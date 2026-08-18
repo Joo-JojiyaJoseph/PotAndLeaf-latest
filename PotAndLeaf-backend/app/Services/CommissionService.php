@@ -12,9 +12,11 @@ class CommissionService
 {
     public function __construct(private readonly SupervisorCommissionService $supervisorCommission) {}
 
-    public function rules(int|string $companyId)
+    public function rules(int|string|null $companyId)
     {
-        return CommissionRule::forCompany($companyId)->with('user:id,name')->get();
+        return CommissionRule::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->with('user:id,name')->get();
     }
 
     public function upsertRule(int|string $companyId, array $data): CommissionRule
@@ -90,14 +92,15 @@ class CommissionService
         ];
     }
 
-    public function supervisorEntries(int|string $companyId, array $filters)
+    public function supervisorEntries(int|string|null $companyId, array $filters)
     {
         return $this->supervisorCommission->entries($companyId, $filters);
     }
 
-    public function payouts(int|string $companyId)
+    public function payouts(int|string|null $companyId)
     {
-        return CommissionPayout::forCompany($companyId)
+        return CommissionPayout::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('user:id,name')
             ->orderByDesc('period')
             ->orderByDesc('created_at')

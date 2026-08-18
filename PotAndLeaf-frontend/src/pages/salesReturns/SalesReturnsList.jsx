@@ -49,7 +49,7 @@ export default function SalesReturnsList() {
           <p className="text-sm text-muted">Credit notes to customers. Confirming restores stock and reduces receivables{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('sales_returns.create') && (
             <Link to="/sales-returns/new">
               <Button size="sm"><PlusIcon className="size-4" /> New return</Button>

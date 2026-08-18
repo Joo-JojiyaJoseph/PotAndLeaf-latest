@@ -15,7 +15,7 @@ const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); retur
 
 const QUICK = [
   // { label: 'New sale', desc: 'Ring up a bill at POS', to: '/sales/new', icon: BanknotesIcon },
-  // { label: 'New purchase', desc: 'Record a GRN', to: '/purchases/new', icon: ShoppingCartIcon },
+  { label: 'New purchase', desc: 'Record a GRN', to: '/purchases/new', icon: ShoppingCartIcon },
   { label: 'Add product', desc: 'Create a catalogue item', to: '/products/new', icon: PlusCircleIcon },
   // { label: 'Reports', desc: 'Sales, stock & dues', to: '/reports', icon: ChartBarIcon },
   // { label: 'Barcode labels', desc: 'Print a label sheet', to: '/products/labels', icon: QrCodeIcon },
@@ -62,18 +62,13 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6">
-      {/* Header */}
-      {/* <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Overview</h1>
-          <p className="mt-0.5 text-sm text-muted">{activeCompany ? activeCompany.name : 'Select a company'} · last 30 days{companyHint}</p>
+          <h1 className="text-lg font-semibold">Overview</h1>
+          <p className="text-sm text-muted">Dashboard{companyHint}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link to="/reports" className="inline-flex items-center gap-1.5 rounded-full bg-leaf px-4 py-2 text-sm font-medium text-white shadow-soft transition-colors hover:bg-leaf-hover">
-            View full reports <ArrowRightIcon className="size-4" />
-          </Link>
-        </div>
-      </div> */}
+        <Filter />
+      </div>
 
       {dashQ.isLoading ? (
         <div className="flex justify-center py-20"><Spinner className="size-6" /></div>

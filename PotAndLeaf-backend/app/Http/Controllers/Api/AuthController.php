@@ -72,7 +72,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'name'             => ['required', 'string', 'max:150'],
             'email'            => ['required', 'email', 'max:190', Rule::unique('users', 'email')->ignore($user->id)],
-            'phone'            => ['nullable', 'string', 'max:30'],
+            'phone'            => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'current_password' => ['nullable', 'required_with:password', 'current_password'],
             'password'         => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
@@ -128,8 +128,8 @@ class AuthController extends Controller
     private function companies($user): array
     {
         $query = $user->is_super_admin
-            ? \App\Models\Company::query()->orderBy('name')
-            : $user->companies();
+            ? \App\Models\Company::query()->active()->orderBy('name')
+            : $user->companies()->where('companies.is_active', true);
 
         return $query
             ->get(['companies.id', 'companies.name', 'companies.code'])

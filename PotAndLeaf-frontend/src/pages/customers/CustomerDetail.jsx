@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { PencilSquareIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
@@ -17,19 +17,23 @@ const ledgerTone = { earn: 'active', redeem: 'pending', reverse: 'blocked' };
 export default function CustomerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { activeCompany, can } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { companyId, can } = useAuth();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
   const [histPage, setHistPage] = useState(1);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['customer', activeCompany?.id, id],
-    queryFn: () => api.get(`/customers/${id}`).then((r) => r.data.data),
-    enabled: Boolean(activeCompany),
+    queryKey: ['customer', headerCompanyId, id],
+    queryFn: () => api.get(`/customers/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
 
   const { data: history, isLoading: histLoading } = useQuery({
-    queryKey: ['customer-purchase-history', activeCompany?.id, id, histPage],
-    queryFn: () => api.get(`/customers/${id}/purchase-history`, { params: { page: histPage, per_page: 10 } }).then((r) => r.data),
-    enabled: Boolean(activeCompany && id),
+    queryKey: ['customer-purchase-history', headerCompanyId, id, histPage],
+    queryFn: () => api
+      .get(`/customers/${id}/purchase-history`, { params: { page: histPage, per_page: 10 }, ...withCompany(headerCompanyId) })
+      .then((r) => r.data),
+    enabled: Boolean(headerCompanyId && id),
     placeholderData: keepPreviousData,
   });
 

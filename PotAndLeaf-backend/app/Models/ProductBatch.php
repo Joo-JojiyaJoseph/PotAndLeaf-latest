@@ -17,7 +17,7 @@ class ProductBatch extends Model
     use HasUuids;
 
     protected $fillable = [
-        'company_id', 'product_id', 'purchase_id', 'purchase_item_id', 'production_order_id', 'supplier_id',
+        'company_id', 'product_id', 'purchase_id', 'purchase_item_id', 'production_order_id', 'bulk_split_id', 'supplier_id',
         'location_id', 'batch_no', 'barcode', 'qty', 'remaining_qty', 'cost_price',
         'status', 'received_at',
     ];
@@ -55,6 +55,11 @@ class ProductBatch extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function bulkSplit(): BelongsTo
+    {
+        return $this->belongsTo(BulkSplit::class, 'bulk_split_id');
     }
 
     public function scopeForCompany($query, int|string $companyId)

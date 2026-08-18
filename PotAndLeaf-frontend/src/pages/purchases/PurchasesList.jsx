@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tansta
 import { CheckCircleIcon, PlusIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import CompanyFilter, { companyFilterParam, filteredCompanyLabel } from '../../components/CompanyFilter';
+import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
@@ -18,12 +18,11 @@ const STATUS_TABS = [
 const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked' };
 
 export default function PurchasesList() {
-  const { activeCompany, can, companies, isSuperAdmin } = useAuth();
+  const { activeCompany, can } = useAuth();
+  const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
-  const [filterCompanyId, setFilterCompanyId] = useState('');
-  const companyParams = companyFilterParam(filterCompanyId);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['purchases', activeCompany?.id, filterCompanyId, status],
@@ -48,11 +47,11 @@ export default function PurchasesList() {
         <div>
           <h1 className="text-lg font-semibold">Purchases</h1>
           <p className="text-sm text-muted">
-            GST purchase entries{isSuperAdmin ? ` · ${filteredCompanyLabel(companies, filterCompanyId, activeCompany)}` : ''}. Confirming a draft posts stock to the ledger.
+            GST purchase entries{companyHint}. Confirming a draft posts stock to the ledger.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* <CompanyFilter value={filterCompanyId} onChange={setFilterCompanyId} /> */}
+          <Filter />
           {can('purchases.create') && (
             <Link to="/purchases/new">
               <Button size="sm">

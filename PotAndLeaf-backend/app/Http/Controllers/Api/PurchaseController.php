@@ -23,12 +23,11 @@ class PurchaseController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->filterCompany($request);
-        abort_unless($request->user()->hasPermission('purchases.view', $company->id), 403);
+        abort_unless($request->user()->hasPermission('purchases.view', $this->company($request)->id), 403);
 
         $filters = $request->only(['search', 'status', 'supplier_id', 'per_page']);
 
-        return $this->ok(PurchaseResource::collection($this->purchases->list($company->id, $filters)));
+        return $this->ok(PurchaseResource::collection($this->purchases->list($this->listCompanyId($request), $filters)));
     }
 
     /** Options the purchase entry form needs: suppliers, products, tax rates. */

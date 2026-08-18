@@ -37,7 +37,7 @@ export default function TransfersList() {
           <p className="text-sm text-muted">Move stock between companies. Dispatch from source; receive at destination (matched by SKU){companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('transfers.create') && <Link to="/transfers/new"><Button size="sm"><PlusIcon className="size-4" /> New transfer</Button></Link>}
         </div>
       </div>

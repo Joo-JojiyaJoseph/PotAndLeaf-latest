@@ -147,7 +147,7 @@ export default function PaymentsList() {
           <p className="text-sm text-muted">Track what's owed per GRN and record payments against suppliers{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('payments.create') && <Button size="sm" onClick={() => openRecord(null)}><PlusIcon className="size-4" /> Record payment</Button>}
         </div>
       </div>

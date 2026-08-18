@@ -21,11 +21,10 @@ class SupplierPaymentController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'payments.view');
 
         return $this->ok(SupplierPaymentResource::collection(
-            $this->payments->list($company->id, $request->only(['supplier_id', 'per_page']))
+            $this->payments->list($this->listCompanyId($request), $request->only(['supplier_id', 'per_page']))
         ));
     }
 
@@ -45,10 +44,9 @@ class SupplierPaymentController extends Controller
     /** Confirmed purchases with paid / balance / due-date / status. */
     public function payables(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'payments.view');
 
-        return $this->ok(['payables' => $this->payments->payables($company->id, $request->query('supplier_id'))]);
+        return $this->ok(['payables' => $this->payments->payables($this->listCompanyId($request), $request->query('supplier_id'))]);
     }
 
     public function store(StoreSupplierPaymentRequest $request): JsonResponse

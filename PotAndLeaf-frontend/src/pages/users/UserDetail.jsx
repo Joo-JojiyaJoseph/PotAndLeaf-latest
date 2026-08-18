@@ -1,7 +1,7 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { PencilSquareIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
@@ -9,11 +9,14 @@ import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError }
 export default function UserDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { activeCompany, can } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { activeCompany, can, companyId } = useAuth();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['user', activeCompany?.id, id],
-    queryFn: () => api.get(`/users/${id}`).then((r) => r.data.data),
-    enabled: Boolean(activeCompany),
+    queryKey: ['user', headerCompanyId, id],
+    queryFn: () => api.get(`/users/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
 
   if (isLoading) return <DetailLoading />;
@@ -24,7 +27,7 @@ export default function UserDetail() {
     <div className="space-y-5 p-4 sm:p-6">
       <DetailHeader
         title={u.name}
-        subtitle={u.is_super_admin ? 'HO super admin' : `User at ${activeCompany?.name}`}
+        subtitle={u.is_super_admin ? 'HO super admin' : `User at ${u.companies?.find((c) => String(c.id) === String(headerCompanyId))?.name ?? activeCompany?.name}`}
         backTo="/users"
         actions={
           <>

@@ -11,7 +11,8 @@ class BulkSplitItem extends Model
     use HasUuids;
 
     protected $fillable = [
-        'bulk_split_id', 'product_id', 'product_name', 'qty', 'weight',
+        'bulk_split_id', 'product_id', 'product_name', 'split_label', 'split_sequence',
+        'qty', 'weight',
         'cost_alloc', 'unit_cost', 'suggested_retail', 'retail_price',
     ];
 

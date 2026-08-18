@@ -22,9 +22,10 @@ class ProductionService
 
     // ---- Bill of Materials ----
 
-    public function boms(int|string $companyId)
+    public function boms(int|string|null $companyId)
     {
-        return Bom::forCompany($companyId)
+        return Bom::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['product:id,sku,name', 'items.component:id,sku,name'])
             ->orderBy('name')->get();
     }
@@ -78,9 +79,10 @@ class ProductionService
 
     // ---- Production orders ----
 
-    public function orders(int|string $companyId, array $filters): LengthAwarePaginator
+    public function orders(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
-        return ProductionOrder::forCompany($companyId)
+        return ProductionOrder::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('outputProduct:id,sku,name')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
             ->orderByDesc('order_date')->orderByDesc('created_at')

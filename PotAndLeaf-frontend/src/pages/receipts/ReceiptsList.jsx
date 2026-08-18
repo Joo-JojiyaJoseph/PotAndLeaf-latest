@@ -139,7 +139,7 @@ export default function ReceiptsList() {
           <p className="text-sm text-muted">Track credit sales outstanding and record collections{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('receipts.create') && <Button size="sm" onClick={() => openRecord(null)}><PlusIcon className="size-4" /> Record receipt</Button>}
         </div>
       </div>

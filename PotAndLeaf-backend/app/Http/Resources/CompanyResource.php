@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\ResolvesMediaUrls;
 use App\Models\Company;
 use App\Support\ProtectedRecords;
 use Illuminate\Http\Request;
@@ -10,6 +11,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Company */
 class CompanyResource extends JsonResource
 {
+    use ResolvesMediaUrls;
     public function toArray(Request $request): array
     {
         return [
@@ -24,8 +26,8 @@ class CompanyResource extends JsonResource
             'locations'    => $this->locations,
             'phone'        => $this->phone,
             'email'        => $this->email,
-            'logo'         => $this->logo,
-            'photo'        => $this->logo,
+            'logo'         => $this->mediaUrl($this->logo),
+            'photo'        => $this->mediaUrl($this->logo),
             'description'  => $this->description,
             'is_active'    => (bool) $this->is_active,
             'is_protected' => ProtectedRecords::isProtectedCompany($this->resource),

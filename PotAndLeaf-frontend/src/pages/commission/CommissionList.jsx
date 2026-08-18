@@ -242,7 +242,7 @@ export default function CommissionList() {
           <p className="text-sm text-muted">Sales commission plus supervisor accruals on produced stock (sale or transfer, once){companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {tab === 'rules' && can('commission.manage') && <Button size="sm" onClick={() => { setEditingRule(null); setRuleModal(true); }}><PlusIcon className="size-4" /> Set rule</Button>}
           {tab === 'payouts' && can('commission.pay') && <Button size="sm" onClick={() => setPayoutModal(true)}><PlusIcon className="size-4" /> Record payout</Button>}
         </div>

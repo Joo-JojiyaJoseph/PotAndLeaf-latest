@@ -1,7 +1,7 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { PencilSquareIcon, PrinterIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
@@ -12,17 +12,21 @@ import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { can } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { can, companyId } = useAuth();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
+  const companyCfg = headerCompanyId ? withCompany(headerCompanyId) : {};
 
   const { data: p, isLoading, isError } = useQuery({
-    queryKey: ['product', id],
-    queryFn: () => api.get(`/products/${id}`).then((r) => r.data.data),
+    queryKey: ['product', id, headerCompanyId],
+    queryFn: () => api.get(`/products/${id}`, companyCfg).then((r) => r.data.data),
+    enabled: Boolean(id && headerCompanyId),
   });
 
   const { data: batches } = useQuery({
-    queryKey: ['product-batches', id],
-    queryFn: () => api.get(`/products/${id}/batches`).then((r) => r.data.data),
-    enabled: Boolean(id),
+    queryKey: ['product-batches', id, headerCompanyId],
+    queryFn: () => api.get(`/products/${id}/batches`, companyCfg).then((r) => r.data.data),
+    enabled: Boolean(id && headerCompanyId),
   });
 
   if (isLoading) return <DetailLoading />;
@@ -41,7 +45,7 @@ export default function ProductDetail() {
           <Badge tone={p.status === 'active' ? 'active' : 'inactive'}>{p.status}</Badge>
           {p.is_rental && <Badge tone="info">Rental</Badge>}
           {(p.can?.update ?? can('products.update')) && (
-            <Button size="sm" onClick={() => navigate(`/products/${p.id}/edit`)}>
+            <Button size="sm" onClick={() => navigate(`/products/${p.id}/edit${headerCompanyId ? `?company_id=${headerCompanyId}` : ''}`)}>
               <PencilSquareIcon className="size-4" /> Edit
             </Button>
           )}

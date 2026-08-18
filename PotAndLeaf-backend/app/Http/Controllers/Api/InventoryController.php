@@ -24,7 +24,7 @@ class InventoryController extends Controller
 
     public function stock(Request $request): JsonResponse
     {
-        $company = $this->allow($request);
+        $companyId = $this->allowList($request);
 
         $filters = [
             'search'   => $request->query('search'),
@@ -32,7 +32,7 @@ class InventoryController extends Controller
             'per_page' => $request->query('per_page'),
         ];
 
-        $levels = $this->inventory->stockLevels($company->id, $filters);
+        $levels = $this->inventory->stockLevels($companyId, $filters);
         $levels->loadMissing('unit:id,short_name,name');
 
         return $this->ok(ProductResource::collection($levels));
@@ -40,10 +40,10 @@ class InventoryController extends Controller
 
     public function alerts(Request $request): JsonResponse
     {
-        $company = $this->allow($request);
+        $companyId = $this->allowList($request);
 
         return $this->ok(
-            $this->inventory->reorderAlerts($company->id)->map(fn ($p) => [
+            $this->inventory->reorderAlerts($companyId)->map(fn ($p) => [
                 'id'            => $p->id,
                 'sku'           => $p->sku,
                 'name'          => $p->name,
@@ -55,7 +55,8 @@ class InventoryController extends Controller
 
     public function ledgerFormData(Request $request): JsonResponse
     {
-        $company = $this->allow($request);
+        $this->allow($request);
+        $company = $this->company($request);
 
         $products = Product::forCompany($company->id)
             ->orderBy('name')
@@ -70,22 +71,22 @@ class InventoryController extends Controller
 
     public function ledger(Request $request): JsonResponse
     {
-        $company = $this->allow($request);
+        $companyId = $this->allowList($request);
         $filters = $this->ledgerFilters($request);
 
         return $this->ok(
             StockLedgerResource::collection(
-                $this->inventory->ledgerFor($company->id, $filters)
+                $this->inventory->ledgerFor($companyId, $filters)
             )
         );
     }
 
     public function exportLedger(Request $request)
     {
-        $company = $this->allow($request);
+        $companyId = $this->allowList($request);
         $filters = $this->ledgerFilters($request);
 
-        $rows = $this->inventory->ledgerExportRows($company->id, $filters)->map(fn ($e) => [
+        $rows = $this->inventory->ledgerExportRows($companyId, $filters)->map(fn ($e) => [
             'occurred_at'    => optional($e->occurred_at)->toDateTimeString(),
             'sku'            => $e->product?->sku ?? '',
             'product_name'   => $e->product?->name ?? '',
@@ -118,25 +119,25 @@ class InventoryController extends Controller
 
     public function valuation(Request $request): JsonResponse
     {
-        $company = $this->allow($request);
+        $companyId = $this->allowList($request);
 
-        return $this->ok($this->inventory->valuation($company->id));
+        return $this->ok($this->inventory->valuation($companyId));
     }
 
     public function movement(Request $request): JsonResponse
     {
-        $company = $this->allow($request);
+        $companyId = $this->allowList($request);
         $days = max(1, min((int) $request->query('days', 30), 365));
 
-        return $this->ok($this->inventory->movement($company->id, $days));
+        return $this->ok($this->inventory->movement($companyId, $days));
     }
 
     public function byLocation(Request $request, \App\Services\LocationStockService $locations): JsonResponse
     {
-        $company = $this->allow($request);
+        $companyId = $this->allowList($request);
         $locationId = $request->query('location_id') ?: null;
 
-        return $this->ok(['balances' => $locations->balances($company->id, $locationId)]);
+        return $this->ok(['balances' => $locations->balances($companyId, $locationId)]);
     }
 
     /** @return array<string,mixed> */
@@ -191,11 +192,20 @@ class InventoryController extends Controller
         };
     }
 
-    private function allow(Request $request)
+    private function allow(Request $request): void
     {
-        $company = $this->filterCompany($request);
-        abort_unless($request->user()->hasPermission('inventory.view', $company->id), 403);
+        abort_unless($request->user()->hasPermission('inventory.view', $this->company($request)->id), 403);
+    }
 
-        return $company;
+    private function allowList(Request $request): ?int
+    {
+        $this->allow($request);
+
+        return $this->listCompanyId($request);
+    }
+
+    private function company(Request $request)
+    {
+        return $request->attributes->get('company');
     }
 }

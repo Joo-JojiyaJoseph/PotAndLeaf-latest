@@ -34,6 +34,9 @@ class StoreProductRequest extends FormRequest
             'name.required' => 'Name is required.',
             'name.unique'   => 'A product with this name already exists in this company.',
             'sku.unique'    => 'This SKU is already used by another product in this company.',
+            'category_id.required' => 'Category is required.',
+            'cost_price.required'  => 'Cost price is required.',
+            'cost_price.numeric'   => 'Cost price must be a number.',
         ];
     }
 
@@ -48,12 +51,12 @@ class StoreProductRequest extends FormRequest
             'barcode'         => ['nullable', 'string', 'max:100'],
             'hsn_code'        => ['nullable', 'string', 'max:20'],
             'description'     => ['nullable', 'string', 'max:2000'],
-            'category_id'     => ['nullable', 'uuid', Rule::exists('product_categories', 'id')->where('company_id', $companyId)],
+            'category_id'     => ['required', 'uuid', Rule::exists('product_categories', 'id')->where('company_id', $companyId)],
             'brand_id'        => ['nullable', 'uuid', Rule::exists('product_brands', 'id')->where('company_id', $companyId)],
             'unit_id'         => ['nullable', 'uuid', Rule::exists('product_units', 'id')->where('company_id', $companyId)],
             'gst_rate'        => ['nullable', 'numeric', 'min:0', 'max:100'],
             'mrp'             => ['nullable', 'numeric', 'min:0'],
-            'cost_price'      => ['nullable', 'numeric', 'min:0'],
+            'cost_price'      => ['required', 'numeric', 'min:0'],
             'dealer_price'    => ['nullable', 'numeric', 'min:0'],
             'wholesale_price' => ['nullable', 'numeric', 'min:0'],
             'retail_price'    => ['nullable', 'numeric', 'min:0'],

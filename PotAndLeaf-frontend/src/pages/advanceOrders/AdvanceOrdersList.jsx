@@ -36,7 +36,7 @@ export default function AdvanceOrdersList() {
           <p className="text-sm text-muted">Customer pre-bookings against future stock. Fulfil to raise a sale{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-           {/* <Filter /> */} 
+            <Filter /> 
           {can('advance.create') && <Link to="/advance-orders/new"><Button size="sm"><PlusIcon className="size-4" /> New booking</Button></Link>}
         </div>
       </div>

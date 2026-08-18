@@ -48,7 +48,7 @@ export default function BulkSplitsList() {
           <p className="text-sm text-muted">Convert bulk stock into sellable units. Confirming posts the stock movements{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('bulk_splits.create') && (
             <Link to="/bulk-splits/new"><Button size="sm"><PlusIcon className="size-4" /> New split</Button></Link>
           )}

@@ -18,7 +18,7 @@ class BulkSplitService
         private readonly CancelBulkSplit $cancelSplit,
     ) {}
 
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         return $this->splits->paginateForCompany($companyId, $filters);
     }

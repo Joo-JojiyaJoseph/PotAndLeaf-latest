@@ -54,8 +54,39 @@ class CreatePurchaseReturn
                 ]);
             }
 
+            $productId = $orig->product_id;
+            $batchId = null;
+
+            if (! empty($row['product_batch_id'])) {
+                $batch = \App\Models\ProductBatch::forCompany($companyId)
+                    ->with('product:id,parent_product_id')
+                    ->find($row['product_batch_id']);
+
+                if (! $batch) {
+                    throw ValidationException::withMessages(['items' => 'Selected batch was not found.']);
+                }
+
+                $batchProduct = $batch->product;
+                $validBatch = $batch->purchase_item_id === $orig->id
+                    || ($batchProduct && (string) $batchProduct->parent_product_id === (string) $orig->product_id)
+                    || ($batchProduct && (string) $batchProduct->id === (string) $orig->product_id);
+
+                if (! $validBatch) {
+                    throw ValidationException::withMessages(['items' => "Batch does not belong to {$orig->product_name}."]);
+                }
+
+                if ((float) $batch->remaining_qty < $qty) {
+                    throw ValidationException::withMessages([
+                        'items' => "Batch {$batch->batch_no} has only {$batch->remaining_qty} available.",
+                    ]);
+                }
+
+                $productId = $batch->product_id;
+                $batchId = $batch->id;
+            }
+
             $calcInput[] = ['qty' => $qty, 'rate' => (float) $orig->rate, 'discount' => 0, 'gst_rate' => (float) $orig->gst_rate];
-            $meta[] = $orig;
+            $meta[] = ['orig' => $orig, 'product_id' => $productId, 'product_batch_id' => $batchId];
         }
 
         $computed = $this->calculator->compute($calcInput, (bool) $purchase->is_interstate, 0);
@@ -76,19 +107,19 @@ class CreatePurchaseReturn
                 'status'        => 'draft',
             ]);
 
-            // Resolve each line's batch from its purchase line (1:1), so the
-            // return decrements the exact lot it came from.
+            // Default batch from purchase line; explicit batch_id from split selection overrides.
             $batchByItem = \App\Models\ProductBatch::forCompany($companyId)
-                ->whereIn('purchase_item_id', collect($computed['items'])->map(fn ($l, $i) => $meta[$i]->id)->all())
+                ->whereIn('purchase_item_id', collect($computed['items'])->map(fn ($l, $i) => $meta[$i]['orig']->id)->all())
                 ->pluck('id', 'purchase_item_id');
 
             $rows = [];
             foreach ($computed['items'] as $i => $line) {
-                $orig = $meta[$i];
+                $entry = $meta[$i];
+                $orig = $entry['orig'];
                 $rows[] = [
                     'purchase_item_id' => $orig->id,
-                    'product_id'       => $orig->product_id,
-                    'product_batch_id' => $batchByItem[$orig->id] ?? null,
+                    'product_id'       => $entry['product_id'],
+                    'product_batch_id' => $entry['product_batch_id'] ?? ($batchByItem[$orig->id] ?? null),
                     'product_name'     => $orig->product_name,
                     'hsn_code'         => $orig->hsn_code,
                     'qty'              => $line['qty'],

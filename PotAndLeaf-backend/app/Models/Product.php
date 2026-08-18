@@ -16,7 +16,8 @@ class Product extends Model
     use HasAuditColumns, HasFactory, HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'company_id', 'sku', 'name', 'barcode', 'hsn_code', 'description',
+        'company_id', 'parent_product_id', 'bulk_split_id', 'split_sequence',
+        'sku', 'name', 'barcode', 'hsn_code', 'description',
         'category_id', 'brand_id', 'unit_id',
         'gst_rate', 'mrp', 'cost_price', 'dealer_price', 'wholesale_price', 'retail_price',
         'reorder_level', 'opening_stock', 'current_stock',
@@ -52,6 +53,21 @@ class Product extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function parentProduct(): BelongsTo
+    {
+        return $this->belongsTo(Product::class, 'parent_product_id');
+    }
+
+    public function bulkSplit(): BelongsTo
+    {
+        return $this->belongsTo(BulkSplit::class, 'bulk_split_id');
+    }
+
+    public function splitChildren(): HasMany
+    {
+        return $this->hasMany(Product::class, 'parent_product_id');
     }
 
     public function category(): BelongsTo

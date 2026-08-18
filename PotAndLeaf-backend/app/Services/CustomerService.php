@@ -16,7 +16,7 @@ class CustomerService
         private readonly UpdateCustomer $updateCustomer,
     ) {}
 
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         return $this->customers->paginateForCompany($companyId, $filters);
     }

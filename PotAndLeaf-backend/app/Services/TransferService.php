@@ -17,10 +17,10 @@ class TransferService
         private readonly SupervisorCommissionService $supervisorCommission,
     ) {}
 
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         return StockTransfer::query()
-            ->where(fn ($q) => $q->where('company_id', $companyId)->orWhere('to_company_id', $companyId))
+            ->when($companyId !== null, fn ($q) => $q->where(fn ($inner) => $inner->where('company_id', $companyId)->orWhere('to_company_id', $companyId)))
             ->with(['fromCompany:id,name', 'toCompany:id,name'])
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))

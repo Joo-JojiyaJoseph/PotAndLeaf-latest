@@ -14,6 +14,9 @@ use Symfony\Component\HttpFoundation\Response;
  *   - request()->attributes->get('company')      — for API controllers
  *   - the "current_company" route parameter        — so form requests /
  *     resources that resolve the current company keep working.
+ *
+ * Super-admins may pass ?company_id=all or ?company_id={id} on GET list/read
+ * calls without changing the X-Company-Id header (used for writes).
  */
 class ResolveApiCompany
 {
@@ -37,16 +40,28 @@ class ResolveApiCompany
         $request->attributes->set('company', $company);
         $request->route()?->setParameter('current_company', $company);
 
-        // HO super-admins may pass ?company_id= on GET list/read calls to view another
-        // company's data without changing the X-Company-Id header (used for writes).
-        $listCompany = $company;
-        if ($request->isMethod('GET') && $request->user()->is_super_admin && $request->filled('company_id')) {
-            $target = Company::find((int) $request->query('company_id'));
-            if ($target) {
-                $listCompany = $target;
+        $listCompanyId = $company->id;
+
+        if ($request->isMethod('GET') && $request->user()->is_super_admin) {
+            $param = $request->query('company_id');
+
+            if ($param === 'all' || $param === null || $param === '') {
+                $listCompanyId = null;
+            } elseif (filled($param)) {
+                $target = Company::find((int) $param);
+                if ($target) {
+                    $listCompanyId = $target->id;
+                }
+            }
+        } elseif ($request->filled('company_id') && ! $request->user()->is_super_admin) {
+            // Non-super-admins cannot filter across companies via query param.
+            $requested = (int) $request->query('company_id');
+            if ($requested !== (int) $company->id) {
+                return response()->json(['message' => 'You do not have access to this company.'], 403);
             }
         }
-        $request->attributes->set('list_company', $listCompany);
+
+        $request->attributes->set('list_company_id', $listCompanyId);
 
         return $next($request);
     }

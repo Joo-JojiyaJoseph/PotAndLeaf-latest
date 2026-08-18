@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import InventoryLedgerTab from './InventoryLedgerTab';
 import { ExclamationTriangleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import CompanyFilter, { companyFilterParam, filteredCompanyLabel } from '../../components/CompanyFilter';
+import { companyFilterParam } from '../../components/CompanyFilter';
+import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Input, Spinner, StatCard } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
@@ -79,7 +81,12 @@ function LevelsTab({ onViewLedger, filterCompanyId }) {
                     <td className="px-4 py-2.5">{p.is_low_stock ? <Badge tone="warning">Low</Badge> : <Badge tone="active">OK</Badge>}</td>
                     <td className="px-4 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <a href={`/inventory/batches?q=${encodeURIComponent(p.sku || p.name)}`} className="text-xs font-medium text-leaf underline">Batches</a>
+                        <Link
+                          to={`/inventory/batches?q=${encodeURIComponent(p.sku || p.name)}`}
+                          className="text-xs font-medium text-leaf underline"
+                        >
+                          Batches
+                        </Link>
                         <Button variant="outline" size="sm" onClick={() => onViewLedger(p.id)}>View ledger</Button>
                       </div>
                     </td>
@@ -192,10 +199,9 @@ function MovementTab({ filterCompanyId }) {
 }
 
 export default function InventoryList() {
-  const { activeCompany, companies, isSuperAdmin } = useAuth();
+  const { filterCompanyId, companyHint, Filter } = useCompanyFilter();
   const [tab, setTab] = useState('levels');
   const [ledgerProductId, setLedgerProductId] = useState('');
-  const [filterCompanyId, setFilterCompanyId] = useState('');
 
   function openLedger(productId) {
     setLedgerProductId(productId);
@@ -206,19 +212,16 @@ export default function InventoryList() {
     if (tab !== 'ledger') setLedgerProductId('');
   }, [tab]);
 
-  const viewingCompany = filteredCompanyLabel(companies, filterCompanyId, activeCompany);
-
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Inventory</h1>
           <p className="text-sm text-muted">
-            Live stock, movement ledger, valuation, and analysis
-            {isSuperAdmin ? ` · ${viewingCompany}` : ''}.
+            Live stock, movement ledger, valuation, and analysis{companyHint}.
           </p>
         </div>
-        {/* <CompanyFilter value={filterCompanyId} onChange={setFilterCompanyId} /> */}
+        <Filter />
       </div>
       <div className="flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map((t) => (

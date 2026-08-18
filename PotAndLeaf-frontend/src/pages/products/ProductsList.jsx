@@ -10,7 +10,7 @@ import {
   TrashIcon,
   QrCodeIcon,
 } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
@@ -18,11 +18,19 @@ import { useConfirm } from '../../lib/confirm';
 import { Badge, Button, Card, Input, Spinner } from '../../components/ui';
 import Pagination from '../../components/Pagination';
 import StatusToggle from '../../components/StatusToggle';
-import { mediaUrl } from '../../components/media';
+import { MediaImg } from '../../components/media';
 import { formatCurrency } from '../../lib/format';
 
+function productDetailPath(p) {
+  return p.company_id ? `/products/${p.id}?company_id=${p.company_id}` : `/products/${p.id}`;
+}
+
+function productEditPath(p) {
+  return p.company_id ? `/products/${p.id}/edit?company_id=${p.company_id}` : `/products/${p.id}/edit`;
+}
+
 export default function ProductsList() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -69,7 +77,7 @@ export default function ProductsList() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['products'] });
 
   async function onToggle(p, next) {
-    await api.patch(`/products/${p.id}/status`, { status: next ? 'active' : 'inactive' });
+    await api.patch(`/products/${p.id}/status`, { status: next ? 'active' : 'inactive' }, withCompany(p.company_id ?? companyId));
     toast.success(`${p.name} ${next ? 'activated' : 'deactivated'}`);
     invalidate();
   }
@@ -83,7 +91,7 @@ export default function ProductsList() {
     });
     if (!ok) return;
     try {
-      await api.delete(`/products/${p.id}`);
+      await api.delete(`/products/${p.id}`, withCompany(p.company_id ?? companyId));
       toast.success(`${p.name} deleted`);
       invalidate();
     } catch (e) {
@@ -101,7 +109,7 @@ export default function ProductsList() {
           <p className="text-sm text-muted">Product master with live stock levels and barcodes{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('products.create') && (
             <>
               <Link to="/products/labels"><Button variant="outline" size="sm"><QrCodeIcon className="size-4" /> Labels</Button></Link>
@@ -165,13 +173,13 @@ export default function ProductsList() {
                 <div className="flex items-start gap-3">
                   <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-leaf-soft">
                     {thumb
-                      ? <img src={mediaUrl(thumb)} alt="" className="size-full object-cover" />
+                      ? <MediaImg value={thumb} className="size-full object-cover" iconClassName="size-7 text-leaf/50" />
                       : <PhotoIcon className="size-7 text-leaf/50" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <button
                       type="button"
-                      onClick={() => navigate(`/products/${p.id}`)}
+                      onClick={() => navigate(productDetailPath(p))}
                       className="block truncate text-left font-semibold text-ink hover:text-leaf"
                     >
                       {p.name}
@@ -198,7 +206,7 @@ export default function ProductsList() {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => navigate(`/products/${p.id}`)}
+                      onClick={() => navigate(productDetailPath(p))}
                       className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink"
                       aria-label="View"
                     >
@@ -207,7 +215,7 @@ export default function ProductsList() {
                     {(p.can?.update ?? can('products.update')) && (
                       <button
                         type="button"
-                        onClick={() => navigate(`/products/${p.id}/edit`)}
+                        onClick={() => navigate(productEditPath(p))}
                         className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink"
                         aria-label="Edit"
                       >

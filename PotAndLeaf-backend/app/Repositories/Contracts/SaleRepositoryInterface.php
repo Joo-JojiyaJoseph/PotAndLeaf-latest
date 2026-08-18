@@ -7,7 +7,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 interface SaleRepositoryInterface
 {
-    public function paginateForCompany(int|string $companyId, array $filters): LengthAwarePaginator;
+    public function paginateForCompany(int|string|null $companyId, array $filters): LengthAwarePaginator;
 
     public function findForCompany(int|string $companyId, string $id): ?Sale;
 

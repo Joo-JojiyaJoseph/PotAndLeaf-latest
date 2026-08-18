@@ -63,12 +63,12 @@ class InventoryService
     }
 
     /** @param array<string,mixed> $filters */
-    public function stockLevels(int|string $companyId, array $filters): LengthAwarePaginator
+    public function stockLevels(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         $perPage = min((int) ($filters['per_page'] ?? 20), 100);
 
         return Product::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->when(filled($filters['search'] ?? null), fn ($q) => $q->search($filters['search']))
             ->when(($filters['low_only'] ?? false), fn ($q) => $q->whereColumn('current_stock', '<=', 'reorder_level'))
             ->orderBy('name')
@@ -76,17 +76,17 @@ class InventoryService
             ->withQueryString();
     }
 
-    public function reorderAlerts(int|string $companyId): \Illuminate\Support\Collection
+    public function reorderAlerts(int|string|null $companyId): \Illuminate\Support\Collection
     {
         return Product::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->whereColumn('current_stock', '<=', 'reorder_level')
             ->orderBy('name')
             ->get(['id', 'sku', 'name', 'current_stock', 'reorder_level']);
     }
 
     /** @param array<string,mixed> $filters */
-    public function ledgerFor(int|string $companyId, array $filters = []): LengthAwarePaginator
+    public function ledgerFor(int|string|null $companyId, array $filters = []): LengthAwarePaginator
     {
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
 
@@ -98,7 +98,7 @@ class InventoryService
     }
 
     /** Flat list for CSV export (capped). */
-    public function ledgerExportRows(int|string $companyId, array $filters = [], int $limit = 5000): \Illuminate\Support\Collection
+    public function ledgerExportRows(int|string|null $companyId, array $filters = [], int $limit = 5000): \Illuminate\Support\Collection
     {
         return $this->ledgerQuery($companyId, $filters)
             ->with('product:id,sku,name')
@@ -108,10 +108,10 @@ class InventoryService
     }
 
     /** @param array<string,mixed> $filters */
-    private function ledgerQuery(int|string $companyId, array $filters)
+    private function ledgerQuery(int|string|null $companyId, array $filters)
     {
         return StockLedgerEntry::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->when(filled($filters['product_id'] ?? null), fn ($q) => $q->where('product_id', $filters['product_id']))
             ->when(filled($filters['reference_type'] ?? null), fn ($q) => $q->where('reference_type', $filters['reference_type']))
             ->when(filled($filters['direction'] ?? null), fn ($q) => $q->where('direction', $filters['direction']))
@@ -127,10 +127,10 @@ class InventoryService
     }
 
     /** Stock valuation: current_stock × cost_price per product, plus totals. */
-    public function valuation(int|string $companyId): array
+    public function valuation(int|string|null $companyId): array
     {
         $rows = Product::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->orderBy('name')
             ->get(['id', 'sku', 'name', 'current_stock', 'cost_price'])
             ->map(fn ($p) => [
@@ -157,12 +157,12 @@ class InventoryService
      * dead = no outbound in the window; fast = outbound at or above the average
      * of the movers; slow = some movement below that average.
      */
-    public function movement(int|string $companyId, int $days = 30): array
+    public function movement(int|string|null $companyId, int $days = 30): array
     {
         $since = now()->subDays($days);
 
         $out = StockLedgerEntry::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('direction', 'out')
             ->where('occurred_at', '>=', $since)
             ->selectRaw('product_id, SUM(qty) as out_qty, MAX(occurred_at) as last_out')
@@ -174,7 +174,7 @@ class InventoryService
         $avg = $movers->count() ? (float) $movers->avg('out_qty') : 0.0;
 
         $rows = Product::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->orderBy('name')
             ->get(['id', 'sku', 'name', 'current_stock'])
             ->map(function ($p) use ($out, $avg) {

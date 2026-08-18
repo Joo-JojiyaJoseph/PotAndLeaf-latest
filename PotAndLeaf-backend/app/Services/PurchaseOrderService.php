@@ -43,9 +43,10 @@ class PurchaseOrderService
             ->all();
     }
 
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
-        return PurchaseOrder::forCompany($companyId)
+        return PurchaseOrder::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('supplier:id,name')
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))

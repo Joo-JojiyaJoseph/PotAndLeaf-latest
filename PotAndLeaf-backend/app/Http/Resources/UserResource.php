@@ -18,6 +18,10 @@ class UserResource extends JsonResource
             'phone'          => $this->phone,
             'is_active'      => (bool) $this->is_active,
             'is_super_admin' => (bool) $this->is_super_admin,
+            'companies'      => $this->whenLoaded('companies', fn () => $this->companies->map(fn ($c) => [
+                'id' => $c->id, 'name' => $c->name,
+            ])->values()),
+            'company_id'     => $this->whenLoaded('companies', fn () => $this->companies->first()?->id),
             // Roles are pre-filtered to the active company by the controller.
             'roles'          => $this->whenLoaded('roles', fn () => $this->roles->map(fn ($r) => [
                 'id' => $r->id, 'name' => $r->name, 'slug' => $r->slug,

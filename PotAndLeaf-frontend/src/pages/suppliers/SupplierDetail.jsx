@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { PencilSquareIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { mediaUrl } from '../../components/media';
@@ -14,17 +15,23 @@ const payTone = { paid: 'active', partial: 'pending', unpaid: 'blocked', 'n/a': 
 export default function SupplierDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
   const [histPage, setHistPage] = useState(1);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['supplier', id],
-    queryFn: () => api.get(`/suppliers/${id}`).then((r) => r.data.data),
+    queryKey: ['supplier', id, headerCompanyId],
+    queryFn: () => api.get(`/suppliers/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(id && headerCompanyId),
   });
 
   const { data: history, isLoading: histLoading } = useQuery({
-    queryKey: ['supplier-purchase-history', id, histPage],
-    queryFn: () => api.get(`/suppliers/${id}/purchase-history`, { params: { page: histPage, per_page: 10 } }).then((r) => r.data),
-    enabled: Boolean(id),
+    queryKey: ['supplier-purchase-history', id, headerCompanyId, histPage],
+    queryFn: () => api
+      .get(`/suppliers/${id}/purchase-history`, { params: { page: histPage, per_page: 10 }, ...withCompany(headerCompanyId) })
+      .then((r) => r.data),
+    enabled: Boolean(id && headerCompanyId),
     placeholderData: keepPreviousData,
   });
 

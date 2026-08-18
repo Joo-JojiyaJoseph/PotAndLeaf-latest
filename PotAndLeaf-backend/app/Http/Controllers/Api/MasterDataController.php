@@ -29,11 +29,11 @@ class MasterDataController extends Controller
     public function index(Request $request, string $type): JsonResponse
     {
         [$model, $perm, , $hasParent] = $this->resolve($type);
-        $companyId = $this->listCompany($request)->id;
-        $this->allow($request, "{$perm}.view", $companyId);
+        $companyId = $this->listCompanyId($request);
+        $this->allow($request, "{$perm}.view", $this->companyId($request));
 
         $rows = $model::query()
-            ->where('company_id', $companyId)
+            ->when($companyId !== null, fn ($q) => $q->where('company_id', $companyId))
             ->orderBy('name')
             ->get();
         $parents = $hasParent
@@ -143,6 +143,7 @@ class MasterDataController extends Controller
     {
         $out = [
             'id'          => $r->id,
+            'company_id'  => $r->company_id,
             'name'        => $r->name,
             'code'        => $r->code,
             'description' => $r->description,

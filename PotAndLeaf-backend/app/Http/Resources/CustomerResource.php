@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\ResolvesMediaUrls;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -9,6 +10,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Customer */
 class CustomerResource extends JsonResource
 {
+    use ResolvesMediaUrls;
     public function toArray(Request $request): array
     {
         $user = $request->user();
@@ -16,9 +18,10 @@ class CustomerResource extends JsonResource
 
         return [
             'id'              => $this->id,
+            'company_id'      => $companyId,
             'customer_code'   => $this->customer_code,
             'name'            => $this->name,
-            'photo'           => $this->photo,
+            'photo'           => $this->mediaUrl($this->photo),
             'type'            => $this->type?->value,
             'email'           => $this->email,
             'phone'           => $this->phone,

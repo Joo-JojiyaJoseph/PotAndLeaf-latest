@@ -16,7 +16,8 @@ class BulkSplit extends Model
 
     protected $fillable = [
         'company_id', 'source_product_id', 'source_purchase_id', 'source_product_name', 'split_no',
-        'split_date', 'source_qty', 'source_unit_cost', 'total_cost', 'status',
+        'split_date', 'source_qty', 'split_mode', 'split_param', 'split_total_qty',
+        'source_unit_cost', 'total_cost', 'status',
         'notes', 'confirmed_at',
     ];
 
@@ -25,6 +26,8 @@ class BulkSplit extends Model
         return [
             'split_date'       => 'date',
             'source_qty'       => 'decimal:3',
+            'split_param'      => 'decimal:3',
+            'split_total_qty'  => 'decimal:3',
             'source_unit_cost' => 'decimal:4',
             'total_cost'       => 'decimal:2',
             'confirmed_at'     => 'datetime',
@@ -49,6 +52,11 @@ class BulkSplit extends Model
     public function sourcePurchase(): BelongsTo
     {
         return $this->belongsTo(Purchase::class, 'source_purchase_id');
+    }
+
+    public function splitProducts(): HasMany
+    {
+        return $this->hasMany(Product::class, 'bulk_split_id');
     }
 
     public function scopeForCompany($query, int|string $companyId)

@@ -18,11 +18,15 @@ class LocationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
+        $companyId = $this->listCompanyId($request);
         $this->allow($request, 'locations.view');
 
         return $this->ok(LocationResource::collection(
-            Location::forCompany($company->id)->orderByDesc('is_default')->orderBy('name')->get()
+            Location::query()
+                ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->get()
         ));
     }
 

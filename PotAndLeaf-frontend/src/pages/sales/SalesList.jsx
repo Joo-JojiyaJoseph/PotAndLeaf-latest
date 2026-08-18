@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tansta
 import { CheckCircleIcon, PlusIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import CompanyFilter, { companyFilterParam, filteredCompanyLabel } from '../../components/CompanyFilter';
+import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
@@ -16,12 +16,11 @@ const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked
 const payTone = { cash: 'default', card: 'info', upi: 'info', credit: 'warning' };
 
 export default function SalesList() {
-  const { activeCompany, can, companies, isSuperAdmin } = useAuth();
+  const { activeCompany, can } = useAuth();
+  const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
-  const [filterCompanyId, setFilterCompanyId] = useState('');
-  const companyParams = companyFilterParam(filterCompanyId);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['sales', activeCompany?.id, filterCompanyId, status],
@@ -41,11 +40,11 @@ export default function SalesList() {
         <div>
           <h1 className="text-lg font-semibold">Sales</h1>
           <p className="text-sm text-muted">
-            POS invoices{isSuperAdmin ? ` · ${filteredCompanyLabel(companies, filterCompanyId, activeCompany)}` : ''}. Confirming posts stock out and updates the customer.
+            POS invoices{companyHint}. Confirming posts stock out and updates the customer.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* {isSuperAdmin && <CompanyFilter value={filterCompanyId} onChange={setFilterCompanyId} />} */}
+          <Filter />
           {can('sales.create') && <Link to="/sales/new"><Button size="sm"><PlusIcon className="size-4" /> New sale</Button></Link>}
         </div>
       </div>

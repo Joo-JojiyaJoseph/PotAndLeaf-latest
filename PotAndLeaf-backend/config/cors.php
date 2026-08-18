@@ -7,7 +7,7 @@ return [
      * from /storage/* (images via <img> don't strictly need CORS, but allowing
      * it avoids surprises with fetch/canvas).
      */
-    'paths' => [], // CORS is handled in public/.htaccess (Apache). Keep empty to avoid duplicate headers.
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'storage/*'],
 
     'allowed_methods' => ['*'],
 

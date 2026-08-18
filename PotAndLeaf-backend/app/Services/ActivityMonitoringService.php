@@ -13,13 +13,15 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 class ActivityMonitoringService
 {
-    public function snapshot(int|string $companyId): array
+    public function snapshot(int|string|null $companyId): array
     {
         $today = now()->toDateString();
-        $company = Company::find($companyId);
+        $company = $companyId !== null ? Company::find($companyId) : null;
 
         $pendingApprovals = [
-            'stock_verifications' => StockVerification::forCompany($companyId)->where('status', 'submitted')->count(),
+            'stock_verifications' => StockVerification::query()
+                ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+                ->where('status', 'submitted')->count(),
         ];
 
         $recentLogins = PersonalAccessToken::query()
@@ -30,7 +32,10 @@ class ActivityMonitoringService
             ->get()
             ->map(function ($t) use ($companyId) {
                 $user = User::find($t->tokenable_id);
-                if (! $user || ! $user->companies()->where('companies.id', $companyId)->exists()) {
+                if (! $user) {
+                    return null;
+                }
+                if ($companyId !== null && ! $user->companies()->where('companies.id', $companyId)->exists()) {
                     return null;
                 }
 
@@ -44,7 +49,8 @@ class ActivityMonitoringService
             ->values()
             ->all();
 
-        $recentLogs = ActivityLog::forCompany($companyId)
+        $recentLogs = ActivityLog::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('user:id,name')
             ->orderByDesc('created_at')
             ->limit(50)
@@ -65,11 +71,15 @@ class ActivityMonitoringService
             'recent_logins'     => $recentLogins,
             'recent_logs'       => $recentLogs,
             'company_totals'    => [
-                'today_sales'          => round((float) Sale::forCompany($companyId)
+                'today_sales'          => round((float) Sale::query()
+                    ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
                     ->where('status', 'confirmed')->whereDate('sale_date', $today)->sum('grand_total'), 2),
-                'today_production'     => ProductionOrder::forCompany($companyId)
+                'today_production'     => ProductionOrder::query()
+                    ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
                     ->where('status', 'completed')->whereDate('completed_at', $today)->count(),
-                'in_transit_transfers' => StockTransfer::forCompany($companyId)->where('status', 'in_transit')->count(),
+                'in_transit_transfers' => StockTransfer::query()
+                    ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+                    ->where('status', 'in_transit')->count(),
             ],
         ];
     }

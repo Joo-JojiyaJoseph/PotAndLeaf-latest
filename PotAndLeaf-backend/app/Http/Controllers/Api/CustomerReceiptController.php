@@ -21,11 +21,10 @@ class CustomerReceiptController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'receipts.view');
 
         return $this->ok(CustomerReceiptResource::collection(
-            $this->receipts->list($company->id, $request->only(['customer_id', 'per_page']))
+            $this->receipts->list($this->listCompanyId($request), $request->only(['customer_id', 'per_page']))
         ));
     }
 
@@ -43,10 +42,9 @@ class CustomerReceiptController extends Controller
 
     public function receivables(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'receipts.view');
 
-        return $this->ok(['receivables' => $this->receipts->receivables($company->id, $request->query('customer_id') ?: null)]);
+        return $this->ok(['receivables' => $this->receipts->receivables($this->listCompanyId($request), $request->query('customer_id') ?: null)]);
     }
 
     public function store(StoreCustomerReceiptRequest $request): JsonResponse

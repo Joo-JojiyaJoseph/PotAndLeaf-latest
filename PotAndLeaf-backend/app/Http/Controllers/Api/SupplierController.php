@@ -25,11 +25,10 @@ class SupplierController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'suppliers.view');
 
         $filters = $request->only(['search', 'status', 'sort', 'dir', 'per_page']);
-        $paginated = $this->suppliers->list($company->id, $filters);
+        $paginated = $this->suppliers->list($this->listCompanyId($request), $filters);
 
         return $this->ok(SupplierResource::collection($paginated));
     }

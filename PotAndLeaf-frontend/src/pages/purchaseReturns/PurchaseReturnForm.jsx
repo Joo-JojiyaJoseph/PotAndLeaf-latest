@@ -20,6 +20,7 @@ export default function PurchaseReturnForm() {
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [qtys, setQtys] = useState({}); // purchase_item_id -> string
+  const [batchIds, setBatchIds] = useState({}); // purchase_item_id -> batch uuid
   const [errors, setErrors] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -38,8 +39,18 @@ export default function PurchaseReturnForm() {
 
   useEffect(() => {
     setQtys({});
+    setBatchIds({});
     setErrors([]);
   }, [purchaseId]);
+
+  function maxReturnQty(it) {
+    const batchId = batchIds[it.purchase_item_id];
+    if (batchId) {
+      const batch = (it.batches ?? []).find((b) => String(b.id) === String(batchId));
+      if (batch) return Math.min(it.returnable, batch.remaining_qty);
+    }
+    return it.returnable;
+  }
 
   const sourceItems = source?.items ?? [];
   const isInterstate = source?.purchase?.is_interstate ?? false;
@@ -62,7 +73,12 @@ export default function PurchaseReturnForm() {
     setSaving(true);
     const items = sourceItems
       .filter((it) => Number(qtys[it.purchase_item_id]) > 0)
-      .map((it) => ({ purchase_item_id: it.purchase_item_id, qty: Number(qtys[it.purchase_item_id]) }));
+      .map((it) => {
+        const row = { purchase_item_id: it.purchase_item_id, qty: Number(qtys[it.purchase_item_id]) };
+        const batchId = batchIds[it.purchase_item_id];
+        if (batchId) row.product_batch_id = batchId;
+        return row;
+      });
 
     try {
       await api.post('/purchase-returns', {
@@ -141,7 +157,7 @@ export default function PurchaseReturnForm() {
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-wider text-muted">
-                    <th className="px-4 py-2 font-medium">Product</th>
+                    <th className="px-4 py-2 font-medium">Product / batch</th>
                     <th className="px-4 py-2 text-right font-medium">Bought</th>
                     <th className="px-4 py-2 text-right font-medium">Returnable</th>
                     <th className="px-4 py-2 text-right font-medium">Return qty</th>
@@ -154,17 +170,47 @@ export default function PurchaseReturnForm() {
                   {sourceItems.map((it, i) => {
                     const c = computed.items[i] ?? {};
                     const disabled = it.returnable <= 0;
+                    const hasBatches = (it.batches?.length ?? 0) > 0;
+                    const maxQty = maxReturnQty(it);
                     return (
                       <tr key={it.purchase_item_id} className="border-b border-line/60 last:border-0">
-                        <td className="px-4 py-2 font-medium">{it.product_name}</td>
+                        <td className="px-4 py-2">
+                          <div className="font-medium">{it.product_name}</div>
+                          {hasBatches && (
+                            <select
+                              value={batchIds[it.purchase_item_id] ?? ''}
+                              disabled={disabled}
+                              onChange={(e) => {
+                                const bid = e.target.value;
+                                setBatchIds((b) => ({ ...b, [it.purchase_item_id]: bid }));
+                                const nextMax = bid
+                                  ? Math.min(it.returnable, (it.batches.find((x) => String(x.id) === bid)?.remaining_qty ?? it.returnable))
+                                  : it.returnable;
+                                setQtys((q) => {
+                                  const cur = Number(q[it.purchase_item_id]) || 0;
+                                  if (cur > nextMax) return { ...q, [it.purchase_item_id]: String(nextMax) };
+                                  return q;
+                                });
+                              }}
+                              className="mt-1.5 h-8 w-full max-w-xs rounded-[10px] border border-line bg-surface px-2 text-xs focus:outline-none focus:ring-2 focus:ring-leaf/30 disabled:bg-paper disabled:text-muted"
+                            >
+                              <option value="">Whole purchase line</option>
+                              {it.batches.map((b) => (
+                                <option key={b.id} value={b.id}>
+                                  {b.batch_no} · {b.product_name ?? it.product_name} · avail {b.remaining_qty}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </td>
                         <td className="tnum px-4 py-2 text-right text-muted">{it.qty}</td>
-                        <td className="tnum px-4 py-2 text-right">{it.returnable}</td>
+                        <td className="tnum px-4 py-2 text-right">{hasBatches && batchIds[it.purchase_item_id] ? maxQty : it.returnable}</td>
                         <td className="px-4 py-2">
                           <input
                             type="number"
                             step="0.001"
                             min="0"
-                            max={it.returnable}
+                            max={maxQty}
                             disabled={disabled}
                             className={numInput}
                             value={qtys[it.purchase_item_id] ?? ''}

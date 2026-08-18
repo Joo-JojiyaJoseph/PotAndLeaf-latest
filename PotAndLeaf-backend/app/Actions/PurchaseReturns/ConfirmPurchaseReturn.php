@@ -95,6 +95,16 @@ class ConfirmPurchaseReturn
                     'items' => "{$item->product_name}: only {$available} left to return.",
                 ]);
             }
+
+            if ($item->product_batch_id) {
+                $batch = \App\Models\ProductBatch::where('id', $item->product_batch_id)->lockForUpdate()->first();
+                if (! $batch || (float) $batch->remaining_qty + 1e-6 < (float) $item->qty) {
+                    $left = $batch ? (float) $batch->remaining_qty : 0;
+                    throw ValidationException::withMessages([
+                        'items' => "{$item->product_name}: batch has only {$left} available.",
+                    ]);
+                }
+            }
         }
     }
 }

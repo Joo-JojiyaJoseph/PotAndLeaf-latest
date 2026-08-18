@@ -21,6 +21,10 @@ const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 tex
 const typeTone = { retail: 'info', wholesale: 'active', dealer: 'pending' };
 const TYPES = [{ v: '', l: 'All types' }, { v: 'retail', l: 'Retail' }, { v: 'wholesale', l: 'Wholesale' }, { v: 'dealer', l: 'Dealer' }];
 
+function customerDetailPath(c) {
+  return c.company_id ? `/customers/${c.id}?company_id=${c.company_id}` : `/customers/${c.id}`;
+}
+
 export default function CustomersList() {
   const { activeCompany, can, isSuperAdmin, companies, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
@@ -55,7 +59,8 @@ export default function CustomersList() {
   const saveM = useMutation({
     mutationFn: (payload) => {
       const { id, target_company_id, ...data } = payload;
-      const cfg = target_company_id ? withCompany(target_company_id) : {};
+      const headerCompany = target_company_id ?? editing?.company_id;
+      const cfg = headerCompany ? withCompany(headerCompany) : {};
       return id ? api.put(`/customers/${id}`, data, cfg) : api.post('/customers', data, cfg);
     },
     onSuccess: (_r, payload) => { invalidate(); setEditing(null); toast.success(payload.id ? 'Customer updated.' : 'Customer created.'); },
@@ -64,14 +69,14 @@ export default function CustomersList() {
   const { submit, release, locked } = useSubmitLock(saveM.isPending);
 
   async function onToggle(c, next) {
-    await api.patch(`/customers/${c.id}/status`, { status: next ? 'active' : 'inactive' });
+    await api.patch(`/customers/${c.id}/status`, { status: next ? 'active' : 'inactive' }, withCompany(c.company_id ?? companyId));
     toast.success(`${c.name} ${next ? 'activated' : 'deactivated'}`);
     invalidate();
   }
   async function onDelete(c) {
     const ok = await confirm({ title: 'Delete customer', message: `Delete ${c.name}? This is a soft delete.`, confirmLabel: 'Delete', tone: 'danger' });
     if (!ok) return;
-    try { await api.delete(`/customers/${c.id}`); toast.success(`${c.name} deleted`); invalidate(); }
+    try { await api.delete(`/customers/${c.id}`, withCompany(c.company_id ?? companyId)); toast.success(`${c.name} deleted`); invalidate(); }
     catch (e) { toast.error(e.response?.data?.message ?? 'Could not delete customer.'); }
   }
 
@@ -92,7 +97,7 @@ export default function CustomersList() {
           <p className="text-sm text-muted">Customer master — types, GST, credit terms and balances{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('customers.create') && <Button size="sm" onClick={openNew}><PlusIcon className="size-4" /> New customer</Button>}
         </div>
       </div>
@@ -137,7 +142,7 @@ export default function CustomersList() {
                       ? <Badge tone={c.status === 'active' ? 'active' : c.status === 'blocked' ? 'blocked' : 'inactive'}>{c.status}</Badge>
                       : <StatusToggle active={c.status === 'active'} onToggle={(next) => onToggle(c, next)} />}
                     <div className="flex items-center gap-1">
-                      <Button variant="outline" size="sm" onClick={() => navigate(`/customers/${c.id}`)}><EyeIcon className="size-4" /> View</Button>
+                      <Button variant="outline" size="sm" onClick={() => navigate(customerDetailPath(c))}><EyeIcon className="size-4" /> View</Button>
                       {can('customers.update') && <button onClick={() => openEdit(c)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="Edit"><PencilSquareIcon className="size-4" /></button>}
                       {can('customers.delete') && <button onClick={() => onDelete(c)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Delete"><TrashIcon className="size-4" /></button>}
                     </div>
@@ -157,7 +162,13 @@ export default function CustomersList() {
         footer={<>
           <Button variant="ghost" size="sm" onClick={() => setEditing(null)} disabled={saveM.isPending}>Cancel</Button>
           <Button size="sm" disabled={locked || (isCreate && isSuperAdmin && !companyReady)} onClick={() => submit(() => {
-            const payload = { ...form, id: editing?.id, target_company_id: isCreate && isSuperAdmin ? formCompanyId : undefined };
+            const payload = {
+              ...form,
+              id: editing?.id,
+              target_company_id: isCreate && isSuperAdmin
+                ? formCompanyId
+                : (editing?.company_id ?? undefined),
+            };
             if (!payload.id) delete payload.customer_code;
             saveM.mutate(payload, { onSettled: release });
           })}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}</Button>

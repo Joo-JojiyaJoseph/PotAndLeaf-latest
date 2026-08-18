@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\ResolvesMediaUrls;
 use App\Models\DamageEntry;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -9,6 +10,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin DamageEntry */
 class DamageEntryResource extends JsonResource
 {
+    use ResolvesMediaUrls;
     public function toArray(Request $request): array
     {
         return [
@@ -18,7 +20,7 @@ class DamageEntryResource extends JsonResource
             'qty'        => (float) $this->qty,
             'reason'     => $this->reason,
             'notes'      => $this->notes,
-            'photo'      => $this->photo,
+            'photo'      => $this->mediaUrl($this->photo),
             'product'    => $this->whenLoaded('product', fn () => [
                 'id'   => $this->product?->id,
                 'sku'  => $this->product?->sku,

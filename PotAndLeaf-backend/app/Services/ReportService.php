@@ -24,7 +24,7 @@ class ReportService
         private readonly SettingsService $settings,
     ) {}
 
-    public function dashboard(int|string $companyId, string $from, string $to, ?string $locationId = null): array
+    public function dashboard(int|string|null $companyId, string $from, string $to, ?string $locationId = null): array
     {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
@@ -35,8 +35,8 @@ class ReportService
             'sales'         => $this->sales($companyId, $from, $to, $locationId),
             'purchases'     => $this->purchases($companyId, $from, $to),
             'inventory'     => $this->inventorySnapshot($companyId),
-            'receivables'   => round((float) Customer::forCompany($companyId)->sum('outstanding'), 2),
-            'payables'      => round((float) Supplier::forCompany($companyId)->sum('outstanding'), 2),
+            'receivables'   => round((float) Customer::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->sum('outstanding'), 2),
+            'payables'      => round((float) Supplier::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->sum('outstanding'), 2),
             'top_products'  => $this->topProducts($companyId, $from, $to, $locationId),
             'top_customers' => $this->topCustomers($companyId, $from, $to, $locationId),
             'production'    => $this->production($companyId, $from, $to),
@@ -115,7 +115,7 @@ class ReportService
         $toC = Carbon::parse($to)->endOfDay();
         $dailyExpense = $this->settings->getFloat($companyId, 'daily_expense');
 
-        $salesQ = Sale::forCompany($companyId)
+        $salesQ = Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('status', 'confirmed')
             ->whereBetween('sale_date', [$fromC->toDateString(), $toC->toDateString()])
             ->when($branchId, fn ($q) => $q->where('location_id', $branchId));
@@ -142,7 +142,7 @@ class ReportService
             default   => 'DATE(sale_date)',
         };
 
-        $trend = Sale::forCompany($companyId)
+        $trend = Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('status', 'confirmed')
             ->whereBetween('sale_date', [$fromC->toDateString(), $toC->toDateString()])
             ->when($branchId, fn ($q) => $q->where('location_id', $branchId))
@@ -156,11 +156,11 @@ class ReportService
             ])
             ->all();
 
-        $byBranch = Location::forCompany($companyId)
+        $byBranch = Location::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->orderBy('name')
             ->get()
             ->map(function (Location $loc) use ($companyId, $fromC, $toC, $dailyExpense, $days) {
-                $sales = (float) Sale::forCompany($companyId)
+                $sales = (float) Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
                     ->where('status', 'confirmed')
                     ->where('location_id', $loc->id)
                     ->whereBetween('sale_date', [$fromC->toDateString(), $toC->toDateString()])
@@ -207,7 +207,7 @@ class ReportService
 
     private function sales(int|string $companyId, string $from, string $to, ?string $locationId = null): array
     {
-        $base = Sale::forCompany($companyId)->where('status', 'confirmed')->whereBetween('sale_date', [$from, $to])
+        $base = Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')->whereBetween('sale_date', [$from, $to])
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId));
 
         $byMode = (clone $base)->selectRaw('payment_mode, SUM(grand_total) as total')
@@ -228,7 +228,7 @@ class ReportService
 
     private function purchases(int|string $companyId, string $from, string $to): array
     {
-        $base = Purchase::forCompany($companyId)->where('status', 'confirmed')->whereBetween('purchase_date', [$from, $to]);
+        $base = Purchase::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')->whereBetween('purchase_date', [$from, $to]);
 
         return ['total' => round((float) (clone $base)->sum('grand_total'), 2), 'count' => (clone $base)->count()];
     }
@@ -236,21 +236,21 @@ class ReportService
     private function inventorySnapshot(int|string $companyId): array
     {
         $valuation = $this->inventory->valuation($companyId);
-        $lowStock = Product::forCompany($companyId)
+        $lowStock = Product::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->whereColumn('current_stock', '<=', 'reorder_level')
             ->where('reorder_level', '>', 0)->count();
 
         return [
             'stock_value' => round((float) ($valuation['totals']['total_value'] ?? $valuation['total'] ?? 0), 2),
             'low_stock'   => $lowStock,
-            'skus'        => Product::forCompany($companyId)->count(),
+            'skus'        => Product::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->count(),
         ];
     }
 
     private function topProducts(int|string $companyId, string $from, string $to, ?string $locationId = null): array
     {
         return SaleItem::query()
-            ->whereHas('sale', fn ($q) => $q->forCompany($companyId)->where('status', 'confirmed')
+            ->whereHas('sale', fn ($q) => $q->when($companyId !== null, fn ($sq) => $sq->forCompany($companyId))->where('status', 'confirmed')
                 ->whereBetween('sale_date', [$from, $to])
                 ->when($locationId, fn ($qq) => $qq->where('location_id', $locationId)))
             ->selectRaw('product_name, SUM(qty) as qty, SUM(line_total) as revenue')
@@ -261,7 +261,7 @@ class ReportService
 
     private function topCustomers(int|string $companyId, string $from, string $to, ?string $locationId = null): array
     {
-        return Sale::forCompany($companyId)->where('status', 'confirmed')->whereBetween('sale_date', [$from, $to])
+        return Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')->whereBetween('sale_date', [$from, $to])
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
             ->selectRaw('customer_name, SUM(grand_total) as revenue')
             ->groupBy('customer_name')->orderByDesc('revenue')->limit(5)->get()
@@ -271,7 +271,7 @@ class ReportService
 
     private function production(int|string $companyId, string $from, string $to): array
     {
-        $base = ProductionOrder::forCompany($companyId)->where('status', 'completed')->whereBetween('order_date', [$from, $to]);
+        $base = ProductionOrder::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'completed')->whereBetween('order_date', [$from, $to]);
 
         return [
             'completed'    => (clone $base)->count(),
@@ -282,8 +282,8 @@ class ReportService
     private function rentals(int|string $companyId, string $from, string $to): array
     {
         return [
-            'active'   => Rental::forCompany($companyId)->where('status', 'active')->count(),
-            'invoiced' => round((float) RentalInvoice::forCompany($companyId)->whereBetween('period_from', [$from, $to])->sum('amount'), 2),
+            'active'   => Rental::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'active')->count(),
+            'invoiced' => round((float) RentalInvoice::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->whereBetween('period_from', [$from, $to])->sum('amount'), 2),
         ];
     }
 
@@ -303,7 +303,7 @@ class ReportService
         $to = Carbon::parse($to)->endOfDay();
         $today = Carbon::today()->toDateString();
 
-        $query = Rental::forCompany($companyId)
+        $query = Rental::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['customer:id,name', 'items', 'location:id,name'])
             ->whereNotNull('activated_at')
             ->whereBetween('activated_at', [$from, $to])
@@ -428,7 +428,7 @@ class ReportService
     ): LengthAwarePaginator {
         $today = Carbon::today();
 
-        $rentals = Rental::forCompany($companyId)
+        $rentals = Rental::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['customer:id,name', 'items', 'location:id,name'])
             ->where('status', 'active')
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
@@ -484,7 +484,7 @@ class ReportService
         int $perPage = 50,
         int $page = 1,
     ): LengthAwarePaginator {
-        $query = Rental::forCompany($companyId)
+        $query = Rental::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['customer:id,name', 'items', 'invoices', 'location:id,name'])
             ->where('customer_id', $customerId)
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))

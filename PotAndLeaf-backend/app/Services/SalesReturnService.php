@@ -19,7 +19,7 @@ class SalesReturnService
     ) {}
 
     /** @param array<string,mixed> $filters */
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         return $this->returns->paginateForCompany($companyId, $filters);
     }

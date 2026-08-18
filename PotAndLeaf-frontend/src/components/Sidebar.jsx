@@ -26,25 +26,26 @@ import {
   UsersIcon,
   BuildingOffice2Icon,
   ClipboardDocumentListIcon,
-  CalendarDaysIcon,
+  QrCodeIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../lib/confirm';
 import { useToast } from '../lib/toast';
 import { classNames } from '../lib/format';
+import { CompanySelectMenuBlock } from './CompanySelectMenu';
 
 const GROUPS = [
   {
     label: 'Main',
     items: [
       { key: 'dashboard', label: 'Dashboard', to: '/', icon: HomeIcon, end: true },
-      // { key: 'purchase', label: 'Purchase', to: '/purchases', icon: ShoppingCartIcon },
-      // { key: 'inventory', label: 'Inventory', to: '/inventory', icon: CubeIcon },
-      // { key: 'batches', label: 'Batches & barcodes', to: '/inventory/batches', icon: CubeIcon },
-      // { key: 'damage', label: 'Damage Entry', to: '/damage-entries', icon: ExclamationTriangleIcon },
-      // { key: 'purchase-returns', label: 'Purch. Returns', to: '/purchase-returns', icon: ArrowUturnLeftIcon },
-      // { key: 'stock-verifications', label: 'Stock Count', to: '/stock-verifications', icon: ClipboardDocumentCheckIcon },
-      // { key: 'bulk-splits', label: 'Bulk Split', to: '/bulk-splits', icon: ScissorsIcon },
+      { key: 'purchase', label: 'Purchase', to: '/purchases', icon: ShoppingCartIcon },
+      { key: 'inventory', label: 'Inventory', to: '/inventory', icon: CubeIcon, end: true },
+      { key: 'batches', label: 'Batches & barcodes', to: '/inventory/batches', icon: QrCodeIcon },
+      { key: 'damage', label: 'Damage Entry', to: '/damage-entries', icon: ExclamationTriangleIcon },
+      { key: 'purchase-returns', label: 'Purch. Returns', to: '/purchase-returns', icon: ArrowUturnLeftIcon },
+      { key: 'stock-verifications', label: 'Stock Count', to: '/stock-verifications', icon: ClipboardDocumentCheckIcon },
+      { key: 'bulk-splits', label: 'Bulk Split', to: '/bulk-splits', icon: ScissorsIcon },
       // { key: 'transfers', label: 'Transfers', to: '/transfers', icon: ArrowsRightLeftIcon },
       // { key: 'production', label: 'Production', to: '/production', icon: BeakerIcon },
     ],
@@ -52,7 +53,7 @@ const GROUPS = [
   {
     label: 'Commerce',
     items: [
-      // { key: 'pos', label: 'POS Sales', to: '/sales', icon: CalculatorIcon },
+      { key: 'pos', label: 'POS Sales', to: '/sales', icon: CalculatorIcon },
       // { key: 'sales-returns', label: 'Sales Returns', to: '/sales-returns', icon: ArrowUturnLeftIcon },
       // { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon },
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon },
@@ -100,41 +101,39 @@ function CompanySwitcher() {
   const confirm = useConfirm();
   const toast = useToast();
 
-  async function onChange(e) {
-    const next = e.target.value;
-    if (!next || String(next) === String(companyId)) return;
+  if (companies.length === 0) return null;
+
+  const options = companies.map((c) => ({
+    value: c.id,
+    label: c.name,
+    sublabel: c.code ? c.code.toUpperCase() : undefined,
+  }));
+
+  async function onBeforeChange(next) {
+    if (!isSuperAdmin) return true;
     const name = companies.find((c) => String(c.id) === String(next))?.name ?? 'this company';
-    if (isSuperAdmin) {
-      const ok = await confirm({
-        title: 'Switch company?',
-        message: `The whole workspace will switch to ${name}. Any unsaved changes on the current screen may be lost.`,
-        confirmLabel: 'Switch',
-        tone: 'primary',
-      });
-      if (!ok) return;
-    }
+    return confirm({
+      title: 'Switch company?',
+      message: `The whole workspace will switch to ${name}. Any unsaved changes on the current screen may be lost.`,
+      confirmLabel: 'Switch',
+      tone: 'primary',
+    });
+  }
+
+  function onChange(next) {
     selectCompany(next);
+    const name = companies.find((c) => String(c.id) === String(next))?.name ?? 'this company';
     toast.info(`Switched to ${name}`);
   }
 
   return (
-    <div className="px-3 pb-3">
-      <label className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-muted">
-        Company
-      </label>
-      <select
-        value={companyId ?? ''}
-        onChange={onChange}
-        className="h-9 w-full rounded-xl border border-line bg-surface px-2 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25"
-      >
-        {companies.length === 0 && <option value="">No companies</option>}
-        {companies.map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-    </div>
+    <CompanySelectMenuBlock
+      value={companyId ?? ''}
+      options={options}
+      onChange={onChange}
+      onBeforeChange={onBeforeChange}
+      hint="Used for creating and updating records."
+    />
   );
 }
 
@@ -199,7 +198,7 @@ export default function Sidebar({ open, onClose }) {
           </div>
         </div>
 
-        <CompanySwitcher />
+        {/* <CompanySwitcher /> */}
 
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-6">
           {GROUPS.map((group) => (

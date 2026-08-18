@@ -27,13 +27,15 @@ class UserController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
+        $companyId = $this->listCompanyId($request);
         $this->allow($request, 'users.view');
 
         $users = User::query()
-            ->where('is_super_admin', false)
-            ->whereHas('companies', fn ($q) => $q->whereKey($company->id))
-            ->with(['roles' => fn ($q) => $q->wherePivot('company_id', $company->id)])
+            ->activeMembers($companyId)
+            ->with([
+                'companies:id,name',
+                'roles' => fn ($q) => $q->when($companyId !== null, fn ($q2) => $q2->wherePivot('company_id', $companyId)),
+            ])
             ->orderBy('name')
             ->paginate(min((int) $request->integer('per_page', 25), 100))
             ->withQueryString();
@@ -54,11 +56,10 @@ class UserController extends Controller
 
     public function show(Request $request, User $user): JsonResponse
     {
-        $company = $this->company($request);
         $this->allow($request, 'users.view');
-        $this->ensureMember($user, $company->id);
+        $companyId = $this->resolveUserCompanyContext($request, $user);
 
-        return $this->ok($this->present($user, $company->id));
+        return $this->ok($this->present($user, $companyId));
     }
 
     public function store(StoreUserRequest $request): JsonResponse
@@ -85,11 +86,10 @@ class UserController extends Controller
 
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
-        $company = $this->company($request);
-        $this->ensureMember($user, $company->id);
+        $companyId = $this->resolveUserCompanyContext($request, $user);
         $data = $request->validated();
 
-        DB::transaction(function () use ($user, $company, $data) {
+        DB::transaction(function () use ($user, $companyId, $data) {
             $user->fill([
                 'name'      => $data['name'],
                 'email'     => $data['email'],
@@ -100,25 +100,23 @@ class UserController extends Controller
                 $user->password = Hash::make($data['password']);
             }
             $user->save();
-            $this->syncCompanyRole($user, $company->id, $data['role_id'] ?? null);
+            $this->syncCompanyRole($user, $companyId, $data['role_id'] ?? null);
         });
 
-        return $this->ok($this->present($user->refresh(), $company->id), 'User updated.');
+        return $this->ok($this->present($user->refresh(), $companyId), 'User updated.');
     }
 
     public function destroy(Request $request, User $user): JsonResponse
     {
-        $company = $this->company($request);
+        $companyId = $this->resolveUserCompanyContext($request, $user);
         $this->allow($request, 'users.delete');
-        $this->ensureMember($user, $company->id);
 
-        abort_if(ProtectedRecords::isProtectedUser($user) && $company->code === ProtectedRecords::HO_COMPANY_CODE, 403, 'The default HO admin cannot be removed from this company.');
+        abort_if(ProtectedRecords::isProtectedUser($user) && $this->company($request)->code === ProtectedRecords::HO_COMPANY_CODE, 403, 'The default HO admin cannot be removed from this company.');
 
-        DB::transaction(function () use ($user, $company) {
-            $this->syncCompanyRole($user, $company->id, null);   // drop this company's roles
-            $user->companies()->detach($company->id);            // remove access to this company
+        DB::transaction(function () use ($user, $companyId) {
+            $this->syncCompanyRole($user, $companyId, null);
+            $user->companies()->detach($companyId);
 
-            // No company access left — deactivate and revoke all sessions.
             if (! $user->is_super_admin && ! $user->companies()->exists()) {
                 $user->tokens()->delete();
                 $user->update(['is_active' => false]);
@@ -149,9 +147,36 @@ class UserController extends Controller
 
     private function present(User $user, int|string $companyId): UserResource
     {
-        $user->load(['roles' => fn ($q) => $q->wherePivot('company_id', $companyId)]);
+        $user->load([
+            'companies:id,name',
+            'roles' => fn ($q) => $q->wherePivot('company_id', $companyId),
+        ]);
 
         return new UserResource($user);
+    }
+
+    /** Resolve which company context to use for show/update/delete. */
+    private function resolveUserCompanyContext(Request $request, User $user): int|string
+    {
+        $headerCompanyId = $this->company($request)->id;
+
+        if ($user->companies()->whereKey($headerCompanyId)->exists()) {
+            return $headerCompanyId;
+        }
+
+        $param = $request->query('company_id');
+        if (filled($param) && $user->companies()->whereKey($param)->exists()) {
+            return $param;
+        }
+
+        if ($request->user()->is_super_admin) {
+            $memberCompany = $user->companies()->value('companies.id');
+            abort_unless($memberCompany, 404, 'User has no company membership.');
+
+            return $memberCompany;
+        }
+
+        abort(404, 'User is not in this company.');
     }
 
     private function company(Request $request)
@@ -164,16 +189,10 @@ class UserController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function ensureMember(User $user, int|string $companyId): void
-    {
-        abort_unless($user->companies()->whereKey($companyId)->exists(), 404, 'User is not in this company.');
-    }
-
     public function toggleStatus(Request $request, User $user): JsonResponse
     {
-        $company = $this->company($request);
+        $companyId = $this->resolveUserCompanyContext($request, $user);
         $this->allow($request, 'users.update');
-        abort_unless($user->companies()->whereKey($company->id)->exists(), 404);
         abort_if((bool) $user->is_super_admin, 403, 'A super admin cannot be deactivated here.');
         $data = $request->validate(['is_active' => ['required', 'boolean']]);
         $user->update(['is_active' => $data['is_active']]);

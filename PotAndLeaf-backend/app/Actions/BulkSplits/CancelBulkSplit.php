@@ -4,6 +4,7 @@ namespace App\Actions\BulkSplits;
 
 use App\Models\BulkSplit;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Services\InventoryService;
 use Illuminate\Support\Facades\DB;
 
@@ -16,14 +17,19 @@ class CancelBulkSplit
         return DB::transaction(function () use ($split, $userId) {
             if ($split->isConfirmed()) {
                 $split->loadMissing('items');
+                $reversalQty = (float) ($split->split_total_qty ?? $split->items->sum('qty'));
 
-                // Put the source back, take the outputs away.
                 $source = Product::forCompany($split->company_id)->lockForUpdate()->find($split->source_product_id);
                 if ($source) {
                     $this->inventory->post(
-                        product: $source, direction: 'in', qty: (float) $split->source_qty,
-                        unitCost: (float) $split->source_unit_cost, referenceType: 'bulk-split-cancel',
-                        referenceId: $split->id, note: "Reversal of {$split->split_no}", userId: $userId,
+                        product: $source,
+                        direction: 'in',
+                        qty: $reversalQty,
+                        unitCost: (float) $split->source_unit_cost,
+                        referenceType: 'bulk-split-cancel',
+                        referenceId: $split->id,
+                        note: "Reversal of {$split->split_no}",
+                        userId: $userId,
                     );
                     $source->save();
                 }
@@ -37,11 +43,22 @@ class CancelBulkSplit
                         continue;
                     }
                     $this->inventory->post(
-                        product: $target, direction: 'out', qty: (float) $item->qty,
-                        unitCost: (float) $item->unit_cost, referenceType: 'bulk-split-cancel',
-                        referenceId: $split->id, note: "Reversal of {$split->split_no}", userId: $userId,
+                        product: $target,
+                        direction: 'out',
+                        qty: (float) $item->qty,
+                        unitCost: (float) $item->unit_cost,
+                        referenceType: 'bulk-split-cancel',
+                        referenceId: $split->id,
+                        note: "Reversal of {$split->split_no}",
+                        userId: $userId,
                     );
+                    $target->update(['status' => 'inactive']);
                     $target->save();
+
+                    ProductBatch::forCompany($split->company_id)
+                        ->where('product_id', $target->id)
+                        ->where('bulk_split_id', $split->id)
+                        ->update(['status' => 'archived', 'remaining_qty' => 0]);
                 }
             }
 

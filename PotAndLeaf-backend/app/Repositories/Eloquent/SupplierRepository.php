@@ -11,7 +11,7 @@ class SupplierRepository implements SupplierRepositoryInterface
     /** Columns that are safe to sort by (never trust raw client input). */
     private const SORTABLE = ['supplier_code', 'name', 'status', 'outstanding', 'created_at'];
 
-    public function paginateForCompany(int|string $companyId, array $filters): LengthAwarePaginator
+    public function paginateForCompany(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         $sort = in_array($filters['sort'] ?? '', self::SORTABLE, true)
             ? $filters['sort']
@@ -21,7 +21,7 @@ class SupplierRepository implements SupplierRepositoryInterface
         $perPage = min((int) ($filters['per_page'] ?? 15), 100);
 
         return Supplier::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->search($filters['search'] ?? null)
             ->when(
                 filled($filters['status'] ?? null),

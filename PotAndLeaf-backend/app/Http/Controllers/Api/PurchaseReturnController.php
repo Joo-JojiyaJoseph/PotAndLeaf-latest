@@ -25,12 +25,11 @@ class PurchaseReturnController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'purchase_returns.view');
 
         $filters = $request->only(['search', 'status', 'per_page']);
 
-        return $this->ok(PurchaseReturnResource::collection($this->returns->list($company->id, $filters)));
+        return $this->ok(PurchaseReturnResource::collection($this->returns->list($this->listCompanyId($request), $filters)));
     }
 
     /**
@@ -48,17 +47,39 @@ class PurchaseReturnController extends Controller
 
         $returned = $this->returnRepo->returnedQtyByPurchaseItem($purchase->id);
 
-        $lines = $purchase->items->map(function ($item) use ($returned) {
+        $lines = $purchase->items->map(function ($item) use ($returned, $company) {
             $already = (float) ($returned[$item->id] ?? 0);
+            $returnable = max(0, (float) $item->qty - $already);
+
+            $batches = \App\Models\ProductBatch::forCompany($company->id)
+                ->where('remaining_qty', '>', 0)
+                ->where(function ($q) use ($item) {
+                    $q->where('purchase_item_id', $item->id)
+                        ->orWhereHas('product', fn ($p) => $p->where('parent_product_id', $item->product_id));
+                })
+                ->with('product:id,name,sku')
+                ->orderBy('batch_no')
+                ->get()
+                ->map(fn ($b) => [
+                    'id'            => $b->id,
+                    'batch_no'      => $b->batch_no,
+                    'barcode'       => $b->barcode,
+                    'product_id'    => $b->product_id,
+                    'product_name'  => $b->product?->name,
+                    'remaining_qty' => (float) $b->remaining_qty,
+                ])
+                ->values();
+
             return [
                 'purchase_item_id' => $item->id,
                 'product_id'       => $item->product_id,
                 'product_name'     => $item->product_name,
                 'qty'              => (float) $item->qty,
                 'returned'         => $already,
-                'returnable'       => max(0, (float) $item->qty - $already),
+                'returnable'       => $returnable,
                 'rate'             => (float) $item->rate,
                 'gst_rate'         => (float) $item->gst_rate,
+                'batches'          => $batches,
             ];
         })->values();
 

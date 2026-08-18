@@ -3,28 +3,33 @@ import { code128BBars, code128Svg } from '../lib/barcode';
 /** Renders a Code128-B barcode inline as SVG. */
 export function Barcode({ value, height = 56, moduleWidth = 1.7, showText = true }) {
   if (!value) return null;
-  const { bars, totalModules } = code128BBars(value);
-  const w = totalModules * moduleWidth;
-  const textH = showText ? 18 : 0;
-  return (
-    <svg
-      width={w}
-      height={height + textH}
-      viewBox={`0 0 ${w} ${height + textH}`}
-      className="max-w-full"
-      role="img"
-      aria-label={`Barcode ${value}`}
-    >
-      {bars.map((b, i) => (
-        <rect key={i} x={b.x * moduleWidth} y={0} width={b.width * moduleWidth} height={height} fill="#111" />
-      ))}
-      {showText && (
-        <text x={w / 2} y={height + 14} textAnchor="middle" fontFamily="monospace" fontSize="13" fill="#111">
-          {value}
-        </text>
-      )}
-    </svg>
-  );
+  try {
+    const { bars, totalModules } = code128BBars(value);
+    if (!totalModules) return null;
+    const w = totalModules * moduleWidth;
+    const textH = showText ? 18 : 0;
+    return (
+      <svg
+        width={w}
+        height={height + textH}
+        viewBox={`0 0 ${w} ${height + textH}`}
+        className="max-w-full"
+        role="img"
+        aria-label={`Barcode ${value}`}
+      >
+        {bars.map((b, i) => (
+          <rect key={i} x={b.x * moduleWidth} y={0} width={b.width * moduleWidth} height={height} fill="#111" />
+        ))}
+        {showText && (
+          <text x={w / 2} y={height + 14} textAnchor="middle" fontFamily="monospace" fontSize="13" fill="#111">
+            {value}
+          </text>
+        )}
+      </svg>
+    );
+  } catch {
+    return null;
+  }
 }
 
 /** Opens a print-ready label (barcode + name + price) in a new window. */

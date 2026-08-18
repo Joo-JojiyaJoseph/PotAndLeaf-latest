@@ -87,9 +87,10 @@ class SupervisorCommissionService
         return $entries;
     }
 
-    public function entries(int|string $companyId, array $filters = [])
+    public function entries(int|string|null $companyId, array $filters = [])
     {
-        return SupervisorCommissionEntry::forCompany($companyId)
+        return SupervisorCommissionEntry::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['user:id,name', 'product:id,sku,name'])
             ->when(filled($filters['user_id'] ?? null), fn ($q) => $q->where('user_id', $filters['user_id']))
             ->when(filled($filters['from'] ?? null), fn ($q) => $q->whereDate('accrued_date', '>=', $filters['from']))

@@ -289,7 +289,7 @@ export default function ProductionList() {
           <p className="text-sm text-muted">Raise finished plants from input materials. Completing an order consumes inputs and yields stock{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {tab === 'orders' && can('production.create') && <Button size="sm" onClick={() => { setEditingOrder(null); setOrderModal(true); }} disabled={boms.length === 0}><PlusIcon className="size-4" /> New order</Button>}
           {tab === 'boms' && can('production.manage_bom') && <Button size="sm" onClick={() => { setEditingBom(null); setBomModal(true); }}><PlusIcon className="size-4" /> New BOM</Button>}
         </div>

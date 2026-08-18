@@ -22,11 +22,10 @@ class StockVerificationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'stock_verifications.view');
 
         return $this->ok(StockVerificationResource::collection(
-            $this->verifications->list($company->id, $request->only(['search', 'status', 'per_page']))
+            $this->verifications->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))
         ));
     }
 

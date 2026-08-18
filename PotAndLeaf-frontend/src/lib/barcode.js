@@ -18,7 +18,7 @@ const STOP = 106;
 
 /** Returns the on/off module string for the given value in Code128-B. */
 export function code128BModules(value) {
-  const text = String(value);
+  const text = String(value ?? '');
   const codes = [START_B];
   let sum = START_B;
   for (let i = 0; i < text.length; i++) {
@@ -33,8 +33,10 @@ export function code128BModules(value) {
   let modules = '';
   for (const code of codes) {
     const widths = PATTERNS[code];
+    if (!widths) continue;
     for (let i = 0; i < widths.length; i++) {
       const w = Number(widths[i]);
+      if (!Number.isFinite(w) || w <= 0) continue;
       modules += (i % 2 === 0 ? '1' : '0').repeat(w); // even index = bar
     }
   }

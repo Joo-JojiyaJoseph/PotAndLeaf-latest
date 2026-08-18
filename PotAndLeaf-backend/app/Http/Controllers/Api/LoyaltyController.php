@@ -19,10 +19,11 @@ class LoyaltyController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
+        $companyId = $this->listCompanyId($request);
         $this->allow($request, 'customers.view');
 
-        $customers = Customer::forCompany($company->id)
+        $customers = Customer::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->orderByDesc('loyalty_points')
             ->orderBy('name')
             ->paginate(min(50, max(1, (int) $request->input('per_page', 25))));
@@ -35,7 +36,8 @@ class LoyaltyController extends Controller
             'loyalty_points' => (int) $c->loyalty_points,
         ]);
 
-        $recentLedger = LoyaltyLedgerEntry::forCompany($company->id)
+        $recentLedger = LoyaltyLedgerEntry::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('customer:id,name,customer_code')
             ->orderByDesc('created_at')
             ->limit(40)
@@ -52,11 +54,12 @@ class LoyaltyController extends Controller
                 'created_at'     => $e->created_at?->toIso8601String(),
             ]);
 
-        $totals = Customer::forCompany($company->id)
+        $totals = Customer::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->selectRaw('COUNT(*) as customers, COALESCE(SUM(loyalty_points), 0) as total_points, SUM(CASE WHEN loyalty_points > 0 THEN 1 ELSE 0 END) as with_points')
             ->first();
 
-        $all = $this->settings->all($company->id);
+        $all = $this->settings->all($this->company($request)->id);
 
         return $this->ok([
             'customers'     => $customersPayload,

@@ -21,11 +21,10 @@ class DamageEntryController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->filterCompany($request);
-        abort_unless($request->user()->hasPermission('damage.view', $company->id), 403);
+        abort_unless($request->user()->hasPermission('damage.view', $this->company($request)->id), 403);
 
         return $this->ok(DamageEntryResource::collection(
-            $this->damage->list($company->id, $request->only(['product_id', 'location_id', 'from', 'to', 'per_page']))
+            $this->damage->list($this->listCompanyId($request), $request->only(['product_id', 'location_id', 'from', 'to', 'per_page']))
         ));
     }
 
@@ -38,11 +37,12 @@ class DamageEntryController extends Controller
             'products' => Product::forCompany($company->id)
                 ->where('status', 'active')
                 ->orderBy('name')
-                ->get(['id', 'sku', 'name', 'current_stock'])
+                ->get(['id', 'sku', 'name', 'barcode', 'current_stock'])
                 ->map(fn ($p) => [
                     'id'            => $p->id,
                     'sku'           => $p->sku,
                     'name'          => $p->name,
+                    'barcode'       => $p->barcode,
                     'current_stock' => (float) $p->current_stock,
                 ]),
             'locations' => Location::forCompany($company->id)

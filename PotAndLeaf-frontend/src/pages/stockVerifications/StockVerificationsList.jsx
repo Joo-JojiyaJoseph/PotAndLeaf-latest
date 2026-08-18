@@ -58,7 +58,7 @@ export default function StockVerificationsList() {
           <p className="text-sm text-muted">Physical counts. HO approval adjusts system stock to the counted figures{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('stock_verifications.create') && (
             <Link to="/stock-verifications/new">
               <Button size="sm">

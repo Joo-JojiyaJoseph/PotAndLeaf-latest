@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Support\Api\ApiResponse;
+use App\Support\Media\MediaUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 /** Stores an uploaded image on the public disk and returns its URL.
  *  Used by product galleries and supplier/customer/company photos. */
@@ -24,7 +24,7 @@ class UploadController extends Controller
 
         return $this->created([
             'path' => $path,
-            'url'  => url(Storage::disk('public')->url($path)),
+            'url'  => MediaUrl::resolve($path),
         ], 'File uploaded.');
     }
 }

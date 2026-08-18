@@ -1,13 +1,24 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PrinterIcon, QrCodeIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon, PrinterIcon, QrCodeIcon } from '@heroicons/react/24/outline';
 import { useToast } from '../../lib/toast';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 import { printBarcodeSheet } from '../../lib/barcodeSheet';
+
+function SafeBarcode({ value, height = 40 }) {
+  if (!value) {
+    return <span className="text-xs text-muted">No barcode</span>;
+  }
+  try {
+    return <Barcode value={String(value)} height={height} />;
+  } catch {
+    return <span className="font-mono text-xs text-muted">{String(value)}</span>;
+  }
+}
 
 export default function BatchesPage() {
   const { activeCompany } = useAuth();
@@ -16,7 +27,7 @@ export default function BatchesPage() {
   const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState(searchParams.get('q') ?? '');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['inventory-batches', activeCompany?.id],
     queryFn: () => api.get('/inventory/batches').then((r) => r.data.data),
     enabled: Boolean(activeCompany),
@@ -41,10 +52,19 @@ export default function BatchesPage() {
   function printAll() {
     const labels = [];
     batches.forEach((b) => {
+      if (!b.barcode) return;
       const copies = Math.min(Math.max(Math.round(Number(b.remaining_qty) || 1), 1), 200);
       for (let i = 0; i < copies; i++) labels.push({ name: b.product, barcode: b.barcode });
     });
     if (labels.length) printBarcodeSheet(labels);
+  }
+
+  if (!activeCompany) {
+    return (
+      <div className="p-4 sm:p-6">
+        <Card className="p-10 text-center text-sm text-muted">Select a company to view batches.</Card>
+      </div>
+    );
   }
 
   return (
@@ -61,7 +81,17 @@ export default function BatchesPage() {
         </div>
       </div>
 
-      {untracked.length > 0 && (
+      {isError && (
+        <Card className="flex flex-wrap items-center justify-between gap-3 border-danger/30 bg-danger-soft p-4">
+          <div className="flex items-start gap-2 text-sm text-danger">
+            <ExclamationTriangleIcon className="mt-0.5 size-5 shrink-0" />
+            <span>{error?.response?.data?.message ?? 'Could not load batches. Please try again.'}</span>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
+        </Card>
+      )}
+
+      {!isError && untracked.length > 0 && (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-amber-300/50 bg-amber-50 p-4">
           <div className="text-sm text-amber-800">
             {untracked.length} product{untracked.length === 1 ? '' : 's'} hold stock with no batch barcode yet
@@ -82,7 +112,7 @@ export default function BatchesPage() {
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
-      ) : batches.length === 0 ? (
+      ) : isError ? null : batches.length === 0 ? (
         <Card className="p-10 text-center text-sm text-muted">No batches in stock.</Card>
       ) : (
         <Card className="overflow-hidden">
@@ -100,19 +130,24 @@ export default function BatchesPage() {
               </thead>
               <tbody>
                 {batches.map((b) => (
-                  <tr key={b.id} className="border-b border-line/60 last:border-0">
+                  <tr key={b.id ?? `${b.batch_no}-${b.barcode}`} className="border-b border-line/60 last:border-0">
                     <td className="px-4 py-2.5">
-                      <div className="font-medium text-ink">{b.product}</div>
-                      <div className="microlabel text-faint">{b.sku}</div>
+                      <div className="font-medium text-ink">{b.product ?? 'Unknown product'}</div>
+                      <div className="microlabel text-faint">{b.sku ?? '—'}</div>
+                      {b.source_product && (
+                        <div className="mt-0.5 text-xs text-muted">From bulk: {b.source_product}</div>
+                      )}
                     </td>
-                    <td className="px-4 py-2.5 text-muted">{b.batch_no}</td>
-                    <td className="px-4 py-2.5"><Badge tone="default">{b.source}</Badge></td>
-                    <td className="tnum px-4 py-2.5 text-right font-medium">{b.remaining_qty}</td>
-                    <td className="px-4 py-2.5"><div className="w-40"><Barcode value={b.barcode} height={40} /></div></td>
+                    <td className="px-4 py-2.5 text-muted">{b.batch_no ?? '—'}</td>
+                    <td className="px-4 py-2.5"><Badge tone="default">{b.source ?? '—'}</Badge></td>
+                    <td className="tnum px-4 py-2.5 text-right font-medium">{b.remaining_qty ?? 0}</td>
+                    <td className="px-4 py-2.5"><div className="w-40"><SafeBarcode value={b.barcode} height={40} /></div></td>
                     <td className="px-4 py-2.5 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => printBarcodeLabel({ barcode: b.barcode, name: b.product })}>
-                        <PrinterIcon className="size-4" />
-                      </Button>
+                      {b.barcode && (
+                        <Button variant="ghost" size="sm" onClick={() => printBarcodeLabel({ barcode: b.barcode, name: b.product })}>
+                          <PrinterIcon className="size-4" />
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))}

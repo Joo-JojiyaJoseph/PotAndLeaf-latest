@@ -13,9 +13,10 @@ class AdvanceOrderService
 {
     public function __construct(private readonly CreateSale $createSale) {}
 
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
-        return AdvanceOrder::forCompany($companyId)
+        return AdvanceOrder::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('customer:id,name')
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))

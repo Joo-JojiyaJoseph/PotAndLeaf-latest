@@ -12,12 +12,12 @@ class DamageEntryService
 {
     public function __construct(private readonly InventoryService $inventory) {}
 
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         $perPage = min((int) ($filters['per_page'] ?? 20), 100);
 
         return DamageEntry::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['product:id,sku,name'])
             ->when(filled($filters['product_id'] ?? null), fn ($q) => $q->where('product_id', $filters['product_id']))
             ->when(filled($filters['from'] ?? null), fn ($q) => $q->whereDate('entry_date', '>=', $filters['from']))

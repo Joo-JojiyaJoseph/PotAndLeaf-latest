@@ -21,19 +21,21 @@ class DashboardController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
-        $companyId = $company->id;
+        $companyId = $this->listCompanyId($request);
 
-        $lowStock = Product::query()->forCompany($companyId)
+        $lowStock = Product::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->whereColumn('current_stock', '<=', 'reorder_level')->count();
+
+        $company = $this->listCompany($request);
 
         return $this->ok([
             'company' => ['id' => $company->id, 'name' => $company->name],
             'cards'   => [
-                ['key' => 'suppliers',  'label' => 'Suppliers',    'value' => Supplier::query()->forCompany($companyId)->count()],
-                ['key' => 'products',   'label' => 'Products',     'value' => Product::query()->forCompany($companyId)->count()],
+                ['key' => 'suppliers',  'label' => 'Suppliers',    'value' => Supplier::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->count()],
+                ['key' => 'products',   'label' => 'Products',     'value' => Product::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->count()],
                 ['key' => 'low_stock',  'label' => 'Low stock',    'value' => $lowStock, 'tone' => $lowStock > 0 ? 'warning' : 'default'],
-                ['key' => 'members',    'label' => 'Users',        'value' => $company->users()->count()],
+                ['key' => 'members',    'label' => 'Users',        'value' => $companyId !== null ? $company->users()->count() : \App\Models\User::count()],
             ],
             // Placeholder feed until transactional modules write real events.
             'activity' => [],

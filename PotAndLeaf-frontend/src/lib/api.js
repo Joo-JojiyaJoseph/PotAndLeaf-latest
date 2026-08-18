@@ -28,10 +28,9 @@ export function withCompany(id, config = {}) {
 }
 
 const api = axios.create({
-  // Dev uses the Vite proxy (relative /api). A production build has no proxy,
-  // so point it at the deployed backend via VITE_API_URL at build time, e.g.
-  // VITE_API_URL=https://test-potandleaf-backend.webfolks.in/api
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  // Dev always uses the Vite proxy (/api → VITE_API_PROXY) so there is no CORS.
+  // Production builds use VITE_API_URL from .env.production at build time.
+  baseURL: import.meta.env.DEV ? '/api' : (import.meta.env.VITE_API_URL || '/api'),
   headers: { Accept: 'application/json' },
 });
 

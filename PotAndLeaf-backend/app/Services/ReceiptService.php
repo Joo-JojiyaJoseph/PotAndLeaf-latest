@@ -10,12 +10,12 @@ use Illuminate\Support\Facades\DB;
 
 class ReceiptService
 {
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         $perPage = min((int) ($filters['per_page'] ?? 20), 100);
 
         return CustomerReceipt::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['customer:id,name', 'sale:id,sale_no'])
             ->when(filled($filters['customer_id'] ?? null), fn ($q) => $q->where('customer_id', $filters['customer_id']))
             ->orderByDesc('receipt_date')
@@ -62,10 +62,10 @@ class ReceiptService
     }
 
     /** Confirmed sales that carry a credit balance, with received / balance / status. */
-    public function receivables(int|string $companyId, ?string $customerId = null): array
+    public function receivables(int|string|null $companyId, ?string $customerId = null): array
     {
         return Sale::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('status', 'confirmed')
             ->whereNotNull('customer_id')
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))

@@ -37,9 +37,10 @@ class LocationStockService
     }
 
     /** Per-location balances for a company (optionally one location), joined to product + location names. */
-    public function balances(int|string $companyId, ?string $locationId = null): Collection
+    public function balances(int|string|null $companyId, ?string $locationId = null): Collection
     {
-        return LocationStock::forCompany($companyId)
+        return LocationStock::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
             ->where('qty', '<>', 0)
             ->with(['product:id,sku,name', 'location:id,name,type'])

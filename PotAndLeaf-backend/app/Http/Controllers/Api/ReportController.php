@@ -334,8 +334,12 @@ class ReportController extends Controller
         return $this->export->pdf('Customer Rental History', $rows, $headers, $labels)->download("rental-customer-{$customer}.pdf");
     }
 
-    private function reportCompanyId(Request $request): int|string
+    private function reportCompanyId(Request $request): int|string|null
     {
+        if ($request->user()->is_super_admin && $request->query('company_id') === 'all') {
+            return null;
+        }
+
         if ($request->user()->is_super_admin && $request->filled('company_id')) {
             return (int) $request->query('company_id');
         }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\ResolvesMediaUrls;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -9,10 +10,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Product */
 class ProductResource extends JsonResource
 {
+    use ResolvesMediaUrls;
     public function toArray(Request $request): array
     {
         return [
             'id'              => $this->id,
+            'company_id'      => $this->company_id,
             'sku'             => $this->sku,
             'name'            => $this->name,
             'barcode'         => $this->barcode,
@@ -40,7 +43,7 @@ class ProductResource extends JsonResource
             'width_cm'        => $this->width_cm !== null ? (float) $this->width_cm : null,
             'height_cm'       => $this->height_cm !== null ? (float) $this->height_cm : null,
             'is_low_stock'    => $this->is_low_stock,
-            'images'          => $this->images ?? [],
+            'images'          => $this->mediaUrls($this->images ?? []),
             'status'          => $this->status,
             'is_rental'       => (bool) $this->is_rental,
             'rental_daily_rate' => $this->rental_daily_rate !== null ? (float) $this->rental_daily_rate : null,

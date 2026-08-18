@@ -24,11 +24,9 @@ class ProductController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'products.view');
 
-        $products = Product::query()
-            ->forCompany($company->id)
+        $products = $this->applyListCompanyScope(Product::query(), $request)
             ->with(['unit:id,short_name,name', 'category:id,name'])
             ->when(filled($request->query('search')), fn ($q) => $q->search($request->query('search')))
             ->when(filled($request->query('category_id')), fn ($q) => $q->where('category_id', $request->query('category_id')))
@@ -108,21 +106,45 @@ class ProductController extends Controller
 
         $batches = \App\Models\ProductBatch::forCompany($companyId)
             ->where('remaining_qty', '>', 0)
-            ->with(['product:id,sku,name', 'purchase:id,purchase_no'])
+            ->with(['product:id,sku,name', 'purchase:id,purchase_no', 'bulkSplit:id,split_no,source_product_name'])
             ->orderBy('created_at')
             ->get()
-            ->map(fn ($b) => [
-                'id'            => $b->id,
-                'product_id'    => $b->product_id,
-                'sku'           => $b->product?->sku,
-                'product'       => $b->product?->name,
-                'batch_no'      => $b->batch_no,
-                'barcode'       => $b->barcode,
-                'remaining_qty' => (float) $b->remaining_qty,
-                'qty'           => (float) $b->qty,
-                'source'        => $b->purchase?->purchase_no
-                    ?? ($b->production_order_id ? 'Production' : ($b->purchase_id ? 'Purchase' : 'Opening')),
-            ])->values();
+            ->map(function ($b) {
+                try {
+                    $source = $b->purchase?->purchase_no
+                        ?? ($b->bulkSplit ? "Split {$b->bulkSplit->split_no}" : null)
+                        ?? ($b->production_order_id ? 'Production' : ($b->purchase_id ? 'Purchase' : 'Opening'));
+
+                    return [
+                        'id'            => $b->id,
+                        'product_id'    => $b->product_id,
+                        'sku'           => $b->product?->sku ?? '—',
+                        'product'       => $b->product?->name ?? 'Unknown product',
+                        'batch_no'      => $b->batch_no ?? '—',
+                        'barcode'       => $b->barcode,
+                        'remaining_qty' => (float) ($b->remaining_qty ?? 0),
+                        'qty'           => (float) ($b->qty ?? 0),
+                        'cost_price'    => (float) ($b->cost_price ?? 0),
+                        'source'        => $source,
+                        'bulk_split_id' => $b->bulk_split_id,
+                        'source_product' => $b->bulkSplit?->source_product_name,
+                    ];
+                } catch (\Throwable) {
+                    return [
+                        'id'            => $b->id,
+                        'product_id'    => $b->product_id,
+                        'sku'           => '—',
+                        'product'       => 'Unknown product',
+                        'batch_no'      => $b->batch_no ?? '—',
+                        'barcode'       => $b->barcode,
+                        'remaining_qty' => (float) ($b->remaining_qty ?? 0),
+                        'qty'           => (float) ($b->qty ?? 0),
+                        'source'        => 'Unknown',
+                    ];
+                }
+            })
+            ->filter(fn ($row) => filled($row['id']))
+            ->values();
 
         // Products holding stock that isn't covered by any batch yet.
         $covered = $batches->groupBy('product_id')->map(fn ($g) => $g->sum('remaining_qty'));
@@ -130,7 +152,9 @@ class ProductController extends Controller
             ->where('current_stock', '>', 0)
             ->get(['id', 'sku', 'name', 'current_stock'])
             ->map(fn ($p) => [
-                'product_id' => $p->id, 'sku' => $p->sku, 'product' => $p->name,
+                'product_id'    => $p->id,
+                'sku'           => $p->sku ?? '—',
+                'product'       => $p->name ?? 'Unknown product',
                 'untracked_qty' => round((float) $p->current_stock - (float) ($covered[$p->id] ?? 0), 3),
             ])
             ->filter(fn ($r) => $r['untracked_qty'] > 0.001)
@@ -187,21 +211,77 @@ class ProductController extends Controller
             ->with('product:id,sku,name,mrp,retail_price,gst_rate,hsn_code')
             ->first();
 
-        abort_unless($batch, 404, 'No batch found for this barcode.');
-        abort_if((float) $batch->remaining_qty <= 0, 422, 'This batch is out of stock.');
+        if ($batch) {
+            abort_if((float) $batch->remaining_qty <= 0, 422, 'This batch is out of stock.');
+
+            return $this->ok([
+                'batch_id'      => $batch->id,
+                'batch_no'      => $batch->batch_no,
+                'barcode'       => $batch->barcode,
+                'remaining_qty' => (float) $batch->remaining_qty,
+                'product'       => [
+                    'id'       => $batch->product?->id,
+                    'sku'      => $batch->product?->sku,
+                    'name'     => $batch->product?->name,
+                    'hsn_code' => $batch->product?->hsn_code,
+                    'gst_rate' => (float) $batch->product?->gst_rate,
+                    'price'    => (float) ($batch->product?->retail_price ?: $batch->product?->mrp),
+                ],
+            ]);
+        }
+
+        $splitUnit = \App\Models\BulkSplitUnit::query()
+            ->where('barcode', $barcode)
+            ->whereHas('split', fn ($q) => $q->where('company_id', $companyId)->where('status', 'confirmed'))
+            ->with(['product:id,sku,name,mrp,retail_price,gst_rate,hsn_code', 'item'])
+            ->first();
+
+        if ($splitUnit?->product) {
+            $product = $splitUnit->product;
+            $batch = \App\Models\ProductBatch::forCompany($companyId)
+                ->where('product_id', $product->id)
+                ->where('remaining_qty', '>', 0)
+                ->orderByDesc('received_at')
+                ->first();
+
+            abort_if(! $batch && (float) $product->current_stock <= 0, 422, 'This split unit is out of stock.');
+
+            return $this->ok([
+                'batch_id'      => $batch?->id,
+                'batch_no'      => $batch?->batch_no,
+                'barcode'       => $splitUnit->barcode,
+                'remaining_qty' => (float) ($batch?->remaining_qty ?? $product->current_stock),
+                'product'       => [
+                    'id'       => $product->id,
+                    'sku'      => $product->sku,
+                    'name'     => $product->name,
+                    'hsn_code' => $product->hsn_code,
+                    'gst_rate' => (float) $product->gst_rate,
+                    'price'    => (float) ($product->retail_price ?: $product->mrp),
+                ],
+            ]);
+        }
+
+        $product = \App\Models\Product::forCompany($companyId)
+            ->where('barcode', $barcode)
+            ->where('status', 'active')
+            ->first(['id', 'sku', 'name', 'mrp', 'retail_price', 'gst_rate', 'hsn_code', 'barcode', 'current_stock']);
+
+        abort_unless($product, 404, 'No product or batch found for this barcode.');
+        abort_if((float) $product->current_stock <= 0, 422, 'This product is out of stock.');
 
         return $this->ok([
-            'batch_id'      => $batch->id,
-            'batch_no'      => $batch->batch_no,
-            'barcode'       => $batch->barcode,
-            'remaining_qty' => (float) $batch->remaining_qty,
+            'batch_id'      => null,
+            'batch_no'      => null,
+            'barcode'       => $product->barcode,
+            'remaining_qty' => (float) $product->current_stock,
             'product'       => [
-                'id'       => $batch->product?->id,
-                'sku'      => $batch->product?->sku,
-                'name'     => $batch->product?->name,
-                'hsn_code' => $batch->product?->hsn_code,
-                'gst_rate' => (float) $batch->product?->gst_rate,
-                'price'    => (float) ($batch->product?->retail_price ?: $batch->product?->mrp),
+                'id'       => $product->id,
+                'sku'      => $product->sku,
+                'name'     => $product->name,
+                'hsn_code' => $product->hsn_code,
+                'gst_rate' => (float) $product->gst_rate,
+                'price'    => (float) ($product->retail_price ?: $product->mrp),
             ],
         ]);
     }

@@ -27,7 +27,7 @@ class CommissionController extends Controller
         $this->allow($request, 'commission.view');
 
         $staff = User::query()
-            ->whereHas('companies', fn ($q) => $q->whereKey($company->id))
+            ->activeMembers($company->id)
             ->orderBy('name')
             ->get(['users.id', 'users.name'])
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
@@ -37,10 +37,9 @@ class CommissionController extends Controller
 
     public function rules(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'commission.view');
 
-        return $this->ok(CommissionRuleResource::collection($this->commission->rules($company->id)));
+        return $this->ok(CommissionRuleResource::collection($this->commission->rules($this->listCompanyId($request))));
     }
 
     public function upsertRule(UpsertCommissionRuleRequest $request): JsonResponse
@@ -53,22 +52,20 @@ class CommissionController extends Controller
 
     public function compute(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'commission.view');
         $validated = $request->validate([
             'user_id' => ['required', 'integer'],
             'period'  => ['required', 'regex:/^\d{4}-\d{2}$/'],
         ]);
 
-        return $this->ok($this->commission->compute($company->id, (int) $validated['user_id'], $validated['period']));
+        return $this->ok($this->commission->compute($this->listCompanyId($request), (int) $validated['user_id'], $validated['period']));
     }
 
     public function supervisorEntries(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'commission.view');
 
-        $entries = $this->commission->supervisorEntries($company->id, $request->only(['user_id', 'from', 'to', 'per_page']));
+        $entries = $this->commission->supervisorEntries($this->listCompanyId($request), $request->only(['user_id', 'from', 'to', 'per_page']));
         $entries->getCollection()->transform(fn ($e) => [
             'id'            => $e->id,
             'user_id'       => $e->user_id,
@@ -86,10 +83,9 @@ class CommissionController extends Controller
 
     public function payouts(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'commission.view');
 
-        return $this->ok(CommissionPayoutResource::collection($this->commission->payouts($company->id)));
+        return $this->ok(CommissionPayoutResource::collection($this->commission->payouts($this->listCompanyId($request))));
     }
 
     public function storePayout(StoreCommissionPayoutRequest $request): JsonResponse

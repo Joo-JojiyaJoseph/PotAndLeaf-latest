@@ -21,7 +21,7 @@ class StockVerificationService
     ) {}
 
     /** @param array<string,mixed> $filters */
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         return $this->verifications->paginateForCompany($companyId, $filters);
     }

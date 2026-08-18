@@ -29,13 +29,19 @@ class UpdateSupplierRequest extends FormRequest
 
         return [
             'supplier_code' => [
-                'required', 'string', 'max:50',
+                'nullable', 'string', 'max:50',
                 Rule::unique('suppliers', 'supplier_code')
                     ->where('company_id', $companyId)
                     ->whereNull('deleted_at')
                     ->ignore($supplierId),
             ],
-            'name'            => ['required', 'string', 'max:191'],
+            'name'            => [
+                'required', 'string', 'max:191',
+                Rule::unique('suppliers', 'name')
+                    ->where('company_id', $companyId)
+                    ->whereNull('deleted_at')
+                    ->ignore($supplierId),
+            ],
             'email'           => ['nullable', 'email', 'max:191'],
             'phone'           => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'gst_number'      => ['nullable', 'string', 'max:20'],
@@ -63,7 +69,9 @@ class UpdateSupplierRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'phone.regex' => 'Enter a valid phone number (digits, and optionally + - ( ) spaces).',
+            'phone.regex'          => 'Enter a valid phone number (digits, and optionally + - ( ) spaces).',
+            'name.unique'          => 'A supplier with this name already exists in this company.',
+            'supplier_code.unique' => 'This supplier code is already used in this company.',
         ];
     }
 }

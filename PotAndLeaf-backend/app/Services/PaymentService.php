@@ -12,12 +12,12 @@ class PaymentService
 {
     public function __construct(private readonly ActivityLogService $activity) {}
 
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         $perPage = min((int) ($filters['per_page'] ?? 20), 100);
 
         return SupplierPayment::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['supplier:id,name', 'purchase:id,purchase_no'])
             ->when(filled($filters['supplier_id'] ?? null), fn ($q) => $q->where('supplier_id', $filters['supplier_id']))
             ->orderByDesc('payment_date')
@@ -80,10 +80,10 @@ class PaymentService
     }
 
     /** Confirmed purchases with paid / balance / status / due date. */
-    public function payables(int|string $companyId, int|string|null $supplierId = null): array
+    public function payables(int|string|null $companyId, int|string|null $supplierId = null): array
     {
         return Purchase::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('status', 'confirmed')
             ->when(filled($supplierId), fn ($q) => $q->where('supplier_id', $supplierId))
             ->with('supplier:id,name,credit_days')

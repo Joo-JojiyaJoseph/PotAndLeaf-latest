@@ -38,7 +38,7 @@ export default function LoyaltyPage() {
           <p className="text-sm text-muted">Customer balances, earn/redeem rules and recent activity{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('settings.update') && (
             <Link to="/settings"><Button variant="outline" size="sm"><SparklesIcon className="size-4" /> Loyalty settings</Button></Link>
           )}

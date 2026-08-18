@@ -44,4 +44,13 @@ class User extends Authenticatable
         return $this->companies()->wherePivot('is_default', true)->first()
             ?? $this->companies()->first();
     }
+
+    /** Active users with company membership — for lists and dropdowns. */
+    public function scopeActiveMembers($query, int|string|null $companyId = null)
+    {
+        return $query
+            ->where('is_super_admin', false)
+            ->where('is_active', true)
+            ->whereHas('companies', fn ($q) => $companyId !== null ? $q->whereKey($companyId) : $q);
+    }
 }

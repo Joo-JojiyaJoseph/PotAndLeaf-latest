@@ -21,11 +21,10 @@ class CustomerController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'customers.view');
 
         return $this->ok(CustomerResource::collection(
-            $this->customers->list($company->id, $request->only(['search', 'status', 'type', 'per_page']))
+            $this->customers->list($this->listCompanyId($request), $request->only(['search', 'status', 'type', 'per_page']))
         ));
     }
 

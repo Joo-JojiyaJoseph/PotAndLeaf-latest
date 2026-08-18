@@ -36,7 +36,7 @@ export default function RentalsList() {
           <p className="text-sm text-muted">Rent plants out on agreements. Activating issues stock; returns bring it back{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('rental.create') && <Link to="/rentals/new"><Button size="sm"><PlusIcon className="size-4" /> New rental</Button></Link>}
         </div>
       </div>

@@ -34,7 +34,8 @@ class CompanyController extends Controller
         if (empty($data['code'])) {
             $data['code'] = $this->nextCompanyCode();
         }
-        $locations = $this->extractLocations($data); // never a companies column
+        // `locations` is a column on the companies table — keep it in $data so
+        // it persists with the row. (Do NOT strip it out.)
 
         // A code from a soft-deleted company still occupies the unique index.
         // Re-adding that code should reactivate the old record (with the new
@@ -43,13 +44,11 @@ class CompanyController extends Controller
         if ($trashed) {
             $trashed->restore();
             $trashed->fill($data)->save();
-            $this->syncLocations($trashed, $locations);
 
             return $this->created(new CompanyResource($trashed), 'Company created.');
         }
 
         $company = Company::create($data);
-        $this->syncLocations($company, $locations);
 
         return $this->created(new CompanyResource($company), 'Company created.');
     }
@@ -65,55 +64,15 @@ class CompanyController extends Controller
     {
         $data = $request->validated();
         unset($data['photo'], $data['code']);
-        $locations = $this->extractLocations($data);
 
         if (array_key_exists('logo', $data)) {
             $data['logo'] = MediaStorage::replace($company->logo, $data['logo']);
         }
 
+        // `locations` stays in $data and is saved as a company column.
         $company->update($data);
-        $this->syncLocations($company, $locations);
 
         return $this->ok(new CompanyResource($company->fresh()), 'Company updated.');
-    }
-
-    /** Pull the free-text "locations" out of the payload — it's not a companies column. */
-    private function extractLocations(array &$data): ?array
-    {
-        if (! array_key_exists('locations', $data)) {
-            return null;
-        }
-        $raw = $data['locations'];
-        unset($data['locations']);
-        if (blank($raw)) {
-            return [];
-        }
-
-        return collect(preg_split('/\r\n|\r|\n/', (string) $raw))
-            ->map(fn ($l) => trim($l))->filter()->unique()->values()->all();
-    }
-
-    /** Create any new godown/shop lines as Location records (never destructive). */
-    private function syncLocations(Company $company, ?array $names): void
-    {
-        if ($names === null) {
-            return;
-        }
-        $existing = $company->locations()->pluck('name')->map(fn ($n) => mb_strtolower($n))->all();
-        $first = $company->locations()->count() === 0;
-        foreach ($names as $name) {
-            if (in_array(mb_strtolower($name), $existing, true)) {
-                continue;
-            }
-            $company->locations()->create([
-                'name'       => $name,
-                'code'       => strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $name) ?: 'LOC', 0, 6)).'-'.strtoupper(substr((string) \Illuminate\Support\Str::uuid(), 0, 4)),
-                'type'       => 'godown',
-                'is_default' => $first,
-                'is_active'  => true,
-            ]);
-            $first = false;
-        }
     }
 
     public function destroy(Request $request, Company $company): JsonResponse

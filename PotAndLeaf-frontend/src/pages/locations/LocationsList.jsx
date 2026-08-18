@@ -47,7 +47,7 @@ export default function LocationsList() {
           <p className="text-sm text-muted">Godowns and shops that hold stock{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('locations.manage') && <Button size="sm" onClick={openNew}><PlusIcon className="size-4" /> New location</Button>}
         </div>
       </div>

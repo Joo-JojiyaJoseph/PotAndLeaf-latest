@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -25,8 +25,10 @@ const blank = {
 
 export default function ProductForm() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { activeCompany, isSuperAdmin, companies, companyId } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const toast = useToast();
   const isEdit = Boolean(id);
   const [form, setForm] = useState(blank);
@@ -38,7 +40,15 @@ export default function ProductForm() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [margin, setMargin] = useState('40');
   const companyReady = isEdit || !isSuperAdmin || Boolean(formCompanyId);
-  const targetCompanyId = isEdit ? null : (isSuperAdmin ? formCompanyId : companyId);
+
+  const { data: existing, isLoading: loadingExisting } = useQuery({
+    queryKey: ['product', id, searchParams.get('company_id')],
+    queryFn: () => api.get(`/products/${id}`, withCompany(searchParams.get('company_id') || companyId)).then((r) => r.data.data),
+    enabled: isEdit && Boolean(companyId),
+  });
+
+  const editCompanyId = existing?.company_id ?? searchParams.get('company_id') ?? companyId;
+  const targetCompanyId = isEdit ? editCompanyId : (isSuperAdmin ? formCompanyId : companyId);
   const companyCfg = targetCompanyId ? withCompany(targetCompanyId) : {};
 
   const applyMargin = () => {
@@ -50,14 +60,8 @@ export default function ProductForm() {
 
   const { data: formData, isLoading: loadingForm } = useQuery({
     queryKey: ['product-form-data', targetCompanyId || activeCompany?.id],
-    enabled: Boolean(activeCompany) && companyReady,
+    enabled: Boolean(activeCompany) && companyReady && Boolean(targetCompanyId || !isSuperAdmin),
     queryFn: () => api.get('/products/form-data', companyCfg).then((r) => r.data.data),
-  });
-
-  const { data: existing, isLoading: loadingExisting } = useQuery({
-    queryKey: ['product', id],
-    queryFn: () => api.get(`/products/${id}`).then((r) => r.data.data),
-    enabled: isEdit,
   });
 
   const categories = formData?.categories ?? [];
@@ -100,6 +104,10 @@ export default function ProductForm() {
 
     const clientErrors = {};
     if (!form.name?.trim()) clientErrors.name = ['Name is required.'];
+    if (!form.category_id && !form.subcategory_id) clientErrors.category_id = ['Category is required.'];
+    if (form.cost_price === '' || form.cost_price == null || Number.isNaN(Number(form.cost_price))) {
+      clientErrors.cost_price = ['Cost price is required.'];
+    }
     if (Object.keys(clientErrors).length) {
       setErrors(clientErrors);
       toast.error('Please fix the highlighted fields.');
@@ -127,11 +135,18 @@ export default function ProductForm() {
 
     try {
       const res = isEdit
-        ? await api.put(`/products/${id}`, payload)
+        ? await api.put(`/products/${id}`, payload, companyCfg)
         : await api.post('/products', payload, companyCfg);
+      await queryClient.invalidateQueries({ queryKey: ['products'] });
+      await queryClient.invalidateQueries({ queryKey: ['product', id] });
       toast.success(isEdit ? 'Product updated.' : 'Product created.');
       setBarcode(res.data.data.barcode);
-      navigate('/products');
+      if (isEdit) {
+        seededRef.current = null;
+        navigate(`/products/${id}${editCompanyId ? `?company_id=${editCompanyId}` : ''}`);
+      } else {
+        navigate('/products');
+      }
     } catch (e) {
       const apiErrors = e.response?.data?.errors ?? {};
       const message = e.response?.data?.message ?? 'Could not save the product.';
@@ -203,7 +218,7 @@ export default function ProductForm() {
                 {STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s}</option>)}
               </select>
             </Field>
-            <Field label="Category" error={err('category_id')}>
+            <Field label="Category" required error={err('category_id')}>
               <select
                 value={form.category_id}
                 onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value, subcategory_id: '' }))}
@@ -255,7 +270,7 @@ export default function ProductForm() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <Field label="Cost price"><Input type="number" step="0.01" value={form.cost_price} onChange={set('cost_price')} /></Field>
+              <Field label="Cost price" required error={err('cost_price')}><Input type="number" step="0.01" value={form.cost_price} onChange={set('cost_price')} /></Field>
               <Field label="MRP"><Input type="number" step="0.01" value={form.mrp} onChange={set('mrp')} /></Field>
               <Field label="Retail price"><Input type="number" step="0.01" value={form.retail_price} onChange={set('retail_price')} /></Field>
               <Field label="Wholesale price"><Input type="number" step="0.01" value={form.wholesale_price} onChange={set('wholesale_price')} /></Field>

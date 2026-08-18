@@ -21,10 +21,9 @@ class BulkSplitController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'bulk_splits.view');
 
-        return $this->ok(BulkSplitResource::collection($this->splits->list($company->id, $request->only(['search', 'status', 'per_page']))));
+        return $this->ok(BulkSplitResource::collection($this->splits->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))));
     }
 
     public function formData(Request $request): JsonResponse
@@ -50,6 +49,13 @@ class BulkSplitController extends Controller
         $company = $this->company($request);
         $split = $this->splits->create($company->id, $request->validated(), $request->user()->id);
 
+        if ($request->boolean('confirm_immediately')) {
+            abort_unless($request->user()->hasPermission('bulk_splits.confirm', $company->id), 403);
+            $split = $this->splits->confirm($split, $request->user()->id);
+
+            return $this->created(new BulkSplitResource($split), 'Split confirmed — products created and stock updated.');
+        }
+
         return $this->created(new BulkSplitResource($split), 'Split saved as draft.');
     }
 
@@ -58,7 +64,23 @@ class BulkSplitController extends Controller
         $this->allow($request, 'bulk_splits.view');
         $this->sameCompany($request, $bulkSplit);
 
-        return $this->ok(new BulkSplitResource($bulkSplit->load(['items.units', 'sourceProduct:id,sku,name'])));
+        $bulkSplit->load([
+            'items.units',
+            'items.product:id,sku,name,barcode,unit_id',
+            'items.product.unit:id,short_name,name',
+            'sourceProduct:id,sku,name',
+        ]);
+
+        $batches = \App\Models\ProductBatch::forCompany($bulkSplit->company_id)
+            ->where('bulk_split_id', $bulkSplit->id)
+            ->get(['id', 'product_id', 'batch_no', 'barcode', 'qty', 'remaining_qty', 'cost_price', 'status', 'received_at']);
+
+        $batchByProduct = $batches->keyBy('product_id');
+        $bulkSplit->items->each(function ($item) use ($batchByProduct) {
+            $item->setRelation('splitBatch', $batchByProduct->get($item->product_id));
+        });
+
+        return $this->ok(new BulkSplitResource($bulkSplit));
     }
 
     public function confirm(Request $request, BulkSplit $bulkSplit): JsonResponse

@@ -49,7 +49,7 @@ export default function PurchaseReturnsList() {
           <p className="text-sm text-muted">Debit notes to suppliers. Confirming reverses stock out of inventory{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('purchase_returns.create') && (
             <Link to="/purchase-returns/new">
               <Button size="sm">

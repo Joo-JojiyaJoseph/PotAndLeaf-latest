@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -54,6 +54,10 @@ const EMPTY = {
 const selectClass =
   'h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30';
 
+function supplierDetailPath(s) {
+  return s.company_id ? `/suppliers/${s.id}?company_id=${s.company_id}` : `/suppliers/${s.id}`;
+}
+
 export default function SuppliersList() {
   const { activeCompany, can, isSuperAdmin, companies, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
@@ -72,6 +76,11 @@ export default function SuppliersList() {
   const [pickedCompany, setPickedCompany] = useState(false);
   const [formCompanyId, setFormCompanyId] = useState('');
 
+  useEffect(() => {
+    const t = setTimeout(() => { setPage(1); setDebounced(search.trim()); }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['suppliers', activeCompany?.id, filterCompanyId, debounced, page],
     queryFn: () =>
@@ -89,7 +98,8 @@ export default function SuppliersList() {
   const saveMutation = useMutation({
     mutationFn: (payload) => {
       const { target_company_id, ...data } = payload;
-      const cfg = target_company_id ? withCompany(target_company_id) : {};
+      const headerCompany = target_company_id ?? editing?.company_id;
+      const cfg = headerCompany ? withCompany(headerCompany) : {};
       return editing
         ? api.put(`/suppliers/${editing.id}`, data, cfg)
         : api.post('/suppliers', data, cfg);
@@ -145,6 +155,7 @@ export default function SuppliersList() {
         }
       });
       if (!editing && isSuperAdmin) payload.target_company_id = formCompanyId;
+      else if (editing?.company_id) payload.target_company_id = editing.company_id;
       delete payload.supplier_code;
       saveMutation.mutate(payload, { onSettled: release });
     });
@@ -154,7 +165,7 @@ export default function SuppliersList() {
     const ok = await confirm({ title: 'Delete supplier', message: `Delete ${row.name}? It can be restored later.`, confirmLabel: 'Delete', tone: 'danger' });
     if (!ok) return;
     try {
-      await api.delete(`/suppliers/${row.id}`);
+      await api.delete(`/suppliers/${row.id}`, withCompany(row.company_id ?? companyId));
       toast.success(`${row.name} deleted`);
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
     } catch (e) {
@@ -163,7 +174,7 @@ export default function SuppliersList() {
   }
 
   async function onToggle(row, next) {
-    await api.patch(`/suppliers/${row.id}/status`, { status: next ? 'active' : 'inactive' });
+    await api.patch(`/suppliers/${row.id}/status`, { status: next ? 'active' : 'inactive' }, withCompany(row.company_id ?? companyId));
     toast.success(`${row.name} ${next ? 'activated' : 'deactivated'}`);
     queryClient.invalidateQueries({ queryKey: ['suppliers'] });
   }
@@ -179,7 +190,7 @@ export default function SuppliersList() {
           <p className="text-sm text-muted">Vendor master — GST, terms and outstanding balances{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('suppliers.create') && (
             <Button size="sm" onClick={openCreate}>
               <PlusIcon className="size-4" /> New supplier
@@ -225,7 +236,7 @@ export default function SuppliersList() {
                     : <PhotoIcon className="size-7 text-leaf/50" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <button onClick={() => navigate(`/suppliers/${s.id}`)} className="block truncate text-left font-semibold text-ink hover:text-leaf">
+                  <button onClick={() => navigate(supplierDetailPath(s))} className="block truncate text-left font-semibold text-ink hover:text-leaf">
                     {s.name}
                   </button>
                   <p className="tnum text-xs text-muted">{s.supplier_code}</p>
@@ -240,7 +251,7 @@ export default function SuppliersList() {
                   : <Badge tone={s.status}>{s.status}</Badge>}
               </div>
               <div className="mt-2 flex items-center justify-end gap-1">
-                <button onClick={() => navigate(`/suppliers/${s.id}`)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="View">
+                <button onClick={() => navigate(supplierDetailPath(s))} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="View">
                   <EyeIcon className="size-4" />
                 </button>
                 {(s.can?.update ?? can('suppliers.update')) && (

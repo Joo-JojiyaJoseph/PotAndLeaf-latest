@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\ResolvesMediaUrls;
 use App\Models\Supplier;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -9,14 +10,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Supplier */
 class SupplierResource extends JsonResource
 {
+    use ResolvesMediaUrls;
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
+        $user = $request->user();
+        $companyId = $this->company_id;
+
         return [
             'id'                => $this->id,
+            'company_id'        => $companyId,
             'supplier_code'     => $this->supplier_code,
             'name'              => $this->name,
-            'photo'             => $this->photo,
+            'photo'             => $this->mediaUrl($this->photo),
             'email'             => $this->email,
             'phone'             => $this->phone,
             'gst_number'        => $this->gst_number,
@@ -41,8 +47,8 @@ class SupplierResource extends JsonResource
             'created_at'      => $this->created_at?->toIso8601String(),
             'updated_at'      => $this->updated_at?->toIso8601String(),
             'can'             => [
-                'update' => $request->user()?->can('update', $this->resource),
-                'delete' => $request->user()?->can('delete', $this->resource),
+                'update' => $user?->hasPermission('suppliers.update', $companyId),
+                'delete' => $user?->hasPermission('suppliers.delete', $companyId),
             ],
         ];
     }

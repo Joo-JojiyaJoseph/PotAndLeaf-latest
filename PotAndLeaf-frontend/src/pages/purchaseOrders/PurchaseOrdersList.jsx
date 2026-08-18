@@ -36,7 +36,7 @@ export default function PurchaseOrdersList() {
           <p className="text-sm text-muted">Raise orders to suppliers, then convert them to GRNs on receipt{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('po.create') && <Link to="/purchase-orders/new"><Button size="sm"><PlusIcon className="size-4" /> New PO</Button></Link>}
         </div>
       </div>

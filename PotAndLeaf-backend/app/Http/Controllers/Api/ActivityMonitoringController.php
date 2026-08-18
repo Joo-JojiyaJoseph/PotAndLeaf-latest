@@ -18,14 +18,13 @@ class ActivityMonitoringController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $user = $request->user();
         $ok = $user->is_super_admin
             || $user->hasPermission('*', $request->attributes->get('company')->id)
             || $user->hasPermission('activity.view', $request->attributes->get('company')->id);
         abort_unless($ok, 403);
 
-        return $this->ok($this->activity->snapshot($company->id));
+        return $this->ok($this->activity->snapshot($this->listCompanyId($request)));
     }
 
     public function formData(Request $request): JsonResponse

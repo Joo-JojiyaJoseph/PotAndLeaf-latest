@@ -15,9 +15,10 @@ class RentalService
 {
     public function __construct(private readonly InventoryService $inventory) {}
 
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
-        return Rental::forCompany($companyId)
+        return Rental::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('customer:id,name')
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))

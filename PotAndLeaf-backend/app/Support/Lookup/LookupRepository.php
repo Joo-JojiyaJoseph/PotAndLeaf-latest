@@ -27,7 +27,7 @@ class LookupRepository
     ) {}
 
     /** @param array<string,mixed> $filters */
-    public function paginateForCompany(int|string $companyId, array $filters): LengthAwarePaginator
+    public function paginateForCompany(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         $sort = in_array($filters['sort'] ?? '', $this->sortable, true)
             ? $filters['sort'] : 'name';
@@ -93,8 +93,9 @@ class LookupRepository
             ->exists();
     }
 
-    private function query(int|string $companyId)
+    private function query(int|string|null $companyId)
     {
-        return ($this->modelClass)::query()->where('company_id', $companyId);
+        return ($this->modelClass)::query()
+            ->when($companyId !== null, fn ($q) => $q->where('company_id', $companyId));
     }
 }

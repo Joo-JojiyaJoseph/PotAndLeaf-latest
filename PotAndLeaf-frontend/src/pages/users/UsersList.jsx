@@ -50,8 +50,8 @@ export default function UsersList() {
 
   const saveM = useMutation({
     mutationFn: (payload) => {
-      const { id, target_company_id, ...data } = payload;
-      const cfg = target_company_id ? withCompany(target_company_id) : {};
+      const { id, target_company_id, header_company_id, ...data } = payload;
+      const cfg = (target_company_id || header_company_id) ? withCompany(target_company_id || header_company_id) : {};
       return id ? api.put(`/users/${id}`, data, cfg) : api.post('/users', data, cfg);
     },
     onSuccess: (_r, payload) => { invalidate(); setEditing(null); toast.success(payload.id ? 'User updated.' : 'User created.'); },
@@ -60,20 +60,34 @@ export default function UsersList() {
   const { submit, release, locked } = useSubmitLock(saveM.isPending);
 
   async function onToggle(u, next) {
-    await api.patch(`/users/${u.id}/status`, { is_active: next });
+    const headerCo = resolveUserCompany(u);
+    await api.patch(`/users/${u.id}/status`, { is_active: next }, withCompany(headerCo));
     toast.success(`${u.name} ${next ? 'activated' : 'deactivated'}`);
     invalidate();
+  }
+
+  function resolveUserCompany(u) {
+    if (filterCompanyId && filterCompanyId !== 'all') return filterCompanyId;
+    return u.companies?.[0]?.id ?? u.company_id ?? companyId;
+  }
+
+  function userDetailPath(u) {
+    const cid = resolveUserCompany(u);
+    return cid ? `/users/${u.id}?company_id=${cid}` : `/users/${u.id}`;
   }
 
   async function onRemove(u) {
     const ok = await confirm({
       title: 'Remove user',
-      message: `Remove ${u.name} from ${activeCompany?.name}? If they have no other company access, their login will be deactivated.`,
+      message: `Remove ${u.name} from this company? If they have no other company access, their login will be deactivated.`,
       confirmLabel: 'Remove', tone: 'danger',
     });
     if (!ok) return;
-    try { await api.delete(`/users/${u.id}`); toast.success(`${u.name} removed`); invalidate(); }
-    catch (e) { toast.error(e.response?.data?.message ?? 'Could not remove user.'); }
+    try {
+      await api.delete(`/users/${u.id}`, withCompany(resolveUserCompany(u)));
+      toast.success(`${u.name} removed`);
+      invalidate();
+    } catch (e) { toast.error(e.response?.data?.message ?? 'Could not remove user.'); }
   }
 
   const openNew = () => { setForm(empty); setErrors({}); setEditing({}); setFormCompanyId(companyId ?? ''); setPickedCompany(!isSuperAdmin || Boolean(companyId)); };
@@ -91,7 +105,7 @@ export default function UsersList() {
           <p className="text-sm text-muted">Branch-level access. Each user signs in with their own login{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can('users.create') && <Button size="sm" onClick={openNew}><PlusIcon className="size-4" /> Add user</Button>}
         </div>
       </div>
@@ -120,7 +134,7 @@ export default function UsersList() {
                 {rows.map((u) => (
                   <tr key={u.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                     <td className="px-4 py-2.5 font-medium">
-                      <button onClick={() => navigate(`/users/${u.id}`)} className="text-ink hover:text-leaf">{u.name}</button>
+                      <button onClick={() => navigate(userDetailPath(u))} className="text-ink hover:text-leaf">{u.name}</button>
                     </td>
                     <td className="px-4 py-2.5 text-muted">{u.email}</td>
                     <td className="px-4 py-2.5">{u.roles?.length ? <Badge tone="info">{u.roles[0].name}</Badge> : <span className="text-muted">—</span>}</td>
@@ -153,7 +167,7 @@ export default function UsersList() {
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setEditing(null)} disabled={saveM.isPending}>Cancel</Button>
-            <Button size="sm" disabled={locked || (isCreate && isSuperAdmin && !companyReady)} onClick={() => submit(() => saveM.mutate({ ...form, id: editing?.id, target_company_id: targetCompanyId }, { onSettled: release }))}>
+            <Button size="sm" disabled={locked || (isCreate && isSuperAdmin && !companyReady)} onClick={() => submit(() => saveM.mutate({ ...form, id: editing?.id, target_company_id: targetCompanyId, header_company_id: editing?.id ? resolveUserCompany(editing) : undefined }, { onSettled: release }))}>
               {saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save user'}
             </Button>
           </>

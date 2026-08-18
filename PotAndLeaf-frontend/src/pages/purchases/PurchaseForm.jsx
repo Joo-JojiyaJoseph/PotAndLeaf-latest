@@ -289,7 +289,7 @@ export default function PurchaseForm() {
                 <th className="px-3 py-2 text-right font-medium">Taxable</th>
                 <th className="px-3 py-2 text-right font-medium">Tax</th>
                 <th className="px-3 py-2 text-right font-medium">Total</th>
-                <th className="px-3 py-2 text-center font-medium">Bulk</th>
+                {/* <th className="px-3 py-2 text-center font-medium">Bulk</th> */}
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -341,7 +341,7 @@ export default function PurchaseForm() {
                       <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(c.taxable_value ?? 0)}</td>
                       <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(tax)}</td>
                       <td className="tnum px-3 py-2 text-right font-medium">{formatCurrency(c.line_total ?? 0)}</td>
-                      <td className="px-3 py-2 text-center">
+                      {/* <td className="px-3 py-2 text-center">
                         <input
                           type="checkbox"
                           checked={line.is_bulk}
@@ -352,7 +352,7 @@ export default function PurchaseForm() {
                           className="size-4 rounded border-line text-leaf focus:ring-leaf/40"
                           title="This line is a bulk purchase (case/bag of multiple sellable units)"
                         />
-                      </td>
+                      </td> */}
                       <td className="px-3 py-2">
                         <button
                           onClick={() => removeLine(i)}
@@ -363,7 +363,7 @@ export default function PurchaseForm() {
                         </button>
                       </td>
                     </tr>
-                    {line.is_bulk && (
+                    {/* {line.is_bulk && (
                       <tr className="border-b border-line/60 bg-leaf-soft/30 last:border-0">
                         <td colSpan={10} className="px-3 pb-3 pt-1">
                           <div className="flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-3">
@@ -432,7 +432,7 @@ export default function PurchaseForm() {
                           </div>
                         </td>
                       </tr>
-                    )}
+                    )} */}
                   </Fragment>
                 );
               })}

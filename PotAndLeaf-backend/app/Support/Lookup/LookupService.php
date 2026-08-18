@@ -16,7 +16,7 @@ class LookupService
     public function __construct(private readonly LookupRepository $repository) {}
 
     /** @param array<string,mixed> $filters */
-    public function list(int|string $companyId, array $filters): LengthAwarePaginator
+    public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         return $this->repository->paginateForCompany($companyId, $filters);
     }

@@ -10,12 +10,12 @@ use Illuminate\Support\Collection;
 
 class SalesReturnRepository implements SalesReturnRepositoryInterface
 {
-    public function paginateForCompany(int|string $companyId, array $filters): LengthAwarePaginator
+    public function paginateForCompany(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         $perPage = min((int) ($filters['per_page'] ?? 15), 100);
 
         return SalesReturn::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['customer:id,name,customer_code', 'sale:id,sale_no'])
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
             ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('return_no', 'like', "%{$filters['search']}%"))

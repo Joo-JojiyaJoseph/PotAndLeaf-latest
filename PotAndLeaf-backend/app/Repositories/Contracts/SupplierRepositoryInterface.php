@@ -13,7 +13,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 interface SupplierRepositoryInterface
 {
     /** @param array{search?:string,status?:string,sort?:string,dir?:string,per_page?:int} $filters */
-    public function paginateForCompany(int|string $companyId, array $filters): LengthAwarePaginator;
+    public function paginateForCompany(int|string|null $companyId, array $filters): LengthAwarePaginator;
 
     public function findForCompany(int|string $companyId, string $id): ?Supplier;
 

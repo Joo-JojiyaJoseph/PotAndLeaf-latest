@@ -22,10 +22,9 @@ class PurchaseOrderController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'po.view');
 
-        return $this->ok(PurchaseOrderResource::collection($this->orders->list($company->id, $request->only(['search', 'status', 'per_page']))));
+        return $this->ok(PurchaseOrderResource::collection($this->orders->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))));
     }
 
     public function formData(Request $request): JsonResponse

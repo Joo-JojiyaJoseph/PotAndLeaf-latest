@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 interface PurchaseReturnRepositoryInterface
 {
     /** @param array<string,mixed> $filters */
-    public function paginateForCompany(int|string $companyId, array $filters): LengthAwarePaginator;
+    public function paginateForCompany(int|string|null $companyId, array $filters): LengthAwarePaginator;
 
     public function findForCompany(int|string $companyId, string $id): ?PurchaseReturn;
 

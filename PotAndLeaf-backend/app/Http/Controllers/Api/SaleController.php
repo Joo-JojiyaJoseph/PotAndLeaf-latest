@@ -23,10 +23,9 @@ class SaleController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->filterCompany($request);
-        abort_unless($request->user()->hasPermission('sales.view', $company->id), 403);
+        abort_unless($request->user()->hasPermission('sales.view', $this->company($request)->id), 403);
 
-        return $this->ok(SaleResource::collection($this->sales->list($company->id, $request->only(['search', 'status', 'per_page']))));
+        return $this->ok(SaleResource::collection($this->sales->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))));
     }
 
     public function formData(Request $request): JsonResponse

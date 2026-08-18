@@ -8,12 +8,12 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class StockVerificationRepository implements StockVerificationRepositoryInterface
 {
-    public function paginateForCompany(int|string $companyId, array $filters): LengthAwarePaginator
+    public function paginateForCompany(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         $perPage = min((int) ($filters['per_page'] ?? 15), 100);
 
         return StockVerification::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
             ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('count_no', 'like', "%{$filters['search']}%"))

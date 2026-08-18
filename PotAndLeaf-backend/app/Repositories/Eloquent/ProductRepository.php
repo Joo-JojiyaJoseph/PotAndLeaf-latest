@@ -10,7 +10,7 @@ class ProductRepository implements ProductRepositoryInterface
 {
     private const SORTABLE = ['sku', 'name', 'status', 'current_stock', 'retail_price', 'created_at'];
 
-    public function paginateForCompany(int|string $companyId, array $filters): LengthAwarePaginator
+    public function paginateForCompany(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
         $sort = in_array($filters['sort'] ?? '', self::SORTABLE, true) ? $filters['sort'] : 'created_at';
         $dir = strtolower($filters['dir'] ?? 'desc') === 'asc' ? 'asc' : 'desc';
@@ -18,7 +18,7 @@ class ProductRepository implements ProductRepositoryInterface
 
         return Product::query()
             ->with(['category:id,name', 'brand:id,name', 'unit:id,name,short_name'])
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->search($filters['search'] ?? null)
             ->when(filled($filters['category_id'] ?? null), fn ($q) => $q->where('category_id', $filters['category_id']))
             ->when(filled($filters['brand_id'] ?? null), fn ($q) => $q->where('brand_id', $filters['brand_id']))

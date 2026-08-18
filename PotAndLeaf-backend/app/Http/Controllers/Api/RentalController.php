@@ -28,10 +28,9 @@ class RentalController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'rental.view');
 
-        return $this->ok(RentalResource::collection($this->rentals->list($company->id, $request->only(['search', 'status', 'per_page']))));
+        return $this->ok(RentalResource::collection($this->rentals->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))));
     }
 
     public function formData(Request $request): JsonResponse

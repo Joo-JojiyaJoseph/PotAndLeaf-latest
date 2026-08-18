@@ -25,11 +25,10 @@ class SalesReturnController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'sales_returns.view');
 
         return $this->ok(SalesReturnResource::collection(
-            $this->returns->list($company->id, $request->only(['search', 'status', 'per_page']))
+            $this->returns->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))
         ));
     }
 

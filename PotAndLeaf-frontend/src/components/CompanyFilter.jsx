@@ -1,37 +1,69 @@
+import { BuildingOffice2Icon, FunnelIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
-
-const selectCls =
-  'h-9 rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
+import { CompanySelectMenu } from './CompanySelectMenu';
 
 /** Query params for super-admin company filter (?company_id=). */
 export function companyFilterParam(filterCompanyId) {
-  return filterCompanyId ? { company_id: filterCompanyId } : {};
+  if (!filterCompanyId || filterCompanyId === 'all') {
+    return { company_id: 'all' };
+  }
+  return { company_id: filterCompanyId };
 }
 
 export function filteredCompanyLabel(companies, filterCompanyId, activeCompany) {
-  if (!filterCompanyId) return activeCompany?.name ?? '—';
+  if (!filterCompanyId || filterCompanyId === 'all') {
+    return 'All Companies';
+  }
   return companies.find((c) => String(c.id) === String(filterCompanyId))?.name ?? activeCompany?.name ?? '—';
+}
+
+function companyOptions(companies, includeAll = true) {
+  const items = includeAll
+    ? [{ value: 'all', label: 'All Companies', sublabel: 'Combined view across companies' }]
+    : [];
+  return [
+    ...items,
+    ...companies.map((c) => ({
+      value: c.id,
+      label: c.name,
+      sublabel: c.code ? c.code.toUpperCase() : undefined,
+    })),
+  ];
 }
 
 /** HO super-admin dropdown to filter list/read APIs by company. */
 export default function CompanyFilter({ value, onChange, className = '' }) {
-  const { isSuperAdmin, companies, activeCompany } = useAuth();
+  const { isSuperAdmin, companies } = useAuth();
 
-  if (!isSuperAdmin || companies.length <= 1) return null;
+  if (!isSuperAdmin) return null;
 
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`${selectCls} ${className}`.trim()}
-      aria-label="Filter by company"
-    >
-      <option value="">Current company ({activeCompany?.name})</option>
-      {companies.map((c) => (
-        <option key={c.id} value={c.id}>
-          {c.name}{c.code ? ` (${c.code})` : ''}
-        </option>
-      ))}
-    </select>
+    <CompanySelectMenu
+      value={value || 'all'}
+      options={companyOptions(companies)}
+      onChange={onChange}
+      label="Company"
+      icon={FunnelIcon}
+      className={className}
+    />
+  );
+}
+
+/** Compact variant for tight toolbars. */
+export function CompanyFilterCompact({ value, onChange, className = '' }) {
+  const { isSuperAdmin, companies } = useAuth();
+
+  if (!isSuperAdmin) return null;
+
+  return (
+    <CompanySelectMenu
+      value={value || 'all'}
+      options={companyOptions(companies)}
+      onChange={onChange}
+      label="Co."
+      icon={BuildingOffice2Icon}
+      className={className}
+      menuClassName="min-w-[200px]"
+    />
   );
 }

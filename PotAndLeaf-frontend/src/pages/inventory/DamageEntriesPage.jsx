@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import CompanyFilter, { companyFilterParam, filteredCompanyLabel } from '../../components/CompanyFilter';
+import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { ImageUpload } from '../../components/media';
@@ -21,6 +21,7 @@ function DamageFormModal({ open, onClose }) {
   });
   const [scanValue, setScanValue] = useState('');
   const [scanError, setScanError] = useState('');
+  const [scanning, setScanning] = useState(false);
   const [errors, setErrors] = useState({});
 
   const { data: formData } = useQuery({
@@ -28,6 +29,53 @@ function DamageFormModal({ open, onClose }) {
     queryFn: () => api.get('/damage-entries/form-data').then((r) => r.data.data),
     enabled: open,
   });
+
+  async function resolveBarcode(code) {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    setScanning(true);
+    setScanError('');
+    try {
+      const b = (await api.get('/batches/scan', { params: { barcode: trimmed } })).data.data;
+      setForm((f) => ({
+        ...f,
+        product_id: b.product.id,
+        product_batch_id: b.batch_id || '',
+        barcode: b.barcode,
+        batch_no: b.batch_no || '',
+        qty: f.qty || '1',
+      }));
+      setScanValue('');
+    } catch (err) {
+      const match = (formData?.products ?? []).find(
+        (p) => p.barcode && String(p.barcode).trim() === trimmed,
+      );
+      if (match) {
+        setForm((f) => ({
+          ...f,
+          product_id: match.id,
+          product_batch_id: '',
+          barcode: match.barcode,
+          batch_no: '',
+          qty: f.qty || '1',
+        }));
+        setScanValue('');
+        setScanError('');
+      } else {
+        setScanError(err.response?.data?.message || 'Barcode not found or out of stock.');
+      }
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const code = scanValue.trim();
+    if (code.length < 3) return undefined;
+    const t = setTimeout(() => resolveBarcode(code), 450);
+    return () => clearTimeout(t);
+  }, [scanValue, open, formData?.products]);
 
   const saveM = useMutation({
     mutationFn: () => api.post('/damage-entries', {
@@ -53,6 +101,8 @@ function DamageFormModal({ open, onClose }) {
 
   function handleClose() {
     setForm({ product_id: '', product_batch_id: '', barcode: '', batch_no: '', qty: '', reason: '', notes: '', photo: null, entry_date: today() });
+    setScanValue('');
+    setScanError('');
     setErrors({});
     onClose();
   }
@@ -62,16 +112,7 @@ function DamageFormModal({ open, onClose }) {
   async function handleScan(e) {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    const code = scanValue.trim();
-    if (!code) return;
-    try {
-      const b = (await api.get('/batches/scan', { params: { barcode: code } })).data.data;
-      setForm((f) => ({ ...f, product_id: b.product.id, product_batch_id: b.batch_id, barcode: b.barcode, batch_no: b.batch_no, qty: f.qty || '1' }));
-      setScanValue(''); setScanError('');
-    } catch (err) {
-      setScanError(err.response?.data?.message || 'Barcode not found or out of stock.');
-      setScanValue('');
-    }
+    await resolveBarcode(scanValue);
   }
   const err = (k) => errors[k]?.[0];
   const product = (formData?.products ?? []).find((p) => String(p.id) === String(form.product_id));
@@ -92,9 +133,20 @@ function DamageFormModal({ open, onClose }) {
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <Field label="Scan batch barcode">
-            <Input value={scanValue} onChange={(e) => { setScanValue(e.target.value); setScanError(''); }} onKeyDown={handleScan} placeholder="Scan the barcode of the batch being damaged, then Enter" />
-            {form.barcode && <span className="mt-1 block text-xs text-muted">Batch {form.batch_no} · {form.barcode}</span>}
+          <Field label="Scan batch or product barcode">
+            <Input
+              value={scanValue}
+              onChange={(e) => { setScanValue(e.target.value); setScanError(''); }}
+              onKeyDown={handleScan}
+              onBlur={() => scanValue.trim() && resolveBarcode(scanValue)}
+              placeholder="Scan or type barcode — product is selected automatically"
+            />
+            {scanning && <span className="mt-1 block text-xs text-muted">Looking up barcode…</span>}
+            {form.barcode && !scanning && (
+              <span className="mt-1 block text-xs text-muted">
+                {form.batch_no ? `Batch ${form.batch_no} · ${form.barcode}` : `Product barcode · ${form.barcode}`}
+              </span>
+            )}
             {scanError && <span className="mt-1 block text-xs text-danger">{scanError}</span>}
           </Field>
         </div>
@@ -137,12 +189,15 @@ function DamageFormModal({ open, onClose }) {
 }
 
 export default function DamageEntriesPage() {
-  const { activeCompany, can, companies, isSuperAdmin } = useAuth();
+  const { activeCompany, can } = useAuth();
+  const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const [modal, setModal] = useState(false);
   const [page, setPage] = useState(1);
   const [movementFilter, setMovementFilter] = useState('');
-  const [filterCompanyId, setFilterCompanyId] = useState('');
-  const companyParams = companyFilterParam(filterCompanyId);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterCompanyId]);
 
   const listQ = useQuery({
     queryKey: ['damage-entries', activeCompany?.id, filterCompanyId, page],
@@ -168,11 +223,11 @@ export default function DamageEntriesPage() {
         <div>
           <h1 className="text-lg font-semibold">Damage Entry</h1>
           <p className="text-sm text-muted">
-            Write off damaged stock{isSuperAdmin ? ` · ${filteredCompanyLabel(companies, filterCompanyId, activeCompany)}` : ''} — posts a Damage movement to the ledger.
+            Write off damaged stock{companyHint} — posts a Damage movement to the ledger.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {/* <CompanyFilter value={filterCompanyId} onChange={(id) => { setFilterCompanyId(id); setPage(1); }} /> */}
+          <Filter />
           {can('damage.create') && (
             <Button size="sm" onClick={() => setModal(true)}>
               <PlusIcon className="size-4" /> Record damage

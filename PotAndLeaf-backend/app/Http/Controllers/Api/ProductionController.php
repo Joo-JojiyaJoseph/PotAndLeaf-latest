@@ -40,8 +40,8 @@ class ProductionController extends Controller
         $boms = $this->production->boms($company->id)
             ->map(fn ($b) => ['id' => $b->id, 'name' => $b->name, 'product_name' => $b->product?->name, 'output_qty' => (float) $b->output_qty]);
 
-        $supervisors = \App\Models\User::query()
-            ->whereHas('companies', fn ($q) => $q->where('companies.id', $company->id))
+        $supervisors = User::query()
+            ->activeMembers($company->id)
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
@@ -58,10 +58,9 @@ class ProductionController extends Controller
     // BOMs
     public function boms(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'production.view');
 
-        return $this->ok(BomResource::collection($this->production->boms($company->id)));
+        return $this->ok(BomResource::collection($this->production->boms($this->listCompanyId($request))));
     }
 
     public function storeBom(UpsertBomRequest $request): JsonResponse
@@ -92,10 +91,9 @@ class ProductionController extends Controller
     // Orders
     public function orders(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'production.view');
 
-        return $this->ok(ProductionOrderResource::collection($this->production->orders($company->id, $request->only(['status', 'per_page']))));
+        return $this->ok(ProductionOrderResource::collection($this->production->orders($this->listCompanyId($request), $request->only(['status', 'per_page']))));
     }
 
     public function storeOrder(StoreProductionOrderRequest $request): JsonResponse

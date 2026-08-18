@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import useSubmitLock from '../../hooks/useSubmitLock';
@@ -18,9 +18,22 @@ const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 tex
 
 function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyParams }) {
   const queryClient = useQueryClient();
+  const { isSuperAdmin, companies, companyId } = useAuth();
   const [form, setForm] = useState({ name: '', short_name: '', description: '', parent_id: '', status: 'active' });
+  const [formCompanyId, setFormCompanyId] = useState('');
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
+
+  const isCreate = !editing?.id;
+  const headerCompanyId = editing?.company_id
+    ?? (isSuperAdmin ? formCompanyId : companyId)
+    ?? companyId;
+  const companyCfg = headerCompanyId ? withCompany(headerCompanyId) : {};
+  const companyReady = !isSuperAdmin || !isCreate || Boolean(formCompanyId);
+
+  const parentParams = isSuperAdmin && formCompanyId
+    ? { company_id: formCompanyId }
+    : (filterCompanyId && filterCompanyId !== 'all' ? { company_id: filterCompanyId } : companyParams);
 
   const saveM = useMutation({
     mutationFn: () => {
@@ -29,7 +42,9 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
       if (tab.type === 'categories') {
         payload.parent_id = tab.mode === 'child' ? (form.parent_id || null) : null;
       }
-      return editing ? api.put(`/masters/${tab.type}/${editing.id}`, payload) : api.post(`/masters/${tab.type}`, payload);
+      return editing
+        ? api.put(`/masters/${tab.type}/${editing.id}`, payload, companyCfg)
+        : api.post(`/masters/${tab.type}`, payload, companyCfg);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['masters', tab.type] });
@@ -46,19 +61,27 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
     setForm(editing
       ? { name: editing.name ?? '', short_name: editing.short_name ?? '', description: editing.description ?? '', parent_id: editing.parent_id ?? '', status: editing.status ?? 'active' }
       : { name: '', short_name: '', description: '', parent_id: '', status: 'active' });
-    setApplied(key); setErrors({});
+    setFormCompanyId(editing?.company_id ?? companyId ?? '');
+    setApplied(key);
+    setErrors({});
   }
 
   const parentsQ = useQuery({
-    queryKey: ['masters', 'categories', 'parents', filterCompanyId],
-    queryFn: () => api.get('/masters/categories', { params: companyParams }).then((r) => r.data.data),
-    enabled: open && Boolean(tab.hasParent),
+    queryKey: ['masters', 'categories', 'parents', filterCompanyId, formCompanyId, editing?.company_id],
+    queryFn: () => api.get('/masters/categories', {
+      params: editing?.company_id
+        ? { company_id: editing.company_id }
+        : parentParams,
+      ...companyCfg,
+    }).then((r) => r.data.data),
+    enabled: open && Boolean(tab.hasParent) && Boolean(headerCompanyId) && companyReady,
   });
 
   function validate() {
     const next = {};
     if (!form.name.trim()) next.name = ['Name is required.'];
     if (tab.mode === 'child' && !form.parent_id) next.parent_id = ['Parent category is required.'];
+    if (isCreate && isSuperAdmin && !formCompanyId) next.company_id = ['Select a company first.'];
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -78,41 +101,56 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
     <Modal open={open} onClose={handleClose} title={`${editing ? 'Edit' : 'New'} ${tab.singular}`} dismissible={!saveM.isPending}
       footer={<>
         <Button variant="ghost" size="sm" onClick={handleClose} disabled={saveM.isPending}>Cancel</Button>
-        <Button size="sm" disabled={locked} onClick={handleSave}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}</Button>
+        <Button size="sm" disabled={locked || (isCreate && isSuperAdmin && !companyReady)} onClick={handleSave}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}</Button>
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {editing?.code && (
-          <Field label="Code"><Input value={editing.code} disabled readOnly className="bg-paper text-muted" /></Field>
+        {isSuperAdmin && isCreate && (
+          <div className="sm:col-span-2 rounded-xl bg-leaf-soft/50 p-3">
+            <Field label="Company" required error={err('company_id')}>
+              <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+                <option value="">Select company first…</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <p className="mt-1.5 text-xs text-muted">Choose which company this {tab.singular} belongs to.</p>
+          </div>
         )}
-        {!editing && (
-          <div className="sm:col-span-2 text-xs text-muted">Code is generated automatically when you save.</div>
+        {(editing?.id || !isSuperAdmin || companyReady) && (
+          <>
+            {editing?.code && (
+              <Field label="Code"><Input value={editing.code} disabled readOnly className="bg-paper text-muted" /></Field>
+            )}
+            {!editing && (
+              <div className="sm:col-span-2 text-xs text-muted">Code is generated automatically when you save.</div>
+            )}
+            <Field label="Name" required error={err('name')}><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></Field>
+            {tab.hasShort && <Field label="Short name" error={err('short_name')}><Input value={form.short_name} onChange={(e) => setForm((f) => ({ ...f, short_name: e.target.value }))} placeholder="e.g. kg, pc" /></Field>}
+            {tab.hasParent && (
+              <Field label="Parent category" required error={err('parent_id')}>
+                <select value={form.parent_id} onChange={(e) => setForm((f) => ({ ...f, parent_id: e.target.value }))} className={selectCls}>
+                  <option value="">Select parent…</option>
+                  {rootCategories.filter((c) => c.id !== editing?.id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+            )}
+            <Field label="Status">
+              <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={selectCls}>
+                <option value="active">Active</option><option value="inactive">Inactive</option>
+              </select>
+            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Description" error={err('description')}><Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></Field>
+            </div>
+          </>
         )}
-        <Field label="Name" required error={err('name')}><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></Field>
-        {tab.hasShort && <Field label="Short name" error={err('short_name')}><Input value={form.short_name} onChange={(e) => setForm((f) => ({ ...f, short_name: e.target.value }))} placeholder="e.g. kg, pc" /></Field>}
-        {tab.hasParent && (
-          <Field label="Parent category" required error={err('parent_id')}>
-            <select value={form.parent_id} onChange={(e) => setForm((f) => ({ ...f, parent_id: e.target.value }))} className={selectCls}>
-              <option value="">Select parent…</option>
-              {rootCategories.filter((c) => c.id !== editing?.id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-        )}
-        <Field label="Status">
-          <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={selectCls}>
-            <option value="active">Active</option><option value="inactive">Inactive</option>
-          </select>
-        </Field>
-        <div className="sm:col-span-2">
-          <Field label="Description" error={err('description')}><Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></Field>
-        </div>
       </div>
     </Modal>
   );
 }
 
 export default function MastersPage() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companyId } = useAuth();
   const confirm = useConfirm();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const queryClient = useQueryClient();
@@ -127,7 +165,7 @@ export default function MastersPage() {
     enabled: Boolean(activeCompany),
   });
   const deleteM = useMutation({
-    mutationFn: (id) => api.delete(`/masters/${tab.type}/${id}`),
+    mutationFn: ({ id, company_id: rowCompanyId }) => api.delete(`/masters/${tab.type}/${id}`, withCompany(rowCompanyId ?? companyId)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['masters', tab.type] }),
   });
   const rows = (data ?? []).filter((r) => {
@@ -143,7 +181,7 @@ export default function MastersPage() {
           <p className="text-sm text-muted">Each company manages its own categories, subcategories and units{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-            {/* <Filter /> */}
+            <Filter />
           {can(`${tab.type}.create`) && <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true); }}><PlusIcon className="size-4" /> New {tab.singular}</Button>}
         </div>
       </div>
@@ -185,7 +223,7 @@ export default function MastersPage() {
                         {can(`${tab.type}.update`) && <button onClick={() => { setEditing(r); setModalOpen(true); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink"><PencilSquareIcon className="size-4" /></button>}
                         {can(`${tab.type}.delete`) && <button onClick={async () => {
                           const ok = await confirm({ title: `Delete ${tab.singular}`, message: `Delete "${r.name}"? Products already using it keep their reference, but it can't be selected again.`, confirmLabel: 'Delete', tone: 'danger' });
-                          if (ok) deleteM.mutate(r.id);
+                          if (ok) deleteM.mutate({ id: r.id, company_id: r.company_id });
                         }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>}
                       </div>
                     </td>
