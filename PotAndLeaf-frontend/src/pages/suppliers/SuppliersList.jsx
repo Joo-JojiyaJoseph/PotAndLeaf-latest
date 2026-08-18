@@ -10,6 +10,7 @@ import {
   TrashIcon,
 } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
+import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import useSubmitLock from '../../hooks/useSubmitLock';
@@ -117,11 +118,12 @@ export default function SuppliersList() {
   const { submit, release, locked } = useSubmitLock(saveMutation.isPending);
 
   function openCreate() {
+    const createCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId });
     setEditing(null);
     setForm(EMPTY);
     setErrors({});
-    setFormCompanyId(companyId ?? '');
-    setPickedCompany(!isSuperAdmin || Boolean(companyId));
+    setFormCompanyId(createCompanyId);
+    setPickedCompany(!isSuperAdmin || Boolean(createCompanyId));
     setModalOpen(true);
   }
 

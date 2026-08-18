@@ -20,6 +20,7 @@ import Pagination from '../../components/Pagination';
 import StatusToggle from '../../components/StatusToggle';
 import { MediaImg } from '../../components/media';
 import { formatCurrency } from '../../lib/format';
+import { defaultCreateCompanyId } from '../../lib/recordCompany';
 
 function productDetailPath(p) {
   return p.company_id ? `/products/${p.id}?company_id=${p.company_id}` : `/products/${p.id}`;
@@ -30,7 +31,7 @@ function productEditPath(p) {
 }
 
 export default function ProductsList() {
-  const { activeCompany, can, companyId } = useAuth();
+  const { activeCompany, can, companyId, isSuperAdmin } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -100,6 +101,10 @@ export default function ProductsList() {
   }
 
   const selectCls = 'h-10 rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
+  const newProductPath = (() => {
+    const createCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId });
+    return createCompanyId && isSuperAdmin ? `/products/new?company_id=${createCompanyId}` : '/products/new';
+  })();
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -113,7 +118,7 @@ export default function ProductsList() {
           {can('products.create') && (
             <>
               <Link to="/products/labels"><Button variant="outline" size="sm"><QrCodeIcon className="size-4" /> Labels</Button></Link>
-              <Link to="/products/new"><Button size="sm"><PlusIcon className="size-4" /> New product</Button></Link>
+              <Link to={newProductPath}><Button size="sm"><PlusIcon className="size-4" /> New product</Button></Link>
             </>
           )}
         </div>

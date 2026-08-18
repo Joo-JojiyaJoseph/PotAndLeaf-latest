@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
+import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import useSubmitLock from '../../hooks/useSubmitLock';
@@ -61,7 +62,7 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
     setForm(editing
       ? { name: editing.name ?? '', short_name: editing.short_name ?? '', description: editing.description ?? '', parent_id: editing.parent_id ?? '', status: editing.status ?? 'active' }
       : { name: '', short_name: '', description: '', parent_id: '', status: 'active' });
-    setFormCompanyId(editing?.company_id ?? companyId ?? '');
+    setFormCompanyId(editing?.company_id ?? defaultCreateCompanyId({ filterCompanyId, companyId }));
     setApplied(key);
     setErrors({});
   }

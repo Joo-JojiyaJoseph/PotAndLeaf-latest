@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
+import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
@@ -90,7 +91,14 @@ export default function UsersList() {
     } catch (e) { toast.error(e.response?.data?.message ?? 'Could not remove user.'); }
   }
 
-  const openNew = () => { setForm(empty); setErrors({}); setEditing({}); setFormCompanyId(companyId ?? ''); setPickedCompany(!isSuperAdmin || Boolean(companyId)); };
+  const openNew = () => {
+    const createCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId });
+    setForm(empty);
+    setErrors({});
+    setEditing({});
+    setFormCompanyId(createCompanyId);
+    setPickedCompany(!isSuperAdmin || Boolean(createCompanyId));
+  };
   const openEdit = (u) => { setForm({ name: u.name, email: u.email, password: '', phone: u.phone ?? '', role_id: u.roles?.[0]?.id ?? '', is_active: u.is_active }); setErrors({}); setEditing(u); setPickedCompany(true); };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const err = (k) => fieldError(errors, k);

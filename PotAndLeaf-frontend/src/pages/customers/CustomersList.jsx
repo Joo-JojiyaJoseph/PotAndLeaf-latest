@@ -5,6 +5,7 @@ import { MagnifyingGlassIcon, PencilSquareIcon, PlusIcon, TrashIcon, EyeIcon, Ph
 import { formatCurrency } from '../../lib/format';
 import { mediaUrl } from '../../components/media';
 import api, { withCompany } from '../../lib/api';
+import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import useSubmitLock from '../../hooks/useSubmitLock';
@@ -83,7 +84,14 @@ export default function CustomersList() {
   const isCreate = editing !== null && !editing?.id;
   const companyReady = !isSuperAdmin || !isCreate || Boolean(formCompanyId);
 
-  const openNew = () => { setForm(empty); setErrors({}); setEditing({}); setFormCompanyId(companyId ?? ''); setPickedCompany(!isSuperAdmin || Boolean(companyId)); };
+  const openNew = () => {
+    const createCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId });
+    setForm(empty);
+    setErrors({});
+    setEditing({});
+    setFormCompanyId(createCompanyId);
+    setPickedCompany(!isSuperAdmin || Boolean(createCompanyId));
+  };
   const openEdit = (c) => { setForm({ ...empty, ...c, photo: c.photo ?? null }); setErrors({}); setEditing(c); setPickedCompany(true); };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const err = (k) => fieldError(errors, k);

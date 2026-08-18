@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
+import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { useAuth } from '../../context/AuthContext';
 import { fieldError } from '../../lib/formErrors';
 import { useToast } from '../../lib/toast';
@@ -32,7 +33,8 @@ export default function ProductForm() {
   const toast = useToast();
   const isEdit = Boolean(id);
   const [form, setForm] = useState(blank);
-  const [formCompanyId, setFormCompanyId] = useState(companyId ?? '');
+  const presetCompanyId = searchParams.get('company_id') ?? '';
+  const [formCompanyId, setFormCompanyId] = useState(() => defaultCreateCompanyId({ filterCompanyId: presetCompanyId, companyId }));
   const [barcode, setBarcode] = useState('');
   const [errors, setErrors] = useState({});
   const err = (k) => fieldError(errors, k);
@@ -72,6 +74,11 @@ export default function ProductForm() {
   );
 
   const seededRef = useRef(null);
+
+  useEffect(() => {
+    if (isEdit || !isSuperAdmin) return;
+    setFormCompanyId(defaultCreateCompanyId({ filterCompanyId: presetCompanyId, companyId }));
+  }, [isEdit, isSuperAdmin, presetCompanyId, companyId]);
 
   useEffect(() => {
     if (!existing) return;

@@ -5,7 +5,7 @@ import { CheckCircleIcon, PlusIcon, XCircleIcon, PaperAirplaneIcon } from '@hero
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
+import { recordDetailPath, resolveRecordCompany, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { formatDate } from '../../lib/format';
 
@@ -18,7 +18,7 @@ const STATUS_TABS = [
 ];
 
 export default function StockVerificationsList() {
-  const { activeCompany, can, companyId } = useAuth();
+  const { activeCompany, can, companyId, isSuperAdmin } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -58,6 +58,10 @@ export default function StockVerificationsList() {
   });
 
   const rows = data?.data ?? [];
+  const newCountPath = (() => {
+    const createCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId });
+    return createCompanyId && isSuperAdmin ? `/stock-verifications/new?company_id=${createCompanyId}` : '/stock-verifications/new';
+  })();
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -69,7 +73,7 @@ export default function StockVerificationsList() {
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
           {can('stock_verifications.create') && (
-            <Link to="/stock-verifications/new">
+            <Link to={newCountPath}>
               <Button size="sm">
                 <PlusIcon className="size-4" /> New count
               </Button>
