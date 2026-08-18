@@ -9,13 +9,14 @@ use App\Models\BulkSplit;
 use App\Models\Product;
 use App\Services\BulkSplitService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class BulkSplitController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly BulkSplitService $splits) {}
 
@@ -62,7 +63,7 @@ class BulkSplitController extends Controller
     public function show(Request $request, BulkSplit $bulkSplit): JsonResponse
     {
         $this->allow($request, 'bulk_splits.view');
-        $this->sameCompany($request, $bulkSplit);
+        $this->assertRecordCompany($request, $bulkSplit);
 
         $bulkSplit->load([
             'items.units',
@@ -86,7 +87,7 @@ class BulkSplitController extends Controller
     public function confirm(Request $request, BulkSplit $bulkSplit): JsonResponse
     {
         $this->allow($request, 'bulk_splits.confirm');
-        $this->sameCompany($request, $bulkSplit);
+        $this->assertRecordCompany($request, $bulkSplit, writable: true);
 
         return $this->ok(new BulkSplitResource($this->splits->confirm($bulkSplit, $request->user()->id)), 'Split confirmed — stock updated.');
     }
@@ -94,7 +95,7 @@ class BulkSplitController extends Controller
     public function destroy(Request $request, BulkSplit $bulkSplit): JsonResponse
     {
         $this->allow($request, 'bulk_splits.delete');
-        $this->sameCompany($request, $bulkSplit);
+        $this->assertRecordCompany($request, $bulkSplit, writable: true);
         $this->splits->cancel($bulkSplit, $request->user()->id);
 
         return $this->message('Split cancelled.');
@@ -110,8 +111,4 @@ class BulkSplitController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, BulkSplit $split): void
-    {
-        abort_unless((string) $split->company_id === (string) $this->company($request)->id, 404);
-    }
 }

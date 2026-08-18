@@ -11,13 +11,14 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Services\SaleService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SaleController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly SaleService $sales) {}
 
@@ -79,7 +80,7 @@ class SaleController extends Controller
     public function show(Request $request, Sale $sale): JsonResponse
     {
         $this->allow($request, 'sales.view');
-        $this->sameCompany($request, $sale);
+        $this->assertRecordCompany($request, $sale);
 
         return $this->ok(new SaleResource($sale->load(['items', 'customer:id,name,type', 'createdBy:id,name', 'company:id,name,legal_name,gst_number,address,phone,email,state,state_code'])));
     }
@@ -87,7 +88,7 @@ class SaleController extends Controller
     public function confirm(Request $request, Sale $sale): JsonResponse
     {
         $this->allow($request, 'sales.confirm');
-        $this->sameCompany($request, $sale);
+        $this->assertRecordCompany($request, $sale, writable: true);
 
         return $this->ok(new SaleResource($this->sales->confirm($sale, $request->user()->id)), 'Sale confirmed — stock updated.');
     }
@@ -95,7 +96,7 @@ class SaleController extends Controller
     public function destroy(Request $request, Sale $sale): JsonResponse
     {
         $this->allow($request, 'sales.delete');
-        $this->sameCompany($request, $sale);
+        $this->assertRecordCompany($request, $sale, writable: true);
         $this->sales->cancel($sale, $request->user()->id);
 
         return $this->message('Sale cancelled.');
@@ -111,8 +112,4 @@ class SaleController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, Sale $sale): void
-    {
-        abort_unless((string) $sale->company_id === (string) $this->company($request)->id, 404);
-    }
 }

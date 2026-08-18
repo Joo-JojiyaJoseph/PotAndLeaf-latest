@@ -48,6 +48,12 @@ class ConfirmPurchaseReturn
                     continue;
                 }
 
+                if ((float) $product->current_stock + 1e-6 < (float) $item->qty) {
+                    throw ValidationException::withMessages([
+                        'items' => "{$item->product_name}: only {$product->current_stock} in stock — cannot return {$item->qty}.",
+                    ]);
+                }
+
                 $this->inventory->post(
                     product: $product,
                     direction: 'out',

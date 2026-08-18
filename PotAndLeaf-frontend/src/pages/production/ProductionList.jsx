@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon, PencilSquareIcon, TrashIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
+import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadCsv } from '../../lib/csv';
@@ -154,7 +155,7 @@ function BomModal({ open, onClose, products, units = [], editing }) {
   );
 }
 
-function OrderModal({ open, onClose, boms, supervisors = [], editing }) {
+function OrderModal({ open, onClose, boms, supervisors = [], editing, recordCtx }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ bom_id: '', output_quantity: '', supervisor_id: '', order_date: today(), notes: '' });
@@ -183,7 +184,10 @@ function OrderModal({ open, onClose, boms, supervisors = [], editing }) {
         supervisor_id: form.supervisor_id ? Number(form.supervisor_id) : null,
         order_date: form.order_date, notes: form.notes || null,
       };
-      return editing ? api.put(`/production/orders/${editing.id}`, payload) : api.post('/production/orders', payload);
+      const companyConfig = editing ? withCompany(resolveRecordCompany(editing, recordCtx)) : undefined;
+      return editing
+        ? api.put(`/production/orders/${editing.id}`, payload, companyConfig)
+        : api.post('/production/orders', payload);
     },
     onSuccess: (res) => {
       if (editing) {
@@ -191,7 +195,8 @@ function OrderModal({ open, onClose, boms, supervisors = [], editing }) {
         handleClose();
       } else {
         handleClose();
-        navigate(`/production/orders/${res.data.data.id}`);
+        const created = res.data.data;
+        navigate(recordDetailPath('/production/orders', created, recordCtx));
       }
     },
     onError: (err) => setErrors(err.response?.data?.errors ?? {}),
@@ -230,8 +235,9 @@ function OrderModal({ open, onClose, boms, supervisors = [], editing }) {
 }
 
 export default function ProductionList() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
+  const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState('orders');
@@ -257,7 +263,7 @@ export default function ProductionList() {
     enabled: Boolean(activeCompany) && tab === 'boms',
   });
   const deleteBomM = useMutation({
-    mutationFn: (id) => api.delete(`/production/boms/${id}`),
+    mutationFn: (b) => api.delete(`/production/boms/${b.id}`, withCompany(resolveRecordCompany(b, recordCtx))),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['boms'] }),
   });
 
@@ -342,7 +348,7 @@ export default function ProductionList() {
                   <tbody>
                     {orders.map((o) => (
                       <tr key={o.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
-                        <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(`/production/orders/${o.id}`)} className="font-medium text-ink hover:text-leaf">{o.order_no}</button></td>
+                        <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(recordDetailPath('/production/orders', o, recordCtx))} className="font-medium text-ink hover:text-leaf">{o.order_no}</button></td>
                         <td className="px-4 py-2.5 text-muted">{formatDate(o.order_date)}</td>
                         <td className="px-4 py-2.5 font-medium">{o.output_product}</td>
                         <td className="tnum px-4 py-2.5 text-right">{o.output_quantity}</td>
@@ -391,7 +397,7 @@ export default function ProductionList() {
                         <td className="px-4 py-2.5">
                           <div className="flex items-center justify-end gap-1.5">
                             {can('production.manage_bom') && <button onClick={() => { setEditingBom(b); setBomModal(true); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink"><PencilSquareIcon className="size-4" /></button>}
-                            {can('production.manage_bom') && <button onClick={() => deleteBomM.mutate(b.id)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>}
+                            {can('production.manage_bom') && <button onClick={() => deleteBomM.mutate(b)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>}
                           </div>
                         </td>
                       </tr>
@@ -404,7 +410,7 @@ export default function ProductionList() {
       )}
 
       <BomModal open={bomModal} onClose={() => { setBomModal(false); setEditingBom(null); }} products={products} units={units} editing={editingBom} />
-      <OrderModal open={orderModal} onClose={() => { setOrderModal(false); setEditingOrder(null); }} boms={boms} supervisors={supervisors} editing={editingOrder} />
+      <OrderModal open={orderModal} onClose={() => { setOrderModal(false); setEditingOrder(null); }} boms={boms} supervisors={supervisors} editing={editingOrder} recordCtx={recordCtx} />
     </div>
   );
 }

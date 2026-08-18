@@ -53,7 +53,7 @@ const GROUPS = [
   {
     label: 'Commerce',
     items: [
-      { key: 'pos', label: 'POS Sales', to: '/sales', icon: CalculatorIcon },
+      // { key: 'pos', label: 'POS Sales', to: '/sales', icon: CalculatorIcon },
       // { key: 'sales-returns', label: 'Sales Returns', to: '/sales-returns', icon: ArrowUturnLeftIcon },
       // { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon },
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon },

@@ -16,6 +16,7 @@ class PurchaseOrderResource extends JsonResource
 
         return [
             'id'            => $this->id,
+            'company_id'    => $this->company_id,
             'po_no'         => $this->po_no,
             'po_date'       => optional($this->po_date)->toDateString(),
             'expected_date' => optional($this->expected_date)->toDateString(),

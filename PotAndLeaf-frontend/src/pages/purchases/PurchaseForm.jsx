@@ -1,8 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
@@ -29,8 +29,10 @@ const SELL_AS_OPTIONS = [
 export default function PurchaseForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
   const { isSuperAdmin, companies, companyId, selectCompany, activeCompany } = useAuth();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
 
   const [header, setHeader] = useState({
     supplier_id: '',
@@ -47,10 +49,18 @@ export default function PurchaseForm() {
 
   // Suppliers/products are company-scoped — keying by company prevents showing a
   // previous company's options (which would fail validation on submit).
+  const { data: existing, isLoading: loadingExisting } = useQuery({
+    queryKey: ['purchase', headerCompanyId, id],
+    queryFn: () => api.get(`/purchases/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: isEdit && Boolean(headerCompanyId),
+  });
+
+  const purchaseCompanyId = existing?.company_id ?? headerCompanyId;
+
   const { data: formData, isLoading: loadingForm } = useQuery({
-    queryKey: ['purchase-form-data', activeCompany?.id],
-    queryFn: () => api.get('/purchases/form-data').then((r) => r.data.data),
-    enabled: Boolean(activeCompany),
+    queryKey: ['purchase-form-data', purchaseCompanyId],
+    queryFn: () => api.get('/purchases/form-data', withCompany(purchaseCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(purchaseCompanyId) && (!isEdit || Boolean(existing)),
   });
 
   // When a super admin switches the company on a new purchase, clear stale picks.
@@ -62,12 +72,6 @@ export default function PurchaseForm() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompany?.id]);
-
-  const { data: existing, isLoading: loadingExisting } = useQuery({
-    queryKey: ['purchase', id],
-    queryFn: () => api.get(`/purchases/${id}`).then((r) => r.data.data),
-    enabled: isEdit,
-  });
 
   useEffect(() => {
     if (!existing) return;
@@ -155,8 +159,8 @@ export default function PurchaseForm() {
         })),
     };
     try {
-      if (isEdit) await api.put(`/purchases/${id}`, payload);
-      else await api.post('/purchases', payload);
+      if (isEdit) await api.put(`/purchases/${id}`, payload, withCompany(purchaseCompanyId));
+      else await api.post('/purchases', payload, withCompany(activeCompany?.id));
       navigate('/purchases');
     } catch (err) {
       const bag = err.response?.data?.errors;

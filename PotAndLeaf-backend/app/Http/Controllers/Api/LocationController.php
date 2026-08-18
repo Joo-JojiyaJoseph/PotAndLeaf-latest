@@ -7,6 +7,7 @@ use App\Http\Requests\Location\StoreLocationRequest;
 use App\Http\Resources\LocationResource;
 use App\Models\Location;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 class LocationController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function index(Request $request): JsonResponse
     {
@@ -40,7 +41,7 @@ class LocationController extends Controller
 
     public function update(StoreLocationRequest $request, Location $location): JsonResponse
     {
-        $this->sameCompany($request, $location);
+        $this->assertRecordCompany($request, $location, writable: true);
         $updated = $this->save($this->company($request)->id, $location, $request->validated());
 
         return $this->ok(new LocationResource($updated), 'Location updated.');
@@ -49,7 +50,7 @@ class LocationController extends Controller
     public function destroy(Request $request, Location $location): JsonResponse
     {
         $this->allow($request, 'locations.manage');
-        $this->sameCompany($request, $location);
+        $this->assertRecordCompany($request, $location, writable: true);
         $location->delete();
 
         return $this->message('Location deleted.');
@@ -81,8 +82,4 @@ class LocationController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, Location $location): void
-    {
-        abort_unless((string) $location->company_id === (string) $this->company($request)->id, 404);
-    }
 }

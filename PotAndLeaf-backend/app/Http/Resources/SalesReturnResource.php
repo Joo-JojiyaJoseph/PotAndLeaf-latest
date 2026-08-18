@@ -16,6 +16,7 @@ class SalesReturnResource extends JsonResource
 
         return [
             'id'            => $this->id,
+            'company_id'    => $this->company_id,
             'return_no'     => $this->return_no,
             'return_date'   => optional($this->return_date)->toDateString(),
             'is_interstate' => (bool) $this->is_interstate,

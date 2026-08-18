@@ -16,6 +16,7 @@ class RentalResource extends JsonResource
 
         return [
             'id'                => $this->id,
+            'company_id'        => $this->company_id,
             'rental_no'         => $this->rental_no,
             'customer_id'       => $this->customer_id,
             'customer_name'     => $this->customer?->name,

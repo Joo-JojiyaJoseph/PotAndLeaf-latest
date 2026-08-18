@@ -8,7 +8,7 @@ import CompanyFilter, { companyFilterParam, filteredCompanyLabel } from '../comp
 export function useCompanyFilter() {
   const { activeCompany, companies, isSuperAdmin } = useAuth();
   const [filterCompanyId, setFilterCompanyId] = useState(isSuperAdmin ? 'all' : '');
-  const companyParams = isSuperAdmin ? companyFilterParam(filterCompanyId) : {};
+  const companyParams = companyFilterParam(filterCompanyId, isSuperAdmin);
   const viewingCompany = filteredCompanyLabel(companies, filterCompanyId, activeCompany);
 
   function Filter({ className = '' }) {

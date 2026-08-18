@@ -16,6 +16,7 @@ class StockVerificationResource extends JsonResource
 
         return [
             'id'               => $this->id,
+            'company_id'       => $this->company_id,
             'count_no'         => $this->count_no,
             'count_date'       => optional($this->count_date)->toDateString(),
             'location_note'    => $this->location_note,

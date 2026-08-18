@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import {
   ArrowDownTrayIcon,
@@ -12,7 +12,6 @@ import { useToast } from '../../lib/toast';
 import { Badge, Button, Card, Input, Spinner, StatCard } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
-import { companyFilterParam } from '../../components/CompanyFilter';
 
 const selectCls =
   'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
@@ -34,10 +33,10 @@ function formatDateTime(value) {
   return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function InventoryLedgerTab({ initialProductId = '', filterCompanyId = '' }) {
+export default function InventoryLedgerTab({ initialProductId = '', companyParams = {} }) {
   const { activeCompany } = useAuth();
   const toast = useToast();
-  const companyParams = companyFilterParam(filterCompanyId);
+  const showCompany = companyParams?.company_id === 'all';
   const [filters, setFilters] = useState({
     product_id: initialProductId,
     direction: '',
@@ -50,8 +49,15 @@ export default function InventoryLedgerTab({ initialProductId = '', filterCompan
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(true);
 
+  useEffect(() => {
+    if (!initialProductId) return;
+    setFilters((f) => ({ ...f, product_id: initialProductId }));
+    setApplied((f) => ({ ...f, product_id: initialProductId }));
+    setPage(1);
+  }, [initialProductId]);
+
   const { data: formData } = useQuery({
-    queryKey: ['inventory-ledger-form', activeCompany?.id, filterCompanyId],
+    queryKey: ['inventory-ledger-form', activeCompany?.id, companyParams],
     queryFn: () => api.get('/inventory/ledger/form-data', { params: companyParams }).then((r) => r.data.data),
     enabled: Boolean(activeCompany),
   });
@@ -68,7 +74,7 @@ export default function InventoryLedgerTab({ initialProductId = '', filterCompan
   }, [applied, page, companyParams]);
 
   const { data, isLoading, isFetching, isError, refetch } = useQuery({
-    queryKey: ['inventory-ledger', activeCompany?.id, filterCompanyId, params],
+    queryKey: ['inventory-ledger', activeCompany?.id, companyParams, params],
     queryFn: () => api.get('/inventory/ledger', { params }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
@@ -89,9 +95,15 @@ export default function InventoryLedgerTab({ initialProductId = '', filterCompan
     return { inQty, outQty };
   }, [rows]);
 
-  function applyFilters() {
+  function applyFilters(next = filters) {
     setPage(1);
-    setApplied({ ...filters });
+    setApplied({ ...next });
+  }
+
+  function applyPreset(from, to) {
+    const next = { ...filters, from, to };
+    setFilters(next);
+    applyFilters(next);
   }
 
   function resetFilters() {
@@ -188,7 +200,7 @@ export default function InventoryLedgerTab({ initialProductId = '', filterCompan
                   <button
                     key={p.label}
                     type="button"
-                    onClick={() => setFilters((f) => ({ ...f, from: p.from, to: p.to }))}
+                    onClick={() => applyPreset(p.from, p.to)}
                     className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-muted transition-colors hover:border-leaf/40 hover:text-ink"
                   >
                     {p.label}
@@ -197,7 +209,7 @@ export default function InventoryLedgerTab({ initialProductId = '', filterCompan
               </div>
               <div className="ml-auto flex gap-2">
                 <Button variant="ghost" size="sm" onClick={resetFilters}>Reset</Button>
-                <Button size="sm" onClick={applyFilters}>Apply filters</Button>
+                <Button size="sm" onClick={() => applyFilters()}>Apply filters</Button>
               </div>
             </div>
           </div>
@@ -227,6 +239,7 @@ export default function InventoryLedgerTab({ initialProductId = '', filterCompan
               <thead>
                 <tr className="border-b border-line bg-sidebar/40 text-left text-faint">
                   <th className="microlabel px-4 py-2.5 font-semibold">Date & time</th>
+                  {showCompany && <th className="microlabel px-4 py-2.5 font-semibold">Company</th>}
                   <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Source</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Direction</th>
@@ -240,8 +253,11 @@ export default function InventoryLedgerTab({ initialProductId = '', filterCompan
                 {rows.map((e) => (
                   <tr key={e.id} className="border-b border-line/60 last:border-0 transition-colors hover:bg-sidebar/50">
                     <td className="whitespace-nowrap px-4 py-2.5 text-xs text-muted">{formatDateTime(e.occurred_at)}</td>
+                    {showCompany && (
+                      <td className="px-4 py-2.5 text-xs text-muted">{e.company?.name ?? '—'}</td>
+                    )}
                     <td className="px-4 py-2.5">
-                      <div className="font-medium text-ink">{e.product?.name ?? '—'}</div>
+                      <div className="font-medium text-ink">{e.product?.name ?? e.product_name ?? '—'}</div>
                       {e.product?.sku && <div className="tnum text-xs text-muted">{e.product.sku}</div>}
                     </td>
                     <td className="px-4 py-2.5">

@@ -1,7 +1,8 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, XCircleIcon, PrinterIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../lib/toast';
 import { Badge, Button, Card } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
@@ -14,25 +15,32 @@ const statusTone = { draft: 'inactive', completed: 'active', cancelled: 'blocked
 export default function ProductionOrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
+
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['production-order', id],
-    queryFn: () => api.get(`/production/orders/${id}`).then((r) => r.data.data),
-    enabled: Boolean(id),
+    queryKey: ['production-order', headerCompanyId, id],
+    queryFn: () => api.get(`/production/orders/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['production-order', id] });
+    queryClient.invalidateQueries({ queryKey: ['production-order', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['production-orders'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
   const completeM = useMutation({
-    mutationFn: () => api.post(`/production/orders/${id}/complete`),
+    mutationFn: () => api.post(`/production/orders/${id}/complete`, {}, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Production completed — stock updated.'); },
     onError: (err) => toast.error(err.response?.data?.message ?? 'Could not complete production.'),
   });
   const cancelM = useMutation({
-    mutationFn: () => api.delete(`/production/orders/${id}`),
+    mutationFn: () => api.delete(`/production/orders/${id}`, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Production order cancelled.'); navigate('/production'); },
     onError: (err) => toast.error(err.response?.data?.message ?? 'Could not cancel production order.'),
   });

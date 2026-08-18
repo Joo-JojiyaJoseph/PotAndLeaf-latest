@@ -10,13 +10,14 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Services\AdvanceOrderService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdvanceOrderController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly AdvanceOrderService $orders) {}
 
@@ -52,7 +53,7 @@ class AdvanceOrderController extends Controller
     public function show(Request $request, AdvanceOrder $advanceOrder): JsonResponse
     {
         $this->allow($request, 'advance.view');
-        $this->sameCompany($request, $advanceOrder);
+        $this->assertRecordCompany($request, $advanceOrder);
 
         return $this->ok(new AdvanceOrderResource($advanceOrder->load(['items', 'customer:id,name,type'])));
     }
@@ -60,7 +61,7 @@ class AdvanceOrderController extends Controller
     public function fulfill(Request $request, AdvanceOrder $advanceOrder): JsonResponse
     {
         $this->allow($request, 'advance.fulfill');
-        $this->sameCompany($request, $advanceOrder);
+        $this->assertRecordCompany($request, $advanceOrder, writable: true);
         $result = $this->orders->fulfill($advanceOrder, $request->user()->id);
 
         return $this->ok(['sale_id' => $result['sale_id']], 'Draft sale created from advance order.');
@@ -69,7 +70,7 @@ class AdvanceOrderController extends Controller
     public function destroy(Request $request, AdvanceOrder $advanceOrder): JsonResponse
     {
         $this->allow($request, 'advance.delete');
-        $this->sameCompany($request, $advanceOrder);
+        $this->assertRecordCompany($request, $advanceOrder, writable: true);
         $this->orders->cancel($advanceOrder);
 
         return $this->message('Advance order cancelled.');
@@ -85,8 +86,4 @@ class AdvanceOrderController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, AdvanceOrder $order): void
-    {
-        abort_unless((string) $order->company_id === (string) $this->company($request)->id, 404);
-    }
 }

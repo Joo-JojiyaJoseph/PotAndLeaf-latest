@@ -16,6 +16,7 @@ class BulkSplitResource extends JsonResource
 
         return [
             'id'                  => $this->id,
+            'company_id'          => $this->company_id,
             'split_no'            => $this->split_no,
             'split_date'          => optional($this->split_date)->toDateString(),
             'source_product_id'   => $this->source_product_id,

@@ -55,13 +55,20 @@ class InventoryController extends Controller
 
     public function ledgerFormData(Request $request): JsonResponse
     {
-        $this->allow($request);
-        $company = $this->company($request);
+        $companyId = $this->allowList($request);
 
-        $products = Product::forCompany($company->id)
+        $products = Product::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->with('company:id,name')
             ->orderBy('name')
-            ->get(['id', 'sku', 'name'])
-            ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name]);
+            ->get(['id', 'sku', 'name', 'company_id'])
+            ->map(fn ($p) => [
+                'id'   => $p->id,
+                'sku'  => $p->sku,
+                'name' => $companyId === null && $p->company?->name
+                    ? "{$p->name} · {$p->company->name}"
+                    : $p->name,
+            ]);
 
         return $this->ok([
             'products'         => $products,
@@ -164,6 +171,7 @@ class InventoryController extends Controller
             'production', 'production-cancel', 'bulk-split', 'bulk-split-cancel',
             'transfer', 'purchase-return', 'purchase-return-cancel',
             'sales-return', 'sales-return-cancel', 'stock-verification',
+            'damage',
             'rental', 'rental-return', 'rental-cancel',
         ])->map(fn ($v) => ['value' => $v, 'label' => $this->referenceLabel($v)])->values()->all();
     }
@@ -185,6 +193,7 @@ class InventoryController extends Controller
             'sales-return'          => 'Sales return',
             'sales-return-cancel'   => 'Sales return (reversal)',
             'stock-verification'    => 'Stock verification',
+            'damage'                => 'Damage',
             'rental'                => 'Rental',
             'rental-return'         => 'Rental return',
             'rental-cancel'           => 'Rental (reversal)',

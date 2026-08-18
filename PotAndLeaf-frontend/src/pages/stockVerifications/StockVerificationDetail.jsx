@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, PaperAirplaneIcon, XCircleIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Field, Input, Modal } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatDate, classNames } from '../../lib/format';
@@ -12,23 +13,36 @@ const varClass = (v) => (Math.abs(v) < 1e-6 ? 'text-muted' : v < 0 ? 'text-dange
 
 export default function StockVerificationDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const queryClient = useQueryClient();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
+  const headerCompanyId = searchParams.get('company_id') || companyId;
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['stock-verification', id],
-    queryFn: () => api.get(`/stock-verifications/${id}`).then((r) => r.data.data),
+    queryKey: ['stock-verification', headerCompanyId, id],
+    queryFn: () => api.get(`/stock-verifications/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['stock-verification', id] });
+    queryClient.invalidateQueries({ queryKey: ['stock-verification', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['stock-verifications'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
-  const submitM = useMutation({ mutationFn: () => api.post(`/stock-verifications/${id}/submit`), onSuccess: invalidate });
-  const approveM = useMutation({ mutationFn: () => api.post(`/stock-verifications/${id}/approve`), onSuccess: invalidate });
+  const submitM = useMutation({
+    mutationFn: () => api.post(`/stock-verifications/${id}/submit`, {}, withCompany(recordCompanyId)),
+    onSuccess: invalidate,
+  });
+  const approveM = useMutation({
+    mutationFn: () => api.post(`/stock-verifications/${id}/approve`, {}, withCompany(recordCompanyId)),
+    onSuccess: invalidate,
+  });
   const rejectM = useMutation({
-    mutationFn: () => api.post(`/stock-verifications/${id}/reject`, { reason }),
+    mutationFn: () => api.post(`/stock-verifications/${id}/reject`, { reason }, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); setRejecting(false); setReason(''); },
   });
 

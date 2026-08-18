@@ -10,13 +10,14 @@ use App\Models\PurchaseReturn;
 use App\Repositories\Contracts\PurchaseReturnRepositoryInterface;
 use App\Services\PurchaseReturnService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PurchaseReturnController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(
         private readonly PurchaseReturnService $returns,
@@ -104,7 +105,7 @@ class PurchaseReturnController extends Controller
     public function show(Request $request, PurchaseReturn $purchaseReturn): JsonResponse
     {
         $this->allow($request, 'purchase_returns.view');
-        $this->sameCompany($request, $purchaseReturn);
+        $this->assertRecordCompany($request, $purchaseReturn);
 
         return $this->ok(new PurchaseReturnResource(
             $purchaseReturn->load(['supplier', 'purchase:id,purchase_no', 'items'])
@@ -114,7 +115,7 @@ class PurchaseReturnController extends Controller
     public function confirm(Request $request, PurchaseReturn $purchaseReturn): JsonResponse
     {
         $this->allow($request, 'purchase_returns.confirm');
-        $this->sameCompany($request, $purchaseReturn);
+        $this->assertRecordCompany($request, $purchaseReturn, writable: true, writableMessage: 'Switch to the return company to confirm or cancel.');
 
         return $this->ok(
             new PurchaseReturnResource($this->returns->confirm($purchaseReturn, $request->user()->id)),
@@ -125,7 +126,7 @@ class PurchaseReturnController extends Controller
     public function destroy(Request $request, PurchaseReturn $purchaseReturn): JsonResponse
     {
         $this->allow($request, 'purchase_returns.delete');
-        $this->sameCompany($request, $purchaseReturn);
+        $this->assertRecordCompany($request, $purchaseReturn, writable: true, writableMessage: 'Switch to the return company to confirm or cancel.');
         $this->returns->cancel($purchaseReturn, $request->user()->id);
 
         return $this->message('Return cancelled.');
@@ -139,10 +140,5 @@ class PurchaseReturnController extends Controller
     private function allow(Request $request, string $permission): void
     {
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
-    }
-
-    private function sameCompany(Request $request, PurchaseReturn $return): void
-    {
-        abort_unless((string) $return->company_id === (string) $this->company($request)->id, 404);
     }
 }

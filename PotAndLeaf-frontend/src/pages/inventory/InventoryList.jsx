@@ -5,7 +5,6 @@ import { ExclamationTriangleIcon, MagnifyingGlassIcon } from '@heroicons/react/2
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { companyFilterParam } from '../../components/CompanyFilter';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Input, Spinner, StatCard } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -18,20 +17,19 @@ const TABS = [
 ];
 const classTone = { fast: 'active', slow: 'warning', dead: 'blocked' };
 
-function LevelsTab({ onViewLedger, filterCompanyId }) {
+function LevelsTab({ onViewLedger, companyParams }) {
   const { activeCompany } = useAuth();
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [lowOnly, setLowOnly] = useState(false);
-  const companyParams = companyFilterParam(filterCompanyId);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', 'stock', activeCompany?.id, filterCompanyId, debounced, lowOnly],
+    queryKey: ['inventory', 'stock', activeCompany?.id, companyParams, debounced, lowOnly],
     queryFn: () => api.get('/inventory/stock', { params: { ...companyParams, search: debounced, low_only: lowOnly ? 1 : 0 } }).then((r) => r.data),
     keepPreviousData: true,
   });
   const { data: alerts } = useQuery({
-    queryKey: ['inventory', 'alerts', activeCompany?.id, filterCompanyId],
+    queryKey: ['inventory', 'alerts', activeCompany?.id, companyParams],
     queryFn: () => api.get('/inventory/alerts', { params: companyParams }).then((r) => r.data.data),
   });
   const rows = data?.data ?? [];
@@ -100,11 +98,10 @@ function LevelsTab({ onViewLedger, filterCompanyId }) {
   );
 }
 
-function ValuationTab({ filterCompanyId }) {
+function ValuationTab({ companyParams }) {
   const { activeCompany } = useAuth();
-  const companyParams = companyFilterParam(filterCompanyId);
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', 'valuation', activeCompany?.id, filterCompanyId],
+    queryKey: ['inventory', 'valuation', activeCompany?.id, companyParams],
     queryFn: () => api.get('/inventory/valuation', { params: companyParams }).then((r) => r.data.data),
   });
   if (isLoading) return <div className="flex justify-center py-16"><Spinner className="size-6" /></div>;
@@ -143,12 +140,11 @@ function ValuationTab({ filterCompanyId }) {
   );
 }
 
-function MovementTab({ filterCompanyId }) {
+function MovementTab({ companyParams }) {
   const { activeCompany } = useAuth();
   const [days, setDays] = useState(30);
-  const companyParams = companyFilterParam(filterCompanyId);
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', 'movement', activeCompany?.id, filterCompanyId, days],
+    queryKey: ['inventory', 'movement', activeCompany?.id, companyParams, days],
     queryFn: () => api.get('/inventory/movement', { params: { ...companyParams, days } }).then((r) => r.data.data),
   });
   const rows = data?.items ?? [];
@@ -199,7 +195,7 @@ function MovementTab({ filterCompanyId }) {
 }
 
 export default function InventoryList() {
-  const { filterCompanyId, companyHint, Filter } = useCompanyFilter();
+  const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const [tab, setTab] = useState('levels');
   const [ledgerProductId, setLedgerProductId] = useState('');
 
@@ -231,10 +227,10 @@ export default function InventoryList() {
           </button>
         ))}
       </div>
-      {tab === 'levels' && <LevelsTab onViewLedger={openLedger} filterCompanyId={filterCompanyId} />}
-      {tab === 'ledger' && <InventoryLedgerTab key={`${ledgerProductId}-${filterCompanyId}`} initialProductId={ledgerProductId} filterCompanyId={filterCompanyId} />}
-      {tab === 'valuation' && <ValuationTab filterCompanyId={filterCompanyId} />}
-      {tab === 'movement' && <MovementTab filterCompanyId={filterCompanyId} />}
+      {tab === 'levels' && <LevelsTab onViewLedger={openLedger} companyParams={companyParams} />}
+      {tab === 'ledger' && <InventoryLedgerTab key={`${ledgerProductId}-${filterCompanyId}`} initialProductId={ledgerProductId} companyParams={companyParams} />}
+      {tab === 'valuation' && <ValuationTab companyParams={companyParams} />}
+      {tab === 'movement' && <MovementTab companyParams={companyParams} />}
     </div>
   );
 }

@@ -10,13 +10,14 @@ use App\Models\Product;
 use App\Models\StockVerification;
 use App\Services\StockVerificationService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class StockVerificationController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly StockVerificationService $verifications) {}
 
@@ -59,7 +60,7 @@ class StockVerificationController extends Controller
     public function show(Request $request, StockVerification $stockVerification): JsonResponse
     {
         $this->allow($request, 'stock_verifications.view');
-        $this->sameCompany($request, $stockVerification);
+        $this->assertRecordCompany($request, $stockVerification);
 
         return $this->ok(new StockVerificationResource($stockVerification->load('items')));
     }
@@ -67,7 +68,7 @@ class StockVerificationController extends Controller
     public function submit(Request $request, StockVerification $stockVerification): JsonResponse
     {
         $this->allow($request, 'stock_verifications.create');
-        $this->sameCompany($request, $stockVerification);
+        $this->assertRecordCompany($request, $stockVerification, writable: true, writableMessage: 'Switch to the count company to submit, approve, or reject.');
 
         return $this->ok(
             new StockVerificationResource($this->verifications->submit($stockVerification, $request->user()->id)),
@@ -78,7 +79,7 @@ class StockVerificationController extends Controller
     public function approve(Request $request, StockVerification $stockVerification): JsonResponse
     {
         $this->allow($request, 'stock_verifications.approve');
-        $this->sameCompany($request, $stockVerification);
+        $this->assertRecordCompany($request, $stockVerification, writable: true, writableMessage: 'Switch to the count company to submit, approve, or reject.');
 
         return $this->ok(
             new StockVerificationResource($this->verifications->approve($stockVerification, $request->user()->id)),
@@ -88,7 +89,7 @@ class StockVerificationController extends Controller
 
     public function reject(RejectStockVerificationRequest $request, StockVerification $stockVerification): JsonResponse
     {
-        $this->sameCompany($request, $stockVerification);
+        $this->assertRecordCompany($request, $stockVerification, writable: true, writableMessage: 'Switch to the count company to submit, approve, or reject.');
 
         return $this->ok(
             new StockVerificationResource(
@@ -108,8 +109,4 @@ class StockVerificationController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, StockVerification $v): void
-    {
-        abort_unless((string) $v->company_id === (string) $this->company($request)->id, 404);
-    }
 }

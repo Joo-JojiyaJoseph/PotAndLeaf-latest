@@ -1,7 +1,8 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -11,25 +12,33 @@ const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked
 
 export default function SalesReturnDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['sales-return', id],
-    queryFn: () => api.get(`/sales-returns/${id}`).then((r) => r.data.data),
+    queryKey: ['sales-return', headerCompanyId, id],
+    queryFn: () => api.get(`/sales-returns/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['sales-return', id] });
+    queryClient.invalidateQueries({ queryKey: ['sales-return', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['sales-returns'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
     queryClient.invalidateQueries({ queryKey: ['customers'] });
   };
   const confirmM = useMutation({
-    mutationFn: () => api.post(`/sales-returns/${id}/confirm`),
+    mutationFn: () => api.post(`/sales-returns/${id}/confirm`, {}, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Return confirmed.'); },
     onError: (e) => toast.error(e.response?.data?.message ?? 'Confirm failed.'),
   });
   const cancelM = useMutation({
-    mutationFn: () => api.delete(`/sales-returns/${id}`),
+    mutationFn: () => api.delete(`/sales-returns/${id}`, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Return cancelled.'); },
     onError: (e) => toast.error(e.response?.data?.message ?? 'Cancel failed.'),
   });

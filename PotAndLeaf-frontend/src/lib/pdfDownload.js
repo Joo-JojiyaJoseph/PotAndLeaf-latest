@@ -1,13 +1,13 @@
 import api, { getAuthToken, getCompanyId } from './api';
 
 /** Download a binary PDF from an authenticated API route. */
-export async function downloadPdf(path, filename) {
-  return downloadWithParams(path, undefined, filename || 'document.pdf', 'application/pdf');
+export async function downloadPdf(path, filename, companyId) {
+  return downloadWithParams(path, undefined, filename || 'document.pdf', 'application/pdf', companyId);
 }
 
 /** Download with optional query params (PDF, CSV, sqlite…). */
-export async function downloadWithParams(path, params, filename, mime) {
-  const res = await api.get(path, { responseType: 'blob', params });
+export async function downloadWithParams(path, params, filename, mime, companyId) {
+  const res = await api.get(path, withCompany(companyId, { responseType: 'blob', params }));
   const blob = new Blob([res.data], mime ? { type: mime } : undefined);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

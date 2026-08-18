@@ -18,6 +18,7 @@ class StockTransferResource extends JsonResource
 
         return [
             'id'            => $this->id,
+            'company_id'    => $this->company_id,
             'transfer_no'   => $this->transfer_no,
             'transfer_date' => optional($this->transfer_date)->toDateString(),
             'from_company_id' => $this->company_id,

@@ -137,20 +137,61 @@ class TransferController extends Controller
 
     private function sameCompanyOrDestination(Request $request, StockTransfer $transfer): void
     {
-        $companyId = (string) $this->company($request)->id;
-        abort_unless(
-            (string) $transfer->company_id === $companyId || (string) $transfer->to_company_id === $companyId,
-            404
-        );
+        $headerId = (string) $this->company($request)->id;
+        $sourceId = (string) $transfer->company_id;
+        $destId = (string) $transfer->to_company_id;
+
+        if ($sourceId === $headerId || $destId === $headerId) {
+            return;
+        }
+
+        $queryId = $request->query('company_id');
+        if (filled($queryId) && ($sourceId === (string) $queryId || $destId === (string) $queryId)) {
+            return;
+        }
+
+        if ($request->user()->is_super_admin) {
+            return;
+        }
+
+        abort(404);
     }
 
     private function sameSourceCompany(Request $request, StockTransfer $transfer): void
     {
-        abort_unless((string) $transfer->company_id === (string) $this->company($request)->id, 404);
+        $headerId = (string) $this->company($request)->id;
+        $sourceId = (string) $transfer->company_id;
+
+        if ($sourceId === $headerId) {
+            return;
+        }
+
+        if ($request->user()->is_super_admin) {
+            $queryId = $request->query('company_id');
+            if ($sourceId === $headerId || (filled($queryId) && $sourceId === (string) $queryId)) {
+                return;
+            }
+        }
+
+        abort(404, 'Switch to the source company to modify this transfer.');
     }
 
     private function sameDestinationCompany(Request $request, StockTransfer $transfer): void
     {
-        abort_unless((string) $transfer->to_company_id === (string) $this->company($request)->id, 404);
+        $headerId = (string) $this->company($request)->id;
+        $destId = (string) $transfer->to_company_id;
+
+        if ($destId === $headerId) {
+            return;
+        }
+
+        if ($request->user()->is_super_admin) {
+            $queryId = $request->query('company_id');
+            if ($destId === $headerId || (filled($queryId) && $destId === (string) $queryId)) {
+                return;
+            }
+        }
+
+        abort(404, 'Switch to the destination company to receive this transfer.');
     }
 }

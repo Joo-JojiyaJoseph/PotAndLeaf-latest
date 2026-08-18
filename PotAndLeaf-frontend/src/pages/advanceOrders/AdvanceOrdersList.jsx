@@ -5,6 +5,7 @@ import { PlusIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
+import { recordDetailPath } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
@@ -15,8 +16,9 @@ const STATUS_TABS = [
 const tone = { booked: 'submitted', fulfilled: 'active', cancelled: 'blocked' };
 
 export default function AdvanceOrdersList() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
+  const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
   const [status, setStatus] = useState('');
 
@@ -68,7 +70,7 @@ export default function AdvanceOrdersList() {
                 <tbody>
                   {rows.map((o) => (
                     <tr key={o.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
-                      <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(`/advance-orders/${o.id}`)} className="font-medium text-ink hover:text-leaf">{o.order_no}</button></td>
+                      <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(recordDetailPath('/advance-orders', o, recordCtx))} className="font-medium text-ink hover:text-leaf">{o.order_no}</button></td>
                       <td className="px-4 py-2.5 font-medium">{o.customer_name}</td>
                       <td className="px-4 py-2.5 text-muted">{o.expected_date ? formatDate(o.expected_date) : '—'}</td>
                       <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(o.advance_amount)}</td>

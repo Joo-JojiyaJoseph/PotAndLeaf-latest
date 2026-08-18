@@ -10,13 +10,14 @@ use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Services\PurchaseOrderService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PurchaseOrderController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly PurchaseOrderService $orders) {}
 
@@ -60,7 +61,7 @@ class PurchaseOrderController extends Controller
     public function show(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
         $this->allow($request, 'po.view');
-        $this->sameCompany($request, $purchaseOrder);
+        $this->assertRecordCompany($request, $purchaseOrder);
 
         return $this->ok(new PurchaseOrderResource($purchaseOrder->load(['items', 'supplier:id,name'])));
     }
@@ -68,7 +69,7 @@ class PurchaseOrderController extends Controller
     public function send(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
         $this->allow($request, 'po.send');
-        $this->sameCompany($request, $purchaseOrder);
+        $this->assertRecordCompany($request, $purchaseOrder, writable: true);
 
         return $this->ok(new PurchaseOrderResource($this->orders->send($purchaseOrder)), 'PO marked as sent.');
     }
@@ -76,7 +77,7 @@ class PurchaseOrderController extends Controller
     public function convert(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
         $this->allow($request, 'po.convert');
-        $this->sameCompany($request, $purchaseOrder);
+        $this->assertRecordCompany($request, $purchaseOrder, writable: true);
         $result = $this->orders->convertToPurchase($purchaseOrder, $request->user()->id);
 
         return $this->ok(['purchase_id' => $result['purchase_id']], 'Draft GRN created from PO.');
@@ -85,7 +86,7 @@ class PurchaseOrderController extends Controller
     public function destroy(Request $request, PurchaseOrder $purchaseOrder): JsonResponse
     {
         $this->allow($request, 'po.delete');
-        $this->sameCompany($request, $purchaseOrder);
+        $this->assertRecordCompany($request, $purchaseOrder, writable: true);
         $this->orders->cancel($purchaseOrder);
 
         return $this->message('Purchase order cancelled.');
@@ -101,8 +102,4 @@ class PurchaseOrderController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, PurchaseOrder $po): void
-    {
-        abort_unless((string) $po->company_id === (string) $this->company($request)->id, 404);
-    }
 }

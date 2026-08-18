@@ -1,7 +1,9 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
+import { recordDetailPath } from '../../lib/recordCompany';
 import { Badge, Button } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -11,19 +13,32 @@ const tone = { booked: 'submitted', fulfilled: 'active', cancelled: 'blocked' };
 export default function AdvanceOrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const queryClient = useQueryClient();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['advance-order', id],
-    queryFn: () => api.get(`/advance-orders/${id}`).then((r) => r.data.data),
+    queryKey: ['advance-order', headerCompanyId, id],
+    queryFn: () => api.get(`/advance-orders/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+  const recordCtx = { filterCompanyId: headerCompanyId, companyId };
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['advance-order', id] });
+    queryClient.invalidateQueries({ queryKey: ['advance-order', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['advance-orders'] });
   };
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/advance-orders/${id}`), onSuccess: invalidate });
+  const cancelM = useMutation({ mutationFn: () => api.delete(`/advance-orders/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
   const fulfillM = useMutation({
-    mutationFn: () => api.post(`/advance-orders/${id}/fulfill`),
-    onSuccess: (res) => { invalidate(); const sid = res.data.data?.sale_id; if (sid) navigate(`/sales/${sid}`); },
+    mutationFn: () => api.post(`/advance-orders/${id}/fulfill`, {}, withCompany(recordCompanyId)),
+    onSuccess: (res) => {
+      invalidate();
+      const sid = res.data.data?.sale_id;
+      if (sid) navigate(recordDetailPath('/sales', { id: sid, company_id: recordCompanyId }, recordCtx));
+    },
   });
 
   if (isLoading) return <DetailLoading />;
@@ -40,7 +55,7 @@ export default function AdvanceOrderDetail() {
           <Badge tone={tone[o.status] ?? 'default'}>{o.status}</Badge>
           {o.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {o.can?.fulfill && <Button size="sm" onClick={() => fulfillM.mutate()} disabled={fulfillM.isPending}><CheckCircleIcon className="size-4" /> Fulfil → sale</Button>}
-          {o.sale_id && <Button variant="outline" size="sm" onClick={() => navigate(`/sales/${o.sale_id}`)}>View sale</Button>}
+          {o.sale_id && <Button variant="outline" size="sm" onClick={() => navigate(recordDetailPath('/sales', { id: o.sale_id, company_id: recordCompanyId }, recordCtx))}>View sale</Button>}
         </>}
       />
 

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -11,18 +12,32 @@ const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked
 
 export default function PurchaseReturnDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const queryClient = useQueryClient();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['purchase-return', id],
-    queryFn: () => api.get(`/purchase-returns/${id}`).then((r) => r.data.data),
+    queryKey: ['purchase-return', headerCompanyId, id],
+    queryFn: () => api.get(`/purchase-returns/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['purchase-return', id] });
+    queryClient.invalidateQueries({ queryKey: ['purchase-return', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['purchase-returns'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
-  const confirmM = useMutation({ mutationFn: () => api.post(`/purchase-returns/${id}/confirm`), onSuccess: invalidate });
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/purchase-returns/${id}`), onSuccess: invalidate });
+  const confirmM = useMutation({
+    mutationFn: () => api.post(`/purchase-returns/${id}/confirm`, {}, withCompany(recordCompanyId)),
+    onSuccess: invalidate,
+  });
+  const cancelM = useMutation({
+    mutationFn: () => api.delete(`/purchase-returns/${id}`, withCompany(recordCompanyId)),
+    onSuccess: invalidate,
+  });
 
   if (isLoading) return <DetailLoading />;
   if (isError || !data) return <DetailError backTo="/purchase-returns" />;

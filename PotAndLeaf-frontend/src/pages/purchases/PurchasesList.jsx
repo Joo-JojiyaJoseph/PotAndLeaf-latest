@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { CheckCircleIcon, PlusIcon, BanknotesIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
@@ -32,12 +32,28 @@ export default function PurchasesList() {
   });
 
   const confirmMutation = useMutation({
-    mutationFn: (id) => api.post(`/purchases/${id}/confirm`),
+    mutationFn: (p) => api.post(`/purchases/${p.id}/confirm`, {}, withCompany(resolvePurchaseCompany(p))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['purchases'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
     },
   });
+
+  function resolvePurchaseCompany(p) {
+    if (p.company_id) return p.company_id;
+    if (filterCompanyId && filterCompanyId !== 'all') return filterCompanyId;
+    return activeCompany?.id;
+  }
+
+  function purchasePath(p) {
+    const cid = resolvePurchaseCompany(p);
+    return cid ? `/purchases/${p.id}?company_id=${cid}` : `/purchases/${p.id}`;
+  }
+
+  function purchaseEditPath(p) {
+    const cid = resolvePurchaseCompany(p);
+    return cid ? `/purchases/${p.id}/edit?company_id=${cid}` : `/purchases/${p.id}/edit`;
+  }
 
   const rows = data?.data ?? [];
 
@@ -108,7 +124,7 @@ export default function PurchasesList() {
               <tbody>
                 {rows.map((p) => (
                   <tr key={p.id} className="border-b border-line/60 last:border-0 hover:bg-paper/60">
-                    <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(`/purchases/${p.id}`)} className="font-medium text-ink hover:text-leaf">{p.purchase_no}</button></td>
+                    <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(purchasePath(p))} className="font-medium text-ink hover:text-leaf">{p.purchase_no}</button></td>
                     <td className="px-4 py-2.5 text-muted">{formatDate(p.purchase_date)}</td>
                     <td className="px-4 py-2.5 font-medium">{p.supplier?.name ?? '—'}</td>
                     <td className="tnum px-4 py-2.5 text-xs text-muted">{p.invoice_no || '—'}</td>
@@ -122,14 +138,14 @@ export default function PurchasesList() {
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-2">
                         {p.can?.update && (
-                          <Button variant="outline" size="sm" onClick={() => navigate(`/purchases/${p.id}/edit`)}>
+                          <Button variant="outline" size="sm" onClick={() => navigate(purchaseEditPath(p))}>
                             Edit
                           </Button>
                         )}
                         {p.can?.confirm && (
                           <Button
                             size="sm"
-                            onClick={() => confirmMutation.mutate(p.id)}
+                            onClick={() => confirmMutation.mutate(p)}
                             disabled={confirmMutation.isPending}
                           >
                             <CheckCircleIcon className="size-4" /> Confirm

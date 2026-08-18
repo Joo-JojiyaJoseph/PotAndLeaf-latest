@@ -14,13 +14,14 @@ use App\Models\ProductUnit;
 use App\Models\ProductionOrder;
 use App\Services\ProductionService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProductionController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly ProductionService $production) {}
 
@@ -73,7 +74,7 @@ class ProductionController extends Controller
 
     public function updateBom(UpsertBomRequest $request, Bom $bom): JsonResponse
     {
-        $this->sameCompany($request, $bom);
+        $this->assertRecordCompany($request, $bom, writable: true);
         $updated = $this->production->upsertBom($this->company($request)->id, ['id' => $bom->id] + $request->validated());
 
         return $this->ok(new BomResource($updated), 'Bill of materials updated.');
@@ -82,7 +83,7 @@ class ProductionController extends Controller
     public function destroyBom(Request $request, Bom $bom): JsonResponse
     {
         $this->allow($request, 'production.manage_bom');
-        $this->sameCompany($request, $bom);
+        $this->assertRecordCompany($request, $bom, writable: true);
         $this->production->deleteBom($bom);
 
         return $this->message('Bill of materials deleted.');
@@ -107,14 +108,14 @@ class ProductionController extends Controller
     public function showOrder(Request $request, ProductionOrder $productionOrder): JsonResponse
     {
         $this->allow($request, 'production.view');
-        $this->sameCompany($request, $productionOrder);
+        $this->assertRecordCompany($request, $productionOrder);
 
         return $this->ok(new ProductionOrderResource($productionOrder->load(['items', 'outputProduct:id,sku,name', 'bom:id,name', 'batches'])));
     }
 
     public function updateOrder(StoreProductionOrderRequest $request, ProductionOrder $productionOrder): JsonResponse
     {
-        $this->sameCompany($request, $productionOrder);
+        $this->assertRecordCompany($request, $productionOrder, writable: true);
         $updated = $this->production->updateOrder($productionOrder, $request->validated());
 
         return $this->ok(new ProductionOrderResource($updated), 'Production order updated.');
@@ -123,7 +124,7 @@ class ProductionController extends Controller
     public function complete(Request $request, ProductionOrder $productionOrder): JsonResponse
     {
         $this->allow($request, 'production.complete');
-        $this->sameCompany($request, $productionOrder);
+        $this->assertRecordCompany($request, $productionOrder, writable: true);
 
         return $this->ok(new ProductionOrderResource($this->production->complete($productionOrder, $request->user()->id)), 'Production completed — stock updated.');
     }
@@ -131,7 +132,7 @@ class ProductionController extends Controller
     public function destroyOrder(Request $request, ProductionOrder $productionOrder): JsonResponse
     {
         $this->allow($request, 'production.delete');
-        $this->sameCompany($request, $productionOrder);
+        $this->assertRecordCompany($request, $productionOrder, writable: true);
         $this->production->cancel($productionOrder, $request->user()->id);
 
         return $this->message('Production order cancelled.');
@@ -147,8 +148,4 @@ class ProductionController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, $model): void
-    {
-        abort_unless((string) $model->company_id === (string) $this->company($request)->id, 404);
-    }
 }

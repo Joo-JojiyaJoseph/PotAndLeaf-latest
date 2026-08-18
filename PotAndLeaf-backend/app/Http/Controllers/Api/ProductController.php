@@ -12,13 +12,14 @@ use App\Models\ProductUnit;
 use App\Models\Supplier;
 use App\Services\ProductService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly ProductService $products) {}
 
@@ -76,14 +77,14 @@ class ProductController extends Controller
     public function show(Request $request, Product $product): JsonResponse
     {
         $this->allow($request, 'products.view');
-        $this->sameCompany($request, $product);
+        $this->assertRecordCompany($request, $product);
 
         return $this->ok(new ProductResource($product->load(['category', 'brand', 'unit', 'suppliers'])));
     }
 
     public function update(UpdateProductRequest $request, Product $product): JsonResponse
     {
-        $this->sameCompany($request, $product);
+        $this->assertRecordCompany($request, $product, writable: true);
         $updated = $this->products->update($product, $request->validated());
 
         return $this->ok(new ProductResource($updated->load(['category', 'brand', 'unit'])), 'Product updated.');
@@ -92,7 +93,7 @@ class ProductController extends Controller
     public function destroy(Request $request, Product $product): JsonResponse
     {
         $this->allow($request, 'products.delete');
-        $this->sameCompany($request, $product);
+        $this->assertRecordCompany($request, $product, writable: true);
         $this->products->delete($product);
 
         return $this->message('Product deleted.');
@@ -290,7 +291,7 @@ class ProductController extends Controller
     public function batches(Request $request, Product $product): JsonResponse
     {
         $this->allow($request, 'products.view');
-        $this->sameCompany($request, $product);
+        $this->assertRecordCompany($request, $product);
 
         $batches = \App\Models\ProductBatch::forCompany($product->company_id)
             ->where('product_id', $product->id)
@@ -312,16 +313,11 @@ class ProductController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, Product $product): void
-    {
-        abort_unless((string) $product->company_id === (string) $this->company($request)->id, 404);
-    }
-
     public function toggleStatus(Request $request, Product $product): JsonResponse
     {
         $company = $request->attributes->get('company');
         abort_unless($request->user()->hasPermission('products.update', $company->id), 403);
-        abort_unless((string) $product->company_id === (string) $company->id, 404);
+        $this->assertRecordCompany($request, $product, writable: true);
 
         $data = $request->validate(['status' => ['required', 'in:active,inactive']]);
         $product->update(['status' => $data['status']]);

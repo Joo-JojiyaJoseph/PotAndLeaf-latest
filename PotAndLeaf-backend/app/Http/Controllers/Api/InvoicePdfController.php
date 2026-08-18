@@ -34,7 +34,7 @@ class InvoicePdfController extends Controller
     {
         $company = $request->attributes->get('company');
         abort_unless($request->user()->hasPermission('purchases.view', $company->id), 403);
-        abort_unless((string) $purchase->company_id === (string) $company->id, 404);
+        $this->assertRecordCompany($request, (string) $purchase->company_id);
 
         $purchase->load([
             'items',
@@ -64,5 +64,25 @@ class InvoicePdfController extends Controller
             ->setPaper('a4');
 
         return $pdf->download("rental-invoice-{$rentalInvoice->invoice_no}.pdf");
+    }
+
+    /** Match record company to header, ?company_id=, or super-admin global read. */
+    private function assertRecordCompany(Request $request, string $recordCompanyId): void
+    {
+        $headerId = (string) $request->attributes->get('company')->id;
+
+        if ($recordCompanyId === $headerId) {
+            return;
+        }
+
+        if (filled($request->query('company_id')) && $recordCompanyId === (string) $request->query('company_id')) {
+            return;
+        }
+
+        if ($request->user()->is_super_admin) {
+            return;
+        }
+
+        abort(404);
     }
 }

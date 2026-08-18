@@ -1,7 +1,8 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, XCircleIcon, PrinterIcon, BanknotesIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -14,19 +15,27 @@ const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked
 export default function SaleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['sale', id],
-    queryFn: () => api.get(`/sales/${id}`).then((r) => r.data.data),
+    queryKey: ['sale', headerCompanyId, id],
+    queryFn: () => api.get(`/sales/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['sale', id] });
+    queryClient.invalidateQueries({ queryKey: ['sale', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['sales'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
   const confirmM = useMutation({
-    mutationFn: () => api.post(`/sales/${id}/confirm`),
+    mutationFn: () => api.post(`/sales/${id}/confirm`, {}, withCompany(recordCompanyId)),
     onSuccess: async (res) => {
       invalidate();
       const confirmed = res?.data?.data;
@@ -38,11 +47,14 @@ export default function SaleDetail() {
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Could not confirm sale.'),
   });
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/sales/${id}`), onSuccess: invalidate });
+  const cancelM = useMutation({
+    mutationFn: () => api.delete(`/sales/${id}`, withCompany(recordCompanyId)),
+    onSuccess: invalidate,
+  });
 
   async function downloadInvoicePdf() {
     try {
-      await downloadPdf(`/sales/${id}/invoice.pdf`, `invoice-${data?.sale_no ?? id}.pdf`);
+      await downloadPdf(`/sales/${id}/invoice.pdf`, `invoice-${data?.sale_no ?? id}.pdf`, recordCompanyId);
       toast.success('Invoice PDF downloaded.');
     } catch {
       toast.error('Could not download PDF.');

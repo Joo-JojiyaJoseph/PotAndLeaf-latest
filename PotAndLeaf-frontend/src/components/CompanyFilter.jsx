@@ -2,8 +2,15 @@ import { BuildingOffice2Icon, FunnelIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { CompanySelectMenu } from './CompanySelectMenu';
 
-/** Query params for super-admin company filter (?company_id=). */
-export function companyFilterParam(filterCompanyId) {
+/**
+ * Query params for super-admin company filter (?company_id=).
+ * Non-super-admins must omit company_id — the API scopes by X-Company-Id header.
+ * Sending company_id=all as a regular user returns 403.
+ */
+export function companyFilterParam(filterCompanyId, isSuperAdmin = false) {
+  if (!isSuperAdmin) {
+    return {};
+  }
   if (!filterCompanyId || filterCompanyId === 'all') {
     return { company_id: 'all' };
   }

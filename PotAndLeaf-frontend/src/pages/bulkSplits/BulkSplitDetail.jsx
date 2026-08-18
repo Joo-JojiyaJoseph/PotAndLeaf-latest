@@ -1,7 +1,8 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, XCircleIcon, PrinterIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -41,19 +42,27 @@ function labelsForSplitItem(it) {
 
 export default function BulkSplitDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const queryClient = useQueryClient();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['bulk-split', id],
-    queryFn: () => api.get(`/bulk-splits/${id}`).then((r) => r.data.data),
+    queryKey: ['bulk-split', headerCompanyId, id],
+    queryFn: () => api.get(`/bulk-splits/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['bulk-split', id] });
+    queryClient.invalidateQueries({ queryKey: ['bulk-split', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['bulk-splits'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
     queryClient.invalidateQueries({ queryKey: ['products'] });
   };
-  const confirmM = useMutation({ mutationFn: () => api.post(`/bulk-splits/${id}/confirm`), onSuccess: invalidate });
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/bulk-splits/${id}`), onSuccess: invalidate });
+  const confirmM = useMutation({ mutationFn: () => api.post(`/bulk-splits/${id}/confirm`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const cancelM = useMutation({ mutationFn: () => api.delete(`/bulk-splits/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
   const { submit, release, locked } = useSubmitLock(confirmM.isPending || cancelM.isPending);
 
   if (isLoading) return <DetailLoading />;

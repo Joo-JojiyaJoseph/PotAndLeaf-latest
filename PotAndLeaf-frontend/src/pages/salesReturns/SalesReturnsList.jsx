@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { CheckCircleIcon, PlusIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
+import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
@@ -17,8 +18,9 @@ const STATUS_TABS = [
 const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked' };
 
 export default function SalesReturnsList() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
+  const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
@@ -31,7 +33,7 @@ export default function SalesReturnsList() {
   });
 
   const confirmMutation = useMutation({
-    mutationFn: (id) => api.post(`/sales-returns/${id}/confirm`),
+    mutationFn: (r) => api.post(`/sales-returns/${r.id}/confirm`, {}, withCompany(resolveRecordCompany(r, recordCtx))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sales-returns'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -98,7 +100,7 @@ export default function SalesReturnsList() {
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-paper/60">
                     <td className="px-4 py-2.5">
-                      <button onClick={() => navigate(`/sales-returns/${r.id}`)} className="font-medium text-ink hover:text-leaf">{r.return_no}</button>
+                      <button onClick={() => navigate(recordDetailPath('/sales-returns', r, recordCtx))} className="font-medium text-ink hover:text-leaf">{r.return_no}</button>
                     </td>
                     <td className="tnum px-4 py-2.5 text-xs text-muted">{formatDate(r.return_date)}</td>
                     <td className="tnum px-4 py-2.5 text-xs text-muted">{r.sale?.sale_no ?? '—'}</td>
@@ -108,7 +110,7 @@ export default function SalesReturnsList() {
                     <td className="px-4 py-2.5 text-right">
                       {r.can?.confirm && (
                         <button
-                          onClick={() => confirmMutation.mutate(r.id)}
+                          onClick={() => confirmMutation.mutate(r)}
                           disabled={confirmMutation.isPending}
                           className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-leaf hover:bg-leaf-soft"
                         >

@@ -10,13 +10,14 @@ use App\Models\SalesReturn;
 use App\Repositories\Contracts\SalesReturnRepositoryInterface;
 use App\Services\SalesReturnService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SalesReturnController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(
         private readonly SalesReturnService $returns,
@@ -81,7 +82,7 @@ class SalesReturnController extends Controller
     public function show(Request $request, SalesReturn $salesReturn): JsonResponse
     {
         $this->allow($request, 'sales_returns.view');
-        $this->sameCompany($request, $salesReturn);
+        $this->assertRecordCompany($request, $salesReturn);
 
         return $this->ok(new SalesReturnResource(
             $salesReturn->load(['customer', 'sale:id,sale_no', 'items'])
@@ -91,7 +92,7 @@ class SalesReturnController extends Controller
     public function confirm(Request $request, SalesReturn $salesReturn): JsonResponse
     {
         $this->allow($request, 'sales_returns.confirm');
-        $this->sameCompany($request, $salesReturn);
+        $this->assertRecordCompany($request, $salesReturn, writable: true);
 
         return $this->ok(
             new SalesReturnResource($this->returns->confirm($salesReturn, $request->user()->id)),
@@ -102,7 +103,7 @@ class SalesReturnController extends Controller
     public function destroy(Request $request, SalesReturn $salesReturn): JsonResponse
     {
         $this->allow($request, 'sales_returns.delete');
-        $this->sameCompany($request, $salesReturn);
+        $this->assertRecordCompany($request, $salesReturn, writable: true);
         $this->returns->cancel($salesReturn, $request->user()->id);
 
         return $this->message('Sales return cancelled.');
@@ -118,8 +119,4 @@ class SalesReturnController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, SalesReturn $return): void
-    {
-        abort_unless((string) $return->company_id === (string) $this->company($request)->id, 404);
-    }
 }

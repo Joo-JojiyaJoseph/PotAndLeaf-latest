@@ -5,6 +5,7 @@ import { PlusIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
+import { recordDetailPath } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatDate } from '../../lib/format';
 
@@ -15,8 +16,9 @@ const STATUS_TABS = [
 const tone = { draft: 'inactive', active: 'active', returned: 'approved', cancelled: 'blocked' };
 
 export default function RentalsList() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
+  const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
   const [status, setStatus] = useState('');
 
@@ -68,7 +70,7 @@ export default function RentalsList() {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
-                      <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(`/rentals/${r.id}`)} className="font-medium text-ink hover:text-leaf">{r.rental_no}</button></td>
+                      <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(recordDetailPath('/rentals', r, recordCtx))} className="font-medium text-ink hover:text-leaf">{r.rental_no}</button></td>
                       <td className="px-4 py-2.5 font-medium">{r.customer_name}</td>
                       <td className="px-4 py-2.5 text-muted">{formatDate(r.start_date)}</td>
                       <td className="px-4 py-2.5"><Badge tone="info">{r.billing_cycle}</Badge></td>

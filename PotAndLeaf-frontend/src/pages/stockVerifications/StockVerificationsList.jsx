@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { CheckCircleIcon, PlusIcon, XCircleIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
+import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { formatDate } from '../../lib/format';
 
@@ -17,7 +18,7 @@ const STATUS_TABS = [
 ];
 
 export default function StockVerificationsList() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -30,6 +31,8 @@ export default function StockVerificationsList() {
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
 
+  const recordCtx = { filterCompanyId, companyId };
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['stock-verifications', activeCompany?.id, filterCompanyId, status],
     queryFn: () => api.get('/stock-verifications', { params: { ...companyParams, status } }).then((r) => r.data),
@@ -37,10 +40,16 @@ export default function StockVerificationsList() {
     placeholderData: keepPreviousData,
   });
 
-  const submitM = useMutation({ mutationFn: (id) => api.post(`/stock-verifications/${id}/submit`), onSuccess: invalidate });
-  const approveM = useMutation({ mutationFn: (id) => api.post(`/stock-verifications/${id}/approve`), onSuccess: invalidate });
+  const submitM = useMutation({
+    mutationFn: (v) => api.post(`/stock-verifications/${v.id}/submit`, {}, withCompany(resolveRecordCompany(v, recordCtx))),
+    onSuccess: invalidate,
+  });
+  const approveM = useMutation({
+    mutationFn: (v) => api.post(`/stock-verifications/${v.id}/approve`, {}, withCompany(resolveRecordCompany(v, recordCtx))),
+    onSuccess: invalidate,
+  });
   const rejectM = useMutation({
-    mutationFn: ({ id, reason }) => api.post(`/stock-verifications/${id}/reject`, { reason }),
+    mutationFn: ({ v, reason }) => api.post(`/stock-verifications/${v.id}/reject`, { reason }, withCompany(resolveRecordCompany(v, recordCtx))),
     onSuccess: () => {
       invalidate();
       setRejecting(null);
@@ -114,7 +123,7 @@ export default function StockVerificationsList() {
               <tbody>
                 {rows.map((v) => (
                   <tr key={v.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
-                    <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(`/stock-verifications/${v.id}`)} className="font-medium text-ink hover:text-leaf">{v.count_no}</button></td>
+                    <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(recordDetailPath('/stock-verifications', v, recordCtx))} className="font-medium text-ink hover:text-leaf">{v.count_no}</button></td>
                     <td className="px-4 py-2.5 text-muted">{formatDate(v.count_date)}</td>
                     <td className="px-4 py-2.5 text-muted">{v.location_note || '—'}</td>
                     <td className="tnum px-4 py-2.5 text-right text-muted">{v.items_count ?? '—'}</td>
@@ -124,7 +133,7 @@ export default function StockVerificationsList() {
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-2">
                         {v.can?.submit && (
-                          <Button variant="outline" size="sm" onClick={() => submitM.mutate(v.id)} disabled={submitM.isPending}>
+                          <Button variant="outline" size="sm" onClick={() => submitM.mutate(v)} disabled={submitM.isPending}>
                             <PaperAirplaneIcon className="size-4" /> Submit
                           </Button>
                         )}
@@ -134,7 +143,7 @@ export default function StockVerificationsList() {
                           </Button>
                         )}
                         {v.can?.approve && (
-                          <Button size="sm" onClick={() => approveM.mutate(v.id)} disabled={approveM.isPending}>
+                          <Button size="sm" onClick={() => approveM.mutate(v)} disabled={approveM.isPending}>
                             <CheckCircleIcon className="size-4" /> Approve
                           </Button>
                         )}
@@ -161,7 +170,7 @@ export default function StockVerificationsList() {
               variant="danger"
               size="sm"
               disabled={!reason.trim() || rejectM.isPending}
-              onClick={() => rejectM.mutate({ id: rejecting.id, reason })}
+              onClick={() => rejectM.mutate({ v: rejecting, reason })}
             >
               Reject count
             </Button>

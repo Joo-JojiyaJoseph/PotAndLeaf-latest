@@ -11,13 +11,14 @@ use App\Models\Purchase;
 use App\Models\Supplier;
 use App\Services\PurchaseService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class PurchaseController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly PurchaseService $purchases) {}
 
@@ -76,14 +77,14 @@ class PurchaseController extends Controller
     public function show(Request $request, Purchase $purchase): JsonResponse
     {
         $this->allow($request, 'purchases.view');
-        $this->sameCompany($request, $purchase);
+        $this->assertRecordCompany($request, $purchase);
 
         return $this->ok(new PurchaseResource($purchase->load(['supplier', 'items', 'createdBy:id,name', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
     }
 
     public function update(UpdatePurchaseRequest $request, Purchase $purchase): JsonResponse
     {
-        $this->sameCompany($request, $purchase);
+        $this->assertRecordCompany($request, $purchase, writable: true, writableMessage: 'Switch to the purchase company to edit or confirm this purchase.');
         $updated = $this->purchases->update($purchase, $request->validated(), $request->user()->id);
 
         return $this->ok(new PurchaseResource($updated), 'Purchase updated.');
@@ -92,7 +93,7 @@ class PurchaseController extends Controller
     public function confirm(Request $request, Purchase $purchase): JsonResponse
     {
         $this->allow($request, 'purchases.confirm');
-        $this->sameCompany($request, $purchase);
+        $this->assertRecordCompany($request, $purchase, writable: true, writableMessage: 'Switch to the purchase company to edit or confirm this purchase.');
         $confirmed = $this->purchases->confirm($purchase, $request->user()->id);
 
         return $this->ok(new PurchaseResource($confirmed), 'Purchase confirmed and stock posted.');
@@ -101,7 +102,7 @@ class PurchaseController extends Controller
     public function destroy(Request $request, Purchase $purchase): JsonResponse
     {
         $this->allow($request, 'purchases.delete');
-        $this->sameCompany($request, $purchase);
+        $this->assertRecordCompany($request, $purchase, writable: true, writableMessage: 'Switch to the purchase company to edit or confirm this purchase.');
         $this->purchases->cancel($purchase, $request->user()->id);
 
         return $this->message('Purchase cancelled.');
@@ -111,7 +112,7 @@ class PurchaseController extends Controller
     public function batches(Request $request, Purchase $purchase): JsonResponse
     {
         $this->allow($request, 'purchases.view');
-        $this->sameCompany($request, $purchase);
+        $this->assertRecordCompany($request, $purchase);
 
         $batches = \App\Models\ProductBatch::forCompany($purchase->company_id)
             ->where('purchase_id', $purchase->id)
@@ -132,8 +133,4 @@ class PurchaseController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, Purchase $purchase): void
-    {
-        abort_unless((string) $purchase->company_id === (string) $this->company($request)->id, 404);
-    }
 }

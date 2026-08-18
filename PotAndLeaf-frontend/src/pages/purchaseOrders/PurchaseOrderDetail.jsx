@@ -1,7 +1,9 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PaperAirplaneIcon, XCircleIcon, ArrowRightCircleIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
+import { recordDetailPath } from '../../lib/recordCompany';
 import { Badge, Button } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -11,20 +13,33 @@ const tone = { draft: 'inactive', sent: 'submitted', received: 'active', cancell
 export default function PurchaseOrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const queryClient = useQueryClient();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
+
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['purchase-order', id],
-    queryFn: () => api.get(`/purchase-orders/${id}`).then((r) => r.data.data),
+    queryKey: ['purchase-order', headerCompanyId, id],
+    queryFn: () => api.get(`/purchase-orders/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+  const recordCtx = { filterCompanyId: headerCompanyId, companyId };
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['purchase-order', id] });
+    queryClient.invalidateQueries({ queryKey: ['purchase-order', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
   };
-  const sendM = useMutation({ mutationFn: () => api.post(`/purchase-orders/${id}/send`), onSuccess: invalidate });
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/purchase-orders/${id}`), onSuccess: invalidate });
+  const sendM = useMutation({ mutationFn: () => api.post(`/purchase-orders/${id}/send`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const cancelM = useMutation({ mutationFn: () => api.delete(`/purchase-orders/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
   const convertM = useMutation({
-    mutationFn: () => api.post(`/purchase-orders/${id}/convert`),
-    onSuccess: (res) => { invalidate(); const pid = res.data.data?.purchase_id; if (pid) navigate(`/purchases/${pid}`); },
+    mutationFn: () => api.post(`/purchase-orders/${id}/convert`, {}, withCompany(recordCompanyId)),
+    onSuccess: (res) => {
+      invalidate();
+      const pid = res.data.data?.purchase_id;
+      if (pid) navigate(recordDetailPath('/purchases', { id: pid, company_id: recordCompanyId }, recordCtx));
+    },
   });
 
   if (isLoading) return <DetailLoading />;
@@ -42,7 +57,7 @@ export default function PurchaseOrderDetail() {
           {po.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {po.can?.send && <Button variant="outline" size="sm" onClick={() => sendM.mutate()} disabled={sendM.isPending}><PaperAirplaneIcon className="size-4" /> Mark sent</Button>}
           {po.can?.convert && <Button size="sm" onClick={() => convertM.mutate()} disabled={convertM.isPending}><ArrowRightCircleIcon className="size-4" /> Convert to GRN</Button>}
-          {po.purchase_id && <Button variant="outline" size="sm" onClick={() => navigate(`/purchases/${po.purchase_id}`)}>View GRN</Button>}
+          {po.purchase_id && <Button variant="outline" size="sm" onClick={() => navigate(recordDetailPath('/purchases', { id: po.purchase_id, company_id: recordCompanyId }, recordCtx))}>View GRN</Button>}
         </>}
       />
 

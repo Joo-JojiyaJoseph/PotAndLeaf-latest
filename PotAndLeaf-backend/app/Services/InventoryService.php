@@ -91,7 +91,10 @@ class InventoryService
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
 
         return $this->ledgerQuery($companyId, $filters)
-            ->with('product:id,sku,name')
+            ->with([
+                'product' => fn ($q) => $q->withTrashed()->select('id', 'sku', 'name', 'company_id'),
+                'company:id,name',
+            ])
             ->latest('occurred_at')
             ->paginate($perPage)
             ->withQueryString();
@@ -101,7 +104,10 @@ class InventoryService
     public function ledgerExportRows(int|string|null $companyId, array $filters = [], int $limit = 5000): \Illuminate\Support\Collection
     {
         return $this->ledgerQuery($companyId, $filters)
-            ->with('product:id,sku,name')
+            ->with([
+                'product' => fn ($q) => $q->withTrashed()->select('id', 'sku', 'name', 'company_id'),
+                'company:id,name',
+            ])
             ->latest('occurred_at')
             ->limit($limit)
             ->get();

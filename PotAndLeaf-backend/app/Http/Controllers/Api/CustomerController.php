@@ -9,13 +9,14 @@ use App\Http\Resources\CustomerResource;
 use App\Models\Customer;
 use App\Services\CustomerService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CustomerController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly CustomerService $customers) {}
 
@@ -39,14 +40,14 @@ class CustomerController extends Controller
     public function show(Request $request, Customer $customer): JsonResponse
     {
         $this->allow($request, 'customers.view');
-        $this->sameCompany($request, $customer);
+        $this->assertRecordCompany($request, $customer);
 
         return $this->ok(new CustomerResource($customer));
     }
 
     public function update(UpdateCustomerRequest $request, Customer $customer): JsonResponse
     {
-        $this->sameCompany($request, $customer);
+        $this->assertRecordCompany($request, $customer, writable: true);
 
         return $this->ok(new CustomerResource($this->customers->update($customer, $request->validated())), 'Customer updated.');
     }
@@ -54,7 +55,7 @@ class CustomerController extends Controller
     public function destroy(Request $request, Customer $customer): JsonResponse
     {
         $this->allow($request, 'customers.delete');
-        $this->sameCompany($request, $customer);
+        $this->assertRecordCompany($request, $customer, writable: true);
         $this->customers->delete($customer);
 
         return $this->message('Customer deleted.');
@@ -63,7 +64,7 @@ class CustomerController extends Controller
     public function purchaseHistory(Request $request, Customer $customer): JsonResponse
     {
         $this->allow($request, 'customers.view');
-        $this->sameCompany($request, $customer);
+        $this->assertRecordCompany($request, $customer);
 
         $perPage = min(50, max(1, (int) $request->input('per_page', 15)));
         $paginated = \App\Models\Sale::forCompany($customer->company_id)
@@ -111,16 +112,11 @@ class CustomerController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, Customer $customer): void
-    {
-        abort_unless((string) $customer->company_id === (string) $this->company($request)->id, 404);
-    }
-
     public function toggleStatus(Request $request, Customer $customer): JsonResponse
     {
         $company = $this->company($request);
         abort_unless($request->user()->hasPermission('customers.update', $company->id), 403);
-        abort_unless((string) $customer->company_id === (string) $company->id, 404);
+        $this->assertRecordCompany($request, $customer, writable: true);
         $data = $request->validate(['status' => ['required', 'in:active,inactive']]);
         $customer->update(['status' => $data['status']]);
 

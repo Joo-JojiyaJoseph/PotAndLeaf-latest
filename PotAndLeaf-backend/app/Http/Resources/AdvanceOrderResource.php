@@ -16,6 +16,7 @@ class AdvanceOrderResource extends JsonResource
 
         return [
             'id'             => $this->id,
+            'company_id'     => $this->company_id,
             'order_no'       => $this->order_no,
             'order_date'     => optional($this->order_date)->toDateString(),
             'expected_date'  => optional($this->expected_date)->toDateString(),

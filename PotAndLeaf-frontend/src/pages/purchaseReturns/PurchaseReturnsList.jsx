@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { CheckCircleIcon, PlusIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
+import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
@@ -18,8 +19,9 @@ const STATUS_TABS = [
 const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked' };
 
 export default function PurchaseReturnsList() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
+  const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
@@ -32,7 +34,7 @@ export default function PurchaseReturnsList() {
   });
 
   const confirmMutation = useMutation({
-    mutationFn: (id) => api.post(`/purchase-returns/${id}/confirm`),
+    mutationFn: (r) => api.post(`/purchase-returns/${r.id}/confirm`, {}, withCompany(resolveRecordCompany(r, recordCtx))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['purchase-returns'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
@@ -106,7 +108,7 @@ export default function PurchaseReturnsList() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-paper/60">
-                    <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(`/purchase-returns/${r.id}`)} className="font-medium text-ink hover:text-leaf">{r.return_no}</button></td>
+                    <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(recordDetailPath('/purchase-returns', r, recordCtx))} className="font-medium text-ink hover:text-leaf">{r.return_no}</button></td>
                     <td className="px-4 py-2.5 text-muted">{formatDate(r.return_date)}</td>
                     <td className="tnum px-4 py-2.5 text-xs text-muted">{r.purchase?.purchase_no ?? '—'}</td>
                     <td className="px-4 py-2.5 font-medium">{r.supplier?.name ?? '—'}</td>
@@ -118,7 +120,7 @@ export default function PurchaseReturnsList() {
                       {r.can?.confirm && (
                         <Button
                           size="sm"
-                          onClick={() => confirmMutation.mutate(r.id)}
+                          onClick={() => confirmMutation.mutate(r)}
                           disabled={confirmMutation.isPending}
                         >
                           <CheckCircleIcon className="size-4" /> Confirm

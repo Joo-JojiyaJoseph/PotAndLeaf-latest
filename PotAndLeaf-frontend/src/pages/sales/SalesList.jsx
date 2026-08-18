@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { CheckCircleIcon, PlusIcon, BanknotesIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
+import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
@@ -16,8 +17,9 @@ const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked
 const payTone = { cash: 'default', card: 'info', upi: 'info', credit: 'warning' };
 
 export default function SalesList() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companyId } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
+  const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
@@ -29,7 +31,7 @@ export default function SalesList() {
     placeholderData: keepPreviousData,
   });
   const confirmM = useMutation({
-    mutationFn: (id) => api.post(`/sales/${id}/confirm`),
+    mutationFn: (s) => api.post(`/sales/${s.id}/confirm`, {}, withCompany(resolveRecordCompany(s, recordCtx))),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['sales'] }); queryClient.invalidateQueries({ queryKey: ['inventory'] }); },
   });
   const rows = data?.data ?? [];
@@ -78,14 +80,14 @@ export default function SalesList() {
                 <tbody>
                   {rows.map((s) => (
                     <tr key={s.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
-                      <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(`/sales/${s.id}`)} className="font-medium text-ink hover:text-leaf">{s.sale_no}</button></td>
+                      <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(recordDetailPath('/sales', s, recordCtx))} className="font-medium text-ink hover:text-leaf">{s.sale_no}</button></td>
                       <td className="px-4 py-2.5 text-muted">{formatDate(s.sale_date)}</td>
                       <td className="px-4 py-2.5">{s.customer_name}</td>
                       <td className="px-4 py-2.5"><Badge tone={payTone[s.payment_mode] ?? 'default'}>{s.payment_mode}</Badge></td>
                       <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(s.grand_total)}</td>
                       <td className="px-4 py-2.5"><Badge tone={statusTone[s.status] ?? 'default'}>{s.status}</Badge></td>
                       <td className="px-4 py-2.5 text-right">
-                        {s.can?.confirm && <Button size="sm" onClick={() => confirmM.mutate(s.id)} disabled={confirmM.isPending}><CheckCircleIcon className="size-4" /> Confirm</Button>}
+                        {s.can?.confirm && <Button size="sm" onClick={() => confirmM.mutate(s)} disabled={confirmM.isPending}><CheckCircleIcon className="size-4" /> Confirm</Button>}
                         {s.status === 'confirmed' && s.customer_id && ['unpaid', 'partial'].includes(s.payment_status) && (
                           <Button variant="outline" size="sm" onClick={() => navigate('/receipts', { state: { prefill: { key: s.id, customer_id: s.customer_id, sale_id: s.id, balance: s.balance ?? +(s.grand_total - (s.amount_paid ?? 0)).toFixed(2) } } })}>
                             <BanknotesIcon className="size-4" /> Receipt

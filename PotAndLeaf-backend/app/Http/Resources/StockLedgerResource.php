@@ -22,11 +22,17 @@ class StockLedgerResource extends JsonResource
             'reference_label'=> $this->referenceLabel($this->reference_type),
             'note'           => $this->note,
             'occurred_at'    => optional($this->occurred_at)->toDateTimeString(),
+            'company_id'     => $this->company_id,
+            'company'        => $this->whenLoaded('company', fn () => [
+                'id'   => $this->company?->id,
+                'name' => $this->company?->name,
+            ]),
             'product'        => $this->whenLoaded('product', fn () => [
                 'id'   => $this->product?->id,
                 'sku'  => $this->product?->sku,
                 'name' => $this->product?->name,
             ]),
+            'product_name'   => $this->whenLoaded('product', fn () => $this->product?->name),
         ];
     }
 
@@ -47,6 +53,7 @@ class StockLedgerResource extends JsonResource
             'sales-return'           => 'Sales return',
             'sales-return-cancel'    => 'Sales return reversal',
             'stock-verification'     => 'Stock verification',
+            'damage'                 => 'Damage',
             'rental'                 => 'Rental',
             'rental-return'          => 'Rental return',
             'rental-cancel'          => 'Rental reversal',

@@ -40,7 +40,15 @@ class ApproveStockVerification
                     continue;
                 }
 
-                $delta = round((float) $item->counted_qty - (float) $product->current_stock, 3);
+                $before = (float) $product->current_stock;
+                $delta = round((float) $item->counted_qty - $before, 3);
+
+                // Persist the approval-time baseline so the count sheet matches the ledger posting.
+                $item->update([
+                    'system_qty' => $before,
+                    'variance'   => $delta,
+                ]);
+
                 if (abs($delta) < 1e-6) {
                     continue;
                 }

@@ -1,7 +1,8 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, PencilSquareIcon, XCircleIcon, PrinterIcon, BanknotesIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -16,19 +17,25 @@ const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked
 export default function PurchaseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['purchase', id],
-    queryFn: () => api.get(`/purchases/${id}`).then((r) => r.data.data),
+    queryKey: ['purchase', headerCompanyId, id],
+    queryFn: () => api.get(`/purchases/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const purchaseCompanyId = data?.company_id ?? headerCompanyId;
 
   // Batches (with their barcodes) only exist once stock is posted on confirm.
   const { data: batches = [] } = useQuery({
-    queryKey: ['purchase-batches', id],
-    queryFn: () => api.get(`/purchases/${id}/batches`).then((r) => r.data.data),
-    enabled: !!data && data.status === 'confirmed',
+    queryKey: ['purchase-batches', purchaseCompanyId, id],
+    queryFn: () => api.get(`/purchases/${id}/batches`, withCompany(purchaseCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(purchaseCompanyId && id && data?.status === 'confirmed'),
   });
 
   function printAllLabels() {
@@ -43,16 +50,22 @@ export default function PurchaseDetail() {
   }
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['purchase', id] });
+    queryClient.invalidateQueries({ queryKey: ['purchase', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['purchases'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
-  const confirmM = useMutation({ mutationFn: () => api.post(`/purchases/${id}/confirm`), onSuccess: invalidate });
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/purchases/${id}`), onSuccess: invalidate });
+  const confirmM = useMutation({
+    mutationFn: () => api.post(`/purchases/${id}/confirm`, {}, withCompany(purchaseCompanyId)),
+    onSuccess: invalidate,
+  });
+  const cancelM = useMutation({
+    mutationFn: () => api.delete(`/purchases/${id}`, withCompany(purchaseCompanyId)),
+    onSuccess: invalidate,
+  });
 
   async function downloadGrnPdf() {
     try {
-      await downloadPdf(`/purchases/${id}/invoice.pdf`, `grn-${data?.purchase_no ?? id}.pdf`);
+      await downloadPdf(`/purchases/${id}/invoice.pdf`, `grn-${data?.purchase_no ?? id}.pdf`, purchaseCompanyId);
       toast.success('GRN PDF downloaded.');
     } catch {
       toast.error('Could not download PDF.');
@@ -82,7 +95,11 @@ export default function PurchaseDetail() {
                 <BanknotesIcon className="size-4" /> Pay {formatCurrency(p.balance)}
               </Button>
             )}
-            {p.can?.update && <Button variant="outline" size="sm" onClick={() => navigate(`/purchases/${id}/edit`)}><PencilSquareIcon className="size-4" /> Edit</Button>}
+            {p.can?.update && (
+              <Button variant="outline" size="sm" onClick={() => navigate(`/purchases/${id}/edit?company_id=${purchaseCompanyId}`)}>
+                <PencilSquareIcon className="size-4" /> Edit
+              </Button>
+            )}
             {p.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
             {p.can?.confirm && <Button size="sm" onClick={() => confirmM.mutate()} disabled={confirmM.isPending}><CheckCircleIcon className="size-4" /> Confirm</Button>}
           </>

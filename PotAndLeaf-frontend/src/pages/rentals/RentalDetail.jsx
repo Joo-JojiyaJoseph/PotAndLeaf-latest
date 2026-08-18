@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, PlusIcon, TrashIcon, PrinterIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -14,8 +15,11 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 export default function RentalDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const { companyId } = useAuth();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
   const [returning, setReturning] = useState(false);
   const [returns, setReturns] = useState({});
   const [settling, setSettling] = useState(false);
@@ -26,18 +30,22 @@ export default function RentalDetail() {
   const [period, setPeriod] = useState({ period_from: today(), period_to: today() });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['rental', id],
-    queryFn: () => api.get(`/rentals/${id}`).then((r) => r.data.data),
+    queryKey: ['rental', headerCompanyId, id],
+    queryFn: () => api.get(`/rentals/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['rental', id] });
+    queryClient.invalidateQueries({ queryKey: ['rental', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['rentals'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
-  const activateM = useMutation({ mutationFn: () => api.post(`/rentals/${id}/activate`), onSuccess: invalidate });
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/rentals/${id}`), onSuccess: invalidate });
+  const activateM = useMutation({ mutationFn: () => api.post(`/rentals/${id}/activate`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const cancelM = useMutation({ mutationFn: () => api.delete(`/rentals/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
   const returnM = useMutation({
-    mutationFn: () => api.post(`/rentals/${id}/return`, { returns: Object.entries(returns).map(([itemId, q]) => ({ id: itemId, qty: Number(q) || 0 })) }),
+    mutationFn: () => api.post(`/rentals/${id}/return`, { returns: Object.entries(returns).map(([itemId, q]) => ({ id: itemId, qty: Number(q) || 0 })) }, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); setReturning(false); },
   });
   const settleM = useMutation({
@@ -45,17 +53,17 @@ export default function RentalDetail() {
       return_date: settleDate || null,
       damage_charge: Number(damageCharge) || 0,
       lines: Object.entries(settleLines).map(([itemId, v]) => ({ id: itemId, returned: Number(v.returned) || 0, damaged: Number(v.damaged) || 0, missing: Number(v.missing) || 0 })),
-    }),
+    }, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); setSettling(false); },
   });
   const billM = useMutation({
-    mutationFn: () => api.post(`/rentals/${id}/invoices`, period),
+    mutationFn: () => api.post(`/rentals/${id}/invoices`, period, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); setBilling(false); },
   });
-  const payM = useMutation({ mutationFn: (invId) => api.post(`/rental-invoices/${invId}/paid`), onSuccess: invalidate });
-  const delInvM = useMutation({ mutationFn: (invId) => api.delete(`/rental-invoices/${invId}`), onSuccess: invalidate });
+  const payM = useMutation({ mutationFn: (invId) => api.post(`/rental-invoices/${invId}/paid`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const delInvM = useMutation({ mutationFn: (invId) => api.delete(`/rental-invoices/${invId}`, withCompany(recordCompanyId)), onSuccess: invalidate });
   const waM = useMutation({
-    mutationFn: (invId) => api.post(`/rental-invoices/${invId}/whatsapp`),
+    mutationFn: (invId) => api.post(`/rental-invoices/${invId}/whatsapp`, {}, withCompany(recordCompanyId)),
     onSuccess: (res) => toast.success(res.data?.message || 'WhatsApp message sent.'),
     onError: (err) => toast.error(err.response?.data?.message || 'Could not send WhatsApp message.'),
   });

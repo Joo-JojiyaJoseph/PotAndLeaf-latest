@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, PaperAirplaneIcon, XCircleIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Modal } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
@@ -12,8 +12,10 @@ const tone = { requested: 'warning', draft: 'inactive', in_transit: 'warning', r
 
 export default function TransferDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const { companies, companyId } = useAuth();
   const queryClient = useQueryClient();
-  const { companies } = useAuth();
+  const headerCompanyId = searchParams.get('company_id') || companyId;
   const [receiving, setReceiving] = useState(false);
   const [receipts, setReceipts] = useState({});
   const [rejecting, setRejecting] = useState(false);
@@ -22,27 +24,31 @@ export default function TransferDetail() {
   const [redirectTo, setRedirectTo] = useState('');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['transfer', id],
-    queryFn: () => api.get(`/transfers/${id}`).then((r) => r.data.data),
+    queryKey: ['transfer', headerCompanyId, id],
+    queryFn: () => api.get(`/transfers/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
   });
+
+  const recordCompanyId = data?.company_id ?? headerCompanyId;
+
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['transfer', id] });
+    queryClient.invalidateQueries({ queryKey: ['transfer', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['transfers'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
-  const dispatchM = useMutation({ mutationFn: () => api.post(`/transfers/${id}/dispatch`), onSuccess: invalidate });
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/transfers/${id}`), onSuccess: invalidate });
-  const approveM = useMutation({ mutationFn: () => api.post(`/transfers/${id}/approve`), onSuccess: invalidate });
+  const dispatchM = useMutation({ mutationFn: () => api.post(`/transfers/${id}/dispatch`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const cancelM = useMutation({ mutationFn: () => api.delete(`/transfers/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const approveM = useMutation({ mutationFn: () => api.post(`/transfers/${id}/approve`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
   const redirectM = useMutation({
-    mutationFn: () => api.post(`/transfers/${id}/redirect`, { to_company_id: redirectTo }),
+    mutationFn: () => api.post(`/transfers/${id}/redirect`, { to_company_id: redirectTo }, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); setRedirecting(false); setRedirectTo(''); },
   });
   const rejectM = useMutation({
-    mutationFn: () => api.post(`/transfers/${id}/reject`, { reason: rejectReason || null }),
+    mutationFn: () => api.post(`/transfers/${id}/reject`, { reason: rejectReason || null }, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); setRejecting(false); setRejectReason(''); },
   });
   const receiveM = useMutation({
-    mutationFn: () => api.post(`/transfers/${id}/receive`, { receipts: Object.entries(receipts).map(([itemId, q]) => ({ id: itemId, received_qty: Number(q) || 0 })) }),
+    mutationFn: () => api.post(`/transfers/${id}/receive`, { receipts: Object.entries(receipts).map(([itemId, q]) => ({ id: itemId, received_qty: Number(q) || 0 })) }, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); setReceiving(false); },
   });
 

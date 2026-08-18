@@ -9,6 +9,7 @@ use App\Http\Resources\SupplierResource;
 use App\Models\Supplier;
 use App\Services\SupplierService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,7 @@ use Illuminate\Http\Request;
  */
 class SupplierController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly SupplierService $suppliers) {}
 
@@ -44,14 +45,14 @@ class SupplierController extends Controller
     public function show(Request $request, Supplier $supplier): JsonResponse
     {
         $this->allow($request, 'suppliers.view');
-        $this->sameCompany($request, $supplier);
+        $this->assertRecordCompany($request, $supplier);
 
         return $this->ok(new SupplierResource($supplier));
     }
 
     public function update(UpdateSupplierRequest $request, Supplier $supplier): JsonResponse
     {
-        $this->sameCompany($request, $supplier);
+        $this->assertRecordCompany($request, $supplier, writable: true);
         $updated = $this->suppliers->update($supplier, $request->validated());
 
         return $this->ok(new SupplierResource($updated), 'Supplier updated.');
@@ -60,7 +61,7 @@ class SupplierController extends Controller
     public function destroy(Request $request, Supplier $supplier): JsonResponse
     {
         $this->allow($request, 'suppliers.delete');
-        $this->sameCompany($request, $supplier);
+        $this->assertRecordCompany($request, $supplier, writable: true);
         $this->suppliers->delete($supplier);
 
         return $this->message('Supplier moved to trash.');
@@ -69,7 +70,7 @@ class SupplierController extends Controller
     public function purchaseHistory(Request $request, Supplier $supplier): JsonResponse
     {
         $this->allow($request, 'suppliers.view');
-        $this->sameCompany($request, $supplier);
+        $this->assertRecordCompany($request, $supplier);
 
         $perPage = min(50, max(1, (int) $request->input('per_page', 15)));
         $paginated = \App\Models\Purchase::forCompany($supplier->company_id)
@@ -88,17 +89,11 @@ class SupplierController extends Controller
         abort_unless($request->user()->hasPermission($permission, $company->id), 403);
     }
 
-    private function sameCompany(Request $request, Supplier $supplier): void
-    {
-        $company = $request->attributes->get('company');
-        abort_unless((string) $supplier->company_id === (string) $company->id, 404);
-    }
-
     public function toggleStatus(Request $request, Supplier $supplier): JsonResponse
     {
         $company = $request->attributes->get('company');
         abort_unless($request->user()->hasPermission('suppliers.update', $company->id), 403);
-        abort_unless((string) $supplier->company_id === (string) $company->id, 404);
+        $this->assertRecordCompany($request, $supplier, writable: true);
         $data = $request->validate(['status' => ['required', 'in:active,inactive']]);
         $supplier->update(['status' => $data['status']]);
 

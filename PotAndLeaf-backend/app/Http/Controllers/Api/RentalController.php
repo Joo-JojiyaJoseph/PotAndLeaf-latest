@@ -16,13 +16,14 @@ use App\Services\RentalService;
 use App\Services\SettingsService;
 use App\Services\WhatsApp\WhatsAppService;
 use App\Support\Api\ApiResponse;
+use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class RentalController extends Controller
 {
-    use ApiResponse, ResolvesFilterCompany;
+    use ApiResponse, AssertsRecordCompany, ResolvesFilterCompany;
 
     public function __construct(private readonly RentalService $rentals) {}
 
@@ -60,7 +61,7 @@ class RentalController extends Controller
     public function show(Request $request, Rental $rental): JsonResponse
     {
         $this->allow($request, 'rental.view');
-        $this->sameCompany($request, $rental);
+        $this->assertRecordCompany($request, $rental);
 
         return $this->ok(new RentalResource($rental->load(['items', 'invoices', 'customer:id,name,type', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
     }
@@ -68,14 +69,14 @@ class RentalController extends Controller
     public function activate(Request $request, Rental $rental): JsonResponse
     {
         $this->allow($request, 'rental.activate');
-        $this->sameCompany($request, $rental);
+        $this->assertRecordCompany($request, $rental, writable: true);
 
         return $this->ok(new RentalResource($this->rentals->activate($rental, $request->user()->id)), 'Rental activated — stock issued.');
     }
 
     public function returnItems(ReturnRentalRequest $request, Rental $rental): JsonResponse
     {
-        $this->sameCompany($request, $rental);
+        $this->assertRecordCompany($request, $rental, writable: true);
         $returns = collect($request->validated()['returns'] ?? [])->mapWithKeys(fn ($r) => [$r['id'] => $r['qty']])->all();
 
         return $this->ok(new RentalResource($this->rentals->returnItems($rental, $returns, $request->user()->id)), 'Return recorded.');
@@ -84,7 +85,7 @@ class RentalController extends Controller
     public function settle(Request $request, Rental $rental): JsonResponse
     {
         $this->allow($request, 'rental.return');
-        $this->sameCompany($request, $rental);
+        $this->assertRecordCompany($request, $rental, writable: true);
 
         $data = $request->validate([
             'return_date'      => ['nullable', 'date'],
@@ -108,7 +109,7 @@ class RentalController extends Controller
     public function destroy(Request $request, Rental $rental): JsonResponse
     {
         $this->allow($request, 'rental.delete');
-        $this->sameCompany($request, $rental);
+        $this->assertRecordCompany($request, $rental, writable: true);
         $this->rentals->cancel($rental, $request->user()->id);
 
         return $this->message('Rental cancelled.');
@@ -116,7 +117,7 @@ class RentalController extends Controller
 
     public function generateInvoice(GenerateRentalInvoiceRequest $request, Rental $rental): JsonResponse
     {
-        $this->sameCompany($request, $rental);
+        $this->assertRecordCompany($request, $rental, writable: true);
         $this->rentals->generateInvoice($this->company($request)->id, $rental, $request->validated(), $request->user()->id);
 
         return $this->ok(new RentalResource($rental->fresh()->load(['items', 'invoices', 'customer:id,name,type'])), 'Rental invoice generated.');
@@ -125,7 +126,7 @@ class RentalController extends Controller
     public function markInvoicePaid(Request $request, RentalInvoice $rentalInvoice): JsonResponse
     {
         $this->allow($request, 'rental.bill');
-        abort_unless((string) $rentalInvoice->company_id === (string) $this->company($request)->id, 404);
+        $this->assertRecordCompany($request, $rentalInvoice, writable: true);
         $this->rentals->markInvoicePaid($rentalInvoice);
 
         return $this->message('Invoice marked paid.');
@@ -134,7 +135,7 @@ class RentalController extends Controller
     public function deleteInvoice(Request $request, RentalInvoice $rentalInvoice): JsonResponse
     {
         $this->allow($request, 'rental.bill');
-        abort_unless((string) $rentalInvoice->company_id === (string) $this->company($request)->id, 404);
+        $this->assertRecordCompany($request, $rentalInvoice, writable: true);
         $this->rentals->deleteInvoice($rentalInvoice);
 
         return $this->message('Invoice removed.');
@@ -144,7 +145,7 @@ class RentalController extends Controller
     {
         $company = $this->company($request);
         $this->allow($request, 'rental.bill');
-        abort_unless((string) $rentalInvoice->company_id === (string) $company->id, 404);
+        $this->assertRecordCompany($request, $rentalInvoice, writable: true);
 
         if ($settings->get($company->id, 'whatsapp_enabled') !== '1') {
             return $this->message('WhatsApp sharing is disabled for this company. Enable it in Settings.', 422);
@@ -204,8 +205,4 @@ class RentalController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
-    private function sameCompany(Request $request, Rental $rental): void
-    {
-        abort_unless((string) $rental->company_id === (string) $this->company($request)->id, 404);
-    }
 }
