@@ -1,0 +1,45 @@
+<?php
+
+namespace App\Actions\Suppliers;
+
+use App\Models\Supplier;
+use App\Repositories\Contracts\SupplierRepositoryInterface;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * One write use-case = one action. Actions own the transaction boundary
+ * and side effects (events, notifications, activity log). Reuse them from
+ * controllers, jobs, console commands, or tests — anywhere.
+ */
+class CreateSupplier
+{
+    public function __construct(
+        private readonly SupplierRepositoryInterface $suppliers,
+    ) {}
+
+    /** @param array<string,mixed> $data */
+    public function handle(int|string $companyId, array $data): Supplier
+    {
+        // NOT NULL columns with DB defaults must never receive null.
+        foreach (['credit_days', 'credit_limit', 'opening_balance', 'outstanding'] as $k) {
+            if (! isset($data[$k]) || $data[$k] === '' || $data[$k] === null) $data[$k] = 0;
+        }
+        if (blank($data['country'] ?? null)) $data['country'] = 'India';
+        if (blank($data['status'] ?? null)) $data['status'] = 'active';
+
+        if (empty($data['supplier_code'])) {
+            $count = Supplier::withTrashed()->forCompany($companyId)->count();
+            $data['supplier_code'] = 'SUP-'.str_pad((string) ($count + 1), 5, '0', STR_PAD_LEFT);
+        }
+
+        return DB::transaction(function () use ($companyId, $data) {
+            $supplier = $this->suppliers->create([
+                ...$data,
+                'company_id' => $companyId,
+                'outstanding' => $data['opening_balance'] ?? 0,
+            ]);
+
+            return $supplier;
+        });
+    }
+}

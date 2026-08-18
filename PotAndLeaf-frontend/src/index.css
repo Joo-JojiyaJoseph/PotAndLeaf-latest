@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&display=swap');
+@import "tailwindcss";
+
+/* Design tokens — Pot & Leaf "modern" theme: cool green-grey canvas, soft
+   sage-green accent, white cards floating on soft shadows, generous radii.
+   Token names are kept stable so existing screens adopt the new look. */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: #EEF3F1;      /* app background            */
+  --color-sidebar: #F5F8F7;    /* sidebar tint              */
+  --color-surface: #FFFFFF;    /* cards / inputs            */
+  --color-ink: #2F3B35;        /* primary text              */
+  --color-muted: #68766E;      /* secondary text            */
+  --color-faint: #98A7A0;      /* micro-labels              */
+  --color-line: #E3EBE7;       /* borders                   */
+  --color-line-strong: #C9D7D1;
+
+  --color-leaf: #8EA53F;       /* accent                    */
+  --color-leaf-hover: #6F8030; /* accent dark               */
+  --color-leaf-light: #A3BB52; /* accent light              */
+  --color-leaf-soft: #EEF2DF;  /* accent pale               */
+
+  --color-terracotta: #C58A5B; /* warm secondary (logo pot) */
+  --color-terracotta-soft: #F3E9DF;
+
+  --color-amber: #B4801E;      /* warn text (on pale)       */
+  --color-amber-soft: #FFF7E4;
+  --color-danger: #B54A3A;
+  --color-danger-soft: #F6E5E1;
+  --color-info: #3E7CB1;
+  --color-info-soft: #E4EFF7;
+
+  --radius-xl: 18px;
+
+  --shadow-soft: 0 6px 18px rgba(35,45,40,0.06);
+  --shadow-card: 0 8px 25px rgba(35,45,40,0.06);
+  --shadow-pop: 0 12px 34px rgba(35,45,40,0.12);
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+/* Tabular figures for codes, amounts and metrics (Inter supports them). */
+.tnum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+/* Mono-style micro label used across the theme (uppercase, tracked). */
+.microlabel { font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; }
+::selection { background: var(--color-leaf-soft); }
+
+@keyframes toastIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes dialogIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+.toast-in { animation: toastIn .22s cubic-bezier(.2,.7,.3,1); }
+.dialog-in { animation: dialogIn .18s cubic-bezier(.2,.7,.3,1); }
+@media (prefers-reduced-motion: reduce) { .toast-in, .dialog-in { animation: none; } }
+
+html.dark {
+  --color-paper: #1a211e;
+  --color-sidebar: #222b27;
+  --color-surface: #2a332f;
+  --color-ink: #e8eee9;
+  --color-muted: #9aaba2;
+  --color-faint: #6b7a72;
+  --color-line: #3a4540;
+  --color-line-strong: #4a5650;
+  --color-leaf-soft: #2a3318;
+  --color-terracotta-soft: #3a2e24;
+  --color-amber-soft: #3a3018;
+  --color-danger-soft: #3a2420;
+  --color-info-soft: #1e2a33;
+  --shadow-soft: 0 6px 18px rgba(0,0,0,0.25);
+  --shadow-card: 0 8px 25px rgba(0,0,0,0.3);
+  --shadow-pop: 0 12px 34px rgba(0,0,0,0.4);
+}
+
+html, body, #root { transition: background-color 0.2s ease, color 0.2s ease; }
+button, a, input, select, textarea { transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease; }
+
+/* Thin, theme-aware scrollbars. */
+* { scrollbar-width: thin; scrollbar-color: var(--color-line-strong) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* Tables: keep momentum scrolling on touch and avoid squashed columns. */
+.overflow-x-auto { -webkit-overflow-scrolling: touch; }
+.overflow-x-auto > table { min-width: 640px; }
+
+/* Larger, comfortable tap targets on coarse pointers. */
+@media (pointer: coarse) {
+  button, a, select, input[type='checkbox'], input[type='radio'] { touch-action: manipulation; }
+}
+
+/* Headings wrap nicely on narrow screens. */
+h1, h2, h3 { text-wrap: balance; }
+
+/* Handwritten accent — used once on the login hero tagline. */
+.login-script { font-family: 'Caveat', 'Inter', cursive; font-weight: 700; letter-spacing: 0.5px; }
+
+.login-main {
+  background: radial-gradient(circle at 18% 16%, rgba(255, 255, 255, .98), transparent 35%), linear-gradient(135deg, #f7f4eb 0%, #eeece2 100%);
+}
+.login-form-card {
+  padding: 42px 40px 38px;
+  border: 1px solid rgba(255, 255, 255, .9);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .42);
+  box-shadow: 0 18px 42px rgba(126, 117, 87, .08), inset 0 0 0 1px rgba(218, 208, 182, .2);
+  backdrop-filter: blur(12px);
+}
+.login-input { box-shadow: inset 0 1px 2px rgba(116, 104, 73, .08), 0 6px 14px rgba(202, 166, 101, .12); }
+.login-submit {
+  background: linear-gradient(105deg, #6d9d16, #4f7f0d 48%, #6b9c17);
+  box-shadow: 0 7px 14px rgba(84, 127, 19, .27), inset 0 1px 0 rgba(255, 255, 255, .22);
+}
+.login-leaf-mark {
+  width: 22px;
+  height: 28px;
+  border: 2px solid #9a967a;
+  border-radius: 100% 0 100% 0;
+  transform: rotate(25deg);
+  opacity: .9;
+}
+@media (max-width: 1023px) {
+  .login-form-card { padding: 32px 26px 30px; }
+}
