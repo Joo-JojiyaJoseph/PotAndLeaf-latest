@@ -19,7 +19,7 @@ return new class extends Migration
             $table->timestamp('sent_at')->nullable();
             $table->timestamps();
 
-            $table->index(['company_id', 'business_date', 'status']);
+            $table->index(['company_id', 'business_date', 'status'], 'eod_mgmt_co_date_status_idx');
             $table->index(['company_id', 'channel', 'recipient', 'business_date'], 'eod_mgmt_lookup');
         });
     }

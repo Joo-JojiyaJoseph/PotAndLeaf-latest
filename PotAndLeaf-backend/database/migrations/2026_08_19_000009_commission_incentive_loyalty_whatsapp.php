@@ -48,12 +48,13 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignUuid('location_id')->nullable()->constrained('locations')->nullOnDelete();
             $table->decimal('percent', 6, 3);
             $table->date('effective_from')->nullable();
             $table->date('effective_to')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
-            $table->unique(['company_id', 'user_id']);
+            $table->unique(['company_id', 'user_id', 'location_id'], 'manager_rule_branch_unique');
         });
 
         Schema::create('commission_transactions', function (Blueprint $table) {
@@ -71,14 +72,14 @@ return new class extends Migration
             $table->json('rule_snapshot')->nullable();
             $table->date('transaction_date');
             $table->string('status', 20)->default('accrued');
-            $table->uuid('reversal_of_id')->nullable()->after('status');
+            $table->uuid('reversal_of_id')->nullable();
             $table->timestamps();
 
             $table->unique(
                 ['company_id', 'user_id', 'commission_type', 'source_type', 'source_id'],
                 'commission_tx_dedupe',
             );
-            $table->index(['company_id', 'user_id', 'transaction_date']);
+            $table->index(['company_id', 'user_id', 'transaction_date'], 'commission_tx_co_user_date_idx');
         });
 
         Schema::create('whatsapp_message_logs', function (Blueprint $table) {
@@ -96,7 +97,7 @@ return new class extends Migration
             $table->timestamp('sent_at')->nullable();
             $table->timestamps();
 
-            $table->index(['company_id', 'message_type', 'business_date']);
+            $table->index(['company_id', 'message_type', 'business_date'], 'wa_logs_co_type_date_idx');
         });
 
         Schema::create('seasonal_care_rules', function (Blueprint $table) {

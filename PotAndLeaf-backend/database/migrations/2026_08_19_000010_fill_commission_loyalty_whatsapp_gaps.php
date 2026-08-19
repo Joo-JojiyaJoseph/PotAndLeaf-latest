@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('commission_rules', function (Blueprint $table) {
-            $table->foreignId('location_id')->nullable()->after('user_id')->constrained('locations')->nullOnDelete();
+            $table->foreignUuid('location_id')->nullable()->after('user_id')->constrained('locations')->nullOnDelete();
             $table->date('effective_from')->nullable()->after('is_supervisor');
             $table->date('effective_to')->nullable()->after('effective_from');
             $table->decimal('max_commission', 14, 2)->nullable()->after('effective_to');
@@ -19,12 +19,6 @@ return new class extends Migration
         Schema::table('commission_tiers', function (Blueprint $table) {
             $table->foreignUuid('product_id')->nullable()->after('commission_rule_id')->constrained('products')->nullOnDelete();
             $table->foreignUuid('category_id')->nullable()->after('product_id')->constrained('product_categories')->nullOnDelete();
-        });
-
-        Schema::table('manager_commission_rules', function (Blueprint $table) {
-            $table->dropUnique(['company_id', 'user_id']);
-            $table->foreignId('location_id')->nullable()->after('user_id')->constrained('locations')->nullOnDelete();
-            $table->unique(['company_id', 'user_id', 'location_id'], 'manager_rule_branch_unique');
         });
 
         Schema::table('customers', function (Blueprint $table) {
@@ -50,7 +44,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->index(['company_id', 'is_active', 'rule_type']);
+            $table->index(['company_id', 'is_active', 'rule_type'], 'loyalty_rules_co_active_type_idx');
         });
 
         Schema::create('whatsapp_templates', function (Blueprint $table) {
@@ -79,11 +73,6 @@ return new class extends Migration
         Schema::dropIfExists('loyalty_rules');
         Schema::table('customers', function (Blueprint $table) {
             $table->dropColumn('loyalty_tier');
-        });
-        Schema::table('manager_commission_rules', function (Blueprint $table) {
-            $table->dropUnique('manager_rule_branch_unique');
-            $table->dropConstrainedForeignId('location_id');
-            $table->unique(['company_id', 'user_id']);
         });
         Schema::table('commission_tiers', function (Blueprint $table) {
             $table->dropConstrainedForeignId('product_id');
