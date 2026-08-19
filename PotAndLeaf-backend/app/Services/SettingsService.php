@@ -17,6 +17,13 @@ class SettingsService
         'website_integration'          => '0',     // company toggle
         'whatsapp_enabled'             => '1',     // allow sending invoices via WhatsApp
         'daily_expense'                => '0',     // flat daily expense for approx profit reports
+        'rental_auto_bill'             => '1',     // generate invoices on billing cycle via scheduler
+        'rental_whatsapp_on_bill'      => '1',     // queue WhatsApp when auto-billing creates an invoice
+        'rental_payment_due_days'      => '7',     // days after period end before invoice is due
+        'rental_overdue_alert_days'    => '0',     // grace days after due/expected return before alerting
+        'sale_cancel_requires_approval'=> '1',     // confirmed sales need HO approval to cancel
+        'cash_opening_balance'         => '0',     // opening cash balance for cash book
+        'bank_opening_balance'         => '0',     // opening bank balance for bank book
     ];
 
     /** @return array<string, string> */

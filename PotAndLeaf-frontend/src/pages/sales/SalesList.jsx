@@ -11,9 +11,9 @@ import { formatCurrency, formatDate } from '../../lib/format';
 
 const STATUS_TABS = [
   { value: '', label: 'All' }, { value: 'draft', label: 'Draft' },
-  { value: 'confirmed', label: 'Confirmed' }, { value: 'cancelled', label: 'Cancelled' },
+  { value: 'proforma', label: 'Proforma' }, { value: 'confirmed', label: 'Confirmed' }, { value: 'cancelled', label: 'Cancelled' },
 ];
-const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked' };
+const statusTone = { draft: 'inactive', proforma: 'info', confirmed: 'active', cancelled: 'blocked' };
 const payTone = { cash: 'default', card: 'info', upi: 'info', credit: 'warning' };
 
 export default function SalesList() {

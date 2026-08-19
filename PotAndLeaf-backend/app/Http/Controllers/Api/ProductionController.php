@@ -12,6 +12,8 @@ use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductUnit;
 use App\Models\ProductionOrder;
+use App\Models\ProductionOrderStage;
+use App\Models\User;
 use App\Services\ProductionService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\AssertsRecordCompany;
@@ -38,8 +40,14 @@ class ProductionController extends Controller
         $locations = Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'is_default'])
             ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'is_default' => (bool) $l->is_default]);
-        $boms = $this->production->boms($company->id)
-            ->map(fn ($b) => ['id' => $b->id, 'name' => $b->name, 'product_name' => $b->product?->name, 'output_qty' => (float) $b->output_qty]);
+        $boms = $this->production->boms($company->id, activeOnly: true)
+            ->map(fn ($b) => [
+                'id'             => $b->id,
+                'name'           => $b->name,
+                'product_name'   => $b->product?->name,
+                'output_qty'     => (float) $b->output_qty,
+                'is_multi_stage' => $b->isMultiStage(),
+            ]);
 
         $supervisors = User::query()
             ->activeMembers($company->id)
@@ -67,7 +75,7 @@ class ProductionController extends Controller
     public function storeBom(UpsertBomRequest $request): JsonResponse
     {
         $company = $this->company($request);
-        $bom = $this->production->upsertBom($company->id, $request->validated());
+        $bom = $this->production->upsertBom($company->id, $request->validated(), $request->user()->id);
 
         return $this->created(new BomResource($bom), 'Bill of materials saved.');
     }
@@ -75,7 +83,7 @@ class ProductionController extends Controller
     public function updateBom(UpsertBomRequest $request, Bom $bom): JsonResponse
     {
         $this->assertRecordCompany($request, $bom, writable: true);
-        $updated = $this->production->upsertBom($this->company($request)->id, ['id' => $bom->id] + $request->validated());
+        $updated = $this->production->upsertBom($this->company($request)->id, ['id' => $bom->id] + $request->validated(), $request->user()->id);
 
         return $this->ok(new BomResource($updated), 'Bill of materials updated.');
     }
@@ -84,7 +92,7 @@ class ProductionController extends Controller
     {
         $this->allow($request, 'production.manage_bom');
         $this->assertRecordCompany($request, $bom, writable: true);
-        $this->production->deleteBom($bom);
+        $this->production->deleteBom($bom, $request->user()->id);
 
         return $this->message('Bill of materials deleted.');
     }
@@ -110,13 +118,51 @@ class ProductionController extends Controller
         $this->allow($request, 'production.view');
         $this->assertRecordCompany($request, $productionOrder);
 
-        return $this->ok(new ProductionOrderResource($productionOrder->load(['items', 'outputProduct:id,sku,name', 'bom:id,name', 'batches'])));
+        return $this->ok(new ProductionOrderResource($productionOrder->load([
+            'items', 'stages.supervisor:id,name', 'outputProduct:id,sku,name',
+            'bom:id,name', 'batches', 'supervisor:id,name', 'location:id,name',
+        ])));
+    }
+
+    public function startStage(Request $request, ProductionOrder $productionOrder, ProductionOrderStage $productionOrderStage): JsonResponse
+    {
+        $this->allow($request, 'production.complete');
+        $this->assertRecordCompany($request, $productionOrder, writable: true);
+
+        $stage = $this->production->startStage($productionOrder, $productionOrderStage, $request->user()->id);
+
+        return $this->ok($stage, 'Production stage started.');
+    }
+
+    public function completeStage(Request $request, ProductionOrder $productionOrder, ProductionOrderStage $productionOrderStage): JsonResponse
+    {
+        $this->allow($request, 'production.complete');
+        $this->assertRecordCompany($request, $productionOrder, writable: true);
+
+        $order = $this->production->completeStage($productionOrder, $productionOrderStage, $request->user()->id);
+
+        return $this->ok(new ProductionOrderResource($order), 'Production stage completed.');
+    }
+
+    public function estimate(Request $request): JsonResponse
+    {
+        $this->allow($request, 'production.view');
+        $data = $request->validate([
+            'bom_id'          => ['required', 'uuid'],
+            'output_quantity' => ['required', 'numeric', 'gt:0'],
+        ]);
+
+        return $this->ok($this->production->estimate(
+            $this->company($request)->id,
+            $data['bom_id'],
+            (float) $data['output_quantity'],
+        ));
     }
 
     public function updateOrder(StoreProductionOrderRequest $request, ProductionOrder $productionOrder): JsonResponse
     {
         $this->assertRecordCompany($request, $productionOrder, writable: true);
-        $updated = $this->production->updateOrder($productionOrder, $request->validated());
+        $updated = $this->production->updateOrder($productionOrder, $request->validated(), $request->user()->id);
 
         return $this->ok(new ProductionOrderResource($updated), 'Production order updated.');
     }

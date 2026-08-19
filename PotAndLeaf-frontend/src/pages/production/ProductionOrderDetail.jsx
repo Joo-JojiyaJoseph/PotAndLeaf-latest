@@ -10,7 +10,7 @@ import { formatCurrency, formatDate } from '../../lib/format';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 import { printBarcodeSheet } from '../../lib/barcodeSheet';
 
-const statusTone = { draft: 'inactive', completed: 'active', cancelled: 'blocked' };
+const statusTone = { draft: 'inactive', in_progress: 'warning', completed: 'active', cancelled: 'blocked' };
 
 export default function ProductionOrderDetail() {
   const { id } = useParams();
@@ -29,6 +29,15 @@ export default function ProductionOrderDetail() {
 
   const recordCompanyId = data?.company_id ?? headerCompanyId;
 
+  const estimateQ = useQuery({
+    queryKey: ['production-estimate', recordCompanyId, data?.bom_id, data?.output_quantity],
+    queryFn: () => api.get('/production/estimate', {
+      params: { bom_id: data.bom_id, output_quantity: data.output_quantity },
+      ...withCompany(recordCompanyId),
+    }).then((r) => r.data.data),
+    enabled: Boolean(recordCompanyId && ['draft', 'in_progress'].includes(data?.status) && data?.bom_id && data?.output_quantity),
+  });
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['production-order', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['production-orders'] });
@@ -43,6 +52,20 @@ export default function ProductionOrderDetail() {
     mutationFn: () => api.delete(`/production/orders/${id}`, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Production order cancelled.'); navigate('/production'); },
     onError: (err) => toast.error(err.response?.data?.message ?? 'Could not cancel production order.'),
+  });
+  const startStageM = useMutation({
+    mutationFn: (stageId) => api.post(`/production/orders/${id}/stages/${stageId}/start`, {}, withCompany(recordCompanyId)),
+    onSuccess: () => { invalidate(); toast.success('Stage started.'); },
+    onError: (err) => toast.error(err.response?.data?.message ?? err.response?.data?.errors?.stage?.[0] ?? 'Could not start stage.'),
+  });
+  const completeStageM = useMutation({
+    mutationFn: (stageId) => api.post(`/production/orders/${id}/stages/${stageId}/complete`, {}, withCompany(recordCompanyId)),
+    onSuccess: (res) => {
+      invalidate();
+      toast.success(res.data?.message ?? 'Stage completed.');
+      if (res.data?.data?.status === 'completed') toast.success('Production completed — stock updated.');
+    },
+    onError: (err) => toast.error(err.response?.data?.message ?? err.response?.data?.errors?.items?.[0] ?? 'Could not complete stage.'),
   });
 
   if (isLoading) return <DetailLoading />;
@@ -77,10 +100,87 @@ export default function ProductionOrderDetail() {
           <InfoItem label="Output quantity" value={o.output_quantity} />
           <InfoItem label="Unit cost" value={o.status === 'completed' ? formatCurrency(o.output_unit_cost) : '—'} mono />
           <InfoItem label="Total input cost" value={o.status === 'completed' ? formatCurrency(o.total_input_cost) : '—'} mono />
+          <InfoItem label="Supervisor" value={o.supervisor || '—'} />
+          <InfoItem label="Location" value={o.location || '—'} />
           <InfoItem label="Completed" value={o.completed_at ? formatDate(o.completed_at) : null} />
           <InfoItem label="Notes" value={o.notes} />
         </InfoGrid>
       </Section>
+
+      {o.is_multi_stage && (o.stages?.length ?? 0) > 0 && o.status !== 'cancelled' && (
+        <Section title="Production pipeline">
+          <div className="space-y-3">
+            {o.stages.map((stage, index) => (
+              <div key={stage.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-paper/40 p-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="microlabel font-semibold text-faint">Step {index + 1}</span>
+                    <span className="font-medium">{stage.name}</span>
+                    <Badge tone={stage.status === 'completed' ? 'active' : stage.status === 'in_progress' ? 'warning' : 'inactive'}>{stage.status.replace('_', ' ')}</Badge>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
+                    {stage.started_at && <span>Started {formatDate(stage.started_at)}</span>}
+                    {stage.completed_at && <span>Completed {formatDate(stage.completed_at)}</span>}
+                    {stage.material_cost > 0 && <span>Material cost {formatCurrency(stage.material_cost)}</span>}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {stage.can?.start && (
+                    <Button size="sm" variant="outline" onClick={() => startStageM.mutate(stage.id)} disabled={startStageM.isPending}>
+                      Start
+                    </Button>
+                  )}
+                  {stage.can?.complete && (
+                    <Button size="sm" onClick={() => completeStageM.mutate(stage.id)} disabled={completeStageM.isPending}>
+                      Complete stage
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {o.is_multi_stage && ['draft', 'in_progress'].includes(o.status) && estimateQ.data && (
+        <Section title="Estimated cost (all stages)">
+          <div className="flex flex-wrap gap-4 text-sm">
+            <span>Material total: <strong className="tnum">{formatCurrency(estimateQ.data.total_material_cost)}</strong></span>
+            <span>Unit cost: <strong className="tnum">{formatCurrency(estimateQ.data.unit_cost)}</strong></span>
+            {!estimateQ.data.can_complete && <span className="text-danger">Insufficient stock across one or more stages</span>}
+          </div>
+        </Section>
+      )}
+
+      {o.status === 'draft' && !o.is_multi_stage && estimateQ.data && (
+        <Section title="Estimated cost (before complete)">
+          <div className="mb-3 flex flex-wrap gap-4 text-sm">
+            <span>Material total: <strong className="tnum">{formatCurrency(estimateQ.data.total_material_cost)}</strong></span>
+            <span>Unit cost: <strong className="tnum">{formatCurrency(estimateQ.data.unit_cost)}</strong></span>
+            {!estimateQ.data.can_complete && <span className="text-danger">Insufficient stock — cannot complete yet</span>}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead><tr className="border-b border-line text-left text-faint">
+                <th className="microlabel py-2 pr-3 font-semibold">Component</th>
+                <th className="microlabel px-3 py-2 text-right font-semibold">Required</th>
+                <th className="microlabel px-3 py-2 text-right font-semibold">Available</th>
+                <th className="microlabel py-2 pl-3 text-right font-semibold">Line cost</th>
+              </tr></thead>
+              <tbody>
+                {(estimateQ.data.items ?? []).map((it) => (
+                  <tr key={it.product_id} className="border-b border-line/60 last:border-0">
+                    <td className="py-2 pr-3 font-medium">{it.product_name}{it.wastage_pct > 0 ? ` (+${it.wastage_pct}% wastage)` : ''}</td>
+                    <td className={`tnum px-3 py-2 text-right ${it.sufficient ? 'text-muted' : 'text-danger'}`}>{it.required_qty}</td>
+                    <td className="tnum px-3 py-2 text-right text-muted">{it.available_stock}</td>
+                    <td className="tnum py-2 pl-3 text-right">{formatCurrency(it.line_cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
 
       {o.status === 'completed' && (o.barcodes?.length ?? 0) > 0 && (
         <Section

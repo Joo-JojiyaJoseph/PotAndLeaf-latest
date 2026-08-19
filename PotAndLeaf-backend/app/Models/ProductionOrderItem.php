@@ -9,7 +9,10 @@ class ProductionOrderItem extends Model
 {
     use HasUuids;
 
-    protected $fillable = ['production_order_id', 'component_product_id', 'product_name', 'qty', 'unit_cost', 'line_cost'];
+    protected $fillable = [
+        'production_order_id', 'production_order_stage_id', 'component_product_id',
+        'product_name', 'qty', 'unit_cost', 'line_cost',
+    ];
 
     protected function casts(): array
     {

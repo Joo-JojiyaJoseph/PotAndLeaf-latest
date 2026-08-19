@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Sale;
+use App\Services\SettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -13,6 +14,8 @@ class SaleResource extends JsonResource
     {
         $user = $request->user();
         $companyId = $this->company_id;
+        $settings = app(SettingsService::class);
+        $cancelRequiresApproval = $settings->get($companyId, 'sale_cancel_requires_approval') === '1';
 
         return [
             'id'            => $this->id,
@@ -32,6 +35,7 @@ class SaleResource extends JsonResource
             ] : null),
             'is_interstate' => (bool) $this->is_interstate,
             'payment_mode'  => $this->payment_mode,
+            'bill_kind'     => $this->bill_kind ?? 'tax_invoice',
             'subtotal'      => (float) $this->subtotal,
             'tax_total'     => (float) $this->tax_total,
             'round_off'     => (float) $this->round_off,
@@ -45,13 +49,32 @@ class SaleResource extends JsonResource
             'status'                  => $this->status,
             'notes'         => $this->notes,
             'confirmed_at'  => optional($this->confirmed_at)->toIso8601String(),
+            'cancel_requested_at'     => optional($this->cancel_requested_at)->toIso8601String(),
+            'cancel_reason'           => $this->cancel_reason,
+            'cancel_rejection_reason' => $this->cancel_rejection_reason,
+            'cancel_requested_by'     => $this->whenLoaded('cancelRequestedBy', fn () => $this->cancelRequestedBy?->name),
+            'cancel_reviewed_by'      => $this->whenLoaded('cancelReviewedBy', fn () => $this->cancelReviewedBy?->name),
             'entered_by'    => $this->whenLoaded('createdBy', fn () => $this->createdBy?->name),
             'created_by'    => $this->created_by,
             'items_count'   => $this->when($this->items_count !== null, $this->items_count),
             'items'         => SaleItemResource::collection($this->whenLoaded('items')),
             'can'           => [
-                'confirm' => $this->status === 'draft' && $user?->hasPermission('sales.confirm', $companyId),
-                'cancel'  => $this->status !== 'cancelled' && $user?->hasPermission('sales.delete', $companyId),
+                'confirm'         => $this->status === 'draft' && $user?->hasPermission('sales.confirm', $companyId),
+                'cancel'          => $this->status !== 'cancelled'
+                    && ! $this->hasCancelRequest()
+                    && (
+                        (in_array($this->status, ['draft', 'proforma'], true) && $user?->hasPermission('sales.delete', $companyId))
+                        || ($this->isConfirmed() && ! $cancelRequiresApproval && $user?->hasPermission('sales.delete', $companyId))
+                    ),
+                'cancel_request'  => $this->isConfirmed()
+                    && ! $this->hasCancelRequest()
+                    && $cancelRequiresApproval
+                    && $user?->hasPermission('sales.cancel_request', $companyId),
+                'cancel_approve'  => $this->hasCancelRequest() && $user?->hasPermission('sales.cancel_approve', $companyId),
+                'cancel_reject'   => $this->hasCancelRequest() && $user?->hasPermission('sales.cancel_approve', $companyId),
+                'whatsapp'        => in_array($this->status, ['confirmed', 'proforma'], true)
+                    && $user?->hasPermission('sales.whatsapp', $companyId),
+                'convert_proforma'=> $this->isProforma() && $user?->hasPermission('sales.confirm', $companyId),
             ],
         ];
     }

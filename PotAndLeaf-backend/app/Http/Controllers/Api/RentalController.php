@@ -12,9 +12,8 @@ use App\Models\Location;
 use App\Models\Product;
 use App\Models\Rental;
 use App\Models\RentalInvoice;
+use App\Services\RentalNotificationService;
 use App\Services\RentalService;
-use App\Services\SettingsService;
-use App\Services\WhatsApp\WhatsAppService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
@@ -141,58 +140,16 @@ class RentalController extends Controller
         return $this->message('Invoice removed.');
     }
 
-    public function sendInvoiceWhatsapp(Request $request, RentalInvoice $rentalInvoice, WhatsAppService $whatsapp, SettingsService $settings): JsonResponse
+    public function sendInvoiceWhatsapp(Request $request, RentalInvoice $rentalInvoice, RentalNotificationService $notifications): JsonResponse
     {
-        $company = $this->company($request);
         $this->allow($request, 'rental.bill');
         $this->assertRecordCompany($request, $rentalInvoice, writable: true);
 
-        if ($settings->get($company->id, 'whatsapp_enabled') !== '1') {
-            return $this->message('WhatsApp sharing is disabled for this company. Enable it in Settings.', 422);
-        }
-
-        $rental = $rentalInvoice->rental()->with(['items', 'customer:id,name,phone,whatsapp'])->firstOrFail();
-        $customer = $rental->customer;
-        $to = $customer?->whatsapp ?: $customer?->phone;
-
-        $result = $whatsapp->sendMessage($to, $this->invoiceSummaryMessage($company, $rental, $rentalInvoice));
+        $result = $notifications->sendInvoiceWhatsApp($rentalInvoice, requireAutoSetting: false);
 
         return $result['success']
-            ? $this->ok(['provider' => $result['provider']], $result['message'])
+            ? $this->ok(['provider' => $result['provider'] ?? null], $result['message'])
             : $this->message($result['message'], 422);
-    }
-
-    private function invoiceSummaryMessage($company, Rental $rental, RentalInvoice $invoice): string
-    {
-        $money = fn ($n) => '₹'.number_format((float) $n, 2);
-        $cycles = (float) $invoice->cycles;
-
-        $lines = [
-            "*Rental Invoice {$invoice->invoice_no}*",
-            "Rental: {$rental->rental_no}",
-            'Period: '.optional($invoice->period_from)->format('d M Y').' – '.optional($invoice->period_to)->format('d M Y'),
-            '',
-        ];
-
-        foreach ($rental->items as $item) {
-            $qty = (float) $item->qty - (float) $item->returned_qty;
-            if ($qty <= 0) {
-                continue;
-            }
-            $line = $qty * (float) $item->rate_per_cycle * $cycles;
-            $lines[] = "- {$item->product_name}: {$qty} x {$money($item->rate_per_cycle)} x {$cycles} cycle(s) = {$money($line)}";
-        }
-
-        $lines[] = '';
-        if ((float) $rental->deposit > 0) {
-            $lines[] = "Deposit held: {$money($rental->deposit)}";
-        }
-        $lines[] = "*Total due: {$money($invoice->amount)}*";
-        $lines[] = 'Status: '.strtoupper($invoice->status);
-        $lines[] = '';
-        $lines[] = "Thank you for renting with {$company->name}.";
-
-        return implode("\n", $lines);
     }
 
     private function company(Request $request)

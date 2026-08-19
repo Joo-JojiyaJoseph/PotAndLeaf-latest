@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Transfer\ApproveTransferRequest;
 use App\Http\Requests\Transfer\ReceiveTransferRequest;
 use App\Http\Requests\Transfer\StoreTransferRequest;
 use App\Http\Resources\StockTransferResource;
 use App\Models\Company;
+use App\Models\Location;
 use App\Models\Product;
 use App\Models\StockTransfer;
 use App\Services\TransferService;
@@ -48,7 +50,11 @@ class TransferController extends Controller
         $products = Product::forCompany($company->id)->orderBy('name')->get(['id', 'sku', 'name', 'current_stock'])
             ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'current_stock' => (float) $p->current_stock]);
 
-        return $this->ok(['companies' => $companies, 'products' => $products, 'from_company' => ['id' => $company->id, 'name' => $company->name]]);
+        $locations = Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
+            ->get(['id', 'name', 'type', 'is_default'])
+            ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'type' => $l->type, 'is_default' => (bool) $l->is_default]);
+
+        return $this->ok(['companies' => $companies, 'products' => $products, 'locations' => $locations, 'from_company' => ['id' => $company->id, 'name' => $company->name]]);
     }
 
     public function store(StoreTransferRequest $request): JsonResponse
@@ -65,12 +71,14 @@ class TransferController extends Controller
         );
     }
 
-    public function approve(Request $request, StockTransfer $stockTransfer): JsonResponse
+    public function approve(ApproveTransferRequest $request, StockTransfer $stockTransfer): JsonResponse
     {
-        $this->allow($request, 'transfers.approve');
         $this->sameCompanyOrDestination($request, $stockTransfer);
 
-        return $this->ok(new StockTransferResource($this->transfers->approve($stockTransfer, $request->user()->id)), 'Transfer approved.');
+        return $this->ok(
+            new StockTransferResource($this->transfers->approve($stockTransfer, $request->validated()['approvals'] ?? [], $request->user()->id)),
+            'Transfer approved.',
+        );
     }
 
     public function reject(Request $request, StockTransfer $stockTransfer): JsonResponse
@@ -96,7 +104,10 @@ class TransferController extends Controller
         $this->allow($request, 'transfers.view');
         $this->sameCompanyOrDestination($request, $stockTransfer);
 
-        return $this->ok(new StockTransferResource($stockTransfer->load(['items.batch.purchase:id,purchase_no', 'fromCompany:id,name', 'toCompany:id,name'])));
+        return $this->ok(new StockTransferResource($stockTransfer->load([
+            'items.batch.purchase:id,purchase_no',
+            'fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name',
+        ])));
     }
 
     public function dispatchTransfer(Request $request, StockTransfer $stockTransfer): JsonResponse
@@ -137,6 +148,12 @@ class TransferController extends Controller
 
     private function sameCompanyOrDestination(Request $request, StockTransfer $transfer): void
     {
+        if ($transfer->isIntraCompany()) {
+            $this->sameSourceCompany($request, $transfer);
+
+            return;
+        }
+
         $headerId = (string) $this->company($request)->id;
         $sourceId = (string) $transfer->company_id;
         $destId = (string) $transfer->to_company_id;
@@ -178,6 +195,12 @@ class TransferController extends Controller
 
     private function sameDestinationCompany(Request $request, StockTransfer $transfer): void
     {
+        if ($transfer->isIntraCompany()) {
+            $this->sameSourceCompany($request, $transfer);
+
+            return;
+        }
+
         $headerId = (string) $this->company($request)->id;
         $destId = (string) $transfer->to_company_id;
 

@@ -4,7 +4,11 @@ namespace App\Services;
 
 use App\Models\Product;
 use App\Models\StockLedgerEntry;
+use App\Models\StockTransfer;
+use App\Models\StockTransferItem;
+use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Owns stock movements. Every change goes through post(), which appends a
@@ -15,6 +19,10 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
  */
 class InventoryService
 {
+    public function __construct(
+        private readonly BackorderService $backorders,
+    ) {}
+
     /**
      * Record one movement. Does not open a transaction or save the product —
      * the caller controls both so multi-line documents post atomically.
@@ -60,6 +68,99 @@ class InventoryService
             'occurred_at'    => now(),
             'created_by'     => $userId,
         ]);
+    }
+
+    /**
+     * Stock availability for a SKU across companies the user may access.
+     *
+     * @return array{sku: string, product_name: string|null, branches: list<array<string,mixed>>}
+     */
+    public function crossBranchStock(User $user, int|string $currentCompanyId, ?string $sku = null, ?string $productId = null): array
+    {
+        if (blank($sku) && blank($productId)) {
+            throw ValidationException::withMessages(['sku' => 'Provide sku or product_id.']);
+        }
+
+        $anchor = Product::forCompany($currentCompanyId)
+            ->when(filled($productId), fn ($q) => $q->whereKey($productId))
+            ->when(filled($sku), fn ($q) => $q->where('sku', $sku))
+            ->first();
+
+        if (! $anchor) {
+            throw ValidationException::withMessages(['sku' => 'Product not found in the current company.']);
+        }
+
+        $sku = $anchor->sku;
+        $companyIds = $this->accessibleCompanyIds($user, $currentCompanyId);
+
+        $products = Product::query()
+            ->whereIn('company_id', $companyIds)
+            ->where('sku', $sku)
+            ->with('company:id,name,code')
+            ->get();
+
+        $branches = $products->map(function (Product $p) use ($currentCompanyId, $sku) {
+            $pending = $this->backorders->pendingQtyForProduct($p->company_id, $p->id);
+            $inTransitIn = $this->inTransitQty($p->company_id, $sku, 'in');
+            $inTransitOut = $this->inTransitQty($p->company_id, $sku, 'out');
+            $stock = (float) $p->current_stock;
+            $atp = max(0, $stock - $pending);
+
+            return [
+                'company_id'          => $p->company_id,
+                'company_name'        => $p->company?->name,
+                'company_code'        => $p->company?->code,
+                'product_id'          => $p->id,
+                'sku'                 => $p->sku,
+                'product_name'        => $p->name,
+                'current_stock'       => $stock,
+                'backorder_pending'   => round($pending, 3),
+                'in_transit_in'       => round($inTransitIn, 3),
+                'in_transit_out'      => round($inTransitOut, 3),
+                'available_to_promise'=> round($atp, 3),
+                'is_current_branch'   => (int) $p->company_id === (int) $currentCompanyId,
+            ];
+        })->sortByDesc('is_current_branch')->values()->all();
+
+        return [
+            'sku'          => $sku,
+            'product_name' => $anchor->name,
+            'branches'     => $branches,
+        ];
+    }
+
+    /** @return list<int|string> */
+    private function accessibleCompanyIds(User $user, int|string $currentCompanyId): array
+    {
+        if ($user->is_super_admin) {
+            return \App\Models\Company::active()->pluck('id')->all();
+        }
+
+        $ids = $user->companies()->where('is_active', true)->pluck('companies.id')->all();
+
+        return $ids !== [] ? $ids : [$currentCompanyId];
+    }
+
+    private function inTransitQty(int|string $companyId, string $sku, string $direction): float
+    {
+        $query = StockTransfer::query()->where('status', 'in_transit');
+
+        if ($direction === 'in') {
+            $query->where('to_company_id', $companyId);
+        } else {
+            $query->where('company_id', $companyId);
+        }
+
+        $transferIds = $query->pluck('id');
+        if ($transferIds->isEmpty()) {
+            return 0.0;
+        }
+
+        return (float) StockTransferItem::query()
+            ->whereIn('stock_transfer_id', $transferIds)
+            ->whereHas('product', fn ($q) => $q->where('sku', $sku))
+            ->get()
+            ->sum(fn (StockTransferItem $item) => $item->dispatchQty());
     }
 
     /** @param array<string,mixed> $filters */

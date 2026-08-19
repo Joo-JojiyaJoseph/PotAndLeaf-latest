@@ -13,7 +13,7 @@ class RentalInvoice extends Model
 
     protected $fillable = [
         'company_id', 'rental_id', 'invoice_no', 'period_from', 'period_to',
-        'cycles', 'amount', 'status', 'notes',
+        'cycles', 'amount', 'due_date', 'sent_at', 'reminder_count', 'status', 'notes',
     ];
 
     protected function casts(): array
@@ -21,8 +21,11 @@ class RentalInvoice extends Model
         return [
             'period_from' => 'date',
             'period_to'   => 'date',
+            'due_date'    => 'date',
+            'sent_at'     => 'datetime',
             'cycles'      => 'decimal:2',
             'amount'      => 'decimal:2',
+            'reminder_count' => 'integer',
         ];
     }
 

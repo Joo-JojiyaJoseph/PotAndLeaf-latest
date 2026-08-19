@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Models\Rental;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Carbon;
 
 /** @mixin Rental */
 class RentalResource extends JsonResource
@@ -13,6 +14,10 @@ class RentalResource extends JsonResource
     {
         $user = $request->user();
         $companyId = $this->company_id;
+        $displayStatus = $this->status;
+        if ($displayStatus === 'active' && $this->expected_end_date && $this->expected_end_date->lt(Carbon::today())) {
+            $displayStatus = 'overdue';
+        }
 
         return [
             'id'                => $this->id,
@@ -28,6 +33,9 @@ class RentalResource extends JsonResource
             'start_date'        => optional($this->start_date)->toDateString(),
             'expected_end_date' => optional($this->expected_end_date)->toDateString(),
             'billing_cycle'     => $this->billing_cycle,
+            'auto_bill'         => (bool) $this->auto_bill,
+            'last_billed_to'    => optional($this->last_billed_to)->toDateString(),
+            'next_bill_at'      => optional($this->next_bill_at)->toDateString(),
             'deposit'           => (float) $this->deposit,
             'rental_charge'     => (float) $this->rental_charge,
             'damage_charge'     => (float) $this->damage_charge,
@@ -37,6 +45,8 @@ class RentalResource extends JsonResource
             'return_date'       => optional($this->return_date)->toDateString(),
             'settled_at'        => optional($this->settled_at)->toIso8601String(),
             'status'            => $this->status,
+            'display_status'    => $displayStatus,
+            'is_overdue'        => $displayStatus === 'overdue',
             'notes'             => $this->notes,
             'activated_at'      => optional($this->activated_at)->toIso8601String(),
             'returned_at'       => optional($this->returned_at)->toIso8601String(),
@@ -50,6 +60,9 @@ class RentalResource extends JsonResource
             'invoices'          => $this->whenLoaded('invoices', fn () => $this->invoices->map(fn ($inv) => [
                 'id' => $inv->id, 'invoice_no' => $inv->invoice_no,
                 'period_from' => optional($inv->period_from)->toDateString(), 'period_to' => optional($inv->period_to)->toDateString(),
+                'due_date' => optional($inv->due_date)->toDateString(),
+                'sent_at' => optional($inv->sent_at)->toIso8601String(),
+                'reminder_count' => (int) $inv->reminder_count,
                 'cycles' => (float) $inv->cycles, 'amount' => (float) $inv->amount, 'status' => $inv->status,
             ])->values()),
             'can'               => [

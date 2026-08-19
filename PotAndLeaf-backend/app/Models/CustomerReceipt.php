@@ -14,7 +14,7 @@ class CustomerReceipt extends Model
     use HasAuditColumns, HasFactory, HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'company_id', 'customer_id', 'sale_id', 'receipt_no',
+        'company_id', 'customer_id', 'sale_id', 'advance_order_id', 'receipt_no',
         'receipt_date', 'amount', 'mode', 'reference', 'notes',
     ];
 

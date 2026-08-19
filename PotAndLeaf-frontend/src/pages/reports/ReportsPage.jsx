@@ -7,6 +7,7 @@ import { useToast } from '../../lib/toast';
 import { Button, Card, StatCard, Spinner, Badge } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
+import AccountingReportPanels from './AccountingReportPanels';
 
 const iso = (d) => d.toISOString().slice(0, 10);
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
@@ -20,9 +21,21 @@ const TABS = [
   { value: 'rental_income', label: 'Rental income', rental: true },
   { value: 'rental_current', label: 'Currently rented', rental: true },
   { value: 'rental_customer', label: 'Customer rentals', rental: true },
+  { value: 'production_summary', label: 'Production summary', production: true },
+  { value: 'production_by_product', label: 'Production by product', production: true },
+  { value: 'production_by_supervisor', label: 'Production by supervisor', production: true },
+  { value: 'production_batches', label: 'Production batches', production: true },
+  { value: 'transfer_summary', label: 'Transfer summary', transfer: true },
+  { value: 'transfer_in_transit', label: 'In transit', transfer: true },
+  { value: 'cash_book', label: 'Cash book', accounting: true },
+  { value: 'bank_book', label: 'Bank book', accounting: true },
+  { value: 'debtor_ledger', label: 'Debtor ledger', accounting: true },
+  { value: 'creditor_ledger', label: 'Creditor ledger', accounting: true },
+  { value: 'ageing_receivables', label: 'Ageing (AR)', accounting: true },
+  { value: 'ageing_payables', label: 'Ageing (AP)', accounting: true },
 ];
 const selectCls = 'h-9 rounded-lg border border-line bg-surface px-2 text-sm';
-const statusTone = { active: 'active', returned: 'inactive', overdue: 'blocked', expected: 'warning', cancelled: 'blocked', draft: 'inactive' };
+const statusTone = { active: 'active', returned: 'inactive', overdue: 'blocked', expected: 'warning', cancelled: 'blocked', draft: 'inactive', requested: 'warning', in_transit: 'info', received: 'active', rejected: 'blocked' };
 
 function TrendChart({ data }) {
   const max = Math.max(1, ...data.map((d) => d.total));
@@ -70,14 +83,21 @@ export default function ReportsPage() {
   const [sortKey, setSortKey] = useState('margin_pct');
   const [locationId, setLocationId] = useState('');
   const [customerId, setCustomerId] = useState('');
+  const [supplierId, setSupplierId] = useState('');
 
   const companyParam = reportCompanyId || undefined;
   const locationParam = locationId || undefined;
 
   const canHo = isSuperAdmin || can('reports.margin') || can('reports.profit') || can('products.view_cost') || can('*');
   const canRentalReports = isSuperAdmin || can('*') || (can('reports.view') && can('rental.view'));
+  const canProductionReports = isSuperAdmin || can('*') || (can('reports.view') && can('production.view'));
+  const canTransferReports = isSuperAdmin || can('*') || (can('reports.view') && can('transfers.view'));
+  const canAccounting = isSuperAdmin || can('*') || (can('reports.view') && (can('receipts.view') || can('payments.view')));
   const isRentalTab = tab.startsWith('rental_');
-  const hideDateRange = tab === 'rental_current';
+  const isProductionTab = tab.startsWith('production_');
+  const isTransferTab = tab.startsWith('transfer_');
+  const isAccountingTab = ['cash_book', 'bank_book', 'debtor_ledger', 'creditor_ledger', 'ageing_receivables', 'ageing_payables'].includes(tab);
+  const hideDateRange = tab === 'rental_current' || tab === 'transfer_in_transit' || tab === 'ageing_receivables' || tab === 'ageing_payables';
 
   const { data: formData } = useQuery({
     queryKey: ['reports-form-data', activeCompany?.id],
@@ -143,6 +163,90 @@ export default function ReportsPage() {
     placeholderData: keepPreviousData,
   });
 
+  const productionSummaryQ = useQuery({
+    queryKey: ['reports-production-summary', activeCompany?.id, reportCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/production/summary', { params: { ...range, company_id: companyParam } }).then((r) => r.data),
+    enabled: Boolean(activeCompany) && tab === 'production_summary' && canProductionReports,
+    placeholderData: keepPreviousData,
+  });
+
+  const productionByProductQ = useQuery({
+    queryKey: ['reports-production-product', activeCompany?.id, reportCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/production/by-product', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'production_by_product' && canProductionReports,
+    placeholderData: keepPreviousData,
+  });
+
+  const productionBySupervisorQ = useQuery({
+    queryKey: ['reports-production-supervisor', activeCompany?.id, reportCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/production/by-supervisor', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'production_by_supervisor' && canProductionReports,
+    placeholderData: keepPreviousData,
+  });
+
+  const productionBatchesQ = useQuery({
+    queryKey: ['reports-production-batches', activeCompany?.id, reportCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/production/batches', { params: { ...range, company_id: companyParam } }).then((r) => r.data),
+    enabled: Boolean(activeCompany) && tab === 'production_batches' && canProductionReports,
+    placeholderData: keepPreviousData,
+  });
+
+  const transferSummaryQ = useQuery({
+    queryKey: ['reports-transfer-summary', activeCompany?.id, reportCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/transfers/summary', { params: { ...range, company_id: companyParam } }).then((r) => r.data),
+    enabled: Boolean(activeCompany) && tab === 'transfer_summary' && canTransferReports,
+    placeholderData: keepPreviousData,
+  });
+
+  const transferInTransitQ = useQuery({
+    queryKey: ['reports-transfer-in-transit', activeCompany?.id, reportCompanyId],
+    queryFn: () => api.get('/reports/transfers/in-transit', { params: { company_id: companyParam } }).then((r) => r.data),
+    enabled: Boolean(activeCompany) && tab === 'transfer_in_transit' && canTransferReports,
+    placeholderData: keepPreviousData,
+  });
+
+  const cashBookQ = useQuery({
+    queryKey: ['reports-cash-book', activeCompany?.id, reportCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/accounting/cash-book', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'cash_book' && canAccounting,
+    placeholderData: keepPreviousData,
+  });
+
+  const bankBookQ = useQuery({
+    queryKey: ['reports-bank-book', activeCompany?.id, reportCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/accounting/bank-book', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'bank_book' && canAccounting,
+    placeholderData: keepPreviousData,
+  });
+
+  const debtorLedgerQ = useQuery({
+    queryKey: ['reports-debtor-ledger', activeCompany?.id, customerId, range.from, range.to],
+    queryFn: () => api.get('/reports/accounting/debtor-ledger', { params: { ...range, customer_id: customerId } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'debtor_ledger' && canAccounting && Boolean(customerId),
+    placeholderData: keepPreviousData,
+  });
+
+  const creditorLedgerQ = useQuery({
+    queryKey: ['reports-creditor-ledger', activeCompany?.id, supplierId, range.from, range.to],
+    queryFn: () => api.get('/reports/accounting/creditor-ledger', { params: { ...range, supplier_id: supplierId } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'creditor_ledger' && canAccounting && Boolean(supplierId),
+    placeholderData: keepPreviousData,
+  });
+
+  const ageingRecQ = useQuery({
+    queryKey: ['reports-ageing-ar', activeCompany?.id, reportCompanyId],
+    queryFn: () => api.get('/reports/accounting/ageing-receivables', { params: { company_id: companyParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'ageing_receivables' && canAccounting,
+    placeholderData: keepPreviousData,
+  });
+
+  const ageingPayQ = useQuery({
+    queryKey: ['reports-ageing-ap', activeCompany?.id, reportCompanyId],
+    queryFn: () => api.get('/reports/accounting/ageing-payables', { params: { company_id: companyParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'ageing_payables' && canAccounting,
+    placeholderData: keepPreviousData,
+  });
+
   const modeRows = useMemo(() => Object.entries(dashQ.data?.sales?.by_mode ?? {}), [dashQ.data]);
   const marginRows = useMemo(() => {
     const rows = [...(marginQ.data?.rows ?? [])];
@@ -162,6 +266,7 @@ export default function ReportsPage() {
   const companies = formData?.companies ?? [];
   const locations = formData?.locations ?? [];
   const customers = formData?.customers ?? [];
+  const suppliers = formData?.suppliers ?? [];
   const reportCompany = companies.find((c) => String(c.id) === String(reportCompanyId)) ?? activeCompany;
 
   return (
@@ -176,6 +281,18 @@ export default function ReportsPage() {
             <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className={selectCls}>
               <option value="">All branches</option>
               {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          )}
+          {tab === 'debtor_ledger' && (
+            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={selectCls}>
+              <option value="">Select customer</option>
+              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
+          {tab === 'creditor_ledger' && (
+            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={selectCls}>
+              <option value="">Select supplier</option>
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           )}
           {tab === 'rental_customer' && (
@@ -212,6 +329,9 @@ export default function ReportsPage() {
       <div className="flex flex-wrap gap-1 border-b border-line">
         {TABS.filter((t) => {
           if (t.rental) return canRentalReports;
+          if (t.production) return canProductionReports;
+          if (t.transfer) return canTransferReports;
+          if (t.accounting) return canAccounting;
           if (t.value === 'dashboard' || t.value === 'price_levels') return true;
           return canHo;
         }).map((t) => (
@@ -282,7 +402,7 @@ export default function ReportsPage() {
                       )}
                   </Card>
                 </div>
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
                   <Card className="p-5">
                     <h2 className="mb-3 text-sm font-semibold">Sales by payment mode</h2>
                     {modeRows.length === 0 ? <p className="text-sm text-muted">No sales.</p>
@@ -301,7 +421,15 @@ export default function ReportsPage() {
                   <Card className="p-5">
                     <h2 className="mb-3 text-sm font-semibold">Rentals</h2>
                     <div className="flex items-baseline justify-between text-sm"><span className="text-muted">Active rentals</span><span className="tnum font-medium">{dashQ.data.rentals.active}</span></div>
+                    <div className="mt-1 flex items-baseline justify-between text-sm"><span className="text-muted">Return overdue</span><span className="tnum font-medium text-danger">{dashQ.data.rentals.overdue_returns ?? 0}</span></div>
+                    <div className="mt-1 flex items-baseline justify-between text-sm"><span className="text-muted">Payment overdue</span><span className="tnum font-medium text-danger">{dashQ.data.rentals.payment_overdue ?? 0}</span></div>
                     <div className="mt-1 flex items-baseline justify-between text-sm"><span className="text-muted">Invoiced in range</span><span className="tnum font-medium">{formatCurrency(dashQ.data.rentals.invoiced)}</span></div>
+                  </Card>
+                  <Card className="p-5">
+                    <h2 className="mb-3 text-sm font-semibold">Transfers</h2>
+                    <div className="flex items-baseline justify-between text-sm"><span className="text-muted">In transit</span><span className="tnum font-medium">{dashQ.data.transfers?.in_transit ?? 0}</span></div>
+                    <div className="mt-1 flex items-baseline justify-between text-sm"><span className="text-muted">Pending approval</span><span className="tnum font-medium">{dashQ.data.transfers?.pending_approval ?? 0}</span></div>
+                    <div className="mt-1 flex items-baseline justify-between text-sm"><span className="text-muted">Received in range</span><span className="tnum font-medium">{dashQ.data.transfers?.received_in_range ?? 0}</span></div>
                   </Card>
                 </div>
               </>
@@ -686,6 +814,230 @@ export default function ReportsPage() {
               )}
           </Card>
         </>
+      )}
+
+      {tab === 'production_summary' && (
+        productionSummaryQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+          : !productionSummaryQ.data?.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load production summary.</Card>
+          : (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                <StatCard label="Completed runs" value={productionSummaryQ.data.data.summary?.completed ?? 0} />
+                <StatCard label="Output qty" value={productionSummaryQ.data.data.summary?.output_qty ?? 0} />
+                <StatCard label="Total cost" value={formatCurrency(productionSummaryQ.data.data.summary?.total_cost ?? 0)} />
+                <StatCard label="Avg unit cost" value={formatCurrency(productionSummaryQ.data.data.summary?.avg_unit_cost ?? 0)} />
+              </div>
+              <Card className="mt-4 overflow-hidden">
+                {(productionSummaryQ.data.data.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No completed production in this range.</div>
+                : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-line text-left text-faint">
+                      <th className="microlabel px-4 py-2.5 font-semibold">Order</th>
+                      <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
+                      <th className="microlabel px-4 py-2.5 font-semibold">Supervisor</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Qty</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Cost</th>
+                    </tr></thead>
+                    <tbody>
+                      {productionSummaryQ.data.data.data.map((r) => (
+                        <tr key={r.id} className="border-b border-line/60 last:border-0">
+                          <td className="px-4 py-2.5 font-medium">{r.order_no}</td>
+                          <td className="px-4 py-2.5 text-muted">{r.output_product}</td>
+                          <td className="px-4 py-2.5 text-muted">{r.supervisor || '—'}</td>
+                          <td className="tnum px-4 py-2.5 text-right">{r.output_quantity}</td>
+                          <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.total_input_cost)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                )}
+              </Card>
+            </>
+          )
+      )}
+
+      {tab === 'production_by_product' && (
+        <Card className="overflow-hidden">
+          {productionByProductQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (productionByProductQ.data?.rows?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No production by product in this range.</div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Runs</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Output qty</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Total cost</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Avg unit</th>
+                  </tr></thead>
+                  <tbody>
+                    {productionByProductQ.data.rows.map((r) => (
+                      <tr key={r.product_id} className="border-b border-line/60 last:border-0">
+                        <td className="px-4 py-2.5 font-medium">{r.product_name}<div className="text-xs text-muted">{r.sku}</div></td>
+                        <td className="tnum px-4 py-2.5 text-right">{r.run_count}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{r.output_qty}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.total_cost)}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.avg_unit_cost)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </Card>
+      )}
+
+      {tab === 'production_by_supervisor' && (
+        <Card className="overflow-hidden">
+          {productionBySupervisorQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (productionBySupervisorQ.data?.rows?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No production by supervisor in this range.</div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5 font-semibold">Supervisor</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Runs</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Output qty</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Total cost</th>
+                  </tr></thead>
+                  <tbody>
+                    {productionBySupervisorQ.data.rows.map((r, i) => (
+                      <tr key={r.supervisor_id ?? `u-${i}`} className="border-b border-line/60 last:border-0">
+                        <td className="px-4 py-2.5 font-medium">{r.supervisor_name}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{r.run_count}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{r.output_qty}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.total_cost)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </Card>
+      )}
+
+      {tab === 'production_batches' && (
+        <Card className="overflow-hidden">
+          {productionBatchesQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (productionBatchesQ.data?.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No production batches in this range.</div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5 font-semibold">Batch / barcode</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Order</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Supervisor</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Qty</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Unit cost</th>
+                  </tr></thead>
+                  <tbody>
+                    {productionBatchesQ.data.data.map((r) => (
+                      <tr key={r.id} className="border-b border-line/60 last:border-0">
+                        <td className="px-4 py-2.5"><div className="font-medium">{r.batch_no}</div><div className="text-xs text-muted">{r.barcode}</div></td>
+                        <td className="px-4 py-2.5 text-muted">{r.product_name}</td>
+                        <td className="px-4 py-2.5 text-muted">{r.order_no}</td>
+                        <td className="px-4 py-2.5 text-muted">{r.supervisor || '—'}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{r.qty}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.cost_price)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </Card>
+      )}
+
+      {tab === 'transfer_summary' && (
+        transferSummaryQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+          : !transferSummaryQ.data?.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load transfer summary.</Card>
+          : (
+            <>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                <StatCard label="Total" value={transferSummaryQ.data.data.summary?.total ?? 0} />
+                <StatCard label="Received" value={transferSummaryQ.data.data.summary?.received ?? 0} />
+                <StatCard label="In transit" value={transferSummaryQ.data.data.summary?.in_transit ?? 0} />
+                <StatCard label="Requested" value={transferSummaryQ.data.data.summary?.requested ?? 0} />
+                <StatCard label="Inter-company" value={transferSummaryQ.data.data.summary?.inter_company ?? 0} />
+                <StatCard label="Location moves" value={transferSummaryQ.data.data.summary?.intra_company ?? 0} />
+              </div>
+              <Card className="mt-4 overflow-hidden">
+                {(transferSummaryQ.data.data.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No transfers in this range.</div>
+                : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-line text-left text-faint">
+                      <th className="microlabel px-4 py-2.5 font-semibold">No.</th>
+                      <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
+                      <th className="microlabel px-4 py-2.5 font-semibold">Route</th>
+                      <th className="microlabel px-4 py-2.5 font-semibold">Type</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Lines</th>
+                      <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
+                    </tr></thead>
+                    <tbody>
+                      {transferSummaryQ.data.data.data.map((r) => (
+                        <tr key={r.id} className="border-b border-line/60 last:border-0">
+                          <td className="px-4 py-2.5 font-medium">{r.transfer_no}</td>
+                          <td className="px-4 py-2.5 text-muted">{formatDate(r.transfer_date)}</td>
+                          <td className="px-4 py-2.5 text-muted">{r.route}</td>
+                          <td className="px-4 py-2.5"><Badge tone="info">{r.transfer_type === 'intra_company' ? 'Location' : 'Company'}</Badge></td>
+                          <td className="tnum px-4 py-2.5 text-right">{r.items_count}</td>
+                          <td className="px-4 py-2.5"><Badge tone={statusTone[r.status] ?? 'default'}>{r.status}</Badge></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                )}
+              </Card>
+            </>
+          )
+      )}
+
+      {tab === 'transfer_in_transit' && (
+        <Card className="overflow-hidden">
+          {transferInTransitQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (transferInTransitQ.data?.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No transfers currently in transit.</div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5 font-semibold">No.</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Route</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Items</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Qty</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Days</th>
+                  </tr></thead>
+                  <tbody>
+                    {transferInTransitQ.data.data.map((r) => (
+                      <tr key={r.id} className="border-b border-line/60 last:border-0">
+                        <td className="px-4 py-2.5 font-medium">{r.transfer_no}</td>
+                        <td className="px-4 py-2.5 text-muted">{r.route}</td>
+                        <td className="px-4 py-2.5 text-muted">{r.items_summary}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{r.qty}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{r.days_in_transit}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </Card>
+      )}
+
+      {isAccountingTab && (
+        <AccountingReportPanels
+          tab={tab}
+          cashQ={cashBookQ}
+          bankQ={bankBookQ}
+          debtorQ={debtorLedgerQ}
+          creditorQ={creditorLedgerQ}
+          ageingRecQ={ageingRecQ}
+          ageingPayQ={ageingPayQ}
+        />
       )}
     </div>
   );

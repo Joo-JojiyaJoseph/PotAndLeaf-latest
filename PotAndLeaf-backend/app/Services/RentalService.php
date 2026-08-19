@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Rental;
 use App\Models\RentalInvoice;
+use App\Jobs\SendRentalInvoiceWhatsApp;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,11 @@ use Illuminate\Validation\ValidationException;
 
 class RentalService
 {
-    public function __construct(private readonly InventoryService $inventory) {}
+    public function __construct(
+        private readonly InventoryService $inventory,
+        private readonly SettingsService $settings,
+        private readonly ActivityLogService $activity,
+    ) {}
 
     public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
@@ -41,7 +46,7 @@ class RentalService
             ->whereIn('id', collect($data['items'])->pluck('product_id')->filter())
             ->pluck('name', 'id');
 
-        return DB::transaction(function () use ($companyId, $data, $names) {
+        return DB::transaction(function () use ($companyId, $data, $names, $userId) {
             $rental = Rental::create([
                 'company_id'        => $companyId,
                 'customer_id'       => $data['customer_id'],
@@ -50,6 +55,7 @@ class RentalService
                 'start_date'        => $data['start_date'],
                 'expected_end_date' => $data['expected_end_date'] ?? null,
                 'billing_cycle'     => $data['billing_cycle'] ?? 'monthly',
+                'auto_bill'         => array_key_exists('auto_bill', $data) ? (bool) $data['auto_bill'] : true,
                 'deposit'           => $data['deposit'] ?? 0,
                 'status'            => 'draft',
                 'notes'             => $data['notes'] ?? null,
@@ -62,6 +68,8 @@ class RentalService
                 'rate_per_cycle' => $i['rate_per_cycle'] ?? 0,
                 'returned_qty'   => 0,
             ])->all());
+
+            $this->logEvent($companyId, $userId, 'create', $rental, 'Rental draft created');
 
             return $rental->load(['items', 'customer:id,name,type']);
         });
@@ -109,7 +117,14 @@ class RentalService
                 $product->save();
             }
 
-            $rental->update(['status' => 'active', 'activated_at' => now(), 'deposit' => $rental->deposit]);
+            $rental->update([
+                'status'       => 'active',
+                'activated_at' => now(),
+                'deposit'      => $rental->deposit,
+                'next_bill_at' => $this->computeNextBillAt($rental, Carbon::parse($rental->start_date)),
+            ]);
+
+            $this->logEvent($rental->company_id, $userId, 'activate', $rental->fresh(), 'Rental activated — stock issued');
 
             return $rental->refresh()->load(['items', 'customer:id,name,type']);
         });
@@ -215,6 +230,12 @@ class RentalService
                 $this->adjustCustomerOutstanding($rental->company_id, $rental->customer_id, $balanceDue);
             }
 
+            $this->logEvent($rental->company_id, $userId, 'settle', $rental->fresh(), 'Rental settled', [
+                'rental_charge' => $rentalCharge,
+                'refund_amount' => $refund,
+                'balance_due'   => $balanceDue,
+            ]);
+
             return $rental->refresh()->load(['items', 'invoices', 'customer:id,name,type']);
         });
     }
@@ -284,13 +305,15 @@ class RentalService
             }
             $rental->update(['status' => 'cancelled']);
 
+            $this->logEvent($rental->company_id, $userId, 'cancel', $rental->fresh(), 'Rental cancelled');
+
             return $rental->refresh();
         });
     }
 
     // ---- Billing ----
 
-    public function generateInvoice(int|string $companyId, Rental $rental, array $data, ?int $userId = null): RentalInvoice
+    public function generateInvoice(int|string $companyId, Rental $rental, array $data, ?int $userId = null, bool $queueWhatsApp = false): RentalInvoice
     {
         $from = Carbon::parse($data['period_from']);
         $to = Carbon::parse($data['period_to']);
@@ -298,8 +321,12 @@ class RentalService
             throw ValidationException::withMessages(['period_to' => 'End of period must be on or after the start.']);
         }
 
+        if ($this->invoicePeriodExists($rental, $from, $to)) {
+            throw ValidationException::withMessages(['period_from' => 'An invoice already exists for this billing period.']);
+        }
+
         $days = $from->diffInDays($to) + 1;
-        $cycleDays = ['daily' => 1, 'weekly' => 7, 'monthly' => 30][$rental->billing_cycle] ?? 30;
+        $cycleDays = $this->cycleDays($rental->billing_cycle);
         $cycles = max(1, (int) ceil($days / $cycleDays));
 
         $rental->loadMissing('items');
@@ -308,7 +335,9 @@ class RentalService
             return $activeQty * (float) $i->rate_per_cycle * $cycles;
         }), 2);
 
-        return DB::transaction(function () use ($companyId, $rental, $from, $to, $cycles, $amount) {
+        $dueDays = max(0, $this->settings->getInt($companyId, 'rental_payment_due_days'));
+
+        return DB::transaction(function () use ($companyId, $rental, $from, $to, $cycles, $amount, $dueDays, $queueWhatsApp, $userId) {
             $invoice = RentalInvoice::create([
                 'company_id'  => $companyId,
                 'rental_id'   => $rental->id,
@@ -317,13 +346,121 @@ class RentalService
                 'period_to'   => $to->toDateString(),
                 'cycles'      => $cycles,
                 'amount'      => $amount,
+                'due_date'    => $to->copy()->addDays($dueDays)->toDateString(),
                 'status'      => 'unpaid',
             ]);
 
             $this->adjustCustomerOutstanding($rental->company_id, $rental->customer_id, $amount);
+            $this->syncBillingSchedule($rental, $to);
+
+            if ($queueWhatsApp && $this->settings->get($companyId, 'rental_whatsapp_on_bill') === '1') {
+                SendRentalInvoiceWhatsApp::dispatch($invoice->id);
+            }
+
+            $this->logEvent($companyId, $userId, 'invoice', $rental, "Invoice {$invoice->invoice_no} generated", [
+                'invoice_id' => $invoice->id,
+                'amount'     => $amount,
+                'auto'       => $queueWhatsApp,
+            ]);
 
             return $invoice;
         });
+    }
+
+    /** @return array{billed: int, skipped: int, errors: list<string>} */
+    public function billDueRentals(int|string|null $companyId = null): array
+    {
+        $result = ['billed' => 0, 'skipped' => 0, 'errors' => []];
+
+        $query = Rental::query()->where('status', 'active')->where('auto_bill', true);
+        if ($companyId !== null) {
+            $query->forCompany($companyId);
+        }
+
+        foreach ($query->with('items')->get() as $rental) {
+            if ($this->settings->get($rental->company_id, 'rental_auto_bill') !== '1') {
+                $result['skipped']++;
+
+                continue;
+            }
+
+            $period = $this->computeBillingPeriod($rental);
+            if (! $period) {
+                $result['skipped']++;
+
+                continue;
+            }
+
+            try {
+                $this->generateInvoice($rental->company_id, $rental, $period, null, queueWhatsApp: true);
+                $result['billed']++;
+            } catch (ValidationException $e) {
+                $result['errors'][] = "{$rental->rental_no}: ".collect($e->errors())->flatten()->first();
+                $result['skipped']++;
+            }
+        }
+
+        return $result;
+    }
+
+    public function cycleDays(string $billingCycle): int
+    {
+        return ['daily' => 1, 'weekly' => 7, 'monthly' => 30][$billingCycle] ?? 30;
+    }
+
+    /** @return array{period_from: string, period_to: string}|null */
+    public function computeBillingPeriod(Rental $rental): ?array
+    {
+        if (! $rental->isActive()) {
+            return null;
+        }
+
+        $cycleDays = $this->cycleDays($rental->billing_cycle);
+        $periodFrom = $rental->last_billed_to
+            ? Carbon::parse($rental->last_billed_to)->addDay()
+            : Carbon::parse($rental->start_date);
+
+        if ($periodFrom->gt(Carbon::today())) {
+            return null;
+        }
+
+        $periodTo = $periodFrom->copy()->addDays($cycleDays - 1);
+        if ($periodTo->gt(Carbon::today())) {
+            return null;
+        }
+
+        if ($this->invoicePeriodExists($rental, $periodFrom, $periodTo)) {
+            return null;
+        }
+
+        return [
+            'period_from' => $periodFrom->toDateString(),
+            'period_to'   => $periodTo->toDateString(),
+        ];
+    }
+
+    private function computeNextBillAt(Rental $rental, Carbon $periodFrom): string
+    {
+        $cycleDays = $this->cycleDays($rental->billing_cycle);
+
+        return $periodFrom->copy()->addDays($cycleDays - 1)->toDateString();
+    }
+
+    private function syncBillingSchedule(Rental $rental, Carbon $periodTo): void
+    {
+        $nextBillAt = $this->computeNextBillAt($rental, $periodTo->copy()->addDay());
+        $rental->update([
+            'last_billed_to' => $periodTo->toDateString(),
+            'next_bill_at'   => $nextBillAt,
+        ]);
+    }
+
+    private function invoicePeriodExists(Rental $rental, Carbon $from, Carbon $to): bool
+    {
+        return $rental->invoices()
+            ->whereDate('period_from', '<=', $to)
+            ->whereDate('period_to', '>=', $from)
+            ->exists();
     }
 
     public function markInvoicePaid(RentalInvoice $invoice): RentalInvoice
@@ -362,6 +499,20 @@ class RentalService
             $customer->outstanding = (float) $customer->outstanding + $delta;
             $customer->save();
         }
+    }
+
+    private function logEvent(int|string $companyId, ?int $userId, string $action, Rental $rental, string $description, ?array $meta = null): void
+    {
+        $this->activity->log(
+            $companyId,
+            $userId,
+            $action,
+            'rental',
+            'rental',
+            $rental->id,
+            $description,
+            array_merge(['rental_no' => $rental->rental_no], $meta ?? []),
+        );
     }
 
     private function nextRentalNo(int|string $companyId): string

@@ -38,6 +38,21 @@ class InventoryController extends Controller
         return $this->ok(ProductResource::collection($levels));
     }
 
+    public function crossBranchStock(Request $request): JsonResponse
+    {
+        $company = $request->attributes->get('company');
+        abort_unless($request->user()->hasPermission('inventory.view', $company->id), 403);
+
+        $data = $this->inventory->crossBranchStock(
+            $request->user(),
+            $company->id,
+            $request->query('sku'),
+            $request->query('product_id'),
+        );
+
+        return $this->ok($data);
+    }
+
     public function alerts(Request $request): JsonResponse
     {
         $companyId = $this->allowList($request);

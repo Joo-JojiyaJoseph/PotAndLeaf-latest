@@ -17,7 +17,7 @@ class StoreProductionOrderRequest extends FormRequest
         $companyId = $this->route('current_company')->id;
 
         return [
-            'bom_id'          => ['required', 'uuid', Rule::exists('boms', 'id')->where('company_id', $companyId)],
+            'bom_id'          => ['required', 'uuid', Rule::exists('boms', 'id')->where('company_id', $companyId)->where('is_active', true)],
             'output_quantity' => ['required', 'numeric', 'gt:0'],
             'location_id'     => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)],
             'supervisor_id'   => ['nullable', 'integer', Rule::exists('users', 'id')],

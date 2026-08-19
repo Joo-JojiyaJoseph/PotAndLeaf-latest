@@ -104,6 +104,9 @@ export default function RentalDetail() {
         <InfoGrid cols={4}>
           <InfoItem label="Customer" value={r.customer_name} />
           <InfoItem label="Billing cycle" value={r.billing_cycle} />
+          <InfoItem label="Auto billing" value={r.auto_bill ? 'On' : 'Off'} />
+          <InfoItem label="Next bill date" value={r.next_bill_at ? formatDate(r.next_bill_at) : null} />
+          <InfoItem label="Last billed to" value={r.last_billed_to ? formatDate(r.last_billed_to) : null} />
           <InfoItem label="Deposit" value={formatCurrency(r.deposit)} mono />
           <InfoItem label="Expected end" value={r.expected_end_date ? formatDate(r.expected_end_date) : null} />
           <InfoItem label="Activated" value={r.activated_at ? formatDate(r.activated_at) : null} />
@@ -162,6 +165,7 @@ export default function RentalDetail() {
                 <th className="microlabel px-3 py-2 font-semibold">Period</th>
                 <th className="microlabel px-3 py-2 text-right font-semibold">Cycles</th>
                 <th className="microlabel px-3 py-2 text-right font-semibold">Amount</th>
+                <th className="microlabel px-3 py-2 font-semibold">Due</th>
                 <th className="microlabel px-3 py-2 font-semibold">Status</th>
                 <th className="microlabel py-2 pl-3" />
               </tr></thead>
@@ -172,6 +176,7 @@ export default function RentalDetail() {
                     <td className="px-3 py-2 text-muted">{formatDate(inv.period_from)} – {formatDate(inv.period_to)}</td>
                     <td className="tnum px-3 py-2 text-right text-muted">{inv.cycles}</td>
                     <td className="tnum px-3 py-2 text-right font-medium">{formatCurrency(inv.amount)}</td>
+                    <td className="px-3 py-2 text-muted">{inv.due_date ? formatDate(inv.due_date) : '—'}{inv.sent_at ? ' · sent' : ''}</td>
                     <td className="px-3 py-2"><Badge tone={inv.status === 'paid' ? 'active' : 'warning'}>{inv.status}</Badge></td>
                     <td className="py-2 pl-3">
                       <div className="flex items-center justify-end gap-1.5">

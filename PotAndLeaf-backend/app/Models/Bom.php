@@ -28,6 +28,20 @@ class Bom extends Model
         return $this->hasMany(BomItem::class);
     }
 
+    public function stages(): HasMany
+    {
+        return $this->hasMany(BomStage::class)->orderBy('sort_order');
+    }
+
+    public function isMultiStage(): bool
+    {
+        if ($this->relationLoaded('stages')) {
+            return $this->stages->isNotEmpty();
+        }
+
+        return $this->stages()->exists();
+    }
+
     public function scopeForCompany($query, int|string $companyId)
     {
         return $query->where('company_id', $companyId);

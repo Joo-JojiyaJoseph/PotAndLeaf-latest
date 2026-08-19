@@ -48,15 +48,14 @@ class ResolveApiCompany
             if ($param === 'all' || $param === null || $param === '') {
                 $listCompanyId = null;
             } elseif (filled($param)) {
-                $target = Company::find((int) $param);
+                $target = Company::query()->whereKey($param)->first();
                 if ($target) {
                     $listCompanyId = $target->id;
                 }
             }
         } elseif ($request->filled('company_id') && ! $request->user()->is_super_admin) {
             // Non-super-admins cannot filter across companies via query param.
-            $requested = (int) $request->query('company_id');
-            if ($requested !== (int) $company->id) {
+            if ((string) $request->query('company_id') !== (string) $company->id) {
                 return response()->json(['message' => 'You do not have access to this company.'], 403);
             }
         }

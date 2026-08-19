@@ -8,6 +8,7 @@ use App\Models\Location;
 use App\Models\Permission;
 use App\Models\Product;
 use App\Models\Role;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Support\Rbac\PermissionRegistry;
 use Illuminate\Support\Str;
@@ -56,6 +57,38 @@ trait CreatesErpFixtures
         $this->user->roles()->attach($role->id, ['company_id' => $this->company->id]);
 
         return $this->user;
+    }
+
+    /** Permissions for cross-module QA matrix scenarios (Phases A–D). */
+    public static function qaMatrixPermissions(): array
+    {
+        return [
+            'sales.view', 'sales.create', 'sales.confirm', 'sales.delete',
+            'sales.cancel_request', 'sales.cancel_approve', 'sales.whatsapp',
+            'backorder.view', 'backorder.create', 'backorder.fulfill', 'backorder.delete',
+            'advance.view', 'advance.create', 'advance.fulfill', 'advance.delete',
+            'po.view', 'po.create', 'po.send', 'po.convert', 'po.delete',
+            'reports.view', 'receipts.view', 'receipts.create',
+            'payments.view', 'payments.create',
+            'purchases.create', 'purchases.confirm', 'inventory.view',
+        ];
+    }
+
+    public function createCompanyWithQaUser(): User
+    {
+        return $this->createCompanyWithUser(self::qaMatrixPermissions());
+    }
+
+    public function createSupplier(array $overrides = []): Supplier
+    {
+        return Supplier::create(array_merge([
+            'company_id' => $this->company->id,
+            'supplier_code' => 'SUP-'.Str::upper(Str::random(4)),
+            'name' => 'Test Supplier',
+            'status' => 'active',
+            'outstanding' => 0,
+            'opening_balance' => 0,
+        ], $overrides));
     }
 
     public function createCustomer(array $overrides = []): Customer

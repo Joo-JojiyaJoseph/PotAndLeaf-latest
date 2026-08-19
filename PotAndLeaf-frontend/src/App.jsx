@@ -46,10 +46,14 @@ import BackupDashboardPage from './pages/activity/BackupDashboardPage';
 import BarcodeLabelsPage from './pages/products/BarcodeLabelsPage';
 import PurchaseOrdersList from './pages/purchaseOrders/PurchaseOrdersList';
 import PurchaseOrderForm from './pages/purchaseOrders/PurchaseOrderForm';
+import PurchaseOrderReorderPage from './pages/purchaseOrders/PurchaseOrderReorderPage';
 import PurchaseOrderDetail from './pages/purchaseOrders/PurchaseOrderDetail';
 import AdvanceOrdersList from './pages/advanceOrders/AdvanceOrdersList';
 import AdvanceOrderForm from './pages/advanceOrders/AdvanceOrderForm';
 import AdvanceOrderDetail from './pages/advanceOrders/AdvanceOrderDetail';
+import BackordersList from './pages/backorders/BackordersList';
+import BackorderForm from './pages/backorders/BackorderForm';
+import BackorderDetail from './pages/backorders/BackorderDetail';
 import PurchasesList from './pages/purchases/PurchasesList';
 import PurchaseForm from './pages/purchases/PurchaseForm';
 import PurchaseDetail from './pages/purchases/PurchaseDetail';
@@ -124,11 +128,15 @@ export default function App() {
           <Route path="activity-monitoring" element={<ActivityMonitoringPage />} />
           <Route path="backups" element={<BackupDashboardPage />} />
           <Route path="purchase-orders" element={<PurchaseOrdersList />} />
+          <Route path="purchase-orders/reorder" element={<PurchaseOrderReorderPage />} />
           <Route path="purchase-orders/new" element={<PurchaseOrderForm />} />
           <Route path="purchase-orders/:id" element={<PurchaseOrderDetail />} />
           <Route path="advance-orders" element={<AdvanceOrdersList />} />
           <Route path="advance-orders/new" element={<AdvanceOrderForm />} />
           <Route path="advance-orders/:id" element={<AdvanceOrderDetail />} />
+          <Route path="backorders" element={<BackordersList />} />
+          <Route path="backorders/new" element={<BackorderForm />} />
+          <Route path="backorders/:id" element={<BackorderDetail />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="soon/:module" element={<ComingSoon />} />
         </Route>

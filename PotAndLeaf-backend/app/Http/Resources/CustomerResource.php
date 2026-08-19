@@ -36,6 +36,7 @@ class CustomerResource extends JsonResource
             'credit_limit'    => (float) $this->credit_limit,
             'opening_balance' => (float) $this->opening_balance,
             'outstanding'     => (float) $this->outstanding,
+            'advance_balance' => (float) $this->advance_balance,
             'loyalty_points'  => (int) $this->loyalty_points,
             'notes'           => $this->notes,
             'status'          => $this->status?->value,

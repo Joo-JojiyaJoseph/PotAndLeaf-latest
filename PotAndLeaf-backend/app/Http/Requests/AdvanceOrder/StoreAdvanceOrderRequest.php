@@ -21,6 +21,7 @@ class StoreAdvanceOrderRequest extends FormRequest
             'order_date'     => ['required', 'date'],
             'expected_date'  => ['nullable', 'date', 'after_or_equal:order_date'],
             'advance_amount' => ['nullable', 'numeric', 'min:0'],
+            'advance_mode'   => ['nullable', 'in:cash,bank,upi,cheque,card'],
             'notes'          => ['nullable', 'string', 'max:1000'],
             'items'                => ['required', 'array', 'min:1'],
             'items.*.product_id'   => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],

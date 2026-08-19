@@ -16,9 +16,11 @@ class Sale extends Model
 
     protected $fillable = [
         'company_id', 'customer_id', 'location_id', 'customer_name', 'sale_no', 'sale_date',
-        'is_interstate', 'payment_mode', 'subtotal', 'tax_total', 'round_off',
-        'grand_total', 'amount_paid', 'loyalty_points_redeemed', 'loyalty_discount',
-        'status', 'notes', 'confirmed_at',
+            'is_interstate', 'payment_mode', 'bill_kind', 'converted_from_sale_id', 'subtotal', 'tax_total', 'round_off',
+            'grand_total', 'amount_paid', 'loyalty_points_redeemed', 'loyalty_discount',
+            'status', 'notes', 'confirmed_at',
+            'cancel_requested_at', 'cancel_requested_by', 'cancel_reason',
+            'cancel_reviewed_at', 'cancel_reviewed_by', 'cancel_rejection_reason',
     ];
 
     protected function casts(): array
@@ -34,7 +36,39 @@ class Sale extends Model
             'loyalty_points_redeemed' => 'integer',
             'loyalty_discount'        => 'decimal:2',
             'confirmed_at'            => 'datetime',
+            'cancel_requested_at'     => 'datetime',
+            'cancel_reviewed_at'      => 'datetime',
         ];
+    }
+
+    public function cancelRequestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancel_requested_by');
+    }
+
+    public function cancelReviewedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancel_reviewed_by');
+    }
+
+    public function convertedFrom(): BelongsTo
+    {
+        return $this->belongsTo(Sale::class, 'converted_from_sale_id');
+    }
+
+    public function isProforma(): bool
+    {
+        return $this->status === 'proforma';
+    }
+
+    public function isComplimentary(): bool
+    {
+        return $this->bill_kind === 'complimentary';
+    }
+
+    public function hasCancelRequest(): bool
+    {
+        return $this->cancel_requested_at !== null && $this->status === 'confirmed';
     }
 
     public function customer(): BelongsTo

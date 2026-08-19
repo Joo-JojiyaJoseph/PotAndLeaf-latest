@@ -5,7 +5,7 @@ import { PlusIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { recordDetailPath } from '../../lib/recordCompany';
+import { recordDetailPath, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatDate } from '../../lib/format';
 
@@ -13,10 +13,10 @@ const STATUS_TABS = [
   { value: '', label: 'All' }, { value: 'draft', label: 'Draft' },
   { value: 'active', label: 'Active' }, { value: 'returned', label: 'Returned' }, { value: 'cancelled', label: 'Cancelled' },
 ];
-const tone = { draft: 'inactive', active: 'active', returned: 'approved', cancelled: 'blocked' };
+const tone = { draft: 'inactive', active: 'active', returned: 'approved', cancelled: 'blocked', overdue: 'blocked' };
 
 export default function RentalsList() {
-  const { activeCompany, can, companyId } = useAuth();
+  const { activeCompany, can, companyId, isSuperAdmin } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
@@ -29,6 +29,10 @@ export default function RentalsList() {
     placeholderData: keepPreviousData,
   });
   const rows = data?.data ?? [];
+  const newRentalPath = (() => {
+    const createCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId });
+    return createCompanyId && isSuperAdmin ? `/rentals/new?company_id=${createCompanyId}` : '/rentals/new';
+  })();
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -39,7 +43,7 @@ export default function RentalsList() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
-          {can('rental.create') && <Link to="/rentals/new"><Button size="sm"><PlusIcon className="size-4" /> New rental</Button></Link>}
+          {can('rental.create') && <Link to={newRentalPath}><Button size="sm"><PlusIcon className="size-4" /> New rental</Button></Link>}
         </div>
       </div>
 
@@ -75,7 +79,7 @@ export default function RentalsList() {
                       <td className="px-4 py-2.5 text-muted">{formatDate(r.start_date)}</td>
                       <td className="px-4 py-2.5"><Badge tone="info">{r.billing_cycle}</Badge></td>
                       <td className="tnum px-4 py-2.5 text-right text-muted">{r.items_count ?? '—'}</td>
-                      <td className="px-4 py-2.5"><Badge tone={tone[r.status] ?? 'default'}>{r.status}</Badge></td>
+                      <td className="px-4 py-2.5"><Badge tone={tone[r.display_status ?? r.status] ?? 'default'}>{r.display_status ?? r.status}</Badge></td>
                     </tr>
                   ))}
                 </tbody>

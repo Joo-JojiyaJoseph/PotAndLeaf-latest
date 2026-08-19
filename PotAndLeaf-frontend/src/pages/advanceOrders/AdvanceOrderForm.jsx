@@ -15,7 +15,7 @@ const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 t
 export default function AdvanceOrderForm() {
   const navigate = useNavigate();
   const { activeCompany } = useAuth();
-  const [header, setHeader] = useState({ customer_id: '', order_date: today(), expected_date: '', advance_amount: '', notes: '' });
+  const [header, setHeader] = useState({ customer_id: '', order_date: today(), expected_date: '', advance_amount: '', advance_mode: 'cash', notes: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -46,7 +46,9 @@ export default function AdvanceOrderForm() {
     try {
       const res = await api.post('/advance-orders', {
         customer_id: header.customer_id, order_date: header.order_date,
-        expected_date: header.expected_date || null, advance_amount: Number(header.advance_amount) || 0, notes: header.notes || null,
+        expected_date: header.expected_date || null, advance_amount: Number(header.advance_amount) || 0,
+        advance_mode: header.advance_mode,
+        notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, qty: Number(l.qty) || 0, rate: Number(l.rate) || 0, gst_rate: Number(l.gst_rate) || 0 })),
       });
       navigate(`/advance-orders/${res.data.data.id}`);
@@ -121,6 +123,11 @@ export default function AdvanceOrderForm() {
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Field label="Advance paid" error={err('advance_amount')}>
           <Input type="number" step="0.01" value={header.advance_amount} onChange={(e) => setHeader((h) => ({ ...h, advance_amount: e.target.value }))} className="w-40" placeholder="0.00" />
+        </Field>
+        <Field label="Advance mode">
+          <select value={header.advance_mode} onChange={(e) => setHeader((h) => ({ ...h, advance_mode: e.target.value }))} className={selectCls + ' w-32'}>
+            <option value="cash">Cash</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="card">Card</option>
+          </select>
         </Field>
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
         <Button onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Book order'}</Button>

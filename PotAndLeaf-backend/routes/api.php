@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\MasterDataController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\PurchaseController;
 use App\Http\Controllers\Api\AdvanceOrderController;
+use App\Http\Controllers\Api\BackorderController;
 use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\PurchaseReturnController;
 use App\Http\Controllers\Api\SaleController;
@@ -113,6 +114,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('sales/{sale}/invoice.pdf', [InvoicePdfController::class, 'sale']);
         Route::get('sales/{sale}', [SaleController::class, 'show']);
         Route::post('sales/{sale}/confirm', [SaleController::class, 'confirm']);
+        Route::post('sales/{sale}/cancel-request', [SaleController::class, 'requestCancellation']);
+        Route::post('sales/{sale}/cancel-approve', [SaleController::class, 'approveCancellation']);
+        Route::post('sales/{sale}/cancel-reject', [SaleController::class, 'rejectCancellation']);
+        Route::post('sales/{sale}/convert-proforma', [SaleController::class, 'convertProforma']);
+        Route::post('sales/{sale}/whatsapp', [SaleController::class, 'sendWhatsapp']);
         Route::delete('sales/{sale}', [SaleController::class, 'destroy']);
 
         Route::get('sales-returns/source', [SalesReturnController::class, 'source']);
@@ -183,9 +189,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('advance-orders/{advanceOrder}/fulfill', [AdvanceOrderController::class, 'fulfill']);
         Route::delete('advance-orders/{advanceOrder}', [AdvanceOrderController::class, 'destroy']);
 
+        // Module 10b — Backorders (shortage when stock unavailable)
+        Route::get('backorders/form-data', [BackorderController::class, 'formData']);
+        Route::get('backorders', [BackorderController::class, 'index']);
+        Route::post('backorders', [BackorderController::class, 'store']);
+        Route::get('backorders/{backorder}', [BackorderController::class, 'show']);
+        Route::post('backorders/{backorder}/fulfill', [BackorderController::class, 'fulfill']);
+        Route::delete('backorders/{backorder}', [BackorderController::class, 'destroy']);
+        Route::post('sales/{sale}/backorder', [BackorderController::class, 'createFromSale']);
+
         // Module 09 — Purchase orders / reorder
         Route::get('purchase-orders/form-data', [PurchaseOrderController::class, 'formData']);
         Route::get('purchase-orders/suggestions', [PurchaseOrderController::class, 'suggestions']);
+        Route::get('purchase-orders/reorder-report', [PurchaseOrderController::class, 'reorderReport']);
+        Route::post('purchase-orders/batch-from-reorder', [PurchaseOrderController::class, 'batchFromReorder']);
         Route::get('purchase-orders', [PurchaseOrderController::class, 'index']);
         Route::post('purchase-orders', [PurchaseOrderController::class, 'store']);
         Route::get('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show']);
@@ -208,6 +225,26 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('reports/profit', [ReportController::class, 'profit']);
         Route::get('reports/profit/export', [ReportController::class, 'exportProfit']);
         Route::get('reports/price-levels', [ReportController::class, 'priceLevels']);
+        Route::get('reports/rental/delivery', [ReportController::class, 'rentalDelivery']);
+        Route::get('reports/rental/delivery/export', [ReportController::class, 'exportRentalDelivery']);
+        Route::get('reports/rental/income', [ReportController::class, 'rentalIncome']);
+        Route::get('reports/rental/income/export', [ReportController::class, 'exportRentalIncome']);
+        Route::get('reports/rental/current', [ReportController::class, 'rentalCurrent']);
+        Route::get('reports/rental/current/export', [ReportController::class, 'exportRentalCurrent']);
+        Route::get('reports/rental/customer/{customer}', [ReportController::class, 'rentalCustomer']);
+        Route::get('reports/rental/customer/{customer}/export', [ReportController::class, 'exportRentalCustomer']);
+        Route::get('reports/production/summary', [ReportController::class, 'productionSummary']);
+        Route::get('reports/production/by-product', [ReportController::class, 'productionByProduct']);
+        Route::get('reports/production/by-supervisor', [ReportController::class, 'productionBySupervisor']);
+        Route::get('reports/production/batches', [ReportController::class, 'productionBatches']);
+        Route::get('reports/transfers/summary', [ReportController::class, 'transferSummary']);
+        Route::get('reports/transfers/in-transit', [ReportController::class, 'transferInTransit']);
+        Route::get('reports/accounting/cash-book', [ReportController::class, 'cashBook']);
+        Route::get('reports/accounting/bank-book', [ReportController::class, 'bankBook']);
+        Route::get('reports/accounting/debtor-ledger', [ReportController::class, 'debtorLedger']);
+        Route::get('reports/accounting/creditor-ledger', [ReportController::class, 'creditorLedger']);
+        Route::get('reports/accounting/ageing-receivables', [ReportController::class, 'ageingReceivables']);
+        Route::get('reports/accounting/ageing-payables', [ReportController::class, 'ageingPayables']);
 
         Route::get('activity-monitoring/form-data', [ActivityMonitoringController::class, 'formData']);
         Route::get('activity-monitoring', [ActivityMonitoringController::class, 'index']);
@@ -219,6 +256,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Module 02 — Production / BOM
         Route::get('production/form-data', [ProductionController::class, 'formData']);
+        Route::get('production/estimate', [ProductionController::class, 'estimate']);
         Route::get('production/boms', [ProductionController::class, 'boms']);
         Route::post('production/boms', [ProductionController::class, 'storeBom']);
         Route::put('production/boms/{bom}', [ProductionController::class, 'updateBom']);
@@ -228,6 +266,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('production/orders/{productionOrder}', [ProductionController::class, 'showOrder']);
         Route::put('production/orders/{productionOrder}', [ProductionController::class, 'updateOrder']);
         Route::post('production/orders/{productionOrder}/complete', [ProductionController::class, 'complete']);
+        Route::post('production/orders/{productionOrder}/stages/{productionOrderStage}/start', [ProductionController::class, 'startStage']);
+        Route::post('production/orders/{productionOrder}/stages/{productionOrderStage}/complete', [ProductionController::class, 'completeStage']);
         Route::delete('production/orders/{productionOrder}', [ProductionController::class, 'destroyOrder']);
 
         // Module 05 — Locations & stock transfers
@@ -248,6 +288,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('inventory/by-location', [InventoryController::class, 'byLocation']);
 
         Route::get('inventory/stock', [InventoryController::class, 'stock']);
+        Route::get('inventory/stock/cross-branch', [InventoryController::class, 'crossBranchStock']);
         Route::get('inventory/alerts', [InventoryController::class, 'alerts']);
         Route::get('inventory/ledger/form-data', [InventoryController::class, 'ledgerFormData']);
         Route::get('inventory/ledger', [InventoryController::class, 'ledger']);

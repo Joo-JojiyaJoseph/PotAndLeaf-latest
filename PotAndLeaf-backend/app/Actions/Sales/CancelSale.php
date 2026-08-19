@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Services\InventoryService;
 use App\Services\LoyaltyService;
+use App\Services\ReceiptService;
 use Illuminate\Support\Facades\DB;
 
 class CancelSale
@@ -14,6 +15,7 @@ class CancelSale
     public function __construct(
         private readonly InventoryService $inventory,
         private readonly LoyaltyService $loyalty,
+        private readonly ReceiptService $receipts,
     ) {}
 
     public function handle(Sale $sale, ?int $userId = null): Sale
@@ -57,9 +59,17 @@ class CancelSale
                         $this->loyalty->reverseForSale($customer, $sale);
                     }
                 }
+
+                $this->receipts->voidForSale($sale);
             }
 
-            $sale->update(['status' => 'cancelled']);
+            $sale->update([
+                'status'                   => 'cancelled',
+                'cancel_requested_at'      => null,
+                'cancel_reason'            => null,
+                'cancel_requested_by'      => null,
+                'cancel_rejection_reason'  => null,
+            ]);
 
             return $sale->refresh();
         });

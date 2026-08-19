@@ -17,7 +17,7 @@ class Customer extends Model
     protected $fillable = [
         'company_id', 'customer_code', 'name', 'type', 'email', 'phone', 'whatsapp',
         'gst_number', 'address_line1', 'address_line2', 'city', 'state', 'pincode',
-        'credit_days', 'credit_limit', 'opening_balance', 'outstanding',
+        'credit_days', 'credit_limit', 'opening_balance', 'outstanding', 'advance_balance',
         'loyalty_points', 'notes', 'status', 'photo',];
 
     protected function casts(): array
@@ -28,6 +28,7 @@ class Customer extends Model
             'credit_limit'    => 'decimal:2',
             'opening_balance' => 'decimal:2',
             'outstanding'     => 'decimal:2',
+            'advance_balance' => 'decimal:2',
             'loyalty_points'  => 'integer',
         ];
     }

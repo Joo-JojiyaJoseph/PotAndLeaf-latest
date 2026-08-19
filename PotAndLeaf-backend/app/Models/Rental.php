@@ -16,7 +16,7 @@ class Rental extends Model
 
     protected $fillable = [
         'company_id', 'customer_id', 'location_id', 'rental_no', 'start_date',
-        'expected_end_date', 'billing_cycle', 'deposit',
+        'expected_end_date', 'billing_cycle', 'auto_bill', 'last_billed_to', 'next_bill_at', 'deposit',
         'rental_charge', 'damage_charge', 'missing_charge', 'refund_amount', 'balance_due',
         'return_date', 'settled_at', 'status', 'notes',
         'activated_at', 'returned_at',
@@ -27,6 +27,9 @@ class Rental extends Model
         return [
             'start_date'        => 'date',
             'expected_end_date' => 'date',
+            'last_billed_to'    => 'date',
+            'next_bill_at'      => 'date',
+            'auto_bill'         => 'boolean',
             'return_date'       => 'date',
             'deposit'           => 'decimal:2',
             'rental_charge'     => 'decimal:2',

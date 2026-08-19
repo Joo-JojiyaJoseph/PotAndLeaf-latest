@@ -11,7 +11,10 @@ use Illuminate\Validation\ValidationException;
 
 class AdvanceOrderService
 {
-    public function __construct(private readonly CreateSale $createSale) {}
+    public function __construct(
+        private readonly CreateSale $createSale,
+        private readonly ReceiptService $receipts,
+    ) {}
 
     public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
@@ -59,7 +62,7 @@ class AdvanceOrderService
             ];
         }
 
-        return DB::transaction(function () use ($companyId, $data, $rows, $subtotal, $taxTotal) {
+        return DB::transaction(function () use ($companyId, $data, $rows, $subtotal, $taxTotal, $userId) {
             $order = AdvanceOrder::create([
                 'company_id'     => $companyId,
                 'customer_id'    => $data['customer_id'],
@@ -75,6 +78,17 @@ class AdvanceOrderService
             ]);
             $order->items()->createMany($rows);
 
+            $advance = (float) ($data['advance_amount'] ?? 0);
+            if ($advance > 0) {
+                $this->receipts->recordAdvance($companyId, [
+                    'customer_id'  => $data['customer_id'],
+                    'receipt_date' => $data['order_date'],
+                    'amount'       => $advance,
+                    'mode'         => $data['advance_mode'] ?? 'cash',
+                    'notes'        => "Advance for {$order->order_no}",
+                ], $order->id, $userId);
+            }
+
             return $order->load(['items', 'customer:id,name,type']);
         });
     }
@@ -84,6 +98,8 @@ class AdvanceOrderService
         if (! $order->isBooked()) {
             throw ValidationException::withMessages(['status' => 'Only booked orders can be cancelled.']);
         }
+
+        $this->receipts->voidAdvanceOrder($order->id);
         $order->update(['status' => 'cancelled']);
 
         return $order->refresh();

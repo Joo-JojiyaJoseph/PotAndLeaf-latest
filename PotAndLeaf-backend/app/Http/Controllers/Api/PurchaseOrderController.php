@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\PurchaseOrder\BatchPurchaseOrderRequest;
 use App\Http\Requests\PurchaseOrder\StorePurchaseOrderRequest;
 use App\Http\Resources\PurchaseOrderResource;
 use App\Models\Product;
@@ -48,6 +49,25 @@ class PurchaseOrderController extends Controller
         $this->allow($request, 'po.view');
 
         return $this->ok(['suggestions' => $this->orders->reorderSuggestions($company->id)]);
+    }
+
+    public function reorderReport(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $this->allow($request, 'po.view');
+
+        return $this->ok($this->orders->reorderReport($company->id));
+    }
+
+    public function batchFromReorder(BatchPurchaseOrderRequest $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $orders = $this->orders->createBatchFromReorder($company->id, $request->validated(), $request->user()->id);
+
+        return $this->created(
+            PurchaseOrderResource::collection(collect($orders)),
+            count($orders).' purchase order(s) created from reorder report.',
+        );
     }
 
     public function store(StorePurchaseOrderRequest $request): JsonResponse

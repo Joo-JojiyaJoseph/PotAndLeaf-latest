@@ -9,6 +9,7 @@ use App\Services\ActivityLogService;
 use App\Services\InventoryService;
 use App\Services\LoyaltyService;
 use App\Services\PoolStockService;
+use App\Services\ReceiptService;
 use App\Services\SupervisorCommissionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -27,12 +28,26 @@ class ConfirmSale
         private readonly SupervisorCommissionService $supervisorCommission,
         private readonly PoolStockService $pool,
         private readonly ActivityLogService $activity,
+        private readonly ReceiptService $receipts,
     ) {}
 
     public function handle(Sale $sale, ?int $userId = null): Sale
     {
         if (! $sale->isDraft()) {
             throw ValidationException::withMessages(['status' => 'Only draft sales can be confirmed.']);
+        }
+
+        if ($sale->bill_kind === 'proforma') {
+            return DB::transaction(function () use ($sale, $userId) {
+                $sale->update(['status' => 'proforma', 'confirmed_at' => now()]);
+                $this->activity->log(
+                    $sale->company_id, $userId, 'confirm_proforma', 'sales', 'sale', $sale->id,
+                    "Proforma {$sale->sale_no} issued (no stock movement)",
+                    ['grand_total' => (float) $sale->grand_total],
+                );
+
+                return $sale->refresh()->load(['items', 'customer:id,name,type,loyalty_points', 'createdBy:id,name']);
+            });
         }
 
         return DB::transaction(function () use ($sale, $userId) {
@@ -106,7 +121,7 @@ class ConfirmSale
                 $customer = Customer::forCompany($sale->company_id)->lockForUpdate()->find($sale->customer_id);
                 if ($customer) {
                     $due = max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount);
-                    if ($sale->payment_mode === 'credit') {
+                    if ($sale->payment_mode === 'credit' && $due > 0) {
                         $customer->outstanding = (float) $customer->outstanding + ($due - (float) $sale->amount_paid);
                         $customer->save();
                     }
@@ -129,6 +144,8 @@ class ConfirmSale
             }
 
             $sale->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+
+            $this->receipts->recordFromConfirmedSale($sale->fresh(), $userId);
 
             $this->activity->log(
                 $sale->company_id, $userId, 'confirm', 'sales', 'sale', $sale->id,

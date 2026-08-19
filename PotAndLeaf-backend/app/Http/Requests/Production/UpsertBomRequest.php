@@ -27,6 +27,16 @@ class UpsertBomRequest extends FormRequest
     {
         $companyId = $this->route('current_company')->id;
         $prod = fn () => Rule::exists('products', 'id')->where('company_id', $companyId);
+        $itemRules = [
+            'items.*.component_product_id' => ['required', 'uuid', $prod()],
+            'items.*.qty'                  => ['required', 'numeric', 'gt:0'],
+            'items.*.wastage_pct'          => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ];
+        $stageItemRules = [
+            'stages.*.items.*.component_product_id' => ['required', 'uuid', $prod()],
+            'stages.*.items.*.qty'                  => ['required', 'numeric', 'gt:0'],
+            'stages.*.items.*.wastage_pct'          => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ];
 
         return [
             'product_id' => ['required_without:new_product', 'nullable', 'uuid', $prod()],
@@ -41,9 +51,13 @@ class UpsertBomRequest extends FormRequest
             'output_qty' => ['required', 'numeric', 'gt:0'],
             'is_active'  => ['boolean'],
             'notes'      => ['nullable', 'string', 'max:1000'],
-            'items'                        => ['required', 'array', 'min:1'],
-            'items.*.component_product_id' => ['required', 'uuid', $prod()],
-            'items.*.qty'                  => ['required', 'numeric', 'gt:0'],
+            'items'                        => ['required_without:stages', 'array', 'min:1'],
+            ...$itemRules,
+            'stages'                       => ['required_without:items', 'array', 'min:2'],
+            'stages.*.name'                => ['required', 'string', 'max:150'],
+            'stages.*.notes'               => ['nullable', 'string', 'max:1000'],
+            'stages.*.items'               => ['required', 'array', 'min:1'],
+            ...$stageItemRules,
         ];
     }
 
@@ -52,6 +66,7 @@ class UpsertBomRequest extends FormRequest
         return [
             'product_id.required_without' => 'Select an existing output product or fill in the new product details.',
             'new_product.required_without' => 'Select an existing output product or fill in the new product details.',
+            'stages.min' => 'Multi-stage recipes need at least two stages.',
         ];
     }
 }

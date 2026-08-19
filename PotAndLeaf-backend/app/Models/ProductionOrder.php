@@ -37,6 +37,11 @@ class ProductionOrder extends Model
         return $this->hasMany(ProductionOrderItem::class);
     }
 
+    public function stages(): HasMany
+    {
+        return $this->hasMany(ProductionOrderStage::class)->orderBy('sort_order');
+    }
+
     public function batches(): HasMany
     {
         return $this->hasMany(ProductBatch::class);
@@ -57,6 +62,11 @@ class ProductionOrder extends Model
         return $this->belongsTo(User::class, 'supervisor_id');
     }
 
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
+    }
+
     public function scopeForCompany($query, int|string $companyId)
     {
         return $query->where('company_id', $companyId);
@@ -65,6 +75,20 @@ class ProductionOrder extends Model
     public function isDraft(): bool
     {
         return $this->status === 'draft';
+    }
+
+    public function isInProgress(): bool
+    {
+        return $this->status === 'in_progress';
+    }
+
+    public function isMultiStage(): bool
+    {
+        if ($this->relationLoaded('stages')) {
+            return $this->stages->isNotEmpty();
+        }
+
+        return $this->stages()->exists();
     }
 
     public function isCompleted(): bool

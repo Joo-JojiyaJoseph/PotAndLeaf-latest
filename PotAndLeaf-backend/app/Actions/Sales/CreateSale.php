@@ -24,7 +24,12 @@ class CreateSale
     /** @param array<string,mixed> $data */
     public function handle(int|string $companyId, array $data, ?int $userId = null): Sale
     {
-        $this->assertDiscountCeiling($companyId, $data['items'] ?? []);
+        $billKind = $data['bill_kind'] ?? 'tax_invoice';
+        if (! in_array($billKind, ['tax_invoice', 'proforma', 'complimentary'], true)) {
+            throw ValidationException::withMessages(['bill_kind' => 'Invalid bill type.']);
+        }
+
+        $this->assertDiscountCeiling($companyId, $data['items'] ?? [], $billKind);
 
         $computed = $this->calculator->compute($data['items'], (bool) ($data['is_interstate'] ?? false));
 
@@ -58,7 +63,7 @@ class CreateSale
             ->get(['id', 'name', 'hsn_code'])
             ->keyBy('id');
 
-        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal) {
+        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind) {
             $t = $computed['totals'];
             $due = max(0, $billTotal - $loyaltyDiscount);
             $sale = $this->sales->create([
@@ -70,6 +75,7 @@ class CreateSale
                 'sale_date'               => $data['sale_date'],
                 'is_interstate'           => (bool) ($data['is_interstate'] ?? false),
                 'payment_mode'            => $data['payment_mode'] ?? 'cash',
+                'bill_kind'               => $billKind,
                 'subtotal'                => $t['subtotal'],
                 'tax_total'               => $t['tax_total'],
                 'round_off'               => $t['round_off'],
@@ -108,9 +114,12 @@ class CreateSale
         });
     }
 
-    /** Enforce HO-configured max line discount as % of (qty × rate). */
-    private function assertDiscountCeiling(int|string $companyId, array $items): void
+    /** Enforce HO-configured max line discount as % of (qty × rate). Skipped for complimentary bills. */
+    private function assertDiscountCeiling(int|string $companyId, array $items, string $billKind = 'tax_invoice'): void
     {
+        if ($billKind === 'complimentary') {
+            return;
+        }
         $ceiling = $this->settings->getFloat($companyId, 'discount_ceiling_percent');
         if ($ceiling <= 0) {
             return;

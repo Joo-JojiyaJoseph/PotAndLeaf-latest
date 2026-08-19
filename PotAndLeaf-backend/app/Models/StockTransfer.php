@@ -15,8 +15,10 @@ class StockTransfer extends Model
     use HasAuditColumns, HasFactory, HasUuids, SoftDeletes;
 
     protected $fillable = [
-        'company_id', 'to_company_id', 'from_location_id', 'to_location_id', 'transfer_no',
-        'transfer_date', 'status', 'approved_at', 'rejection_reason', 'notes', 'dispatched_at', 'received_at',
+        'company_id', 'to_company_id', 'transfer_type', 'from_location_id', 'to_location_id', 'transfer_no',
+        'transfer_date', 'status', 'approved_at', 'rejection_reason',
+        'redirected_from_company_id', 'redirected_at', 'redirected_by',
+        'notes', 'dispatched_at', 'received_at',
     ];
 
     protected function casts(): array
@@ -77,5 +79,15 @@ class StockTransfer extends Model
     public function isInTransit(): bool
     {
         return $this->status === 'in_transit';
+    }
+
+    public function isIntraCompany(): bool
+    {
+        return $this->transfer_type === 'intra_company';
+    }
+
+    public function destinationCompanyId(): int|string|null
+    {
+        return $this->isIntraCompany() ? $this->company_id : $this->to_company_id;
     }
 }

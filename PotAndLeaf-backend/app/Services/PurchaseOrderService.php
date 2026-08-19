@@ -33,6 +33,7 @@ class PurchaseOrderService
                     'sku'           => $p->sku,
                     'current_stock' => (float) $p->current_stock,
                     'reorder_level' => (float) $p->reorder_level,
+                    'shortfall'     => max(0.0, round((float) $p->reorder_level - (float) $p->current_stock, 3)),
                     'suggested_qty' => $suggested > 0 ? $suggested : (float) $p->reorder_level,
                     'rate'          => (float) $p->cost_price,
                     'gst_rate'      => (float) $p->gst_rate,
@@ -41,6 +42,83 @@ class PurchaseOrderService
                 ];
             })
             ->all();
+    }
+
+    /** Reorder report grouped by preferred supplier for batch PO generation. */
+    public function reorderReport(int|string $companyId): array
+    {
+        $lines = $this->reorderSuggestions($companyId);
+        $groups = collect($lines)->groupBy(fn ($row) => $row['supplier_id'] ?? 'unassigned');
+
+        $suppliers = [];
+        $unassigned = [];
+
+        foreach ($groups as $key => $items) {
+            $rows = $items->values()->all();
+            $subtotal = collect($rows)->sum(fn ($r) => (float) $r['suggested_qty'] * (float) $r['rate']);
+
+            if ($key === 'unassigned') {
+                $unassigned = $rows;
+                continue;
+            }
+
+            $suppliers[] = [
+                'supplier_id'   => $key,
+                'supplier_name' => $rows[0]['supplier_name'] ?? 'Supplier',
+                'items'         => $rows,
+                'item_count'    => count($rows),
+                'estimated_value' => round($subtotal, 2),
+            ];
+        }
+
+        usort($suppliers, fn ($a, $b) => strcmp($a['supplier_name'], $b['supplier_name']));
+
+        return [
+            'summary' => [
+                'product_count'   => count($lines),
+                'supplier_count'  => count($suppliers),
+                'unassigned_count'=> count($unassigned),
+                'estimated_value' => round(collect($lines)->sum(fn ($r) => (float) $r['suggested_qty'] * (float) $r['rate']), 2),
+            ],
+            'suppliers'  => $suppliers,
+            'unassigned' => $unassigned,
+        ];
+    }
+
+    /**
+     * Create one draft PO per supplier from a reviewed reorder batch.
+     *
+     * @param  array{po_date: string, expected_date?: string, notes?: string, orders: list<array{supplier_id: string, items: list}>}  $data
+     * @return list<PurchaseOrder>
+     */
+    public function createBatchFromReorder(int|string $companyId, array $data, ?int $userId = null): array
+    {
+        $created = [];
+
+        return DB::transaction(function () use ($companyId, $data, $userId, &$created) {
+            foreach ($data['orders'] as $order) {
+                $items = array_values(array_filter($order['items'] ?? [], fn ($i) => (float) ($i['qty'] ?? 0) > 0));
+                if ($items === []) {
+                    continue;
+                }
+
+                $created[] = $this->create($companyId, [
+                    'supplier_id'   => $order['supplier_id'],
+                    'po_date'       => $data['po_date'],
+                    'expected_date' => $data['expected_date'] ?? null,
+                    'notes'         => filled($data['notes'] ?? null)
+                        ? trim($data['notes']).' — Auto-generated from reorder report'
+                        : 'Auto-generated from reorder report',
+                    'items'         => $items,
+                ], $userId);
+            }
+
+            if ($created === []) {
+                throw ValidationException::withMessages(['orders' => 'No purchase orders to create — add at least one line with quantity.']);
+            }
+
+            return $created;
+        });
     }
 
     public function list(int|string|null $companyId, array $filters): LengthAwarePaginator

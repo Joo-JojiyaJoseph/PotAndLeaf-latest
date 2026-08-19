@@ -49,6 +49,12 @@ class PermissionRegistry
                 'advance.fulfill' => 'Fulfil advance orders',
                 'advance.delete'  => 'Cancel advance orders',
             ],
+            'Backorders' => [
+                'backorder.view'    => 'View backorders',
+                'backorder.create'  => 'Create backorders',
+                'backorder.fulfill' => 'Fulfill backorders',
+                'backorder.delete'  => 'Cancel backorders',
+            ],
             'Purchase Orders' => [
                 'po.view'    => 'View purchase orders',
                 'po.create'  => 'Create purchase orders',
@@ -112,10 +118,13 @@ class PermissionRegistry
                 'payments.delete' => 'Void supplier payments',
             ],
             'Sales'      => [
-                'sales.view'    => 'View sales',
-                'sales.create'  => 'Create sales',
-                'sales.confirm' => 'Confirm sales',
-                'sales.delete'  => 'Cancel sales',
+                'sales.view'           => 'View sales',
+                'sales.create'         => 'Create sales',
+                'sales.confirm'        => 'Confirm sales',
+                'sales.delete'         => 'Cancel draft sales',
+                'sales.cancel_request' => 'Request cancellation of confirmed sales',
+                'sales.cancel_approve' => 'Approve/reject sale cancellation requests (HO)',
+                'sales.whatsapp'       => 'Send sales invoices via WhatsApp',
             ],
             'Sales Returns' => [
                 'sales_returns.view'    => 'View sales returns',

@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Button, Card, Field, Input, Spinner } from '../../components/ui';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -13,16 +14,28 @@ const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 t
 
 export default function RentalForm() {
   const navigate = useNavigate();
-  const { activeCompany } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { activeCompany, isSuperAdmin, companies, companyId } = useAuth();
+  const presetCompanyId = searchParams.get('company_id') ?? '';
+  const [formCompanyId, setFormCompanyId] = useState(() => defaultCreateCompanyId({ filterCompanyId: presetCompanyId, companyId }));
   const [header, setHeader] = useState({ customer_id: '', start_date: today(), expected_end_date: '', billing_cycle: 'monthly', deposit: '', notes: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
+  const targetCompanyId = isSuperAdmin ? formCompanyId : companyId;
+  const companyCfg = targetCompanyId ? withCompany(targetCompanyId) : {};
+  const companyReady = !isSuperAdmin || Boolean(formCompanyId);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    setFormCompanyId(defaultCreateCompanyId({ filterCompanyId: presetCompanyId, companyId }));
+  }, [isSuperAdmin, presetCompanyId, companyId]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ['rental-form-data', activeCompany?.id],
-    queryFn: () => api.get('/rentals/form-data').then((r) => r.data.data),
-    enabled: Boolean(activeCompany),
+    queryKey: ['rental-form-data', targetCompanyId],
+    queryFn: () => api.get('/rentals/form-data', companyCfg).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && companyReady && Boolean(targetCompanyId),
   });
   const customers = data?.customers ?? [];
   const products = data?.products ?? [];
@@ -31,6 +44,11 @@ export default function RentalForm() {
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
   async function save() {
+    if (!companyReady || !targetCompanyId) {
+      setErrors({ company_id: ['Select a company first.'] });
+      return;
+    }
+
     setErrors({}); setSaving(true);
     try {
       const res = await api.post('/rentals', {
@@ -38,11 +56,31 @@ export default function RentalForm() {
         start_date: header.start_date, expected_end_date: header.expected_end_date || null,
         billing_cycle: header.billing_cycle, deposit: Number(header.deposit) || 0, notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, qty: Number(l.qty) || 0, rate_per_cycle: Number(l.rate_per_cycle) || 0 })),
-      });
-      navigate(`/rentals/${res.data.data.id}`);
+      }, companyCfg);
+      const cid = res.data.data.company_id ?? targetCompanyId;
+      navigate(cid ? `/rentals/${res.data.data.id}?company_id=${cid}` : `/rentals/${res.data.data.id}`);
     } catch (e) {
       setErrors(e.response?.data?.errors ?? { _: [e.response?.data?.message ?? 'Could not save rental.'] });
     } finally { setSaving(false); }
+  }
+
+  if (isSuperAdmin && !companyReady) {
+    return (
+      <div className="space-y-5 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h1 className="text-lg font-semibold">New rental</h1><p className="text-sm text-muted">Choose which company this rental belongs to.</p></div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/rentals')}><ArrowLeftIcon className="size-4" /> Back</Button>
+        </div>
+        <Card className="p-5">
+          <Field label="Company" required error={err('company_id')}>
+            <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+              <option value="">Select company first…</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+        </Card>
+      </div>
+    );
   }
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Spinner className="size-6" /></div>;
@@ -55,6 +93,18 @@ export default function RentalForm() {
       </div>
 
       {errors._ && <div className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{errors._[0]}</div>}
+
+      {isSuperAdmin && (
+        <Card className="p-5">
+          <Field label="Company" required error={err('company_id')}>
+            <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+              <option value="">Select company first…</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <p className="mt-1.5 text-xs text-muted">Customers, products and stock load for the selected company.</p>
+        </Card>
+      )}
 
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -109,7 +159,7 @@ export default function RentalForm() {
 
       <div className="flex items-center justify-end gap-3">
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
-        <Button onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
+        <Button onClick={save} disabled={saving || !companyReady}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
       </div>
     </div>
   );

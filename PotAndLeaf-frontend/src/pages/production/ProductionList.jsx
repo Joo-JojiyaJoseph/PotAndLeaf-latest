@@ -5,23 +5,29 @@ import { PlusIcon, PencilSquareIcon, TrashIcon, ArrowDownTrayIcon } from '@heroi
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
+import { recordDetailPath, resolveRecordCompany, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadCsv } from '../../lib/csv';
 
 const TABS = [{ value: 'orders', label: 'Orders' }, { value: 'boms', label: 'Bills of materials' }];
-const statusTone = { draft: 'inactive', completed: 'active', cancelled: 'blocked' };
+const statusTone = { draft: 'inactive', in_progress: 'warning', completed: 'active', cancelled: 'blocked' };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
 const today = () => new Date().toISOString().slice(0, 10);
 
-function BomModal({ open, onClose, products, units = [], editing }) {
+function BomModal({ open, onClose, products, units = [], editing, isSuperAdmin, companies, createCompanyId }) {
   const queryClient = useQueryClient();
+  const [formCompanyId, setFormCompanyId] = useState('');
   const [outputMode, setOutputMode] = useState('existing');
   const [form, setForm] = useState({ product_id: '', name: '', output_qty: '1', is_active: true, notes: '' });
   const [newProduct, setNewProduct] = useState({ sku: '', name: '', unit_id: '' });
-  const [items, setItems] = useState([{ component_product_id: '', qty: '' }]);
+  const [items, setItems] = useState([{ component_product_id: '', qty: '', wastage_pct: '' }]);
+  const [multiStage, setMultiStage] = useState(false);
+  const [stages, setStages] = useState([
+    { name: 'Stage 1', items: [{ component_product_id: '', qty: '', wastage_pct: '' }] },
+    { name: 'Stage 2', items: [{ component_product_id: '', qty: '', wastage_pct: '' }] },
+  ]);
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
 
@@ -29,24 +35,68 @@ function BomModal({ open, onClose, products, units = [], editing }) {
     setOutputMode('existing');
     setForm({ product_id: editing.product_id, name: editing.name, output_qty: String(editing.output_qty), is_active: editing.is_active, notes: editing.notes ?? '' });
     setNewProduct({ sku: '', name: '', unit_id: '' });
-    setItems(editing.items?.length ? editing.items.map((i) => ({ component_product_id: i.component_product_id, qty: String(i.qty) })) : [{ component_product_id: '', qty: '' }]);
+    setItems(editing.items?.length ? editing.items.map((i) => ({ component_product_id: i.component_product_id, qty: String(i.qty), wastage_pct: i.wastage_pct != null ? String(i.wastage_pct) : '' })) : [{ component_product_id: '', qty: '', wastage_pct: '' }]);
+    if (editing.is_multi_stage && editing.stages?.length) {
+      setMultiStage(true);
+      setStages(editing.stages.map((s) => ({
+        name: s.name,
+        items: (s.items ?? []).map((i) => ({
+          component_product_id: i.component_product_id,
+          qty: String(i.qty),
+          wastage_pct: i.wastage_pct != null ? String(i.wastage_pct) : '',
+        })),
+      })));
+    } else {
+      setMultiStage(false);
+      setStages([
+        { name: 'Stage 1', items: [{ component_product_id: '', qty: '', wastage_pct: '' }] },
+        { name: 'Stage 2', items: [{ component_product_id: '', qty: '', wastage_pct: '' }] },
+      ]);
+    }
     setApplied(editing.id);
   }
   if (open && !editing && applied !== 'new') {
     setOutputMode('existing');
     setForm({ product_id: '', name: '', output_qty: '1', is_active: true, notes: '' });
     setNewProduct({ sku: '', name: '', unit_id: '' });
-    setItems([{ component_product_id: '', qty: '' }]);
+    setItems([{ component_product_id: '', qty: '', wastage_pct: '' }]);
+    setMultiStage(false);
+    setStages([
+      { name: 'Stage 1', items: [{ component_product_id: '', qty: '', wastage_pct: '' }] },
+      { name: 'Stage 2', items: [{ component_product_id: '', qty: '', wastage_pct: '' }] },
+    ]);
+    setFormCompanyId(createCompanyId ?? '');
     setApplied('new');
   }
 
+  const companyReady = !isSuperAdmin || Boolean(editing) || Boolean(formCompanyId);
+  const headerCompanyId = editing?.company_id ?? (isSuperAdmin ? formCompanyId : null);
+  const companyCfg = headerCompanyId ? withCompany(headerCompanyId) : {};
+
   const saveM = useMutation({
     mutationFn: () => {
+      if (!companyReady) {
+        return Promise.reject({ response: { data: { errors: { company_id: ['Select a company first.'] } } } });
+      }
+      const mapItem = (i) => ({
+        component_product_id: i.component_product_id,
+        qty: Number(i.qty) || 0,
+        wastage_pct: i.wastage_pct === '' ? 0 : Number(i.wastage_pct) || 0,
+      });
       const payload = {
         ...form,
         output_qty: Number(form.output_qty) || 1,
-        items: items.filter((i) => i.component_product_id).map((i) => ({ component_product_id: i.component_product_id, qty: Number(i.qty) || 0 })),
       };
+      if (multiStage) {
+        payload.stages = stages.map((s) => ({
+          name: s.name.trim() || 'Stage',
+          items: s.items.filter((i) => i.component_product_id).map(mapItem),
+        }));
+        delete payload.items;
+      } else {
+        payload.items = items.filter((i) => i.component_product_id).map(mapItem);
+        delete payload.stages;
+      }
       if (outputMode === 'new') {
         delete payload.product_id;
         payload.new_product = {
@@ -57,7 +107,7 @@ function BomModal({ open, onClose, products, units = [], editing }) {
       } else {
         delete payload.new_product;
       }
-      return editing ? api.put(`/production/boms/${editing.id}`, payload) : api.post('/production/boms', payload);
+      return editing ? api.put(`/production/boms/${editing.id}`, payload, companyCfg) : api.post('/production/boms', payload, companyCfg);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['boms'] });
@@ -72,14 +122,28 @@ function BomModal({ open, onClose, products, units = [], editing }) {
   const err = (k) => errors[k]?.[0];
   const newErr = (k) => errors[`new_product.${k}`]?.[0];
   const setItem = (i, patch) => setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  const setStage = (si, patch) => setStages((prev) => prev.map((st, idx) => (idx === si ? { ...st, ...patch } : st)));
+  const setStageItem = (si, ii, patch) => setStages((prev) => prev.map((st, idx) => (
+    idx === si ? { ...st, items: st.items.map((it, j) => (j === ii ? { ...it, ...patch } : it)) } : st
+  )));
 
   return (
     <Modal open={open} onClose={handleClose} title={editing ? `Edit ${editing.name}` : 'New bill of materials'}
       footer={<>
         <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-        <Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}</Button>
+        <Button size="sm" disabled={saveM.isPending || !companyReady} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}</Button>
       </>}
     >
+      {isSuperAdmin && !editing && (
+        <div className="mb-4 rounded-xl bg-leaf-soft/50 p-3">
+          <Field label="Company" required error={err('company_id')}>
+            <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+              <option value="">Select company first…</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+        </div>
+      )}
       <div className="mb-4">
         <p className="microlabel mb-2 text-faint">Output product</p>
         {!editing && (
@@ -136,29 +200,72 @@ function BomModal({ open, onClose, products, units = [], editing }) {
         </Field>
       </div>
 
-      <p className="mt-4 mb-2 microlabel font-semibold text-faint">Components consumed</p>
-      <div className="space-y-2">
-        {items.map((it, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <select value={it.component_product_id} onChange={(e) => setItem(i, { component_product_id: e.target.value })} className={selectCls + ' flex-1'}>
-              <option value="">Select component…</option>
-              {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-            <input type="number" step="0.001" placeholder="qty" className={numInput + ' w-24'} value={it.qty} onChange={(e) => setItem(i, { qty: e.target.value })} />
-            <button onClick={() => setItems((p) => (p.length === 1 ? p : p.filter((_, idx) => idx !== i)))} className="rounded-md p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>
-          </div>
-        ))}
+      <p className="mt-4 mb-2 microlabel font-semibold text-faint">Recipe structure</p>
+      <div className="mb-3 flex gap-2">
+        <button type="button" onClick={() => setMultiStage(false)} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (!multiStage ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Single step</button>
+        <button type="button" onClick={() => setMultiStage(true)} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (multiStage ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Multi-stage</button>
       </div>
-      {err('items') && <p className="mt-1 text-xs text-danger">{err('items')}</p>}
-      <Button variant="ghost" size="sm" className="mt-2" onClick={() => setItems((p) => [...p, { component_product_id: '', qty: '' }])}><PlusIcon className="size-4" /> Add component</Button>
+
+      {!multiStage ? (
+        <>
+          <p className="mb-2 microlabel font-semibold text-faint">Components consumed</p>
+          <div className="space-y-2">
+            {items.map((it, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <select value={it.component_product_id} onChange={(e) => setItem(i, { component_product_id: e.target.value })} className={selectCls + ' flex-1'}>
+                  <option value="">Select component…</option>
+                  {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <input type="number" step="0.001" placeholder="qty" className={numInput + ' w-24'} value={it.qty} onChange={(e) => setItem(i, { qty: e.target.value })} />
+                <input type="number" step="0.1" min="0" max="100" placeholder="wastage %" title="Wastage %" className={numInput + ' w-24'} value={it.wastage_pct} onChange={(e) => setItem(i, { wastage_pct: e.target.value })} />
+                <button onClick={() => setItems((p) => (p.length === 1 ? p : p.filter((_, idx) => idx !== i)))} className="rounded-md p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>
+              </div>
+            ))}
+          </div>
+          {err('items') && <p className="mt-1 text-xs text-danger">{err('items')}</p>}
+          <Button variant="ghost" size="sm" className="mt-2" onClick={() => setItems((p) => [...p, { component_product_id: '', qty: '', wastage_pct: '' }])}><PlusIcon className="size-4" /> Add component</Button>
+        </>
+      ) : (
+        <div className="space-y-4">
+          {stages.map((stage, si) => (
+            <div key={si} className="rounded-xl border border-line bg-paper/40 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="microlabel font-semibold text-faint">Stage {si + 1}</span>
+                <Input value={stage.name} onChange={(e) => setStage(si, { name: e.target.value })} placeholder="Stage name" className="flex-1" />
+                {stages.length > 2 && (
+                  <button type="button" onClick={() => setStages((p) => p.filter((_, idx) => idx !== si))} className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-danger"><TrashIcon className="size-4" /></button>
+                )}
+              </div>
+              <div className="space-y-2">
+                {stage.items.map((it, ii) => (
+                  <div key={ii} className="flex items-center gap-2">
+                    <select value={it.component_product_id} onChange={(e) => setStageItem(si, ii, { component_product_id: e.target.value })} className={selectCls + ' flex-1'}>
+                      <option value="">Select component…</option>
+                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    <input type="number" step="0.001" placeholder="qty" className={numInput + ' w-24'} value={it.qty} onChange={(e) => setStageItem(si, ii, { qty: e.target.value })} />
+                    <input type="number" step="0.1" min="0" max="100" placeholder="wastage %" className={numInput + ' w-24'} value={it.wastage_pct} onChange={(e) => setStageItem(si, ii, { wastage_pct: e.target.value })} />
+                    <button type="button" onClick={() => setStages((prev) => prev.map((st, idx) => (idx === si ? { ...st, items: st.items.length === 1 ? st.items : st.items.filter((_, j) => j !== ii) } : st)))} className="rounded-md p-1.5 text-muted hover:bg-surface hover:text-danger"><TrashIcon className="size-4" /></button>
+                  </div>
+                ))}
+              </div>
+              <Button variant="ghost" size="sm" className="mt-2" onClick={() => setStages((prev) => prev.map((st, idx) => (idx === si ? { ...st, items: [...st.items, { component_product_id: '', qty: '', wastage_pct: '' }] } : st)))}><PlusIcon className="size-4" /> Add component</Button>
+              {err(`stages.${si}.items`) && <p className="mt-1 text-xs text-danger">{err(`stages.${si}.items`)}</p>}
+            </div>
+          ))}
+          <Button variant="ghost" size="sm" onClick={() => setStages((p) => [...p, { name: `Stage ${p.length + 1}`, items: [{ component_product_id: '', qty: '', wastage_pct: '' }] }])}><PlusIcon className="size-4" /> Add stage</Button>
+          {err('stages') && <p className="text-xs text-danger">{err('stages')}</p>}
+        </div>
+      )}
     </Modal>
   );
 }
 
-function OrderModal({ open, onClose, boms, supervisors = [], editing, recordCtx }) {
+function OrderModal({ open, onClose, boms, supervisors = [], locations = [], editing, recordCtx, isSuperAdmin, companies, createCompanyId }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ bom_id: '', output_quantity: '', supervisor_id: '', order_date: today(), notes: '' });
+  const [formCompanyId, setFormCompanyId] = useState('');
+  const [form, setForm] = useState({ bom_id: '', output_quantity: '', supervisor_id: '', location_id: '', order_date: today(), notes: '' });
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
 
@@ -167,27 +274,50 @@ function OrderModal({ open, onClose, boms, supervisors = [], editing, recordCtx 
       bom_id: editing.bom_id ?? '',
       output_quantity: String(editing.output_quantity ?? ''),
       supervisor_id: editing.supervisor_id ? String(editing.supervisor_id) : '',
+      location_id: editing.location_id ?? '',
       order_date: editing.order_date ?? today(),
       notes: editing.notes ?? '',
     });
     setApplied(editing.id);
   }
   if (open && !editing && applied !== 'new') {
-    setForm({ bom_id: '', output_quantity: '', supervisor_id: '', order_date: today(), notes: '' });
+    setForm({ bom_id: '', output_quantity: '', supervisor_id: '', location_id: '', order_date: today(), notes: '' });
+    setFormCompanyId(createCompanyId ?? '');
     setApplied('new');
   }
 
+  const companyReady = !isSuperAdmin || Boolean(editing) || Boolean(formCompanyId);
+  const headerCompanyId = editing
+    ? resolveRecordCompany(editing, recordCtx)
+    : (isSuperAdmin ? formCompanyId : null);
+  const companyCfg = headerCompanyId ? withCompany(headerCompanyId) : {};
+
+  const estimateCompanyId = headerCompanyId || undefined;
+  const estimateCfg = estimateCompanyId ? withCompany(estimateCompanyId) : {};
+  const estimateQ = useQuery({
+    queryKey: ['production-estimate', estimateCompanyId, form.bom_id, form.output_quantity],
+    queryFn: () => api.get('/production/estimate', {
+      params: { bom_id: form.bom_id, output_quantity: Number(form.output_quantity) || 0 },
+      ...estimateCfg,
+    }).then((r) => r.data.data),
+    enabled: open && Boolean(form.bom_id) && Number(form.output_quantity) > 0 && companyReady && Boolean(estimateCompanyId),
+  });
+
   const saveM = useMutation({
     mutationFn: () => {
+      if (!companyReady) {
+        return Promise.reject({ response: { data: { errors: { company_id: ['Select a company first.'] } } } });
+      }
       const payload = {
         bom_id: form.bom_id, output_quantity: Number(form.output_quantity) || 0,
         supervisor_id: form.supervisor_id ? Number(form.supervisor_id) : null,
+        location_id: form.location_id || null,
         order_date: form.order_date, notes: form.notes || null,
       };
-      const companyConfig = editing ? withCompany(resolveRecordCompany(editing, recordCtx)) : undefined;
+      const companyConfig = editing ? withCompany(resolveRecordCompany(editing, recordCtx)) : companyCfg;
       return editing
         ? api.put(`/production/orders/${editing.id}`, payload, companyConfig)
-        : api.post('/production/orders', payload);
+        : api.post('/production/orders', payload, companyConfig);
     },
     onSuccess: (res) => {
       if (editing) {
@@ -208,19 +338,35 @@ function OrderModal({ open, onClose, boms, supervisors = [], editing, recordCtx 
     <Modal open={open} onClose={handleClose} title={editing ? `Edit ${editing.order_no}` : 'New production order'}
       footer={<>
         <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-        <Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : (editing ? 'Save changes' : 'Create')}</Button>
+        <Button size="sm" disabled={saveM.isPending || !companyReady} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : (editing ? 'Save changes' : 'Create')}</Button>
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {isSuperAdmin && !editing && (
+          <div className="sm:col-span-2 rounded-xl bg-leaf-soft/50 p-3">
+            <Field label="Company" required error={err('company_id')}>
+              <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+                <option value="">Select company first…</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+          </div>
+        )}
         <div className="sm:col-span-2">
           <Field label="Recipe (BOM)" required error={err('bom_id')}>
             <select value={form.bom_id} onChange={(e) => setForm((f) => ({ ...f, bom_id: e.target.value }))} className={selectCls}>
               <option value="">Select…</option>
-              {boms.map((b) => <option key={b.id} value={b.id}>{b.name} → {b.product_name}</option>)}
+              {boms.map((b) => <option key={b.id} value={b.id}>{b.name}{b.is_multi_stage ? ' (multi-stage)' : ''} → {b.product_name}</option>)}
             </select>
           </Field>
         </div>
         <Field label="Output quantity" required error={err('output_quantity')}><Input type="number" step="0.001" value={form.output_quantity} onChange={(e) => setForm((f) => ({ ...f, output_quantity: e.target.value }))} /></Field>
+        <Field label="Location / godown" error={err('location_id')}>
+          <select value={form.location_id} onChange={(e) => setForm((f) => ({ ...f, location_id: e.target.value }))} className={selectCls}>
+            <option value="">Default / company stock</option>
+            {locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.is_default ? ' (default)' : ''}</option>)}
+          </select>
+        </Field>
         <Field label="Supervisor (commission)" error={err('supervisor_id')}>
           <select value={form.supervisor_id} onChange={(e) => setForm((f) => ({ ...f, supervisor_id: e.target.value }))} className={selectCls}>
             <option value="">None</option>
@@ -229,15 +375,26 @@ function OrderModal({ open, onClose, boms, supervisors = [], editing, recordCtx 
         </Field>
         <Field label="Order date" required error={err('order_date')}><Input type="date" value={form.order_date} onChange={(e) => setForm((f) => ({ ...f, order_date: e.target.value }))} /></Field>
         <div className="sm:col-span-2"><Field label="Notes" error={err('notes')}><Input value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></Field></div>
+        {estimateQ.data && (
+          <div className="sm:col-span-2 rounded-xl border border-line bg-paper/60 p-3">
+            <p className="text-sm font-medium">Estimated production cost</p>
+            <div className="mt-2 flex flex-wrap gap-4 text-sm">
+              <span>Material: <strong className="tnum">{formatCurrency(estimateQ.data.total_material_cost)}</strong></span>
+              <span>Unit cost: <strong className="tnum">{formatCurrency(estimateQ.data.unit_cost)}</strong></span>
+              {!estimateQ.data.can_complete && <span className="text-danger">Insufficient stock for one or more components</span>}
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );
 }
 
 export default function ProductionList() {
-  const { activeCompany, can, companyId } = useAuth();
+  const { activeCompany, can, companyId, isSuperAdmin, companies } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const recordCtx = { filterCompanyId, companyId };
+  const createCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId });
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState('orders');
@@ -270,6 +427,7 @@ export default function ProductionList() {
   const products = formData?.products ?? [];
   const units = formData?.units ?? [];
   const boms = formData?.boms ?? [];
+  const locations = formData?.locations ?? [];
   const supervisors = formData?.supervisors ?? [];
   const orders = ordersQ.data?.data ?? [];
   const bomRows = bomsQ.data?.data ?? [];
@@ -389,7 +547,10 @@ export default function ProductionList() {
                   <tbody>
                     {bomRows.map((b) => (
                       <tr key={b.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
-                        <td className="px-4 py-2.5 font-medium">{b.name}</td>
+                        <td className="px-4 py-2.5 font-medium">
+                          {b.name}
+                          {b.is_multi_stage && <Badge tone="default" className="ml-2">Multi-stage</Badge>}
+                        </td>
                         <td className="px-4 py-2.5">{b.product_name}</td>
                         <td className="tnum px-4 py-2.5 text-right text-muted">{b.output_qty}</td>
                         <td className="tnum px-4 py-2.5 text-right text-muted">{b.items?.length ?? 0}</td>
@@ -409,8 +570,8 @@ export default function ProductionList() {
         </Card>
       )}
 
-      <BomModal open={bomModal} onClose={() => { setBomModal(false); setEditingBom(null); }} products={products} units={units} editing={editingBom} />
-      <OrderModal open={orderModal} onClose={() => { setOrderModal(false); setEditingOrder(null); }} boms={boms} supervisors={supervisors} editing={editingOrder} recordCtx={recordCtx} />
+      <BomModal open={bomModal} onClose={() => { setBomModal(false); setEditingBom(null); }} products={products} units={units} editing={editingBom} isSuperAdmin={isSuperAdmin} companies={companies} createCompanyId={createCompanyId} />
+      <OrderModal open={orderModal} onClose={() => { setOrderModal(false); setEditingOrder(null); }} boms={boms} supervisors={supervisors} locations={locations} editing={editingOrder} recordCtx={recordCtx} isSuperAdmin={isSuperAdmin} companies={companies} createCompanyId={createCompanyId} />
     </div>
   );
 }

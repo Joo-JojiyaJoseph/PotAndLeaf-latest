@@ -22,6 +22,7 @@ class StoreRentalRequest extends FormRequest
             'start_date'        => ['required', 'date'],
             'expected_end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'billing_cycle'     => ['required', 'in:daily,weekly,monthly'],
+            'auto_bill'         => ['nullable', 'boolean'],
             'deposit'           => ['nullable', 'numeric', 'min:0'],
             'notes'             => ['nullable', 'string', 'max:1000'],
             'items'                    => ['required', 'array', 'min:1'],

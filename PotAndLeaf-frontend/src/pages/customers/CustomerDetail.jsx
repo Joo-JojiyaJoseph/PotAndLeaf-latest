@@ -87,6 +87,7 @@ export default function CustomerDetail() {
           <InfoItem label="Credit limit" value={formatCurrency(c.credit_limit)} mono />
           <InfoItem label="Opening balance" value={formatCurrency(c.opening_balance)} mono />
           <InfoItem label="Outstanding" value={formatCurrency(c.outstanding)} mono />
+          <InfoItem label="Advance balance" value={formatCurrency(c.advance_balance)} mono />
           <InfoItem label="Loyalty points" value={loyalty.balance ?? c.loyalty_points} mono />
         </InfoGrid>
         {c.notes && <div className="mt-4 border-t border-line pt-4"><InfoItem label="Notes" value={c.notes} /></div>}

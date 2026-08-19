@@ -26,6 +26,7 @@ import {
   UsersIcon,
   BuildingOffice2Icon,
   ClipboardDocumentListIcon,
+  ClockIcon,
   QrCodeIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
@@ -40,22 +41,23 @@ const GROUPS = [
     items: [
       { key: 'dashboard', label: 'Dashboard', to: '/', icon: HomeIcon, end: true },
       { key: 'purchase', label: 'Purchase', to: '/purchases', icon: ShoppingCartIcon },
+      { key: 'purchase-orders', label: 'Purchase Orders', to: '/purchase-orders', icon: ClipboardDocumentListIcon },
       { key: 'inventory', label: 'Inventory', to: '/inventory', icon: CubeIcon, end: true },
       { key: 'batches', label: 'Batches & barcodes', to: '/inventory/batches', icon: QrCodeIcon },
       { key: 'damage', label: 'Damage Entry', to: '/damage-entries', icon: ExclamationTriangleIcon },
       { key: 'purchase-returns', label: 'Purch. Returns', to: '/purchase-returns', icon: ArrowUturnLeftIcon },
       { key: 'stock-verifications', label: 'Stock Count', to: '/stock-verifications', icon: ClipboardDocumentCheckIcon },
       { key: 'bulk-splits', label: 'Bulk Split', to: '/bulk-splits', icon: ScissorsIcon },
-      // { key: 'transfers', label: 'Transfers', to: '/transfers', icon: ArrowsRightLeftIcon },
-      // { key: 'production', label: 'Production', to: '/production', icon: BeakerIcon },
+      { key: 'transfers', label: 'Transfers', to: '/transfers', icon: ArrowsRightLeftIcon },
+      { key: 'production', label: 'Production', to: '/production', icon: BeakerIcon },
     ],
   },
   {
     label: 'Commerce',
     items: [
-      // { key: 'pos', label: 'POS Sales', to: '/sales', icon: CalculatorIcon },
-      // { key: 'sales-returns', label: 'Sales Returns', to: '/sales-returns', icon: ArrowUturnLeftIcon },
-      // { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon },
+      { key: 'sales', label: 'Sales', to: '/sales', icon: CalculatorIcon },
+      { key: 'backorders', label: 'Backorders', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
+      { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon },
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon },
       // { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty' },
     ],
@@ -64,8 +66,8 @@ const GROUPS = [
     label: 'Setup',
     items: [
       { key: 'suppliers', label: 'Suppliers', to: '/suppliers', icon: TruckIcon },
-      // { key: 'payments', label: 'Payments', to: '/payments', icon: BanknotesIcon },
-      // { key: 'receipts', label: 'Receipts', to: '/receipts', icon: ReceiptRefundIcon },
+      { key: 'payments', label: 'Payments', to: '/payments', icon: BanknotesIcon },
+      { key: 'receipts', label: 'Receipts', to: '/receipts', icon: ReceiptRefundIcon },
       // { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon },
        { key: 'companies', label: 'Companies', to: '/companies', icon: BuildingOffice2Icon, superAdmin: true },
        { key: 'roles', label: 'Roles', to: '/roles', icon: ShieldCheckIcon },
@@ -74,10 +76,9 @@ const GROUPS = [
       { key: 'products', label: 'Products', to: '/products', icon: TagIcon },
       
      
-      // { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon },
+      { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon },
       // { key: 'activity', label: 'Activity Monitor', to: '/activity-monitoring', icon: SignalIcon, hoOnly: true },
       // { key: 'backups', label: 'Backups', to: '/backups', icon: ServerStackIcon, hoOnly: true },
-      // { key: 'purchase-orders', label: 'Purchase Orders', to: '/purchase-orders', icon: ClipboardDocumentListIcon },
       // { key: 'advance-orders', label: 'Advance Orders', to: '/advance-orders', icon: CalendarDaysIcon },
       // { key: 'settings', label: 'Settings', to: '/settings', icon: Cog6ToothIcon },
     ],
@@ -210,6 +211,7 @@ export default function Sidebar({ open, onClose }) {
                 {group.items
                   .filter((item) => !item.superAdmin || isSuperAdmin)
                   .filter((item) => !item.hoOnly || showHo)
+                  .filter((item) => !item.permission || can(item.permission))
                   .map((item) => (
                     <Item key={item.key} item={item} />
                   ))}

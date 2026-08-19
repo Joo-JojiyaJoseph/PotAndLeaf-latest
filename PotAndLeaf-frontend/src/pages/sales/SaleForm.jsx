@@ -7,7 +7,13 @@ import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { computeSale, tierPrice } from '../../lib/saleCalc';
+import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 
+const BILL_KINDS = [
+  { value: 'tax_invoice', label: 'Tax invoice' },
+  { value: 'proforma', label: 'Proforma (no stock until converted)' },
+  { value: 'complimentary', label: 'Complimentary (free issue)' },
+];
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', product_batch_id: '', barcode: '', batch_no: '', qty: '1', rate: '', discount: '', gst_rate: '', price_level: 'retail' });
 const PRICE_LEVELS = [
@@ -21,10 +27,11 @@ const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 tex
 export default function SaleForm() {
   const navigate = useNavigate();
   const { isSuperAdmin, companies, companyId, selectCompany, activeCompany } = useAuth();
-  const [header, setHeader] = useState({ customer_id: '', sale_date: today(), is_interstate: false, payment_mode: 'cash', amount_paid: '', notes: '', loyalty_points_redeemed: '' });
+  const [header, setHeader] = useState({ customer_id: '', sale_date: today(), is_interstate: false, payment_mode: 'cash', bill_kind: 'tax_invoice', amount_paid: '', notes: '', loyalty_points_redeemed: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [scanValue, setScanValue] = useState('');
   const [scanError, setScanError] = useState('');
+  const [stockCheckProductId, setStockCheckProductId] = useState('');
 
   async function handleScan(e) {
     if (e.key !== 'Enter') return;
@@ -36,7 +43,13 @@ export default function SaleForm() {
       setLines((prev) => {
         const idx = prev.findIndex((l) => l.product_batch_id === b.batch_id);
         if (idx >= 0) return prev.map((l, i) => (i === idx ? { ...l, qty: String((Number(l.qty) || 0) + 1) } : l));
-        const line = { product_id: b.product.id, product_batch_id: b.batch_id, barcode: b.barcode, batch_no: b.batch_no, qty: '1', rate: String(b.product.price || ''), discount: '', gst_rate: String(b.product.gst_rate || ''), price_level: 'retail' };
+        const level = customerType === 'wholesale' || customerType === 'dealer' ? customerType : 'retail';
+        const p = productsById[b.product.id];
+        const line = {
+          product_id: b.product.id, product_batch_id: b.batch_id, barcode: b.barcode, batch_no: b.batch_no,
+          qty: '1', rate: p ? String(tierPrice(p, level)) : String(b.product.price || ''),
+          discount: '', gst_rate: String(b.product.gst_rate || p?.gst_rate || ''), price_level: level,
+        };
         const emptyIdx = prev.findIndex((l) => !l.product_id);
         return emptyIdx >= 0 ? prev.map((l, i) => (i === emptyIdx ? line : l)) : [...prev, line];
       });
@@ -84,6 +97,7 @@ export default function SaleForm() {
       rate: p ? String(tierPrice(p, level)) : '',
       gst_rate: p ? String(p.gst_rate) : '',
     });
+    setStockCheckProductId(productId);
   };
 
   const applyPriceLevel = (i, level) => {
@@ -100,6 +114,7 @@ export default function SaleForm() {
         sale_date: header.sale_date,
         is_interstate: header.is_interstate,
         payment_mode: header.payment_mode,
+        bill_kind: header.bill_kind,
         amount_paid: header.amount_paid === '' ? dueTotal : Number(header.amount_paid),
         loyalty_points_redeemed: redeemPoints || 0,
         notes: header.notes || null,
@@ -154,6 +169,11 @@ export default function SaleForm() {
           <Field label="Payment mode" error={err('payment_mode')}>
             <select value={header.payment_mode} onChange={(e) => setHeader((h) => ({ ...h, payment_mode: e.target.value }))} className={selectCls}>
               <option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="credit">Credit</option>
+            </select>
+          </Field>
+          <Field label="Bill type" error={err('bill_kind')}>
+            <select value={header.bill_kind} onChange={(e) => setHeader((h) => ({ ...h, bill_kind: e.target.value }))} className={selectCls}>
+              {BILL_KINDS.map((bk) => <option key={bk.value} value={bk.value}>{bk.label}</option>)}
             </select>
           </Field>
           <Field label="Amount paid (blank = full)" error={err('amount_paid')}>
@@ -253,6 +273,10 @@ export default function SaleForm() {
           {err('items') && <span className="ml-2 text-xs text-danger">{err('items')}</span>}
         </div>
       </Card>
+
+      {stockCheckProductId && productsById[stockCheckProductId] && Number(lines.find((l) => l.product_id === stockCheckProductId)?.qty || 0) > (productsById[stockCheckProductId]?.current_stock ?? 0) && (
+        <CrossBranchStockPanel productId={stockCheckProductId} />
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">

@@ -9,7 +9,17 @@ class StoreSaleRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()->hasPermission('sales.create', $this->route('current_company')->id);
+        $companyId = $this->route('current_company')->id;
+        if (! $this->user()->hasPermission('sales.create', $companyId)) {
+            return false;
+        }
+
+        $kind = $this->input('bill_kind', 'tax_invoice');
+        if ($kind === 'complimentary') {
+            return $this->user()->hasPermission('sales.confirm', $companyId);
+        }
+
+        return true;
     }
 
     public function rules(): array
@@ -23,6 +33,7 @@ class StoreSaleRequest extends FormRequest
             'sale_date'     => ['required', 'date'],
             'is_interstate' => ['boolean'],
             'payment_mode'  => ['required', 'in:cash,card,upi,credit'],
+            'bill_kind'     => ['nullable', 'in:tax_invoice,proforma,complimentary'],
             'amount_paid'               => ['nullable', 'numeric', 'min:0'],
             'loyalty_points_redeemed'   => ['nullable', 'integer', 'min:0'],
             'notes'                     => ['nullable', 'string', 'max:2000'],

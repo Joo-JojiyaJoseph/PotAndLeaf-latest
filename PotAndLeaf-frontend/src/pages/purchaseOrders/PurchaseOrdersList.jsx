@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
@@ -39,6 +39,11 @@ export default function PurchaseOrdersList() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
+          {can('po.view') && (
+            <Link to="/purchase-orders/reorder">
+              <Button variant="outline" size="sm"><SparklesIcon className="size-4" /> Reorder report</Button>
+            </Link>
+          )}
           {can('po.create') && <Link to="/purchase-orders/new"><Button size="sm"><PlusIcon className="size-4" /> New PO</Button></Link>}
         </div>
       </div>

@@ -14,7 +14,8 @@ const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 t
 export default function TransferForm() {
   const navigate = useNavigate();
   const { activeCompany } = useAuth();
-  const [header, setHeader] = useState({ to_company_id: '', transfer_date: today(), notes: '' });
+  const [transferType, setTransferType] = useState('inter_company');
+  const [header, setHeader] = useState({ to_company_id: '', from_location_id: '', to_location_id: '', transfer_date: today(), notes: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [scanValue, setScanValue] = useState('');
   const [scanError, setScanError] = useState('');
@@ -49,14 +50,24 @@ export default function TransferForm() {
   });
   const companies = data?.companies ?? [];
   const products = data?.products ?? [];
+  const locations = data?.locations ?? [];
   const fromCompany = data?.from_company ?? activeCompany;
+  const isIntra = transferType === 'intra_company';
 
   useEffect(() => {
-    if (companies.length === 1 && !header.to_company_id) {
+    if (!isIntra && companies.length === 1 && !header.to_company_id) {
       setHeader((h) => ({ ...h, to_company_id: String(companies[0].id) }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companies]);
+  }, [companies, isIntra]);
+
+  useEffect(() => {
+    if (isIntra && locations.length >= 2 && !header.from_location_id && !header.to_location_id) {
+      const godown = locations.find((l) => l.type === 'godown') ?? locations[0];
+      const shop = locations.find((l) => l.id !== godown.id) ?? locations[1];
+      setHeader((h) => ({ ...h, from_location_id: godown.id, to_location_id: shop.id, to_company_id: '' }));
+    }
+  }, [isIntra, locations, header.from_location_id, header.to_location_id]);
 
   const err = (k) => errors[k]?.[0];
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -64,12 +75,19 @@ export default function TransferForm() {
   async function save() {
     setErrors({}); setSaving(true);
     try {
-      const res = await api.post('/transfers', {
-        to_company_id: Number(header.to_company_id),
+      const payload = {
+        transfer_type: transferType,
         transfer_date: header.transfer_date,
         notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, product_batch_id: l.product_batch_id || undefined, qty: Number(l.qty) || 0 })),
-      });
+      };
+      if (isIntra) {
+        payload.from_location_id = header.from_location_id;
+        payload.to_location_id = header.to_location_id;
+      } else {
+        payload.to_company_id = Number(header.to_company_id);
+      }
+      const res = await api.post('/transfers', payload);
       navigate(`/transfers/${res.data.data.id}`);
     } catch (e) {
       setErrors(e.response?.data?.errors ?? { _: [e.response?.data?.message ?? 'Could not save transfer.'] });
@@ -81,35 +99,68 @@ export default function TransferForm() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex items-center justify-between">
-        <div><h1 className="text-lg font-semibold">New transfer</h1><p className="text-sm text-muted">Move stock from {fromCompany?.name} to another company.</p></div>
+        <div>
+          <h1 className="text-lg font-semibold">New transfer</h1>
+          <p className="text-sm text-muted">
+            {isIntra ? `Move stock between locations at ${fromCompany?.name}.` : `Move stock from ${fromCompany?.name} to another company.`}
+          </p>
+        </div>
         <Button variant="outline" size="sm" onClick={() => navigate('/transfers')}><ArrowLeftIcon className="size-4" /> Back</Button>
       </div>
 
       {errors._ && <div className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{errors._[0]}</div>}
 
       <Card className="p-5">
+        <div className="mb-4 flex gap-2">
+          <button type="button" onClick={() => setTransferType('inter_company')} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (!isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Between companies</button>
+          <button type="button" onClick={() => setTransferType('intra_company')} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Godown → shop</button>
+        </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="From company">
             <Input value={fromCompany?.name ?? ''} readOnly className="bg-paper" />
           </Field>
-          <Field label="To company" required error={err('to_company_id')}>
-            <select value={header.to_company_id} onChange={(e) => setHeader((h) => ({ ...h, to_company_id: e.target.value }))} className={selectCls}>
-              <option value="">Select…</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}{c.code ? ` · ${c.code}` : ''}</option>)}
-            </select>
-          </Field>
-          <Field label="Date" required error={err('transfer_date')}><Input type="date" value={header.transfer_date} onChange={(e) => setHeader((h) => ({ ...h, transfer_date: e.target.value }))} /></Field>
+          {isIntra ? (
+            <>
+              <Field label="From location" required error={err('from_location_id')}>
+                <select value={header.from_location_id} onChange={(e) => setHeader((h) => ({ ...h, from_location_id: e.target.value }))} className={selectCls}>
+                  <option value="">Select…</option>
+                  {locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.type ? ` (${l.type})` : ''}</option>)}
+                </select>
+              </Field>
+              <Field label="To location" required error={err('to_location_id')}>
+                <select value={header.to_location_id} onChange={(e) => setHeader((h) => ({ ...h, to_location_id: e.target.value }))} className={selectCls}>
+                  <option value="">Select…</option>
+                  {locations.filter((l) => String(l.id) !== String(header.from_location_id)).map((l) => <option key={l.id} value={l.id}>{l.name}{l.type ? ` (${l.type})` : ''}</option>)}
+                </select>
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="To company" required error={err('to_company_id')}>
+                <select value={header.to_company_id} onChange={(e) => setHeader((h) => ({ ...h, to_company_id: e.target.value }))} className={selectCls}>
+                  <option value="">Select…</option>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}{c.code ? ` · ${c.code}` : ''}</option>)}
+                </select>
+              </Field>
+              <Field label="Date" required error={err('transfer_date')}><Input type="date" value={header.transfer_date} onChange={(e) => setHeader((h) => ({ ...h, transfer_date: e.target.value }))} /></Field>
+            </>
+          )}
+          {isIntra && (
+            <Field label="Date" required error={err('transfer_date')}><Input type="date" value={header.transfer_date} onChange={(e) => setHeader((h) => ({ ...h, transfer_date: e.target.value }))} /></Field>
+          )}
         </div>
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-line bg-[#FAFBFA] px-3 py-2.5">
-          <span className="microlabel font-semibold text-ink">Scan barcode</span>
-          <input value={scanValue} onChange={(e) => { setScanValue(e.target.value); setScanError(''); }} onKeyDown={handleScan}
-            placeholder="Scan a batch barcode to transfer, then Enter"
-            className="h-9 flex-1 min-w-[220px] rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25" />
-          {scanError && <span className="text-xs text-danger">{scanError}</span>}
-        </div>
+        {!isIntra && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-line bg-[#FAFBFA] px-3 py-2.5">
+            <span className="microlabel font-semibold text-ink">Scan barcode</span>
+            <input value={scanValue} onChange={(e) => { setScanValue(e.target.value); setScanError(''); }} onKeyDown={handleScan}
+              placeholder="Scan a batch barcode to transfer, then Enter"
+              className="h-9 flex-1 min-w-[220px] rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25" />
+            {scanError && <span className="text-xs text-danger">{scanError}</span>}
+          </div>
+        )}
         <table className="w-full text-sm">
           <thead><tr className="border-b border-line text-left text-faint">
             <th className="microlabel px-3 py-2 font-semibold">Product</th>
@@ -145,9 +196,10 @@ export default function TransferForm() {
 
       <div className="flex items-center justify-end gap-3">
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
-        <Button onClick={save} disabled={saving || !companies.length}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
+        <Button onClick={save} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
       </div>
-      {!companies.length && <p className="text-sm text-muted">No other companies available to transfer to. Add another company or switch context.</p>}
+      {!isIntra && !companies.length && <p className="text-sm text-muted">No other companies available to transfer to. Add another company or switch context.</p>}
+      {isIntra && locations.length < 2 && <p className="text-sm text-muted">Add at least two locations (e.g. godown and shop) before moving stock internally.</p>}
     </div>
   );
 }

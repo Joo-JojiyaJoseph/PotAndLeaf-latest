@@ -19,6 +19,14 @@ const GROUPS = [
     title: 'Sales & discounts',
     keys: [
       { key: 'discount_ceiling_percent', label: 'Discount ceiling (%)', type: 'number', step: '1' },
+      { key: 'sale_cancel_requires_approval', label: 'Require HO approval to cancel confirmed sales', type: 'toggle' },
+    ],
+  },
+  {
+    title: 'Accounting',
+    keys: [
+      { key: 'cash_opening_balance', label: 'Cash opening balance (₹)', type: 'number', step: '0.01' },
+      { key: 'bank_opening_balance', label: 'Bank opening balance (₹)', type: 'number', step: '0.01' },
     ],
   },
   {
@@ -28,6 +36,15 @@ const GROUPS = [
       { key: 'daily_expense', label: 'Daily expense (₹, for approx. profit)', type: 'number', step: '0.01' },
       { key: 'whatsapp_enabled', label: 'WhatsApp invoice sharing', type: 'toggle' },
       { key: 'website_integration', label: 'Website integration', type: 'toggle' },
+    ],
+  },
+  {
+    title: 'Rental automation',
+    keys: [
+      { key: 'rental_auto_bill', label: 'Auto-generate invoices on billing cycle', type: 'toggle' },
+      { key: 'rental_whatsapp_on_bill', label: 'WhatsApp when auto-billing', type: 'toggle' },
+      { key: 'rental_payment_due_days', label: 'Payment due days after period end', type: 'number', step: '1' },
+      { key: 'rental_overdue_alert_days', label: 'Overdue alert grace (days)', type: 'number', step: '1' },
     ],
   },
 ];

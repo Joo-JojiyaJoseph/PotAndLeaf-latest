@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Location;
+use App\Models\Supplier;
 use App\Services\ReportExportService;
 use App\Services\ReportService;
 use App\Support\Api\ApiResponse;
@@ -48,10 +49,14 @@ class ReportController extends Controller
         $customers = Customer::forCompany($company->id)->where('status', 'active')
             ->orderBy('name')->get(['id', 'name']);
 
+        $suppliers = Supplier::forCompany($company->id)->where('status', 'active')
+            ->orderBy('name')->get(['id', 'name']);
+
         return $this->ok([
             'companies' => $companies,
             'locations' => $locations,
             'customers' => $customers,
+            'suppliers' => $suppliers,
         ]);
     }
 
@@ -334,6 +339,170 @@ class ReportController extends Controller
         return $this->export->pdf('Customer Rental History', $rows, $headers, $labels)->download("rental-customer-{$customer}.pdf");
     }
 
+    public function productionSummary(Request $request): JsonResponse
+    {
+        $this->allowProductionReports($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        $result = $this->reports->productionSummary(
+            $companyId, $from, $to,
+            (int) $request->query('per_page', 50),
+            (int) $request->query('page', 1),
+        );
+        $p = $result['orders'];
+
+        return $this->ok([
+            'summary' => $result['summary'],
+            'data'    => $p->items(),
+            'meta'    => [
+                'current_page' => $p->currentPage(),
+                'last_page'    => $p->lastPage(),
+                'per_page'     => $p->perPage(),
+                'total'        => $p->total(),
+            ],
+        ]);
+    }
+
+    public function productionByProduct(Request $request): JsonResponse
+    {
+        $this->allowProductionReports($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->reports->productionByProduct($companyId, $from, $to));
+    }
+
+    public function productionBySupervisor(Request $request): JsonResponse
+    {
+        $this->allowProductionReports($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->reports->productionBySupervisor($companyId, $from, $to));
+    }
+
+    public function productionBatches(Request $request): JsonResponse
+    {
+        $this->allowProductionReports($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->reports->productionBatches(
+            $companyId, $from, $to,
+            (int) $request->query('per_page', 50),
+            (int) $request->query('page', 1),
+        ));
+    }
+
+    public function transferSummary(Request $request): JsonResponse
+    {
+        $this->allowTransferReports($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        $result = $this->reports->transferSummary(
+            $companyId, $from, $to,
+            (int) $request->query('per_page', 50),
+            (int) $request->query('page', 1),
+        );
+        $p = $result['orders'];
+
+        return $this->ok([
+            'summary' => $result['summary'],
+            'data'    => $p->items(),
+            'meta'    => [
+                'current_page' => $p->currentPage(),
+                'last_page'    => $p->lastPage(),
+                'per_page'     => $p->perPage(),
+                'total'        => $p->total(),
+            ],
+        ]);
+    }
+
+    public function transferInTransit(Request $request): JsonResponse
+    {
+        $this->allowTransferReports($request);
+        $companyId = $this->reportCompanyId($request);
+
+        $p = $this->reports->transferInTransit(
+            $companyId,
+            (int) $request->query('per_page', 50),
+            (int) $request->query('page', 1),
+        );
+
+        return $this->ok($p);
+    }
+
+    public function cashBook(Request $request): JsonResponse
+    {
+        $this->allowAccounting($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->reports->cashBook(
+            $companyId, $from, $to,
+            (int) $request->query('page', 1),
+            (int) $request->query('per_page', 50),
+        ));
+    }
+
+    public function bankBook(Request $request): JsonResponse
+    {
+        $this->allowAccounting($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->reports->bankBook(
+            $companyId, $from, $to,
+            (int) $request->query('page', 1),
+            (int) $request->query('per_page', 50),
+        ));
+    }
+
+    public function debtorLedger(Request $request): JsonResponse
+    {
+        $this->allowAccounting($request);
+        $companyId = $this->reportCompanyId($request);
+        $request->validate(['customer_id' => ['required', 'uuid']]);
+        $from = $request->query('from') ?: now()->subDays(89)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->reports->debtorLedger($companyId, $request->query('customer_id'), $from, $to));
+    }
+
+    public function creditorLedger(Request $request): JsonResponse
+    {
+        $this->allowAccounting($request);
+        $companyId = $this->reportCompanyId($request);
+        $request->validate(['supplier_id' => ['required', 'uuid']]);
+        $from = $request->query('from') ?: now()->subDays(89)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->reports->creditorLedger($companyId, $request->query('supplier_id'), $from, $to));
+    }
+
+    public function ageingReceivables(Request $request): JsonResponse
+    {
+        $this->allowAccounting($request);
+
+        return $this->ok($this->reports->ageingReceivables($this->reportCompanyId($request)));
+    }
+
+    public function ageingPayables(Request $request): JsonResponse
+    {
+        $this->allowAccounting($request);
+
+        return $this->ok($this->reports->ageingPayables($this->reportCompanyId($request)));
+    }
+
     private function reportCompanyId(Request $request): int|string|null
     {
         if ($request->user()->is_super_admin && $request->query('company_id') === 'all') {
@@ -377,6 +546,42 @@ class ReportController extends Controller
         abort_unless(
             $user->hasPermission('reports.view', $companyId)
             && $user->hasPermission('rental.view', $companyId),
+            403,
+        );
+    }
+
+    /** Production reports require reports.view and production.view. */
+    private function allowProductionReports(Request $request): void
+    {
+        $companyId = $this->company($request)->id;
+        $user = $request->user();
+        abort_unless(
+            $user->hasPermission('reports.view', $companyId)
+            && $user->hasPermission('production.view', $companyId),
+            403,
+        );
+    }
+
+    /** Transfer reports require reports.view and transfers.view. */
+    private function allowTransferReports(Request $request): void
+    {
+        $companyId = $this->company($request)->id;
+        $user = $request->user();
+        abort_unless(
+            $user->hasPermission('reports.view', $companyId)
+            && $user->hasPermission('transfers.view', $companyId),
+            403,
+        );
+    }
+
+    /** Accounting reports require reports.view plus receipts/payments visibility. */
+    private function allowAccounting(Request $request): void
+    {
+        $companyId = $this->company($request)->id;
+        $user = $request->user();
+        abort_unless(
+            $user->hasPermission('reports.view', $companyId)
+            && ($user->hasPermission('receipts.view', $companyId) || $user->hasPermission('payments.view', $companyId)),
             403,
         );
     }
