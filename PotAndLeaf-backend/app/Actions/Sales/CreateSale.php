@@ -63,7 +63,7 @@ class CreateSale
             ->get(['id', 'name', 'hsn_code'])
             ->keyBy('id');
 
-        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind) {
+        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind, $userId) {
             $t = $computed['totals'];
             $due = max(0, $billTotal - $loyaltyDiscount);
             $sale = $this->sales->create([
@@ -76,6 +76,7 @@ class CreateSale
                 'is_interstate'           => (bool) ($data['is_interstate'] ?? false),
                 'payment_mode'            => $data['payment_mode'] ?? 'cash',
                 'bill_kind'               => $billKind,
+                'created_by'              => $userId,
                 'subtotal'                => $t['subtotal'],
                 'tax_total'               => $t['tax_total'],
                 'round_off'               => $t['round_off'],

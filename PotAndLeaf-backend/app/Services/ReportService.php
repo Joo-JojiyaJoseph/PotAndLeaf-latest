@@ -1160,7 +1160,8 @@ class ReportService
             '1_30'     => ['label' => '1–30 days', 'total' => 0.0, 'count' => 0],
             '31_60'    => ['label' => '31–60 days', 'total' => 0.0, 'count' => 0],
             '61_90'    => ['label' => '61–90 days', 'total' => 0.0, 'count' => 0],
-            '90_plus'  => ['label' => '90+ days', 'total' => 0.0, 'count' => 0],
+            '91_180'   => ['label' => '91–180 days', 'total' => 0.0, 'count' => 0],
+            '180_plus' => ['label' => '180+ days', 'total' => 0.0, 'count' => 0],
         ];
         $lines = [];
 
@@ -1176,7 +1177,8 @@ class ReportService
                 $days <= 30 => '1_30',
                 $days <= 60 => '31_60',
                 $days <= 90 => '61_90',
-                default => '90_plus',
+                $days <= 180 => '91_180',
+                default => '180_plus',
             };
             $buckets[$key]['total'] += $bal;
             $buckets[$key]['count']++;

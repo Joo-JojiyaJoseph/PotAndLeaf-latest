@@ -59,7 +59,8 @@ const GROUPS = [
       { key: 'backorders', label: 'Backorders', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
       { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon },
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon },
-      // { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty' },
+      { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
+      { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
     ],
   },
   {

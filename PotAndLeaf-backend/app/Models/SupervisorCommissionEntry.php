@@ -13,7 +13,7 @@ class SupervisorCommissionEntry extends Model
     protected $fillable = [
         'company_id', 'user_id', 'product_id', 'production_order_id',
         'trigger_event', 'reference_type', 'reference_id',
-        'qty', 'unit_value', 'amount', 'accrued_date',
+        'qty', 'unit_value', 'amount', 'accrued_date', 'status', 'reversal_of_id',
     ];
 
     protected function casts(): array

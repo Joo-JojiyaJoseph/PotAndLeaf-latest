@@ -14,7 +14,7 @@ class LoyaltyLedgerEntry extends Model
 
     protected $fillable = [
         'company_id', 'customer_id', 'type', 'points', 'balance_after',
-        'reference_type', 'reference_id', 'note',
+        'reference_type', 'reference_id', 'note', 'rule_snapshot',
     ];
 
     protected function casts(): array
@@ -22,6 +22,7 @@ class LoyaltyLedgerEntry extends Model
         return [
             'points'         => 'integer',
             'balance_after'  => 'integer',
+            'rule_snapshot'  => 'array',
         ];
     }
 

@@ -103,9 +103,19 @@ class PermissionRegistry
                 'locations.manage' => 'Manage locations',
             ],
             'Commission' => [
-                'commission.view'   => 'View commission rules & payouts',
-                'commission.manage' => 'Edit commission rules',
-                'commission.pay'    => 'Record commission payouts',
+                'commission.view'      => 'View commission rules & payouts',
+                'commission.view_own'=> 'View own commission summary',
+                'commission.manage'  => 'Edit commission rules',
+                'commission.pay'     => 'Record commission payouts',
+                'commission.adjust'  => 'Adjust commission entries',
+            ],
+            'Loyalty' => [
+                'loyalty.view'   => 'View loyalty balances & history',
+                'loyalty.manage' => 'Configure loyalty earn/redeem rules',
+                'loyalty.adjust' => 'Manually adjust customer points',
+            ],
+            'WhatsApp' => [
+                'whatsapp.templates' => 'Manage WhatsApp message templates',
             ],
             'Customer Receipts' => [
                 'receipts.view'   => 'View customer receipts',

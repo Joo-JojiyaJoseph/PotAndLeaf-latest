@@ -47,10 +47,15 @@ class SettingsController extends Controller
             'sale_cancel_requires_approval' => ['sometimes', 'in:0,1,true,false'],
             'cash_opening_balance'         => ['sometimes', 'numeric', 'min:0'],
             'bank_opening_balance'         => ['sometimes', 'numeric', 'min:0'],
+            'financial_year_start_month'   => ['sometimes', 'integer', 'min:1', 'max:12'],
+            'dead_stock_days'              => ['sometimes', 'integer', 'min:30', 'max:730'],
+            'eod_management_enabled'       => ['sometimes', 'in:0,1,true,false'],
+            'eod_management_whatsapp_phones' => ['sometimes', 'string', 'max:2000'],
+            'eod_management_email_recipients' => ['sometimes', 'string', 'max:2000'],
             'daily_expense'              => ['sometimes', 'numeric', 'min:0'],
         ]);
 
-        foreach (['website_integration', 'whatsapp_enabled', 'rental_auto_bill', 'rental_whatsapp_on_bill', 'sale_cancel_requires_approval'] as $flag) {
+        foreach (['website_integration', 'whatsapp_enabled', 'rental_auto_bill', 'rental_whatsapp_on_bill', 'sale_cancel_requires_approval', 'eod_management_enabled'] as $flag) {
             if (isset($data[$flag])) {
                 $data[$flag] = in_array($data[$flag], [true, 'true', '1', 1], true) ? '1' : '0';
             }

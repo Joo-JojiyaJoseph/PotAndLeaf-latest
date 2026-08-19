@@ -1,39 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { useCompanyFilter } from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
-import { Button, Card, StatCard, Spinner, Badge } from '../../components/ui';
+import { Card, StatCard, Spinner, Badge } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
 import AccountingReportPanels from './AccountingReportPanels';
+import ReportsToolbar from './ReportsToolbar';
+import ReportNavGrid from './ReportNavGrid';
+import ReportEmptyState from './ReportEmptyState';
+import { REPORT_TABS, filterVisibleTabs, tabMeta } from './reportConfig';
 
 const iso = (d) => d.toISOString().slice(0, 10);
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
-const PRESETS = [{ label: '7d', days: 6 }, { label: '30d', days: 29 }, { label: '90d', days: 89 }];
-const TABS = [
-  { value: 'dashboard', label: 'Dashboard' },
-  { value: 'margin', label: 'Profit & Margin' },
-  { value: 'profit', label: 'Approx. Profit' },
-  { value: 'price_levels', label: 'Sales by price tier' },
-  { value: 'rental_delivery', label: 'Rental delivery', rental: true },
-  { value: 'rental_income', label: 'Rental income', rental: true },
-  { value: 'rental_current', label: 'Currently rented', rental: true },
-  { value: 'rental_customer', label: 'Customer rentals', rental: true },
-  { value: 'production_summary', label: 'Production summary', production: true },
-  { value: 'production_by_product', label: 'Production by product', production: true },
-  { value: 'production_by_supervisor', label: 'Production by supervisor', production: true },
-  { value: 'production_batches', label: 'Production batches', production: true },
-  { value: 'transfer_summary', label: 'Transfer summary', transfer: true },
-  { value: 'transfer_in_transit', label: 'In transit', transfer: true },
-  { value: 'cash_book', label: 'Cash book', accounting: true },
-  { value: 'bank_book', label: 'Bank book', accounting: true },
-  { value: 'debtor_ledger', label: 'Debtor ledger', accounting: true },
-  { value: 'creditor_ledger', label: 'Creditor ledger', accounting: true },
-  { value: 'ageing_receivables', label: 'Ageing (AR)', accounting: true },
-  { value: 'ageing_payables', label: 'Ageing (AP)', accounting: true },
-];
 const selectCls = 'h-9 rounded-lg border border-line bg-surface px-2 text-sm';
 const statusTone = { active: 'active', returned: 'inactive', overdue: 'blocked', expected: 'warning', cancelled: 'blocked', draft: 'inactive', requested: 'warning', in_transit: 'info', received: 'active', rejected: 'blocked' };
 
@@ -64,28 +45,23 @@ function TrendChart({ data }) {
   );
 }
 
-function ExportButtons({ onPdf, onExcel }) {
-  return (
-    <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" onClick={onPdf}><ArrowDownTrayIcon className="size-4" /> Export PDF</Button>
-      <Button variant="outline" size="sm" onClick={onExcel}><ArrowDownTrayIcon className="size-4" /> Export Excel</Button>
-    </div>
-  );
-}
 
 export default function ReportsPage() {
-  const { activeCompany, can, isSuperAdmin } = useAuth();
+  const { activeCompany, can, isSuperAdmin, user } = useAuth();
+  const { filterCompanyId, setFilterCompanyId, companyParams, viewingCompany } = useCompanyFilter();
   const toast = useToast();
   const [tab, setTab] = useState('dashboard');
   const [range, setRange] = useState({ from: daysAgo(29), to: iso(new Date()) });
-  const [reportCompanyId, setReportCompanyId] = useState('');
+  const [showCustomDates, setShowCustomDates] = useState(false);
+  const [reportSearch, setReportSearch] = useState('');
   const [period, setPeriod] = useState('daily');
   const [sortKey, setSortKey] = useState('margin_pct');
   const [locationId, setLocationId] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [supplierId, setSupplierId] = useState('');
+  const [movementDays, setMovementDays] = useState(30);
+  const [movementClass, setMovementClass] = useState('all');
 
-  const companyParam = reportCompanyId || undefined;
   const locationParam = locationId || undefined;
 
   const canHo = isSuperAdmin || can('reports.margin') || can('reports.profit') || can('products.view_cost') || can('*');
@@ -93,44 +69,57 @@ export default function ReportsPage() {
   const canProductionReports = isSuperAdmin || can('*') || (can('reports.view') && can('production.view'));
   const canTransferReports = isSuperAdmin || can('*') || (can('reports.view') && can('transfers.view'));
   const canAccounting = isSuperAdmin || can('*') || (can('reports.view') && (can('receipts.view') || can('payments.view')));
+  const canCommissionReport = isSuperAdmin || can('*') || (can('reports.view') && can('commission.view'));
+  const canInventory = isSuperAdmin || can('*') || (can('reports.view') && can('inventory.view'));
   const isRentalTab = tab.startsWith('rental_');
   const isProductionTab = tab.startsWith('production_');
   const isTransferTab = tab.startsWith('transfer_');
   const isAccountingTab = ['cash_book', 'bank_book', 'debtor_ledger', 'creditor_ledger', 'ageing_receivables', 'ageing_payables'].includes(tab);
-  const hideDateRange = tab === 'rental_current' || tab === 'transfer_in_transit' || tab === 'ageing_receivables' || tab === 'ageing_payables';
+  const hideDateRange = tab === 'rental_current' || tab === 'transfer_in_transit' || tab === 'ageing_receivables' || tab === 'ageing_payables' || tab === 'sales_analytics' || tab === 'leaderboard' || tab === 'inventory_movement';
+  const [leaderboardPeriod, setLeaderboardPeriod] = useState('month');
+
+  const visibleTabs = useMemo(() => filterVisibleTabs(REPORT_TABS, {
+    canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory,
+  }), [canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory]);
 
   const { data: formData } = useQuery({
-    queryKey: ['reports-form-data', activeCompany?.id],
-    queryFn: () => api.get('/reports/form-data').then((r) => r.data.data),
+    queryKey: ['reports-form-data', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/reports/form-data', { params: companyParams }).then((r) => r.data.data),
     enabled: Boolean(activeCompany),
   });
 
+  useEffect(() => {
+    setLocationId('');
+    setCustomerId('');
+    setSupplierId('');
+  }, [filterCompanyId]);
+
   const dashQ = useQuery({
-    queryKey: ['reports-dashboard', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/dashboard', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    queryKey: ['reports-dashboard', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/dashboard', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'dashboard',
     placeholderData: keepPreviousData,
   });
 
   const marginQ = useQuery({
-    queryKey: ['reports-margin', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/margin', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    queryKey: ['reports-margin', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/margin', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'margin' && canHo,
     placeholderData: keepPreviousData,
   });
 
   const profitQ = useQuery({
-    queryKey: ['reports-profit', activeCompany?.id, reportCompanyId, range.from, range.to, period],
+    queryKey: ['reports-profit', activeCompany?.id, filterCompanyId, range.from, range.to, period],
     queryFn: () => api.get('/reports/profit', {
-      params: { ...range, period, company_id: companyParam },
+      params: { ...range, period, ...companyParams },
     }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'profit' && canHo,
     placeholderData: keepPreviousData,
   });
 
   const priceLevelQ = useQuery({
-    queryKey: ['reports-price-levels', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/price-levels', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    queryKey: ['reports-price-levels', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/price-levels', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'price_levels',
     placeholderData: keepPreviousData,
   });
@@ -164,57 +153,57 @@ export default function ReportsPage() {
   });
 
   const productionSummaryQ = useQuery({
-    queryKey: ['reports-production-summary', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/production/summary', { params: { ...range, company_id: companyParam } }).then((r) => r.data),
+    queryKey: ['reports-production-summary', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/production/summary', { params: { ...range, ...companyParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'production_summary' && canProductionReports,
     placeholderData: keepPreviousData,
   });
 
   const productionByProductQ = useQuery({
-    queryKey: ['reports-production-product', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/production/by-product', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    queryKey: ['reports-production-product', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/production/by-product', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'production_by_product' && canProductionReports,
     placeholderData: keepPreviousData,
   });
 
   const productionBySupervisorQ = useQuery({
-    queryKey: ['reports-production-supervisor', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/production/by-supervisor', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    queryKey: ['reports-production-supervisor', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/production/by-supervisor', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'production_by_supervisor' && canProductionReports,
     placeholderData: keepPreviousData,
   });
 
   const productionBatchesQ = useQuery({
-    queryKey: ['reports-production-batches', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/production/batches', { params: { ...range, company_id: companyParam } }).then((r) => r.data),
+    queryKey: ['reports-production-batches', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/production/batches', { params: { ...range, ...companyParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'production_batches' && canProductionReports,
     placeholderData: keepPreviousData,
   });
 
   const transferSummaryQ = useQuery({
-    queryKey: ['reports-transfer-summary', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/transfers/summary', { params: { ...range, company_id: companyParam } }).then((r) => r.data),
+    queryKey: ['reports-transfer-summary', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/transfers/summary', { params: { ...range, ...companyParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'transfer_summary' && canTransferReports,
     placeholderData: keepPreviousData,
   });
 
   const transferInTransitQ = useQuery({
-    queryKey: ['reports-transfer-in-transit', activeCompany?.id, reportCompanyId],
-    queryFn: () => api.get('/reports/transfers/in-transit', { params: { company_id: companyParam } }).then((r) => r.data),
+    queryKey: ['reports-transfer-in-transit', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/reports/transfers/in-transit', { params: { ...companyParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'transfer_in_transit' && canTransferReports,
     placeholderData: keepPreviousData,
   });
 
   const cashBookQ = useQuery({
-    queryKey: ['reports-cash-book', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/accounting/cash-book', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    queryKey: ['reports-cash-book', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/accounting/cash-book', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'cash_book' && canAccounting,
     placeholderData: keepPreviousData,
   });
 
   const bankBookQ = useQuery({
-    queryKey: ['reports-bank-book', activeCompany?.id, reportCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/accounting/bank-book', { params: { ...range, company_id: companyParam } }).then((r) => r.data.data),
+    queryKey: ['reports-bank-book', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/accounting/bank-book', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'bank_book' && canAccounting,
     placeholderData: keepPreviousData,
   });
@@ -234,18 +223,116 @@ export default function ReportsPage() {
   });
 
   const ageingRecQ = useQuery({
-    queryKey: ['reports-ageing-ar', activeCompany?.id, reportCompanyId],
-    queryFn: () => api.get('/reports/accounting/ageing-receivables', { params: { company_id: companyParam } }).then((r) => r.data.data),
+    queryKey: ['reports-ageing-ar', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/reports/accounting/ageing-receivables', { params: { ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'ageing_receivables' && canAccounting,
     placeholderData: keepPreviousData,
   });
 
   const ageingPayQ = useQuery({
-    queryKey: ['reports-ageing-ap', activeCompany?.id, reportCompanyId],
-    queryFn: () => api.get('/reports/accounting/ageing-payables', { params: { company_id: companyParam } }).then((r) => r.data.data),
+    queryKey: ['reports-ageing-ap', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/reports/accounting/ageing-payables', { params: { ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'ageing_payables' && canAccounting,
     placeholderData: keepPreviousData,
   });
+
+  const salesMonthQ = useQuery({
+    queryKey: ['reports-sales-month', activeCompany?.id, filterCompanyId, locationId],
+    queryFn: () => api.get('/reports/sales/comparison-month', { params: { ...companyParams, location_id: locationParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'sales_analytics',
+    placeholderData: keepPreviousData,
+  });
+
+  const salesYoyQ = useQuery({
+    queryKey: ['reports-sales-yoy', activeCompany?.id, filterCompanyId, locationId],
+    queryFn: () => api.get('/reports/sales/comparison-yoy', { params: { ...companyParams, location_id: locationParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'sales_analytics',
+    placeholderData: keepPreviousData,
+  });
+
+  const salesYtdQ = useQuery({
+    queryKey: ['reports-sales-ytd', activeCompany?.id, filterCompanyId, locationId],
+    queryFn: () => api.get('/reports/sales/ytd', { params: { ...companyParams, location_id: locationParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'sales_analytics',
+    placeholderData: keepPreviousData,
+  });
+
+  const salesTrendQ = useQuery({
+    queryKey: ['reports-sales-trend', activeCompany?.id, filterCompanyId, locationId],
+    queryFn: () => api.get('/reports/sales/twelve-month-trend', { params: { ...companyParams, location_id: locationParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'sales_analytics',
+    placeholderData: keepPreviousData,
+  });
+
+  const gstQ = useQuery({
+    queryKey: ['reports-gst', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/gst-reconciliation', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'gst_reconciliation' && canAccounting,
+    placeholderData: keepPreviousData,
+  });
+
+  const commissionReportQ = useQuery({
+    queryKey: ['reports-commission', activeCompany?.id, filterCompanyId, range.from, range.to],
+    queryFn: () => api.get('/reports/commission', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'commission_report' && canCommissionReport,
+    placeholderData: keepPreviousData,
+  });
+
+  const leaderboardQ = useQuery({
+    queryKey: ['reports-leaderboard', activeCompany?.id, filterCompanyId, leaderboardPeriod, locationId],
+    queryFn: () => api.get('/reports/leaderboard', {
+      params: { ...companyParams, period: leaderboardPeriod, location_id: locationParam },
+    }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'leaderboard',
+    placeholderData: keepPreviousData,
+  });
+
+  const movementQ = useQuery({
+    queryKey: ['reports-inventory-movement', activeCompany?.id, filterCompanyId, movementDays],
+    queryFn: () => api.get('/inventory/movement', { params: { ...companyParams, days: movementDays } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'inventory_movement' && canInventory,
+    placeholderData: keepPreviousData,
+  });
+
+  const movementRows = useMemo(() => {
+    const items = movementQ.data?.items ?? [];
+    if (movementClass === 'all') return items;
+    return items.filter((i) => i.class === movementClass);
+  }, [movementQ.data, movementClass]);
+
+  const exportOptions = useMemo(() => {
+    const base = { ...range, ...companyParams };
+    const opts = [];
+    if (tab === 'dashboard') {
+      opts.push({ label: 'Export PDF', path: '/reports/dashboard/export', params: { ...base, format: 'pdf' }, file: `dashboard-${range.from}.pdf`, mime: 'application/pdf' });
+      opts.push({ label: 'Export Excel', path: '/reports/dashboard/export', params: { ...base, format: 'excel' }, file: `dashboard-${range.from}.csv`, mime: 'text/csv' });
+    }
+    if (tab === 'margin') {
+      opts.push({ label: 'Export PDF', path: '/reports/margin/export', params: { ...base, format: 'pdf' }, file: 'margin.pdf', mime: 'application/pdf' });
+      opts.push({ label: 'Export Excel', path: '/reports/margin/export', params: { ...base, format: 'excel' }, file: 'margin.csv', mime: 'text/csv' });
+    }
+    if (tab === 'profit') {
+      opts.push({ label: 'Export PDF', path: '/reports/profit/export', params: { ...base, period, format: 'pdf' }, file: 'profit.pdf', mime: 'application/pdf' });
+      opts.push({ label: 'Export Excel', path: '/reports/profit/export', params: { ...base, period, format: 'excel' }, file: 'profit.csv', mime: 'text/csv' });
+    }
+    if (tab === 'rental_delivery') {
+      opts.push({ label: 'Export PDF', path: '/reports/rental/delivery/export', params: { ...base, location_id: locationParam, format: 'pdf' }, file: 'rental-delivery.pdf', mime: 'application/pdf' });
+      opts.push({ label: 'Export Excel', path: '/reports/rental/delivery/export', params: { ...base, location_id: locationParam, format: 'excel' }, file: 'rental-delivery.csv', mime: 'text/csv' });
+    }
+    if (tab === 'rental_income') {
+      opts.push({ label: 'Export PDF', path: '/reports/rental/income/export', params: { ...base, location_id: locationParam, period, format: 'pdf' }, file: 'rental-income.pdf', mime: 'application/pdf' });
+      opts.push({ label: 'Export Excel', path: '/reports/rental/income/export', params: { ...base, location_id: locationParam, period, format: 'excel' }, file: 'rental-income.csv', mime: 'text/csv' });
+    }
+    if (tab === 'rental_current') {
+      opts.push({ label: 'Export PDF', path: '/reports/rental/current/export', params: { ...companyParams, location_id: locationParam, format: 'pdf' }, file: 'rental-current.pdf', mime: 'application/pdf' });
+      opts.push({ label: 'Export Excel', path: '/reports/rental/current/export', params: { ...companyParams, location_id: locationParam, format: 'excel' }, file: 'rental-current.csv', mime: 'text/csv' });
+    }
+    if (tab === 'rental_customer' && customerId) {
+      opts.push({ label: 'Export PDF', path: `/reports/rental/customer/${customerId}/export`, params: { ...base, location_id: locationParam, format: 'pdf' }, file: 'rental-customer.pdf', mime: 'application/pdf' });
+      opts.push({ label: 'Export Excel', path: `/reports/rental/customer/${customerId}/export`, params: { ...base, location_id: locationParam, format: 'excel' }, file: 'rental-customer.csv', mime: 'text/csv' });
+    }
+    return opts;
+  }, [tab, range, companyParams, period, locationParam, customerId]);
 
   const modeRows = useMemo(() => Object.entries(dashQ.data?.sales?.by_mode ?? {}), [dashQ.data]);
   const marginRows = useMemo(() => {
@@ -263,99 +350,104 @@ export default function ReportsPage() {
     }
   }
 
-  const companies = formData?.companies ?? [];
   const locations = formData?.locations ?? [];
   const customers = formData?.customers ?? [];
   const suppliers = formData?.suppliers ?? [];
-  const reportCompany = companies.find((c) => String(c.id) === String(reportCompanyId)) ?? activeCompany;
+  const activeMeta = tabMeta(tab);
+
+  const ActiveIcon = activeMeta.icon;
+
+  const branchFilter = (show) => show && filterCompanyId !== 'all' && locations.length > 0 ? (
+    <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className={selectCls}>
+      <option value="">All branches</option>
+      {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+    </select>
+  ) : null;
+
+  const subtitle = `Business summary and insights for ${isSuperAdmin ? viewingCompany : activeCompany?.name}${user?.name ? ` · ${user.name}` : ''}`;
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">Reports</h1>
-          <p className="text-sm text-muted">Business summary{reportCompany ? ` for ${reportCompany.name}` : ''}.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {isRentalTab && (
-            <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className={selectCls}>
-              <option value="">All branches</option>
-              {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-          )}
-          {tab === 'debtor_ledger' && (
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={selectCls}>
-              <option value="">Select customer</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          )}
-          {tab === 'creditor_ledger' && (
-            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={selectCls}>
-              <option value="">Select supplier</option>
-              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          )}
-          {tab === 'rental_customer' && (
-            <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={selectCls}>
-              <option value="">Select customer</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          )}
-          {!hideDateRange && (
-            <>
-              <div className="flex overflow-hidden rounded-lg border border-line">
-                {PRESETS.map((p) => {
-                  const on = range.from === daysAgo(p.days) && range.to === iso(new Date());
-                  return (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => setRange({ from: daysAgo(p.days), to: iso(new Date()) })}
-                      className={'px-3 py-1.5 text-sm ' + (on ? 'bg-leaf text-white' : 'bg-surface text-muted hover:text-ink')}
-                    >
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <input type="date" value={range.from} onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))} className={selectCls} />
-              <span className="text-muted">–</span>
-              <input type="date" value={range.to} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className={selectCls} />
-            </>
-          )}
-        </div>
-      </div>
+    <div className="space-y-4 p-4 sm:p-6">
+      <ReportsToolbar
+        subtitle={subtitle}
+        isSuperAdmin={isSuperAdmin}
+        companyFilterValue={filterCompanyId}
+        onCompanyChange={setFilterCompanyId}
+        activeCompanyName={activeCompany?.name}
+        range={range}
+        onRangeChange={setRange}
+        hideDateRange={hideDateRange}
+        showCustomDates={showCustomDates}
+        onToggleCustomDates={setShowCustomDates}
+        exportOptions={exportOptions}
+        onExport={(opt) => exportFile(opt.path, opt.params, opt.file, opt.mime)}
+        extraFilters={(
+          <>
+            {branchFilter(tab === 'sales_analytics' || tab === 'leaderboard' || isRentalTab)}
+            {tab === 'leaderboard' && (
+              <select value={leaderboardPeriod} onChange={(e) => setLeaderboardPeriod(e.target.value)} className={selectCls}>
+                <option value="month">Monthly</option>
+                <option value="year">Financial year</option>
+              </select>
+            )}
+            {tab === 'inventory_movement' && (
+              <>
+                <select value={movementDays} onChange={(e) => setMovementDays(Number(e.target.value))} className={selectCls}>
+                  <option value={7}>7 days</option>
+                  <option value={30}>30 days</option>
+                  <option value={90}>90 days</option>
+                  <option value={180}>180 days</option>
+                </select>
+                <select value={movementClass} onChange={(e) => setMovementClass(e.target.value)} className={selectCls}>
+                  <option value="all">All items</option>
+                  <option value="fast">Fast moving</option>
+                  <option value="slow">Slow moving</option>
+                  <option value="dead">Dead stock</option>
+                </select>
+              </>
+            )}
+            {tab === 'debtor_ledger' && (
+              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={selectCls}>
+                <option value="">Select customer</option>
+                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
+            {tab === 'creditor_ledger' && (
+              <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={selectCls}>
+                <option value="">Select supplier</option>
+                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
+            {tab === 'rental_customer' && (
+              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={selectCls}>
+                <option value="">Select customer</option>
+                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
+            {filterCompanyId === 'all' && ['debtor_ledger', 'creditor_ledger', 'rental_customer'].includes(tab) && (
+              <span className="text-xs text-warning">Select a company for party lists</span>
+            )}
+          </>
+        )}
+      />
 
-      <div className="flex flex-wrap gap-1 border-b border-line">
-        {TABS.filter((t) => {
-          if (t.rental) return canRentalReports;
-          if (t.production) return canProductionReports;
-          if (t.transfer) return canTransferReports;
-          if (t.accounting) return canAccounting;
-          if (t.value === 'dashboard' || t.value === 'price_levels') return true;
-          return canHo;
-        }).map((t) => (
-          <button
-            key={t.value}
-            type="button"
-            onClick={() => setTab(t.value)}
-            className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (tab === t.value ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}
-          >
-            {t.label}
-          </button>
-        ))}
+      <ReportNavGrid
+        tabs={visibleTabs}
+        activeTab={tab}
+        onSelect={setTab}
+        search={reportSearch}
+        onSearchChange={setReportSearch}
+      />
+
+      <div className="flex items-center gap-2 text-sm text-muted">
+        <ActiveIcon className="size-4 text-leaf" strokeWidth={1.5} />
+        <span className="font-medium text-ink">{activeMeta.label}</span>
       </div>
 
       {tab === 'dashboard' && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <ExportButtons
-              onPdf={() => exportFile('/reports/dashboard/export', { ...range, company_id: companyParam, format: 'pdf' }, `dashboard-${range.from}.pdf`, 'application/pdf')}
-              onExcel={() => exportFile('/reports/dashboard/export', { ...range, company_id: companyParam, format: 'excel' }, `dashboard-${range.from}.csv`, 'text/csv')}
-            />
-          </div>
           {dashQ.isLoading ? <div className="flex justify-center py-20"><Spinner className="size-6" /></div>
-            : dashQ.isError || !dashQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Couldn't load reports.</Card>
+            : dashQ.isError || !dashQ.data ? <ReportEmptyState title="Couldn't load dashboard" description="Check your connection or try another company filter." onChangeFilters={() => setShowCustomDates(true)} />
             : (
               <>
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
@@ -439,22 +531,18 @@ export default function ReportsPage() {
 
       {tab === 'margin' && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex gap-2">
-              <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} className={selectCls}>
-                <option value="margin_pct">Sort by margin %</option>
-                <option value="margin">Sort by margin ₹</option>
-                <option value="revenue">Sort by revenue</option>
-              </select>
-            </div>
-            <ExportButtons
-              onPdf={() => exportFile('/reports/margin/export', { ...range, company_id: companyParam, format: 'pdf' }, 'margin.pdf', 'application/pdf')}
-              onExcel={() => exportFile('/reports/margin/export', { ...range, company_id: companyParam, format: 'excel' }, 'margin.csv', 'text/csv')}
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} className={selectCls}>
+              <option value="margin_pct">Sort by margin %</option>
+              <option value="margin">Sort by margin ₹</option>
+              <option value="revenue">Sort by revenue</option>
+            </select>
           </div>
           <Card className="overflow-hidden">
             {marginQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
-              : marginRows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No margin data in this range.</div>
+              : marginRows.length === 0 ? (
+                <ReportEmptyState title="No margin data" description="No product margin in the selected date range." onChangeFilters={() => setShowCustomDates(true)} />
+              )
               : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -485,19 +573,13 @@ export default function ReportsPage() {
 
       {tab === 'profit' && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex gap-2">
-              <select value={period} onChange={(e) => setPeriod(e.target.value)} className={selectCls}>
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
-              </select>
-              </div>
-            <ExportButtons
-              onPdf={() => exportFile('/reports/profit/export', { ...range, period, company_id: companyParam, format: 'pdf' }, 'profit.pdf', 'application/pdf')}
-              onExcel={() => exportFile('/reports/profit/export', { ...range, period, company_id: companyParam, format: 'excel' }, 'profit.csv', 'text/csv')}
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={period} onChange={(e) => setPeriod(e.target.value)} className={selectCls}>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
           </div>
           {profitQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
             : !profitQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Couldn't load profit report.</Card>
@@ -583,15 +665,11 @@ export default function ReportsPage() {
 
       {tab === 'rental_delivery' && (
         <>
-          <div className="flex justify-end">
-            <ExportButtons
-              onPdf={() => exportFile('/reports/rental/delivery/export', { ...range, location_id: locationParam, format: 'pdf' }, 'rental-delivery.pdf', 'application/pdf')}
-              onExcel={() => exportFile('/reports/rental/delivery/export', { ...range, location_id: locationParam, format: 'excel' }, 'rental-delivery.csv', 'text/csv')}
-            />
-          </div>
           <Card className="overflow-hidden">
             {rentalDeliveryQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
-              : (rentalDeliveryQ.data?.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No rental deliveries in this range.</div>
+              : (rentalDeliveryQ.data?.data?.length ?? 0) === 0 ? (
+                <ReportEmptyState title="No rental deliveries" description="No deliveries in the selected date range." onChangeFilters={() => setShowCustomDates(true)} />
+              )
               : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -624,16 +702,12 @@ export default function ReportsPage() {
 
       {tab === 'rental_income' && (
         <>
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select value={period} onChange={(e) => setPeriod(e.target.value)} className={selectCls}>
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
             </select>
-            <ExportButtons
-              onPdf={() => exportFile('/reports/rental/income/export', { ...range, location_id: locationParam, period, format: 'pdf' }, 'rental-income.pdf', 'application/pdf')}
-              onExcel={() => exportFile('/reports/rental/income/export', { ...range, location_id: locationParam, period, format: 'excel' }, 'rental-income.csv', 'text/csv')}
-            />
           </div>
           {rentalIncomeQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
             : !rentalIncomeQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Couldn't load rental income.</Card>
@@ -724,16 +798,11 @@ export default function ReportsPage() {
       )}
 
       {tab === 'rental_current' && (
-        <>
-          <div className="flex justify-end">
-            <ExportButtons
-              onPdf={() => exportFile('/reports/rental/current/export', { location_id: locationParam, format: 'pdf' }, 'rental-current.pdf', 'application/pdf')}
-              onExcel={() => exportFile('/reports/rental/current/export', { location_id: locationParam, format: 'excel' }, 'rental-current.csv', 'text/csv')}
-            />
-          </div>
-          <Card className="overflow-hidden">
-            {rentalCurrentQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
-              : (rentalCurrentQ.data?.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">Nothing currently out on rent.</div>
+        <Card className="overflow-hidden">
+          {rentalCurrentQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (rentalCurrentQ.data?.data?.length ?? 0) === 0 ? (
+              <ReportEmptyState title="Nothing on rent" description="No items are currently out on rental." />
+            )
               : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -760,22 +829,14 @@ export default function ReportsPage() {
                   </table>
                 </div>
               )}
-          </Card>
-        </>
+        </Card>
       )}
 
       {tab === 'rental_customer' && (
-        <>
-          <div className="flex justify-end">
-            {customerId && (
-              <ExportButtons
-                onPdf={() => exportFile(`/reports/rental/customer/${customerId}/export`, { ...range, location_id: locationParam, format: 'pdf' }, 'rental-customer.pdf', 'application/pdf')}
-                onExcel={() => exportFile(`/reports/rental/customer/${customerId}/export`, { ...range, location_id: locationParam, format: 'excel' }, 'rental-customer.csv', 'text/csv')}
-              />
-            )}
-          </div>
-          <Card className="overflow-hidden">
-            {!customerId ? <div className="px-4 py-16 text-center text-sm text-muted">Select a customer to view rental history.</div>
+        <Card className="overflow-hidden">
+          {!customerId ? (
+            <ReportEmptyState title="Select a customer" description="Choose a customer from the filter above to view rental history." />
+          )
               : rentalCustomerQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
               : (rentalCustomerQ.data?.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No rentals for this customer.</div>
               : (
@@ -812,8 +873,7 @@ export default function ReportsPage() {
                   </table>
                 </div>
               )}
-          </Card>
-        </>
+        </Card>
       )}
 
       {tab === 'production_summary' && (
@@ -890,10 +950,15 @@ export default function ReportsPage() {
       )}
 
       {tab === 'production_by_supervisor' && (
-        <Card className="overflow-hidden">
-          {productionBySupervisorQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
-            : (productionBySupervisorQ.data?.rows?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No production by supervisor in this range.</div>
-            : (
+        productionBySupervisorQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+          : (productionBySupervisorQ.data?.rows?.length ?? 0) === 0 ? (
+            <ReportEmptyState
+              title="No production found"
+              description="There is no production by supervisor in the selected range."
+              onChangeFilters={() => setShowCustomDates(true)}
+            />
+          ) : (
+            <Card className="overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-line text-left text-faint">
@@ -914,8 +979,8 @@ export default function ReportsPage() {
                   </tbody>
                 </table>
               </div>
-            )}
-        </Card>
+            </Card>
+          )
       )}
 
       {tab === 'production_batches' && (
@@ -1024,6 +1089,228 @@ export default function ReportsPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+        </Card>
+      )}
+
+      {tab === 'inventory_movement' && (
+        <>
+          {movementQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (
+              <>
+                <div className="grid grid-cols-3 gap-4">
+                  <StatCard label="Fast moving" value={movementQ.data?.summary?.fast ?? 0} tone="active" />
+                  <StatCard label="Slow moving" value={movementQ.data?.summary?.slow ?? 0} tone="warning" />
+                  <StatCard label="Dead stock" value={movementQ.data?.summary?.dead ?? 0} tone="blocked" />
+                </div>
+                <Card className="mt-4 overflow-hidden">
+                  {movementRows.length === 0 ? (
+                    <ReportEmptyState title="No items found" description={`No ${movementClass === 'all' ? '' : movementClass + ' '}stock in the last ${movementDays} days.`} />
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b border-line text-left text-faint">
+                          <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
+                          <th className="microlabel px-4 py-2.5 text-right font-semibold">Stock</th>
+                          <th className="microlabel px-4 py-2.5 text-right font-semibold">Qty sold</th>
+                          <th className="microlabel px-4 py-2.5 font-semibold">Last sale</th>
+                          <th className="microlabel px-4 py-2.5 font-semibold">Class</th>
+                        </tr></thead>
+                        <tbody>
+                          {movementRows.slice(0, 100).map((r) => (
+                            <tr key={r.id} className="border-b border-line/60 last:border-0">
+                              <td className="px-4 py-2.5"><div className="font-medium">{r.name}</div><div className="text-xs text-muted">{r.sku}</div></td>
+                              <td className="tnum px-4 py-2.5 text-right">{r.stock}</td>
+                              <td className="tnum px-4 py-2.5 text-right">{r.out_qty}</td>
+                              <td className="px-4 py-2.5 text-muted">{r.last_out ? formatDate(r.last_out) : '—'}</td>
+                              <td className="px-4 py-2.5"><Badge tone={r.class === 'fast' ? 'active' : r.class === 'slow' ? 'warning' : 'blocked'}>{r.class}</Badge></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              </>
+            )}
+        </>
+      )}
+
+      {tab === 'sales_analytics' && (
+        <>
+          {(salesMonthQ.isLoading || salesYoyQ.isLoading) ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (
+              <>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <Card className="p-5">
+                    <h2 className="mb-3 text-sm font-semibold">Current month vs last month</h2>
+                    {salesMonthQ.data && (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <StatCard label="Current net" value={formatCurrency(salesMonthQ.data.current?.net_sales)} sub={`${salesMonthQ.data.current?.invoice_count ?? 0} invoices`} />
+                          <StatCard label="Previous net" value={formatCurrency(salesMonthQ.data.previous?.net_sales)} sub={`${salesMonthQ.data.previous?.invoice_count ?? 0} invoices`} />
+                        </div>
+                        <p className="mt-3 text-sm">
+                          Growth: <span className="font-medium">{formatCurrency(salesMonthQ.data.difference?.net_sales)}</span>
+                          {' '}({salesMonthQ.data.difference?.growth_pct ?? 0}%)
+                        </p>
+                      </>
+                    )}
+                  </Card>
+                  <Card className="p-5">
+                    <h2 className="mb-3 text-sm font-semibold">Year-on-year ({salesYoyQ.data?.current_label})</h2>
+                    {salesYoyQ.data && (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <StatCard label={salesYoyQ.data.current_label} value={formatCurrency(salesYoyQ.data.current?.net_sales)} />
+                          <StatCard label={salesYoyQ.data.previous_label} value={formatCurrency(salesYoyQ.data.previous?.net_sales)} />
+                        </div>
+                        <p className="mt-3 text-sm">YoY growth: {salesYoyQ.data.difference?.growth_pct ?? 0}%</p>
+                      </>
+                    )}
+                  </Card>
+                </div>
+                <Card className="mt-4 p-5">
+                  <h2 className="mb-3 text-sm font-semibold">Year-to-date ({salesYtdQ.data?.as_of})</h2>
+                  {salesYtdQ.data && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                        <StatCard label="YTD net" value={formatCurrency(salesYtdQ.data.current?.net_sales)} />
+                        <StatCard label="Prior YTD" value={formatCurrency(salesYtdQ.data.previous?.net_sales)} />
+                        <StatCard label="Returns" value={formatCurrency(salesYtdQ.data.current?.returns)} />
+                        <StatCard label="GST" value={formatCurrency(salesYtdQ.data.current?.tax)} />
+                      </div>
+                    </>
+                  )}
+                </Card>
+                <Card className="mt-4 overflow-hidden">
+                  <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">12-month trend</div>
+                  {(salesTrendQ.data?.months?.length ?? 0) === 0 ? <div className="px-4 py-12 text-center text-sm text-muted">No data.</div>
+                    : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b border-line text-left text-faint">
+                            <th className="microlabel px-4 py-2 font-semibold">Month</th>
+                            <th className="microlabel px-4 py-2 text-right font-semibold">Net sales</th>
+                            <th className="microlabel px-4 py-2 text-right font-semibold">Returns</th>
+                            <th className="microlabel px-4 py-2 text-right font-semibold">Invoices</th>
+                            <th className="microlabel px-4 py-2 text-right font-semibold">MoM %</th>
+                          </tr></thead>
+                          <tbody>
+                            {salesTrendQ.data.months.map((m) => (
+                              <tr key={m.month} className="border-b border-line/60 last:border-0">
+                                <td className="px-4 py-2 font-medium">{m.label}</td>
+                                <td className="tnum px-4 py-2 text-right">{formatCurrency(m.net_sales)}</td>
+                                <td className="tnum px-4 py-2 text-right text-muted">{formatCurrency(m.returns)}</td>
+                                <td className="tnum px-4 py-2 text-right">{m.invoice_count}</td>
+                                <td className="tnum px-4 py-2 text-right">{m.growth_pct != null ? `${m.growth_pct}%` : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                </Card>
+              </>
+            )}
+        </>
+      )}
+
+      {tab === 'leaderboard' && (
+        <Card className="overflow-hidden">
+          {leaderboardQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (leaderboardQ.data?.rankings?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No sales in this period.</div>
+            : (
+              <>
+                <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">{leaderboardQ.data.label} — ranked by net sales</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-line text-left text-faint">
+                      <th className="microlabel px-4 py-2.5 font-semibold">Rank</th>
+                      <th className="microlabel px-4 py-2.5 font-semibold">Employee</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Net sales</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Invoices</th>
+                      {canCommissionReport && <th className="microlabel px-4 py-2.5 text-right font-semibold">Incentives</th>}
+                    </tr></thead>
+                    <tbody>
+                      {leaderboardQ.data.rankings.map((r) => (
+                        <tr key={r.user_id} className="border-b border-line/60 last:border-0">
+                          <td className="px-4 py-2.5 font-medium">#{r.rank}</td>
+                          <td className="px-4 py-2.5">{r.user_name}</td>
+                          <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.net_sales)}</td>
+                          <td className="tnum px-4 py-2.5 text-right text-muted">{r.invoices}</td>
+                          {canCommissionReport && <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.incentives)}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+        </Card>
+      )}
+
+      {tab === 'gst_reconciliation' && (
+        <>
+          {gstQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : !gstQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load GST reconciliation.</Card>
+            : (
+              <>
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                  <StatCard label="Output GST" value={formatCurrency(gstQ.data.output?.tax_total)} sub={`${gstQ.data.output?.invoice_count ?? 0} invoices`} />
+                  <StatCard label="Input GST" value={formatCurrency(gstQ.data.input?.tax_total)} sub={`${gstQ.data.input?.bill_count ?? 0} purchases`} />
+                  <StatCard label="Return GST" value={formatCurrency(gstQ.data.sales_returns?.tax)} />
+                  <StatCard label="Net payable" value={formatCurrency(gstQ.data.net_gst_payable)} />
+                </div>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <Card className="p-5">
+                    <h2 className="mb-2 text-sm font-semibold">Output tax split</h2>
+                    <p className="text-sm text-muted">CGST {formatCurrency(gstQ.data.output?.cgst)} · SGST {formatCurrency(gstQ.data.output?.sgst)} · IGST {formatCurrency(gstQ.data.output?.igst)}</p>
+                  </Card>
+                  <Card className="p-5">
+                    <h2 className="mb-2 text-sm font-semibold">Input tax split</h2>
+                    <p className="text-sm text-muted">CGST {formatCurrency(gstQ.data.input?.cgst)} · SGST {formatCurrency(gstQ.data.input?.sgst)} · IGST {formatCurrency(gstQ.data.input?.igst)}</p>
+                  </Card>
+                </div>
+              </>
+            )}
+        </>
+      )}
+
+      {tab === 'commission_report' && (
+        <Card className="overflow-hidden">
+          {commissionReportQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (commissionReportQ.data?.staff?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No commission in this range.</div>
+            : (
+              <>
+                <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">
+                  Total commission {formatCurrency(commissionReportQ.data.totals?.commission)} · Supervisor {formatCurrency(commissionReportQ.data.totals?.supervisor)}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead><tr className="border-b border-line text-left text-faint">
+                      <th className="microlabel px-4 py-2.5 font-semibold">Employee</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Net sales</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Tier</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Daily target</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Promo</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Total</th>
+                    </tr></thead>
+                    <tbody>
+                      {commissionReportQ.data.staff.map((s) => (
+                        <tr key={s.user_id} className="border-b border-line/60 last:border-0">
+                          <td className="px-4 py-2.5 font-medium">{s.user_name}</td>
+                          <td className="tnum px-4 py-2.5 text-right">{formatCurrency(s.sales_net)}</td>
+                          <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(s.salesman_tier)}</td>
+                          <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(s.daily_target)}</td>
+                          <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(s.promotion)}</td>
+                          <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(s.total_ledger)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
         </Card>
       )}

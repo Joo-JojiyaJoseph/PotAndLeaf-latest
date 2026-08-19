@@ -10,7 +10,11 @@ import { formatCurrency, formatDate } from '../../lib/format';
 const TABS = [
   { value: 'payouts', label: 'Payouts' },
   { value: 'rules', label: 'Rules' },
-  { value: 'supervisor', label: 'Supervisor accruals' },
+  { value: 'promotions', label: 'Promotions' },
+  { value: 'seasonal', label: 'Seasonal care' },
+  { value: 'templates', label: 'WhatsApp' },
+  { value: 'ledger', label: 'Ledger' },
+  { value: 'supervisor', label: 'Supervisor' },
 ];
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -104,6 +108,144 @@ function RuleModal({ open, onClose, staff, editing }) {
           </select>
         </Field>
         <div className="sm:col-span-2"><Field label="Notes" error={err('notes')}><Input value={form.notes} onChange={set('notes')} /></Field></div>
+      </div>
+    </Modal>
+  );
+}
+
+function TierEditorModal({ open, onClose, rule }) {
+  const queryClient = useQueryClient();
+  const [rows, setRows] = useState([{ min_amount: '', max_amount: '', percent: '' }]);
+
+  const saveM = useMutation({
+    mutationFn: () => api.post(`/commission/rules/${rule.id}/tiers`, {
+      tiers: rows.filter((r) => r.min_amount !== '').map((r) => ({
+        min_amount: Number(r.min_amount), max_amount: r.max_amount === '' ? null : Number(r.max_amount), percent: Number(r.percent),
+      })),
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-rules'] }); onClose(); },
+  });
+
+  if (open && rule && rows.length === 1 && rows[0].min_amount === '') {
+    const existing = rule.tiers ?? [];
+    if (existing.length) setRows(existing.map((t) => ({ min_amount: String(t.min_amount), max_amount: t.max_amount != null ? String(t.max_amount) : '', percent: String(t.percent) })));
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Tier % — ${rule?.user_name ?? ''}`}
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save tiers</Button></>}>
+      <div className="space-y-2">
+        {rows.map((r, i) => (
+          <div key={i} className="grid grid-cols-3 gap-2">
+            <Input placeholder="Min ₹" value={r.min_amount} onChange={(e) => setRows((x) => x.map((row, j) => j === i ? { ...row, min_amount: e.target.value } : row))} />
+            <Input placeholder="Max ₹" value={r.max_amount} onChange={(e) => setRows((x) => x.map((row, j) => j === i ? { ...row, max_amount: e.target.value } : row))} />
+            <Input placeholder="%" value={r.percent} onChange={(e) => setRows((x) => x.map((row, j) => j === i ? { ...row, percent: e.target.value } : row))} />
+          </div>
+        ))}
+        <Button variant="ghost" size="sm" onClick={() => setRows((x) => [...x, { min_amount: '', max_amount: '', percent: '' }])}>+ Add tier</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function DailyTargetModal({ open, onClose, rule }) {
+  const queryClient = useQueryClient();
+  const [rows, setRows] = useState([{ min_amount: '', bonus_amount: '' }]);
+
+  const saveM = useMutation({
+    mutationFn: () => api.post(`/commission/rules/${rule.id}/daily-targets`, {
+      targets: rows.filter((r) => r.min_amount !== '').map((r) => ({ min_amount: Number(r.min_amount), bonus_amount: Number(r.bonus_amount) })),
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-rules'] }); onClose(); },
+  });
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Daily targets — ${rule?.user_name ?? ''}`}
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save targets</Button></>}>
+      <div className="space-y-2">
+        {rows.map((r, i) => (
+          <div key={i} className="grid grid-cols-2 gap-2">
+            <Input placeholder="Target ₹" value={r.min_amount} onChange={(e) => setRows((x) => x.map((row, j) => j === i ? { ...row, min_amount: e.target.value } : row))} />
+            <Input placeholder="Bonus ₹" value={r.bonus_amount} onChange={(e) => setRows((x) => x.map((row, j) => j === i ? { ...row, bonus_amount: e.target.value } : row))} />
+          </div>
+        ))}
+        <Button variant="ghost" size="sm" onClick={() => setRows((x) => [...x, { min_amount: '', bonus_amount: '' }])}>+ Add tier</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function PromotionModal({ open, onClose }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ name: '', start_date: today(), end_date: today(), min_qty: '1', bonus_per_unit: '0', bonus_fixed: '0', bonus_percent: '0' });
+
+  const saveM = useMutation({
+    mutationFn: () => api.post('/commission/promotions', {
+      ...form, min_qty: Number(form.min_qty), bonus_per_unit: Number(form.bonus_per_unit),
+      bonus_fixed: Number(form.bonus_fixed), bonus_percent: Number(form.bonus_percent), is_active: true,
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-promotions'] }); onClose(); },
+  });
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  return (
+    <Modal open={open} onClose={onClose} title="New product promotion"
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save</Button></>}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Name" className="sm:col-span-2"><Input value={form.name} onChange={set('name')} /></Field>
+        <Field label="Start"><Input type="date" value={form.start_date} onChange={set('start_date')} /></Field>
+        <Field label="End"><Input type="date" value={form.end_date} onChange={set('end_date')} /></Field>
+        <Field label="Min qty"><Input type="number" value={form.min_qty} onChange={set('min_qty')} /></Field>
+        <Field label="Bonus / unit ₹"><Input type="number" value={form.bonus_per_unit} onChange={set('bonus_per_unit')} /></Field>
+        <Field label="Fixed bonus ₹"><Input type="number" value={form.bonus_fixed} onChange={set('bonus_fixed')} /></Field>
+        <Field label="Bonus %"><Input type="number" value={form.bonus_percent} onChange={set('bonus_percent')} /></Field>
+      </div>
+    </Modal>
+  );
+}
+
+function SeasonalModal({ open, onClose }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ name: '', days_after_purchase: '15', message_template: 'Hi {customer_name}, care tips for your {product_name} from {company_name}.' });
+
+  const saveM = useMutation({
+    mutationFn: () => api.post('/commission/seasonal-care-rules', { ...form, days_after_purchase: Number(form.days_after_purchase), is_active: true }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['seasonal-care'] }); onClose(); },
+  });
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  return (
+    <Modal open={open} onClose={onClose} title="Seasonal care rule"
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save</Button></>}>
+      <div className="space-y-3">
+        <Field label="Name"><Input value={form.name} onChange={set('name')} /></Field>
+        <Field label="Days after purchase"><Input type="number" value={form.days_after_purchase} onChange={set('days_after_purchase')} /></Field>
+        <Field label="Message template"><textarea className={selectCls + ' min-h-24 py-2'} value={form.message_template} onChange={set('message_template')} /></Field>
+      </div>
+    </Modal>
+  );
+}
+
+function TemplateModal({ open, onClose }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ slug: 'eod_commission', name: 'EOD Commission Summary', body: '*EOD Summary* {employee_name}\nDate: {date}\nSales: {sales_total}\nTotal: {total_incentive}' });
+
+  const saveM = useMutation({
+    mutationFn: () => api.post('/commission/whatsapp-templates', { ...form, is_active: true }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wa-templates'] }); onClose(); },
+  });
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  return (
+    <Modal open={open} onClose={onClose} title="WhatsApp template"
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save</Button></>}>
+      <div className="space-y-3">
+        <Field label="Slug"><Input value={form.slug} onChange={set('slug')} /></Field>
+        <Field label="Name"><Input value={form.name} onChange={set('name')} /></Field>
+        <Field label="Body"><textarea className={selectCls + ' min-h-32 py-2'} value={form.body} onChange={set('body')} /></Field>
       </div>
     </Modal>
   );
@@ -203,6 +345,12 @@ export default function CommissionList() {
   const [ruleModal, setRuleModal] = useState(false);
   const [editingRule, setEditingRule] = useState(null);
   const [payoutModal, setPayoutModal] = useState(false);
+  const [eodDate, setEodDate] = useState(today());
+  const [tierRule, setTierRule] = useState(null);
+  const [targetRule, setTargetRule] = useState(null);
+  const [promoModal, setPromoModal] = useState(false);
+  const [seasonalModal, setSeasonalModal] = useState(false);
+  const [templateModal, setTemplateModal] = useState(false);
 
   const { data: formData } = useQuery({
     queryKey: ['commission-form-data', activeCompany?.id, filterCompanyId],
@@ -224,6 +372,34 @@ export default function CommissionList() {
     queryFn: () => api.get('/commission/supervisor-entries', { params: companyParams }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'supervisor',
   });
+  const ledgerQ = useQuery({
+    queryKey: ['commission-ledger', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/commission/transactions', { params: companyParams }).then((r) => r.data),
+    enabled: Boolean(activeCompany) && tab === 'ledger',
+  });
+  const promosQ = useQuery({
+    queryKey: ['commission-promotions', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/commission/promotions', { params: companyParams }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'promotions',
+  });
+  const seasonalQ = useQuery({
+    queryKey: ['seasonal-care', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/commission/seasonal-care-rules', { params: companyParams }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'seasonal',
+  });
+  const templatesQ = useQuery({
+    queryKey: ['wa-templates', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/commission/whatsapp-templates', { params: companyParams }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'templates',
+  });
+  const waLogsQ = useQuery({
+    queryKey: ['wa-logs', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/commission/whatsapp-logs', { params: companyParams }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'templates',
+  });
+  const sendEodM = useMutation({
+    mutationFn: () => api.post('/commission/send-eod', { date: eodDate, force: true }),
+  });
   const delM = useMutation({
     mutationFn: (id) => api.delete(`/commission/payouts/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['commission-payouts'] }),
@@ -233,6 +409,11 @@ export default function CommissionList() {
   const rules = rulesQ.data?.data ?? [];
   const payouts = payoutsQ.data?.data ?? [];
   const supervisorEntries = supervisorQ.data?.data ?? [];
+  const ledgerRows = ledgerQ.data?.data ?? [];
+  const promotions = promosQ.data ?? [];
+  const seasonalRules = seasonalQ.data ?? [];
+  const templates = templatesQ.data ?? [];
+  const waLogs = waLogsQ.data?.data ?? [];
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -244,7 +425,18 @@ export default function CommissionList() {
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
           {tab === 'rules' && can('commission.manage') && <Button size="sm" onClick={() => { setEditingRule(null); setRuleModal(true); }}><PlusIcon className="size-4" /> Set rule</Button>}
+          {tab === 'promotions' && can('commission.manage') && <Button size="sm" onClick={() => setPromoModal(true)}><PlusIcon className="size-4" /> Add promotion</Button>}
+          {tab === 'seasonal' && can('commission.manage') && <Button size="sm" onClick={() => setSeasonalModal(true)}><PlusIcon className="size-4" /> Add rule</Button>}
+          {tab === 'templates' && can('whatsapp.templates') && <Button size="sm" onClick={() => setTemplateModal(true)}><PlusIcon className="size-4" /> Add template</Button>}
           {tab === 'payouts' && can('commission.pay') && <Button size="sm" onClick={() => setPayoutModal(true)}><PlusIcon className="size-4" /> Record payout</Button>}
+          {tab === 'ledger' && can('commission.manage') && (
+            <div className="flex items-center gap-2">
+              <Input type="date" value={eodDate} onChange={(e) => setEodDate(e.target.value)} className="h-9 w-36" />
+              <Button size="sm" variant="secondary" disabled={sendEodM.isPending} onClick={() => sendEodM.mutate()}>
+                {sendEodM.isPending ? <Spinner className="size-4 border-white/40 border-t-white" /> : 'Resend EOD WhatsApp'}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -321,7 +513,122 @@ export default function CommissionList() {
                         <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(r.monthly_target)}</td>
                         <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(r.target_bonus)}</td>
                         <td className="px-4 py-2.5"><Badge tone={r.is_active ? 'active' : 'inactive'}>{r.is_active ? 'active' : 'inactive'}</Badge></td>
-                        <td className="px-4 py-2.5 text-right">{can('commission.manage') && <button onClick={() => { setEditingRule(r); setRuleModal(true); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="Edit"><PencilSquareIcon className="size-4" /></button>}</td>
+                        <td className="px-4 py-2.5 text-right">{can('commission.manage') && !r.is_supervisor && (
+                          <div className="flex justify-end gap-1">
+                            <button onClick={() => { setEditingRule(r); setRuleModal(true); }} className="rounded-lg p-1.5 text-muted hover:bg-paper" aria-label="Edit"><PencilSquareIcon className="size-4" /></button>
+                            <Button variant="ghost" size="sm" onClick={() => setTierRule(r)}>Tiers</Button>
+                            <Button variant="ghost" size="sm" onClick={() => setTargetRule(r)}>Daily</Button>
+                          </div>
+                        )}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </Card>
+      )}
+
+      {tab === 'promotions' && (
+        <Card className="overflow-hidden">
+          {promosQ.isLoading ? <div className="flex justify-center py-16"><Spinner /></div>
+            : promotions.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No promotions configured.</div>
+            : (
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-line text-left text-faint">
+                  <th className="microlabel px-4 py-2.5">Name</th><th className="microlabel px-4 py-2.5">Period</th>
+                  <th className="microlabel px-4 py-2.5 text-right">Per unit</th><th className="microlabel px-4 py-2.5 text-right">Fixed</th>
+                </tr></thead>
+                <tbody>{promotions.map((p) => (
+                  <tr key={p.id} className="border-b border-line/60"><td className="px-4 py-2.5 font-medium">{p.name}</td>
+                    <td className="px-4 py-2.5 text-muted">{formatDate(p.start_date)} – {formatDate(p.end_date)}</td>
+                    <td className="tnum px-4 py-2.5 text-right">{formatCurrency(p.bonus_per_unit)}</td>
+                    <td className="tnum px-4 py-2.5 text-right">{formatCurrency(p.bonus_fixed)}</td></tr>
+                ))}</tbody>
+              </table>
+            )}
+        </Card>
+      )}
+
+      {tab === 'seasonal' && (
+        <Card className="overflow-hidden">
+          {seasonalQ.isLoading ? <div className="flex justify-center py-16"><Spinner /></div>
+            : seasonalRules.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No seasonal care rules.</div>
+            : (
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-line text-left text-faint">
+                  <th className="microlabel px-4 py-2.5">Name</th><th className="microlabel px-4 py-2.5">Trigger</th><th className="microlabel px-4 py-2.5">Template</th>
+                </tr></thead>
+                <tbody>{seasonalRules.map((r) => (
+                  <tr key={r.id} className="border-b border-line/60"><td className="px-4 py-2.5 font-medium">{r.name}</td>
+                    <td className="px-4 py-2.5">{r.days_after_purchase} days after purchase</td>
+                    <td className="px-4 py-2.5 text-xs text-muted truncate max-w-xs">{r.message_template}</td></tr>
+                ))}</tbody>
+              </table>
+            )}
+        </Card>
+      )}
+
+      {tab === 'templates' && (
+        <div className="space-y-4">
+          <Card className="overflow-hidden">
+            <div className="border-b border-line px-4 py-2 text-sm font-semibold">Templates</div>
+            {templatesQ.isLoading ? <div className="flex justify-center py-10"><Spinner /></div>
+              : templates.length === 0 ? <div className="px-4 py-10 text-center text-sm text-muted">No templates — default message text is used.</div>
+              : templates.map((t) => (
+                <div key={t.id} className="border-b border-line/60 px-4 py-3 last:border-0">
+                  <div className="font-medium">{t.name} <Badge tone="info">{t.slug}</Badge></div>
+                  <pre className="mt-1 whitespace-pre-wrap text-xs text-muted">{t.body}</pre>
+                </div>
+              ))}
+          </Card>
+          <Card className="overflow-hidden">
+            <div className="border-b border-line px-4 py-2 text-sm font-semibold">Recent messages</div>
+            {waLogs.length === 0 ? <div className="px-4 py-10 text-center text-sm text-muted">No messages logged yet.</div>
+              : (
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5">Date</th><th className="microlabel px-4 py-2.5">Type</th>
+                    <th className="microlabel px-4 py-2.5">Phone</th><th className="microlabel px-4 py-2.5">Status</th>
+                  </tr></thead>
+                  <tbody>{waLogs.map((l) => (
+                    <tr key={l.id} className="border-b border-line/60">
+                      <td className="px-4 py-2.5 text-muted">{formatDate(l.business_date || l.created_at)}</td>
+                      <td className="px-4 py-2.5">{l.message_type}</td>
+                      <td className="tnum px-4 py-2.5">{l.recipient_phone}</td>
+                      <td className="px-4 py-2.5"><Badge tone={l.status === 'sent' ? 'active' : 'blocked'}>{l.status}</Badge></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              )}
+          </Card>
+        </div>
+      )}
+
+      {tab === 'ledger' && (
+        <Card className="overflow-hidden">
+          {ledgerQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : ledgerRows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No commission ledger entries yet.</div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Staff</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Type</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Base</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Amount</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
+                  </tr></thead>
+                  <tbody>
+                    {ledgerRows.map((row) => (
+                      <tr key={row.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
+                        <td className="px-4 py-2.5 text-muted">{formatDate(row.transaction_date)}</td>
+                        <td className="px-4 py-2.5 font-medium">{row.user?.name ?? '—'}</td>
+                        <td className="px-4 py-2.5"><Badge tone="info">{row.commission_type}</Badge></td>
+                        <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(row.calculation_base)}</td>
+                        <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(row.amount)}</td>
+                        <td className="px-4 py-2.5"><Badge tone={row.status === 'accrued' ? 'active' : 'inactive'}>{row.status}</Badge></td>
                       </tr>
                     ))}
                   </tbody>
@@ -365,6 +672,11 @@ export default function CommissionList() {
       )}
 
       <RuleModal open={ruleModal} onClose={() => { setRuleModal(false); setEditingRule(null); }} staff={staff} editing={editingRule} />
+      <TierEditorModal open={Boolean(tierRule)} onClose={() => setTierRule(null)} rule={tierRule} />
+      <DailyTargetModal open={Boolean(targetRule)} onClose={() => setTargetRule(null)} rule={targetRule} />
+      <PromotionModal open={promoModal} onClose={() => setPromoModal(false)} />
+      <SeasonalModal open={seasonalModal} onClose={() => setSeasonalModal(false)} />
+      <TemplateModal open={templateModal} onClose={() => setTemplateModal(false)} />
       <PayoutModal open={payoutModal} onClose={() => setPayoutModal(false)} staff={staff} />
     </div>
   );

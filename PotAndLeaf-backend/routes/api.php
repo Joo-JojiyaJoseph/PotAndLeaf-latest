@@ -92,6 +92,20 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('commission/payouts', [CommissionController::class, 'payouts']);
         Route::post('commission/payouts', [CommissionController::class, 'storePayout']);
         Route::delete('commission/payouts/{commissionPayout}', [CommissionController::class, 'destroyPayout']);
+        Route::get('commission/transactions', [CommissionController::class, 'transactions']);
+        Route::get('commission/daily-summary', [CommissionController::class, 'dailySummary']);
+        Route::post('commission/send-eod', [CommissionController::class, 'sendEod']);
+        Route::post('commission/rules/{commissionRule}/tiers', [CommissionController::class, 'syncTiers']);
+        Route::post('commission/rules/{commissionRule}/daily-targets', [CommissionController::class, 'syncDailyTargets']);
+        Route::get('commission/promotions', [CommissionController::class, 'promotions']);
+        Route::post('commission/promotions', [CommissionController::class, 'storePromotion']);
+        Route::get('commission/seasonal-care-rules', [CommissionController::class, 'seasonalCareRules']);
+        Route::post('commission/seasonal-care-rules', [CommissionController::class, 'storeSeasonalCareRule']);
+        Route::get('commission/whatsapp-logs', [CommissionController::class, 'whatsappLogs']);
+        Route::get('commission/whatsapp-templates', [CommissionController::class, 'whatsappTemplates']);
+        Route::post('commission/whatsapp-templates', [CommissionController::class, 'storeWhatsAppTemplate']);
+        Route::post('commission/manager-rules', [CommissionController::class, 'storeManagerRule']);
+        Route::get('commission/manager-rules', [CommissionController::class, 'managerRules']);
 
         // Module 08 — Customer receipts
         Route::get('customer-receipts/form-data', [CustomerReceiptController::class, 'formData']);
@@ -131,6 +145,10 @@ Route::middleware('auth:sanctum')->group(function () {
         // Module 12 — Customer master (CRUD)
         Route::get('customers', [CustomerController::class, 'index']);
         Route::get('loyalty', [LoyaltyController::class, 'index']);
+        Route::post('loyalty/adjust', [LoyaltyController::class, 'adjust']);
+        Route::get('loyalty/rules', [LoyaltyController::class, 'rules']);
+        Route::post('loyalty/rules', [LoyaltyController::class, 'storeRule']);
+        Route::delete('loyalty/rules/{loyaltyRule}', [LoyaltyController::class, 'destroyRule']);
         Route::post('customers', [CustomerController::class, 'store']);
         Route::get('customers/{customer}/purchase-history', [CustomerController::class, 'purchaseHistory']);
         Route::get('customers/{customer}', [CustomerController::class, 'show']);
@@ -245,6 +263,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('reports/accounting/creditor-ledger', [ReportController::class, 'creditorLedger']);
         Route::get('reports/accounting/ageing-receivables', [ReportController::class, 'ageingReceivables']);
         Route::get('reports/accounting/ageing-payables', [ReportController::class, 'ageingPayables']);
+        Route::get('reports/sales/comparison-month', [ReportController::class, 'salesComparisonMonth']);
+        Route::get('reports/sales/comparison-yoy', [ReportController::class, 'salesComparisonYoy']);
+        Route::get('reports/sales/ytd', [ReportController::class, 'salesYtd']);
+        Route::get('reports/sales/twelve-month-trend', [ReportController::class, 'twelveMonthTrend']);
+        Route::get('reports/gst-reconciliation', [ReportController::class, 'gstReconciliation']);
+        Route::get('reports/commission', [ReportController::class, 'commissionReport']);
+        Route::get('reports/leaderboard', [ReportController::class, 'leaderboard']);
+        Route::get('reports/eod-management/preview', [ReportController::class, 'eodManagementPreview']);
+        Route::post('reports/eod-management/send', [ReportController::class, 'sendEodManagement']);
 
         Route::get('activity-monitoring/form-data', [ActivityMonitoringController::class, 'formData']);
         Route::get('activity-monitoring', [ActivityMonitoringController::class, 'index']);

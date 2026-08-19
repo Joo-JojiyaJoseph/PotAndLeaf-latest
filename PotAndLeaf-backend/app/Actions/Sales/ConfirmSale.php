@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Services\ActivityLogService;
+use App\Services\CommissionEngine;
 use App\Services\InventoryService;
 use App\Services\LoyaltyService;
 use App\Services\PoolStockService;
@@ -26,6 +27,7 @@ class ConfirmSale
         private readonly InventoryService $inventory,
         private readonly LoyaltyService $loyalty,
         private readonly SupervisorCommissionService $supervisorCommission,
+        private readonly CommissionEngine $commissionEngine,
         private readonly PoolStockService $pool,
         private readonly ActivityLogService $activity,
         private readonly ReceiptService $receipts,
@@ -137,15 +139,17 @@ class ConfirmSale
                         $customer->refresh();
                     }
 
-                    $earnBase = max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount);
-                    $earned = $this->loyalty->pointsEarned($sale->company_id, $earnBase);
-                    $this->loyalty->postEarn($customer, $earned, $sale);
+                    $earnResult = $this->loyalty->pointsForSale($sale, $customer);
+                    $earned = (int) ($earnResult['points'] ?? 0);
+                    $this->loyalty->postEarn($customer, $earned, $sale, '', $earnResult['rules'] ?? null);
                 }
             }
 
             $sale->update(['status' => 'confirmed', 'confirmed_at' => now()]);
 
             $this->receipts->recordFromConfirmedSale($sale->fresh(), $userId);
+
+            $this->commissionEngine->accrueOnSaleConfirm($sale->fresh(['items']));
 
             $this->activity->log(
                 $sale->company_id, $userId, 'confirm', 'sales', 'sale', $sale->id,

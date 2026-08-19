@@ -24,6 +24,11 @@ class SettingsService
         'sale_cancel_requires_approval'=> '1',     // confirmed sales need HO approval to cancel
         'cash_opening_balance'         => '0',     // opening cash balance for cash book
         'bank_opening_balance'         => '0',     // opening bank balance for bank book
+        'financial_year_start_month'   => '4',     // April FY start (1=Jan … 12=Dec)
+        'dead_stock_days'              => '180',   // days without sale for dead stock
+        'eod_management_enabled'       => '0',     // HO management EOD summary
+        'eod_management_whatsapp_phones' => '',    // comma-separated HO/manager phones
+        'eod_management_email_recipients' => '',   // comma-separated HO/manager emails
     ];
 
     /** @return array<string, string> */

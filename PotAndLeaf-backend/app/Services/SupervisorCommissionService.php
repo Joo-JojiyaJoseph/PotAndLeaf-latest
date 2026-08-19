@@ -3,8 +3,9 @@
 namespace App\Services;
 
 use App\Models\CommissionRule;
-use App\Models\Product;
 use App\Models\ProductionOrder;
+use App\Models\Product;
+use App\Models\Sale;
 use App\Models\SupervisorCommissionEntry;
 use Illuminate\Support\Collection;
 
@@ -75,6 +76,7 @@ class SupervisorCommissionService
                 'unit_value'          => $value,
                 'amount'              => $amount,
                 'accrued_date'        => now()->toDateString(),
+                'status'              => 'accrued',
             ]);
 
             $order->commission_pending_qty = round((float) $order->commission_pending_qty - $take, 3);
@@ -85,6 +87,124 @@ class SupervisorCommissionService
         }
 
         return $entries;
+    }
+
+    /** Reverse supervisor accruals when a sale is cancelled; restore pending production qty. */
+    public function reverseForSale(Sale $sale): void
+    {
+        SupervisorCommissionEntry::forCompany($sale->company_id)
+            ->where('reference_type', 'sale')
+            ->where('reference_id', $sale->id)
+            ->where('status', 'accrued')
+            ->each(fn (SupervisorCommissionEntry $entry) => $this->createFullReversal($entry));
+    }
+
+    /** Pro-rata reversal when sold produced stock is returned. */
+    public function reverseForSalesReturn(\App\Models\SalesReturn $return): void
+    {
+        $return->loadMissing(['items', 'sale']);
+        $sale = $return->sale;
+        if (! $sale) {
+            return;
+        }
+
+        foreach ($return->items as $item) {
+            if (! $item->product_id || (float) $item->qty <= 0) {
+                continue;
+            }
+
+            $origQty = (float) $sale->items()->whereKey($item->sale_item_id)->value('qty');
+            if ($origQty <= 0) {
+                continue;
+            }
+
+            $ratio = min(1.0, (float) $item->qty / $origQty);
+
+            SupervisorCommissionEntry::forCompany($return->company_id)
+                ->where('reference_type', 'sale')
+                ->where('reference_id', $sale->id)
+                ->where('product_id', $item->product_id)
+                ->where('status', 'accrued')
+                ->each(fn (SupervisorCommissionEntry $entry) => $this->createPartialReversal($entry, $ratio, 'sales-return', $return->id));
+        }
+    }
+
+    /** Reverse supervisor accruals when a dispatched transfer is cancelled. */
+    public function reverseForTransfer(\App\Models\StockTransfer $transfer): void
+    {
+        SupervisorCommissionEntry::forCompany($transfer->company_id)
+            ->where('reference_type', 'stock-transfer')
+            ->where('reference_id', $transfer->id)
+            ->where('status', 'accrued')
+            ->each(fn (SupervisorCommissionEntry $entry) => $this->createFullReversal($entry));
+    }
+
+    private function createFullReversal(SupervisorCommissionEntry $entry): void
+    {
+        SupervisorCommissionEntry::create([
+            'company_id'          => $entry->company_id,
+            'user_id'             => $entry->user_id,
+            'product_id'          => $entry->product_id,
+            'production_order_id' => $entry->production_order_id,
+            'trigger_event'       => 'reversal',
+            'reference_type'      => $entry->reference_type,
+            'reference_id'        => $entry->reference_id,
+            'qty'                 => $entry->qty,
+            'unit_value'          => $entry->unit_value,
+            'amount'              => -1 * (float) $entry->amount,
+            'accrued_date'        => now()->toDateString(),
+            'status'              => 'accrued',
+            'reversal_of_id'      => $entry->id,
+        ]);
+        $entry->update(['status' => 'reversed']);
+
+        if ($entry->production_order_id) {
+            ProductionOrder::whereKey($entry->production_order_id)
+                ->increment('commission_pending_qty', (float) $entry->qty);
+        }
+    }
+
+    private function createPartialReversal(SupervisorCommissionEntry $entry, float $ratio, string $refType, string $refId): void
+    {
+        if ($entry->status !== 'accrued' || $ratio <= 0) {
+            return;
+        }
+
+        $amount = round((float) $entry->amount * min(1.0, $ratio), 2);
+        $qty = round((float) $entry->qty * min(1.0, $ratio), 3);
+        if ($amount <= 0) {
+            return;
+        }
+
+        SupervisorCommissionEntry::create([
+            'company_id'          => $entry->company_id,
+            'user_id'             => $entry->user_id,
+            'product_id'          => $entry->product_id,
+            'production_order_id' => $entry->production_order_id,
+            'trigger_event'       => 'reversal',
+            'reference_type'      => $refType,
+            'reference_id'        => $refId,
+            'qty'                 => $qty,
+            'unit_value'          => $entry->unit_value,
+            'amount'              => -1 * $amount,
+            'accrued_date'        => now()->toDateString(),
+            'status'              => 'accrued',
+            'reversal_of_id'      => $entry->id,
+        ]);
+
+        $reversed = abs((float) SupervisorCommissionEntry::query()
+            ->where('reversal_of_id', $entry->id)
+            ->where('trigger_event', 'reversal')
+            ->sum('amount'));
+
+        if ($reversed + 0.01 >= (float) $entry->amount) {
+            $entry->update(['status' => 'reversed']);
+        }
+
+        if ($entry->production_order_id) {
+            ProductionOrder::whereKey($entry->production_order_id)
+                ->increment('commission_pending_qty', $qty);
+        }
     }
 
     public function entries(int|string|null $companyId, array $filters = [])

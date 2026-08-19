@@ -5,6 +5,7 @@ namespace App\Actions\Sales;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Services\CommissionEngine;
 use App\Services\InventoryService;
 use App\Services\LoyaltyService;
 use App\Services\ReceiptService;
@@ -15,6 +16,7 @@ class CancelSale
     public function __construct(
         private readonly InventoryService $inventory,
         private readonly LoyaltyService $loyalty,
+        private readonly CommissionEngine $commissionEngine,
         private readonly ReceiptService $receipts,
     ) {}
 
@@ -61,6 +63,7 @@ class CancelSale
                 }
 
                 $this->receipts->voidForSale($sale);
+                $this->commissionEngine->reverseOnSaleCancel($sale);
             }
 
             $sale->update([

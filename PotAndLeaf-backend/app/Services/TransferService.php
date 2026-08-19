@@ -518,6 +518,10 @@ class TransferService
             }
             $transfer->update(['status' => 'cancelled']);
 
+            if ($transfer->isInTransit() && ! $transfer->isIntraCompany()) {
+                $this->supervisorCommission->reverseForTransfer($transfer->fresh());
+            }
+
             $this->logTransfer($transfer->company_id, $userId, 'cancel', $transfer->fresh(), 'Transfer cancelled');
 
             return $transfer->refresh();

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { SparklesIcon } from '@heroicons/react/24/outline';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { SparklesIcon, PlusIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { Badge, Button, Card, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import Pagination from '../../components/Pagination';
 
 const ledgerTone = { earn: 'active', redeem: 'pending', reverse: 'blocked' };
@@ -15,6 +15,9 @@ export default function LoyaltyPage() {
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [ruleOpen, setRuleOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['loyalty', activeCompany?.id, filterCompanyId, page],
@@ -23,12 +26,37 @@ export default function LoyaltyPage() {
     placeholderData: keepPreviousData,
   });
 
+  const rulesQ = useQuery({
+    queryKey: ['loyalty-rules', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/loyalty/rules', { params: companyParams }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && can('loyalty.manage'),
+  });
+
+  const [adjustForm, setAdjustForm] = useState({ customer_id: '', points: '', reason: '' });
+  const [ruleForm, setRuleForm] = useState({ name: '', rule_type: 'spend', earn_rupees: '100', earn_points: '1', customer_tier: '' });
+
+  const adjustM = useMutation({
+    mutationFn: () => api.post('/loyalty/adjust', { customer_id: adjustForm.customer_id, points: Number(adjustForm.points), reason: adjustForm.reason }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loyalty'] }); setAdjustOpen(false); setAdjustForm({ customer_id: '', points: '', reason: '' }); },
+  });
+
+  const ruleM = useMutation({
+    mutationFn: () => api.post('/loyalty/rules', {
+      name: ruleForm.name, rule_type: ruleForm.rule_type,
+      earn_rupees: Number(ruleForm.earn_rupees), earn_points: Number(ruleForm.earn_points),
+      customer_tier: ruleForm.customer_tier || null, is_active: true,
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loyalty-rules'] }); setRuleOpen(false); },
+  });
+
   const cp = data?.customers;
   const customers = cp?.data ?? [];
   const meta = cp?.last_page > 1 ? cp : null;
   const settings = data?.settings ?? {};
   const totals = data?.totals ?? {};
   const ledger = data?.recent_ledger ?? [];
+  const loyaltyRules = rulesQ.data ?? [];
+  const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm';
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -39,6 +67,8 @@ export default function LoyaltyPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
+          {can('loyalty.adjust') && <Button size="sm" variant="secondary" onClick={() => setAdjustOpen(true)}>Adjust points</Button>}
+          {can('loyalty.manage') && <Button size="sm" onClick={() => setRuleOpen(true)}><PlusIcon className="size-4" /> Add rule</Button>}
           {can('settings.update') && (
             <Link to="/settings"><Button variant="outline" size="sm"><SparklesIcon className="size-4" /> Loyalty settings</Button></Link>
           )}
@@ -60,6 +90,22 @@ export default function LoyaltyPage() {
           <p className="mt-1 text-xs text-muted">Redeem: ₹{settings.loyalty_redeem_rupees ?? 1}/pt · cap {settings.loyalty_redeem_cap_percent ?? 50}%</p>
         </Card>
       </div>
+
+      {can('loyalty.manage') && loyaltyRules.length > 0 && (
+        <Section title="Earn rules">
+          <Card className="divide-y divide-line">
+            {loyaltyRules.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                <div><span className="font-medium">{r.name}</span> <Badge tone="info">{r.rule_type}</Badge></div>
+                <div className="text-muted">
+                  {r.rule_type === 'spend' && `₹${r.earn_rupees} → ${r.earn_points} pt`}
+                  {r.customer_tier && ` · tier: ${r.customer_tier}`}
+                </div>
+              </div>
+            ))}
+          </Card>
+        </Section>
+      )}
 
       <Section title="Customer balances">
         <Card className="overflow-hidden">
@@ -134,6 +180,33 @@ export default function LoyaltyPage() {
           )}
         </Card>
       </Section>
+
+      <Modal open={adjustOpen} onClose={() => setAdjustOpen(false)} title="Adjust customer points"
+        footer={<><Button variant="ghost" size="sm" onClick={() => setAdjustOpen(false)}>Cancel</Button><Button size="sm" disabled={adjustM.isPending} onClick={() => adjustM.mutate()}>Save</Button></>}>
+        <div className="space-y-3">
+          <Field label="Customer ID"><Input value={adjustForm.customer_id} onChange={(e) => setAdjustForm((f) => ({ ...f, customer_id: e.target.value }))} placeholder="Paste customer UUID" /></Field>
+          <Field label="Points (+/-)"><Input type="number" value={adjustForm.points} onChange={(e) => setAdjustForm((f) => ({ ...f, points: e.target.value }))} /></Field>
+          <Field label="Reason"><Input value={adjustForm.reason} onChange={(e) => setAdjustForm((f) => ({ ...f, reason: e.target.value }))} /></Field>
+        </div>
+      </Modal>
+
+      <Modal open={ruleOpen} onClose={() => setRuleOpen(false)} title="Loyalty earn rule"
+        footer={<><Button variant="ghost" size="sm" onClick={() => setRuleOpen(false)}>Cancel</Button><Button size="sm" disabled={ruleM.isPending} onClick={() => ruleM.mutate()}>Save</Button></>}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Name" className="sm:col-span-2"><Input value={ruleForm.name} onChange={(e) => setRuleForm((f) => ({ ...f, name: e.target.value }))} /></Field>
+          <Field label="Type">
+            <select className={selectCls} value={ruleForm.rule_type} onChange={(e) => setRuleForm((f) => ({ ...f, rule_type: e.target.value }))}>
+              <option value="spend">Spend-based</option>
+              <option value="customer_tier">Customer tier</option>
+              <option value="product">Product bonus</option>
+              <option value="category">Category bonus</option>
+            </select>
+          </Field>
+          <Field label="Customer tier (optional)"><Input value={ruleForm.customer_tier} onChange={(e) => setRuleForm((f) => ({ ...f, customer_tier: e.target.value }))} placeholder="silver / gold / retail" /></Field>
+          <Field label="₹ per earn unit"><Input type="number" value={ruleForm.earn_rupees} onChange={(e) => setRuleForm((f) => ({ ...f, earn_rupees: e.target.value }))} /></Field>
+          <Field label="Points per unit"><Input type="number" value={ruleForm.earn_points} onChange={(e) => setRuleForm((f) => ({ ...f, earn_points: e.target.value }))} /></Field>
+        </div>
+      </Modal>
     </div>
   );
 }

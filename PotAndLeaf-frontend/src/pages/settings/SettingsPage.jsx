@@ -39,6 +39,16 @@ const GROUPS = [
     ],
   },
   {
+    title: 'Reports & EOD',
+    keys: [
+      { key: 'financial_year_start_month', label: 'Financial year start month (1–12)', type: 'number', step: '1' },
+      { key: 'dead_stock_days', label: 'Dead stock threshold (days)', type: 'number', step: '1' },
+      { key: 'eod_management_enabled', label: 'Send HO management EOD summary', type: 'toggle' },
+      { key: 'eod_management_whatsapp_phones', label: 'EOD WhatsApp phones (comma-separated)', type: 'text' },
+      { key: 'eod_management_email_recipients', label: 'EOD email recipients (comma-separated)', type: 'text' },
+    ],
+  },
+  {
     title: 'Rental automation',
     keys: [
       { key: 'rental_auto_bill', label: 'Auto-generate invoices on billing cycle', type: 'toggle' },
@@ -135,6 +145,13 @@ export default function SettingsPage() {
                       <option value="0">Off</option>
                       <option value="1">On</option>
                     </select>
+                  ) : field.type === 'text' ? (
+                    <Input
+                      type="text"
+                      disabled={!canEdit}
+                      value={form[field.key] ?? ''}
+                      onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                    />
                   ) : (
                     <Input
                       type="number"

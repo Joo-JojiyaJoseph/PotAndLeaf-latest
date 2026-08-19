@@ -9,6 +9,8 @@ use App\Models\Location;
 use App\Models\Supplier;
 use App\Services\ReportExportService;
 use App\Services\ReportService;
+use App\Services\SalesAnalyticsService;
+use App\Services\EodManagementSummaryService;
 use App\Support\Api\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +22,8 @@ class ReportController extends Controller
     public function __construct(
         private readonly ReportService $reports,
         private readonly ReportExportService $export,
+        private readonly SalesAnalyticsService $analytics,
+        private readonly EodManagementSummaryService $eodManagement,
     ) {}
 
     public function dashboard(Request $request): JsonResponse
@@ -36,27 +40,37 @@ class ReportController extends Controller
     {
         $this->allow($request, 'reports.view');
         $user = $request->user();
-        $company = $this->company($request);
+        $headerCompany = $this->company($request);
+        $scopeId = $this->reportCompanyId($request);
 
         $companies = $user->is_super_admin
             ? Company::active()->orderBy('name')->get(['id', 'name', 'code'])
-            : collect([$company->only(['id', 'name', 'code'])]);
+            : collect([$headerCompany->only(['id', 'name', 'code'])]);
 
-        $locations = Location::forCompany($company->id)->where('is_active', true)
-            ->orderByDesc('is_default')->orderBy('name')
-            ->get(['id', 'name', 'code']);
+        $filterCompanyId = $scopeId ?? $headerCompany->id;
 
-        $customers = Customer::forCompany($company->id)->where('status', 'active')
-            ->orderBy('name')->get(['id', 'name']);
+        $locations = $scopeId === null
+            ? collect()
+            : Location::forCompany($filterCompanyId)->where('is_active', true)
+                ->orderByDesc('is_default')->orderBy('name')
+                ->get(['id', 'name', 'code']);
 
-        $suppliers = Supplier::forCompany($company->id)->where('status', 'active')
-            ->orderBy('name')->get(['id', 'name']);
+        $customers = $scopeId === null
+            ? collect()
+            : Customer::forCompany($filterCompanyId)->where('status', 'active')
+                ->orderBy('name')->get(['id', 'name']);
+
+        $suppliers = $scopeId === null
+            ? collect()
+            : Supplier::forCompany($filterCompanyId)->where('status', 'active')
+                ->orderBy('name')->get(['id', 'name']);
 
         return $this->ok([
             'companies' => $companies,
             'locations' => $locations,
             'customers' => $customers,
             'suppliers' => $suppliers,
+            'scoped_company_id' => $scopeId,
         ]);
     }
 
@@ -503,6 +517,117 @@ class ReportController extends Controller
         return $this->ok($this->reports->ageingPayables($this->reportCompanyId($request)));
     }
 
+    public function salesComparisonMonth(Request $request): JsonResponse
+    {
+        $this->allow($request, 'reports.view');
+        $companyId = $this->reportCompanyId($request);
+
+        return $this->ok($this->analytics->monthComparison(
+            $companyId,
+            $request->query('as_of'),
+            $request->query('location_id'),
+        ));
+    }
+
+    public function salesComparisonYoy(Request $request): JsonResponse
+    {
+        $this->allow($request, 'reports.view');
+        $companyId = $this->reportCompanyId($request);
+
+        return $this->ok($this->analytics->yearOnYear(
+            $companyId,
+            $request->query('month'),
+            $request->query('location_id'),
+        ));
+    }
+
+    public function salesYtd(Request $request): JsonResponse
+    {
+        $this->allow($request, 'reports.view');
+        $companyId = $this->reportCompanyId($request);
+
+        return $this->ok($this->analytics->yearToDate(
+            $companyId,
+            $request->query('as_of'),
+            $request->query('location_id'),
+        ));
+    }
+
+    public function twelveMonthTrend(Request $request): JsonResponse
+    {
+        $this->allow($request, 'reports.view');
+        $companyId = $this->reportCompanyId($request);
+
+        return $this->ok($this->analytics->twelveMonthTrend(
+            $companyId,
+            $request->query('as_of'),
+            $request->query('location_id'),
+        ));
+    }
+
+    public function gstReconciliation(Request $request): JsonResponse
+    {
+        $this->allowAccounting($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->analytics->gstReconciliation($companyId, $from, $to));
+    }
+
+    public function commissionReport(Request $request): JsonResponse
+    {
+        $this->allowCommissionReport($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->analytics->commissionReport(
+            $companyId,
+            $from,
+            $to,
+            $request->query('user_id') ? (int) $request->query('user_id') : null,
+        ));
+    }
+
+    public function leaderboard(Request $request): JsonResponse
+    {
+        $this->allow($request, 'reports.view');
+        $companyId = $this->reportCompanyId($request);
+        $period = $request->query('period', 'month');
+        if (! in_array($period, ['month', 'year'], true)) {
+            $period = 'month';
+        }
+
+        return $this->ok($this->analytics->leaderboard(
+            $companyId,
+            $period,
+            $request->query('as_of'),
+            $request->query('location_id'),
+        ));
+    }
+
+    public function eodManagementPreview(Request $request): JsonResponse
+    {
+        $this->allowEodManagement($request);
+        $companyId = $this->company($request)->id;
+        $date = $request->query('date') ?: now()->toDateString();
+
+        return $this->ok($this->eodManagement->build($companyId, $date));
+    }
+
+    public function sendEodManagement(Request $request): JsonResponse
+    {
+        $this->allowEodManagement($request);
+        $companyId = $this->company($request)->id;
+        $date = $request->input('date') ?: now()->toDateString();
+
+        return $this->ok(
+            $this->eodManagement->send($companyId, $date, (bool) $request->boolean('force')),
+            'Management EOD summary processed.',
+        );
+    }
+
     private function reportCompanyId(Request $request): int|string|null
     {
         if ($request->user()->is_super_admin && $request->query('company_id') === 'all') {
@@ -582,6 +707,31 @@ class ReportController extends Controller
         abort_unless(
             $user->hasPermission('reports.view', $companyId)
             && ($user->hasPermission('receipts.view', $companyId) || $user->hasPermission('payments.view', $companyId)),
+            403,
+        );
+    }
+
+    private function allowCommissionReport(Request $request): void
+    {
+        $companyId = $this->company($request)->id;
+        $user = $request->user();
+        abort_unless(
+            $user->is_super_admin
+            || $user->hasPermission('*', $companyId)
+            || ($user->hasPermission('reports.view', $companyId) && $user->hasPermission('commission.view', $companyId)),
+            403,
+        );
+    }
+
+    private function allowEodManagement(Request $request): void
+    {
+        $companyId = $this->company($request)->id;
+        $user = $request->user();
+        abort_unless(
+            $user->is_super_admin
+            || $user->hasPermission('*', $companyId)
+            || $user->hasPermission('settings.update', $companyId)
+            || $user->hasPermission('commission.manage', $companyId),
             403,
         );
     }

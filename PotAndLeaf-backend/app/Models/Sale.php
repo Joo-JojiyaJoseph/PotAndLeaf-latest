@@ -21,6 +21,7 @@ class Sale extends Model
             'status', 'notes', 'confirmed_at',
             'cancel_requested_at', 'cancel_requested_by', 'cancel_reason',
             'cancel_reviewed_at', 'cancel_reviewed_by', 'cancel_rejection_reason',
+            'created_by',
     ];
 
     protected function casts(): array

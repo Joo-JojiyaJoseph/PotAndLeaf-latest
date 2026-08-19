@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\SaleItem;
 use App\Models\SalesReturn;
 use App\Repositories\Contracts\SalesReturnRepositoryInterface;
+use App\Services\CommissionEngine;
 use App\Services\InventoryService;
 use App\Services\LoyaltyService;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,7 @@ class ConfirmSalesReturn
         private readonly SalesReturnRepositoryInterface $returns,
         private readonly InventoryService $inventory,
         private readonly LoyaltyService $loyalty,
+        private readonly CommissionEngine $commissionEngine,
     ) {}
 
     public function handle(SalesReturn $return, ?int $userId = null): SalesReturn
@@ -83,10 +85,18 @@ class ConfirmSalesReturn
                             'note'           => "Return {$return->return_no}",
                         ]);
                     }
+
+                    if ($return->sale) {
+                        $this->loyalty->reverseRedemptionForReturn($customer, $return->sale, (float) $return->grand_total);
+                    }
                 }
             }
 
             $return->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+
+            if ($return->sale) {
+                $this->commissionEngine->reverseOnSalesReturn($return->fresh(['items', 'sale']));
+            }
 
             return $return->refresh()->load(['customer', 'sale:id,sale_no', 'items']);
         });
