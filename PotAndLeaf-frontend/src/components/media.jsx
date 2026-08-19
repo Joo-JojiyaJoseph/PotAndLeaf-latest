@@ -11,14 +11,14 @@ export function mediaUrl(value) {
   if (!value) return null;
   if (value.startsWith('data:') || value.startsWith('blob:')) return value;
 
-  // Absolute URL — rewrite /storage/ paths to the loadable origin (proxy in dev).
+  // Repair legacy corrupted URLs saved as http:https://host/storage/...
+  const embedded = value.match(/(https?:\/\/[^\s]+)/i);
+  if (embedded && !/^https?:\/\//i.test(value)) {
+    value = embedded[1];
+  }
+
+  // Absolute URL from API — use as-is (backend already resolved APP_URL).
   if (/^https?:\/\//i.test(value)) {
-    try {
-      const { pathname, search } = new URL(value);
-      if (pathname.startsWith('/storage/')) {
-        return `${ASSET_BASE}${pathname}${search}`;
-      }
-    } catch { /* fall through */ }
     return value;
   }
 
