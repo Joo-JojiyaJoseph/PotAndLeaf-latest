@@ -42,6 +42,36 @@ class MediaUrl
         return self::ensureAbsolute(Storage::disk('public')->url('uploads/'.ltrim($pathOrUrl, '/')));
     }
 
+    /** Normalize an absolute URL or /storage path back to a public-disk path (uploads/…). */
+    public static function storagePath(?string $pathOrUrl): ?string
+    {
+        if (blank($pathOrUrl)) {
+            return null;
+        }
+
+        $pathOrUrl = self::repairCorrupted(trim($pathOrUrl));
+
+        if (str_starts_with($pathOrUrl, 'blob:') || str_starts_with($pathOrUrl, 'data:')) {
+            return null;
+        }
+
+        if (preg_match('#^https?://#i', $pathOrUrl) || str_starts_with($pathOrUrl, '/')) {
+            $path = parse_url($pathOrUrl, PHP_URL_PATH) ?? $pathOrUrl;
+            $path = ltrim($path, '/');
+            $path = preg_replace('#^storage/#', '', $path) ?? $path;
+
+            return str_starts_with($path, 'uploads/') ? $path : null;
+        }
+
+        if (str_starts_with($pathOrUrl, 'storage/')) {
+            $path = substr($pathOrUrl, strlen('storage/'));
+
+            return str_starts_with($path, 'uploads/') ? $path : null;
+        }
+
+        return str_starts_with($pathOrUrl, 'uploads/') ? $pathOrUrl : null;
+    }
+
     /** @param  array<int, string|null>|null  $paths */
     public static function resolveMany(?array $paths): array
     {

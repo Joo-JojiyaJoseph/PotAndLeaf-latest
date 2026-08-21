@@ -80,13 +80,13 @@ export function ImageUpload({ value, onChange, shape = 'circle', hint = 'PNG or 
     if (!file) return;
 
     revokeBlob();
-    const localPreview = URL.createObjectURL(file);
-    blobRef.current = localPreview;
-    onChange(localPreview);
-
     setBusy(true);
     onBusyChange?.(true);
     setBroken(false);
+
+    const localPreview = URL.createObjectURL(file);
+    blobRef.current = localPreview;
+    onChange(localPreview);
     try {
       const url = await uploadFile(file);
       revokeBlob();

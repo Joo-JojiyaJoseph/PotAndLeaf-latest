@@ -93,7 +93,7 @@ class PurchaseCalculator
                 'discount_total' => round($discountTotal, 2),
                 'tax_total' => $taxTotal,
                 'landed_cost_total' => round($landedCostTotal, 2),
-                'grand_total' => round($subtotal + $taxTotal, 2),
+                'grand_total' => round($subtotal + $taxTotal + round($landedCostTotal, 2), 2),
             ],
         ];
     }

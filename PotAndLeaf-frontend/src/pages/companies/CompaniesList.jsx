@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BuildingOffice2Icon,
+  EyeIcon,
+  MagnifyingGlassIcon,
   PencilSquareIcon,
   PlusIcon,
   TrashIcon,
@@ -21,19 +24,49 @@ const empty = {
 };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 
+const COMPANY_FIELDS = [
+  'name', 'code', 'gst_number', 'legal_name', 'state', 'state_code',
+  'phone', 'email', 'address', 'locations', 'description', 'logo', 'is_active',
+];
+
+function buildCompanyPayload(form, id) {
+  const payload = {};
+  for (const key of COMPANY_FIELDS) {
+    if (key in form) payload[key] = form[key];
+  }
+  if (payload.logo?.startsWith?.('blob:') || payload.logo?.startsWith?.('data:')) {
+    delete payload.logo;
+  }
+  if (id) payload.id = id;
+  else delete payload.code;
+  return payload;
+}
+
 export default function CompaniesList() {
-  const { isSuperAdmin, refreshCompanies } = useAuth();
+  const { isSuperAdmin, refreshCompanies, booting } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const toast = useToast();
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
+  const [uploadBusy, setUploadBusy] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['companies'],
-    queryFn: () => api.get('/companies').then((r) => r.data),
-    enabled: isSuperAdmin,
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['companies', debounced],
+    queryFn: () => api.get('/companies', { params: debounced ? { search: debounced } : {} }).then((r) => r.data),
+    enabled: !booting && isSuperAdmin,
+    retry: 1,
   });
 
   const saveM = useMutation({
@@ -42,10 +75,12 @@ export default function CompaniesList() {
       if (body.logo) body.photo = body.logo;
       return payload.id ? api.put(`/companies/${payload.id}`, body) : api.post('/companies', body);
     },
-    onSuccess: (_r, payload) => {
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-      refreshCompanies();
+    onSuccess: async (_r, payload) => {
+      await queryClient.invalidateQueries({ queryKey: ['companies'] });
+      await refetch();
+      await refreshCompanies();
       setEditing(null);
+      if (!payload.id) setSearch('');
       toast.success(payload.id ? 'Company updated.' : 'Company created.');
     },
     onError: (err) => {
@@ -66,6 +101,18 @@ export default function CompaniesList() {
     onError: (err) => toast.error(err.response?.data?.message ?? 'Could not delete company.'),
   });
 
+  useEffect(() => {
+    const editId = location.state?.editId;
+    if (!editId || !isSuperAdmin) return;
+    const row = (data?.data ?? []).find((c) => String(c.id) === String(editId));
+    if (!row) return;
+    setForm({ ...empty, ...row, logo: row.logo ?? row.photo ?? null });
+    setErrors({});
+    setEditing(row);
+    navigate(location.pathname, { replace: true, state: null });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state?.editId, data?.data, isSuperAdmin]);
+
   async function onToggle(c, next) {
     if (c.is_protected && !next) {
       toast.error('This company cannot be deactivated.');
@@ -74,6 +121,14 @@ export default function CompaniesList() {
     await api.patch(`/companies/${c.id}/status`, { is_active: next });
     toast.success(`${c.name} ${next ? 'activated' : 'deactivated'}`);
     queryClient.invalidateQueries({ queryKey: ['companies'] });
+  }
+
+  if (booting) {
+    return (
+      <div className="flex justify-center py-16">
+        <Spinner className="size-6" />
+      </div>
+    );
   }
 
   if (!isSuperAdmin) {
@@ -94,7 +149,12 @@ export default function CompaniesList() {
   };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const err = (k) => fieldError(errors, k);
-  const rows = data?.data ?? [];
+  const allRows = data?.data ?? [];
+  const rows = allRows.filter((c) => {
+    if (statusFilter === 'active') return c.is_active;
+    if (statusFilter === 'inactive') return !c.is_active;
+    return true;
+  });
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -106,16 +166,58 @@ export default function CompaniesList() {
         <Button size="sm" onClick={openNew}><PlusIcon className="size-4" /> Add company</Button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-md flex-1">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, code, email, phone…"
+            className="h-10 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25"
+          />
+        </div>
+        <div className="flex rounded-xl border border-line p-0.5">
+          {[
+            { key: 'all', label: 'All' },
+            { key: 'active', label: 'Active' },
+            { key: 'inactive', label: 'Inactive' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setStatusFilter(tab.key)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${statusFilter === tab.key ? 'bg-leaf text-white' : 'text-muted hover:text-ink'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
       ) : isError ? (
-        <Card className="px-4 py-12 text-center text-sm text-muted">Couldn't load companies.</Card>
+        <Card className="space-y-3 px-4 py-12 text-center text-sm">
+          <p className="text-muted">Couldn&apos;t load companies.</p>
+          <p className="text-xs text-danger">{error?.response?.data?.message ?? error?.message ?? 'Server error — try again.'}</p>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>Retry</Button>
+        </Card>
       ) : rows.length === 0 ? (
-        <Card className="px-4 py-16 text-center text-sm text-muted">No companies yet.</Card>
+        <Card className="px-4 py-16 text-center text-sm text-muted">
+          {debounced
+            ? `No companies match “${debounced}”.`
+            : statusFilter === 'inactive'
+              ? 'No inactive companies.'
+              : statusFilter === 'active'
+                ? 'No active companies yet.'
+                : allRows.length > 0
+                  ? 'No companies match the current filter.'
+                  : 'No companies yet.'}
+        </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {rows.map((c) => (
-            <Card key={c.id} className="flex flex-col overflow-hidden p-4">
+            <Card key={c.id} className="flex flex-col overflow-hidden p-4 cursor-pointer hover:shadow-soft" onClick={() => navigate(`/companies/${c.id}`)}>
               <div className="flex items-start gap-3">
                 <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-leaf-soft">
                   {(c.logo || c.photo)
@@ -129,14 +231,22 @@ export default function CompaniesList() {
                 </div>
               </div>
               <p className="mt-3 line-clamp-2 text-xs text-muted">{c.description || c.locations || c.address || 'No description'}</p>
-              <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
+              <div className="mt-3 flex items-center justify-between border-t border-line pt-3" onClick={(e) => e.stopPropagation()}>
                 <StatusToggle active={Boolean(c.is_active)} onToggle={(next) => onToggle(c, next)} />
                 <div className="flex items-center gap-1">
-                  <button onClick={() => openEdit(c)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="Edit">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/companies/${c.id}`)}
+                    className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink"
+                    aria-label="View"
+                  >
+                    <EyeIcon className="size-4" />
+                  </button>
+                  <button type="button" onClick={() => openEdit(c)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="Edit">
                     <PencilSquareIcon className="size-4" />
                   </button>
                   {!c.is_protected && (
-                    <button onClick={() => setDeleting(c)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Delete">
+                    <button type="button" onClick={() => setDeleting(c)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Delete">
                       <TrashIcon className="size-4" />
                     </button>
                   )}
@@ -155,10 +265,14 @@ export default function CompaniesList() {
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setEditing(null)} disabled={saveM.isPending}>Cancel</Button>
-            <Button size="sm" disabled={locked} onClick={() => submit(() => {
-              const payload = { ...form, id: editing?.id };
-              if (!payload.id) delete payload.code;
-              saveM.mutate(payload, { onSettled: release });
+            <Button size="sm" disabled={locked || uploadBusy} onClick={() => submit(() => {
+              if (!form.name?.trim()) {
+                setErrors({ name: 'Company name is required.' });
+                toast.error('Enter a company name.');
+                release();
+                return;
+              }
+              saveM.mutate(buildCompanyPayload(form, editing?.id), { onSettled: release });
             })}>
               {saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}
             </Button>
@@ -168,7 +282,7 @@ export default function CompaniesList() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Field label="Logo / photo">
-              <ImageUpload value={form.logo} onChange={(url) => setForm((f) => ({ ...f, logo: url }))} shape="rounded" />
+              <ImageUpload value={form.logo} onChange={(url) => setForm((f) => ({ ...f, logo: url }))} shape="rounded" onBusyChange={setUploadBusy} />
             </Field>
           </div>
           <Field label="Name" required error={err('name')}><Input value={form.name} onChange={set('name')} /></Field>

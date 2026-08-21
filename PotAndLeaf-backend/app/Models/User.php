@@ -45,12 +45,22 @@ class User extends Authenticatable
             ?? $this->companies()->first();
     }
 
+    /** Company members for lists — active, inactive, or all. */
+    public function scopeCompanyMembers($query, int|string|null $companyId = null, string $status = 'active')
+    {
+        $query->where('is_super_admin', false)
+            ->whereHas('companies', fn ($q) => $companyId !== null ? $q->whereKey($companyId) : $q);
+
+        return match ($status) {
+            'inactive' => $query->where('is_active', false),
+            'all'      => $query,
+            default    => $query->where('is_active', true),
+        };
+    }
+
     /** Active users with company membership — for lists and dropdowns. */
     public function scopeActiveMembers($query, int|string|null $companyId = null)
     {
-        return $query
-            ->where('is_super_admin', false)
-            ->where('is_active', true)
-            ->whereHas('companies', fn ($q) => $companyId !== null ? $q->whereKey($companyId) : $q);
+        return $query->companyMembers($companyId, 'active');
     }
 }

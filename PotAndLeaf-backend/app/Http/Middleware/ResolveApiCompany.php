@@ -49,9 +49,10 @@ class ResolveApiCompany
                 $listCompanyId = null;
             } elseif (filled($param)) {
                 $target = Company::query()->whereKey($param)->first();
-                if ($target) {
-                    $listCompanyId = $target->id;
+                if (! $target) {
+                    return response()->json(['message' => 'Company not found.'], 404);
                 }
+                $listCompanyId = $target->id;
             }
         } elseif ($request->filled('company_id') && ! $request->user()->is_super_admin) {
             // Non-super-admins cannot filter across companies via query param.

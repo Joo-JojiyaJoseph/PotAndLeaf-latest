@@ -4,24 +4,59 @@ namespace App\Actions\Products;
 
 use App\Models\Product;
 use App\Repositories\Contracts\ProductRepositoryInterface;
+use App\Services\InventoryService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class UpdateProduct
 {
-    public function __construct(private readonly ProductRepositoryInterface $products) {}
+    public function __construct(
+        private readonly ProductRepositoryInterface $products,
+        private readonly InventoryService $inventory,
+    ) {}
 
     /** @param array<string,mixed> $data */
-    public function handle(Product $product, array $data): Product
+    public function handle(Product $product, array $data, ?int $userId = null): Product
     {
-        return DB::transaction(function () use ($product, $data) {
+        return DB::transaction(function () use ($product, $data, $userId) {
             $suppliers = $this->pullSuppliers($data);
             $data = $this->normalizeDecimals($data);
             unset($data['sku']);
 
-            // Stock is moved by inventory transactions, never edited directly,
-            // so opening_stock changes don't touch current_stock here.
+            if (! empty($data['company_id']) && (string) $data['company_id'] !== (string) $product->company_id) {
+                $data['company_id'] = (int) $data['company_id'];
+            } else {
+                unset($data['company_id']);
+            }
+
+            $previousOpening = (float) $product->opening_stock;
+            $nextOpening = array_key_exists('opening_stock', $data)
+                ? (float) $data['opening_stock']
+                : $previousOpening;
+            $adjustment = round($nextOpening - $previousOpening, 3);
+
+            if ($adjustment < 0 && (float) $product->current_stock + $adjustment < -0.0001) {
+                throw ValidationException::withMessages([
+                    'opening_stock' => 'Cannot reduce opening stock by more than the current stock on hand.',
+                ]);
+            }
+
             $updated = $this->products->update($product, $data);
             $updated->suppliers()->sync($suppliers);
+
+            if (abs($adjustment) > 0.0001) {
+                $this->inventory->post(
+                    $updated,
+                    $adjustment > 0 ? 'in' : 'out',
+                    abs($adjustment),
+                    (float) ($updated->cost_price ?? 0),
+                    'opening_stock_adjustment',
+                    $updated->id,
+                    'Opening stock adjustment',
+                    $userId,
+                );
+                $updated->save();
+            }
 
             return $updated->load('suppliers');
         });

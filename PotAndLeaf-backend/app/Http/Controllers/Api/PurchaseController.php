@@ -38,6 +38,7 @@ class PurchaseController extends Controller
         $this->allow($request, 'purchases.create');
 
         $suppliers = Supplier::query()->forCompany($company->id)
+            ->where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name', 'supplier_code', 'state'])
             ->map(fn ($s) => [

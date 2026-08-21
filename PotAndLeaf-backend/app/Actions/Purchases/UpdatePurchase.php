@@ -25,18 +25,41 @@ class UpdatePurchase
             ]);
         }
 
+        $companyId = $purchase->company_id;
+        if (! empty($data['company_id']) && (string) $data['company_id'] !== (string) $companyId) {
+            $companyId = $data['company_id'];
+            $supplierOk = \App\Models\Supplier::query()
+                ->where('company_id', $companyId)
+                ->whereKey($data['supplier_id'])
+                ->where('status', 'active')
+                ->exists();
+            if (! $supplierOk) {
+                throw ValidationException::withMessages([
+                    'company_id' => 'Supplier must belong to the selected company.',
+                ]);
+            }
+            $productIds = collect($data['items'])->pluck('product_id')->filter()->all();
+            $productsOk = count($productIds) === \App\Models\Product::forCompany($companyId)->whereIn('id', $productIds)->count();
+            if (! $productsOk) {
+                throw ValidationException::withMessages([
+                    'company_id' => 'All products must belong to the selected company.',
+                ]);
+            }
+        }
+
         $computed = $this->calculator->compute(
             $data['items'],
             (bool) ($data['is_interstate'] ?? false),
             (float) ($data['landed_cost_total'] ?? 0),
         );
 
-        $snapshots = Product::forCompany($purchase->company_id)
+        $snapshots = Product::forCompany($companyId)
             ->whereIn('id', collect($data['items'])->pluck('product_id')->filter()->all())
             ->get(['id', 'name', 'hsn_code'])->keyBy('id');
 
-        return DB::transaction(function () use ($purchase, $data, $computed, $snapshots) {
+        return DB::transaction(function () use ($purchase, $data, $computed, $snapshots, $companyId) {
             $this->purchases->update($purchase, [
+                'company_id'    => $companyId,
                 'supplier_id'   => $data['supplier_id'],
                 'invoice_no'    => $data['invoice_no'] ?? null,
                 'invoice_date'  => $data['invoice_date'] ?? null,

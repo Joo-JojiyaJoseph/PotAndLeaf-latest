@@ -67,6 +67,17 @@ class StoreBulkSplitRequest extends FormRequest
                 );
             }
 
+            $sourceId = $this->input('source_product_id');
+            $source = $sourceId
+                ? \App\Models\Product::forCompany($this->route('current_company')->id)->find($sourceId)
+                : null;
+            if ($source && $sourceQty > (float) $source->current_stock) {
+                $validator->errors()->add(
+                    'source_qty',
+                    'Available quantity cannot exceed stock on hand ('.$source->current_stock.').',
+                );
+            }
+
             foreach ($items as $i => $item) {
                 if ((float) ($item['qty'] ?? 0) <= 0) {
                     $validator->errors()->add("items.{$i}.qty", 'Each split quantity must be greater than zero.');

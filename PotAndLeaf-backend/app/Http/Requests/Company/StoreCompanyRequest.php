@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Company;
 
+use App\Support\Media\MediaUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -32,10 +33,36 @@ class StoreCompanyRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return [
+            'phone.regex'     => 'Enter a valid phone number (digits, and optionally + - ( ) spaces).',
+            'name.required'   => 'Company name is required.',
+            'state_code.max'  => 'State code must be at most 2 characters.',
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         if ($this->filled('photo') && ! $this->filled('logo')) {
             $this->merge(['logo' => $this->input('photo')]);
+        }
+
+        foreach (['phone', 'email', 'gst_number', 'legal_name', 'state', 'state_code', 'address', 'description'] as $field) {
+            if ($this->has($field) && $this->input($field) === '') {
+                $this->merge([$field => null]);
+            }
+        }
+
+        $logo = MediaUrl::storagePath($this->input('logo')) ?? $this->input('logo');
+        if (is_string($logo) && (str_starts_with($logo, 'blob:') || str_starts_with($logo, 'data:'))) {
+            $logo = null;
+        }
+        if ($logo === '') {
+            $logo = null;
+        }
+        if ($this->has('logo') || $this->has('photo')) {
+            $this->merge(['logo' => $logo, 'photo' => null]);
         }
 
         // Accept `locations` as either a newline-delimited string or an array

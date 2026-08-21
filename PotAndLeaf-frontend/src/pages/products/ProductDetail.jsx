@@ -56,7 +56,6 @@ export default function ProductDetail() {
         <InfoGrid cols={4}>
           <InfoItem label="SKU" value={p.sku} mono />
           <InfoItem label="Category" value={p.category || '—'} />
-          <InfoItem label="Brand" value={p.brand || '—'} />
           <InfoItem label="Unit" value={p.unit || '—'} />
           <InfoItem label="HSN code" value={p.hsn_code || '—'} />
           <InfoItem label="GST %" value={`${p.gst_rate ?? 0}%`} />

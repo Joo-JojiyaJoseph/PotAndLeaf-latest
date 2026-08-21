@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './routes/ProtectedRoute';
+import PermissionRoute from './routes/PermissionRoute';
 import AppShell from './components/AppShell';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -12,6 +13,7 @@ import ProductsList from './pages/products/ProductsList';
 import ProductForm from './pages/products/ProductForm';
 import ProductDetail from './pages/products/ProductDetail';
 import CompaniesList from './pages/companies/CompaniesList';
+import CompanyDetail from './pages/companies/CompanyDetail';
 import UsersList from './pages/users/UsersList';
 import UserDetail from './pages/users/UserDetail';
 import RolesList from './pages/roles/RolesList';
@@ -73,70 +75,71 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
-          <Route index element={<Dashboard />} />
-          <Route path="suppliers" element={<SuppliersList />} />
-          <Route path="suppliers/:id" element={<SupplierDetail />} />
-          <Route path="products" element={<ProductsList />} />
-          <Route path="products/labels" element={<BarcodeLabelsPage />} />
-          <Route path="products/new" element={<ProductForm />} />
-          <Route path="products/:id/edit" element={<ProductForm />} />
-          <Route path="products/:id" element={<ProductDetail />} />
-          <Route path="purchases" element={<PurchasesList />} />
-          <Route path="purchases/new" element={<PurchaseForm />} />
-          <Route path="purchases/:id/edit" element={<PurchaseForm />} />
-          <Route path="purchases/:id" element={<PurchaseDetail />} />
-          <Route path="inventory" element={<InventoryList />} />
-          <Route path="damage-entries" element={<DamageEntriesPage />} />
-          <Route path="inventory/batches" element={<BatchesPage />} />
-          <Route path="purchase-returns" element={<PurchaseReturnsList />} />
-          <Route path="purchase-returns/new" element={<PurchaseReturnForm />} />
-          <Route path="purchase-returns/:id" element={<PurchaseReturnDetail />} />
-          <Route path="stock-verifications" element={<StockVerificationsList />} />
-          <Route path="stock-verifications/new" element={<StockVerificationForm />} />
-          <Route path="stock-verifications/:id" element={<StockVerificationDetail />} />
-          <Route path="companies" element={<CompaniesList />} />
-          <Route path="users" element={<UsersList />} />
-          <Route path="users/:id" element={<UserDetail />} />
-          <Route path="roles" element={<RolesList />} />
-          <Route path="masters" element={<MastersPage />} />
+          <Route index element={<PermissionRoute permission="reports.view"><Dashboard /></PermissionRoute>} />
+          <Route path="suppliers" element={<PermissionRoute permission="suppliers.view"><SuppliersList /></PermissionRoute>} />
+          <Route path="suppliers/:id" element={<PermissionRoute permission="suppliers.view"><SupplierDetail /></PermissionRoute>} />
+          <Route path="products" element={<PermissionRoute permission="products.view"><ProductsList /></PermissionRoute>} />
+          <Route path="products/labels" element={<PermissionRoute permission="products.view"><BarcodeLabelsPage /></PermissionRoute>} />
+          <Route path="products/new" element={<PermissionRoute permission="products.create"><ProductForm /></PermissionRoute>} />
+          <Route path="products/:id/edit" element={<PermissionRoute permission="products.update"><ProductForm /></PermissionRoute>} />
+          <Route path="products/:id" element={<PermissionRoute permission="products.view"><ProductDetail /></PermissionRoute>} />
+          <Route path="purchases" element={<PermissionRoute permission="purchases.view"><PurchasesList /></PermissionRoute>} />
+          <Route path="purchases/new" element={<PermissionRoute permission="purchases.create"><PurchaseForm /></PermissionRoute>} />
+          <Route path="purchases/:id/edit" element={<PermissionRoute permission="purchases.update"><PurchaseForm /></PermissionRoute>} />
+          <Route path="purchases/:id" element={<PermissionRoute permission="purchases.view"><PurchaseDetail /></PermissionRoute>} />
+          <Route path="inventory" element={<PermissionRoute permission="inventory.view"><InventoryList /></PermissionRoute>} />
+          <Route path="damage-entries" element={<PermissionRoute permission="damage.view"><DamageEntriesPage /></PermissionRoute>} />
+          <Route path="inventory/batches" element={<PermissionRoute permission="inventory.view"><BatchesPage /></PermissionRoute>} />
+          <Route path="purchase-returns" element={<PermissionRoute permission="purchase_returns.view"><PurchaseReturnsList /></PermissionRoute>} />
+          <Route path="purchase-returns/new" element={<PermissionRoute permission="purchase_returns.create"><PurchaseReturnForm /></PermissionRoute>} />
+          <Route path="purchase-returns/:id" element={<PermissionRoute permission="purchase_returns.view"><PurchaseReturnDetail /></PermissionRoute>} />
+          <Route path="stock-verifications" element={<PermissionRoute permission="stock_verifications.view"><StockVerificationsList /></PermissionRoute>} />
+          <Route path="stock-verifications/new" element={<PermissionRoute permission="stock_verifications.create"><StockVerificationForm /></PermissionRoute>} />
+          <Route path="stock-verifications/:id" element={<PermissionRoute permission="stock_verifications.view"><StockVerificationDetail /></PermissionRoute>} />
+          <Route path="companies" element={<PermissionRoute superAdmin><CompaniesList /></PermissionRoute>} />
+          <Route path="companies/:id" element={<PermissionRoute superAdmin><CompanyDetail /></PermissionRoute>} />
+          <Route path="users" element={<PermissionRoute permission="users.view"><UsersList /></PermissionRoute>} />
+          <Route path="users/:id" element={<PermissionRoute permission="users.view"><UserDetail /></PermissionRoute>} />
+          <Route path="roles" element={<PermissionRoute permission="roles.view"><RolesList /></PermissionRoute>} />
+          <Route path="masters" element={<PermissionRoute anyOf={['categories.view', 'subcategories.view', 'units.view']}><MastersPage /></PermissionRoute>} />
           <Route path="profile" element={<ProfilePage />} />
-          <Route path="bulk-splits" element={<BulkSplitsList />} />
-          <Route path="bulk-splits/new" element={<BulkSplitForm />} />
-          <Route path="bulk-splits/:id" element={<BulkSplitDetail />} />
-          <Route path="customers" element={<CustomersList />} />
-          <Route path="customers/:id" element={<CustomerDetail />} />
-          <Route path="loyalty" element={<LoyaltyPage />} />
-          <Route path="sales" element={<SalesList />} />
-          <Route path="sales/new" element={<SaleForm />} />
-          <Route path="sales/:id" element={<SaleDetail />} />
-          <Route path="sales-returns" element={<SalesReturnsList />} />
-          <Route path="sales-returns/new" element={<SalesReturnForm />} />
-          <Route path="sales-returns/:id" element={<SalesReturnDetail />} />
-          <Route path="payments" element={<PaymentsList />} />
-          <Route path="receipts" element={<ReceiptsList />} />
-          <Route path="commission" element={<CommissionList />} />
-          <Route path="transfers" element={<TransfersList />} />
-          <Route path="transfers/new" element={<TransferForm />} />
-          <Route path="transfers/:id" element={<TransferDetail />} />
-          <Route path="locations" element={<LocationsList />} />
-          <Route path="production" element={<ProductionList />} />
-          <Route path="production/orders/:id" element={<ProductionOrderDetail />} />
-          <Route path="rentals" element={<RentalsList />} />
-          <Route path="rentals/new" element={<RentalForm />} />
-          <Route path="rentals/:id" element={<RentalDetail />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="activity-monitoring" element={<ActivityMonitoringPage />} />
-          <Route path="backups" element={<BackupDashboardPage />} />
-          <Route path="purchase-orders" element={<PurchaseOrdersList />} />
-          <Route path="purchase-orders/reorder" element={<PurchaseOrderReorderPage />} />
-          <Route path="purchase-orders/new" element={<PurchaseOrderForm />} />
-          <Route path="purchase-orders/:id" element={<PurchaseOrderDetail />} />
-          <Route path="advance-orders" element={<AdvanceOrdersList />} />
-          <Route path="advance-orders/new" element={<AdvanceOrderForm />} />
-          <Route path="advance-orders/:id" element={<AdvanceOrderDetail />} />
-          <Route path="backorders" element={<BackordersList />} />
-          <Route path="backorders/new" element={<BackorderForm />} />
-          <Route path="backorders/:id" element={<BackorderDetail />} />
+          <Route path="bulk-splits" element={<PermissionRoute permission="bulk_splits.view"><BulkSplitsList /></PermissionRoute>} />
+          <Route path="bulk-splits/new" element={<PermissionRoute permission="bulk_splits.create"><BulkSplitForm /></PermissionRoute>} />
+          <Route path="bulk-splits/:id" element={<PermissionRoute permission="bulk_splits.view"><BulkSplitDetail /></PermissionRoute>} />
+          <Route path="customers" element={<PermissionRoute permission="customers.view"><CustomersList /></PermissionRoute>} />
+          <Route path="customers/:id" element={<PermissionRoute permission="customers.view"><CustomerDetail /></PermissionRoute>} />
+          <Route path="loyalty" element={<PermissionRoute permission="loyalty.view"><LoyaltyPage /></PermissionRoute>} />
+          <Route path="sales" element={<PermissionRoute permission="sales.view"><SalesList /></PermissionRoute>} />
+          <Route path="sales/new" element={<PermissionRoute permission="sales.create"><SaleForm /></PermissionRoute>} />
+          <Route path="sales/:id" element={<PermissionRoute permission="sales.view"><SaleDetail /></PermissionRoute>} />
+          <Route path="sales-returns" element={<PermissionRoute permission="sales_returns.view"><SalesReturnsList /></PermissionRoute>} />
+          <Route path="sales-returns/new" element={<PermissionRoute permission="sales_returns.create"><SalesReturnForm /></PermissionRoute>} />
+          <Route path="sales-returns/:id" element={<PermissionRoute permission="sales_returns.view"><SalesReturnDetail /></PermissionRoute>} />
+          <Route path="payments" element={<PermissionRoute permission="payments.view"><PaymentsList /></PermissionRoute>} />
+          <Route path="receipts" element={<PermissionRoute permission="receipts.view"><ReceiptsList /></PermissionRoute>} />
+          <Route path="commission" element={<PermissionRoute permission="commission.view"><CommissionList /></PermissionRoute>} />
+          <Route path="transfers" element={<PermissionRoute permission="transfers.view"><TransfersList /></PermissionRoute>} />
+          <Route path="transfers/new" element={<PermissionRoute permission="transfers.create"><TransferForm /></PermissionRoute>} />
+          <Route path="transfers/:id" element={<PermissionRoute permission="transfers.view"><TransferDetail /></PermissionRoute>} />
+          <Route path="locations" element={<PermissionRoute permission="locations.view"><LocationsList /></PermissionRoute>} />
+          <Route path="production" element={<PermissionRoute permission="production.view"><ProductionList /></PermissionRoute>} />
+          <Route path="production/orders/:id" element={<PermissionRoute permission="production.view"><ProductionOrderDetail /></PermissionRoute>} />
+          <Route path="rentals" element={<PermissionRoute permission="rental.view"><RentalsList /></PermissionRoute>} />
+          <Route path="rentals/new" element={<PermissionRoute permission="rental.create"><RentalForm /></PermissionRoute>} />
+          <Route path="rentals/:id" element={<PermissionRoute permission="rental.view"><RentalDetail /></PermissionRoute>} />
+          <Route path="reports" element={<PermissionRoute permission="reports.view"><ReportsPage /></PermissionRoute>} />
+          <Route path="activity-monitoring" element={<PermissionRoute permission="activity.view"><ActivityMonitoringPage /></PermissionRoute>} />
+          <Route path="backups" element={<PermissionRoute permission="backup.view"><BackupDashboardPage /></PermissionRoute>} />
+          <Route path="purchase-orders" element={<PermissionRoute permission="po.view"><PurchaseOrdersList /></PermissionRoute>} />
+          <Route path="purchase-orders/reorder" element={<PermissionRoute permission="po.create"><PurchaseOrderReorderPage /></PermissionRoute>} />
+          <Route path="purchase-orders/new" element={<PermissionRoute permission="po.create"><PurchaseOrderForm /></PermissionRoute>} />
+          <Route path="purchase-orders/:id" element={<PermissionRoute permission="po.view"><PurchaseOrderDetail /></PermissionRoute>} />
+          <Route path="advance-orders" element={<PermissionRoute permission="advance.view"><AdvanceOrdersList /></PermissionRoute>} />
+          <Route path="advance-orders/new" element={<PermissionRoute permission="advance.create"><AdvanceOrderForm /></PermissionRoute>} />
+          <Route path="advance-orders/:id" element={<PermissionRoute permission="advance.view"><AdvanceOrderDetail /></PermissionRoute>} />
+          <Route path="backorders" element={<PermissionRoute permission="backorder.view"><BackordersList /></PermissionRoute>} />
+          <Route path="backorders/new" element={<PermissionRoute permission="backorder.create"><BackorderForm /></PermissionRoute>} />
+          <Route path="backorders/:id" element={<PermissionRoute permission="backorder.view"><BackorderDetail /></PermissionRoute>} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="soon/:module" element={<ComingSoon />} />
         </Route>

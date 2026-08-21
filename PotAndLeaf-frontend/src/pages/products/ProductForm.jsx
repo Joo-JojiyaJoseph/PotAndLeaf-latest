@@ -40,7 +40,7 @@ export default function ProductForm() {
   const err = (k) => fieldError(errors, k);
   const [saving, setSaving] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
-  const [margin, setMargin] = useState('40');
+  const [margin, setMargin] = useState('0');
   const companyReady = isEdit || !isSuperAdmin || Boolean(formCompanyId);
 
   const { data: existing, isLoading: loadingExisting } = useQuery({
@@ -49,21 +49,29 @@ export default function ProductForm() {
     enabled: isEdit && Boolean(companyId),
   });
 
-  const editCompanyId = existing?.company_id ?? searchParams.get('company_id') ?? companyId;
-  const targetCompanyId = isEdit ? editCompanyId : (isSuperAdmin ? formCompanyId : companyId);
-  const companyCfg = targetCompanyId ? withCompany(targetCompanyId) : {};
+  const originalCompanyId = existing?.company_id ?? searchParams.get('company_id') ?? companyId;
+  const editCompanyId = originalCompanyId;
+  const targetCompanyId = isEdit
+    ? (isSuperAdmin ? (formCompanyId || originalCompanyId) : originalCompanyId)
+    : (isSuperAdmin ? formCompanyId : companyId);
+  const apiCompanyId = isEdit ? originalCompanyId : targetCompanyId;
+  const companyCfg = apiCompanyId ? withCompany(apiCompanyId) : {};
+  const formDataCfg = targetCompanyId ? withCompany(targetCompanyId) : {};
+
+  const suggestedRetail = useMemo(() => {
+    const cost = Number(form.cost_price) || 0;
+    const m = Math.max(0, Number(margin) || 0);
+    return Math.round(cost * (1 + m / 100) * 100) / 100;
+  }, [form.cost_price, margin]);
 
   const applyMargin = () => {
-    const cost = Number(form.cost_price) || 0;
-    const m = Number(margin) || 0;
-    const price = Math.round(cost * (1 + m / 100) * 100) / 100;
-    setForm((f) => ({ ...f, retail_price: price, mrp: f.mrp || price }));
+    setForm((f) => ({ ...f, retail_price: suggestedRetail, mrp: f.mrp || suggestedRetail }));
   };
 
   const { data: formData, isLoading: loadingForm } = useQuery({
     queryKey: ['product-form-data', targetCompanyId || activeCompany?.id],
     enabled: Boolean(activeCompany) && companyReady && Boolean(targetCompanyId || !isSuperAdmin),
-    queryFn: () => api.get('/products/form-data', companyCfg).then((r) => r.data.data),
+    queryFn: () => api.get('/products/form-data', formDataCfg).then((r) => r.data.data),
   });
 
   const categories = formData?.categories ?? [];
@@ -101,8 +109,9 @@ export default function ProductForm() {
       is_rental: Boolean(existing.is_rental), rental_daily_rate: existing.rental_daily_rate ?? '',
     });
     setBarcode(existing.barcode ?? '');
+    setFormCompanyId(String(existing.company_id ?? originalCompanyId ?? ''));
     seededRef.current = existing.id;
-  }, [existing, categories]);
+  }, [existing, categories, originalCompanyId]);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -136,6 +145,9 @@ export default function ProductForm() {
     );
     payload.is_rental = Boolean(form.is_rental);
     payload.rental_daily_rate = form.is_rental && form.rental_daily_rate !== '' ? Number(form.rental_daily_rate) : null;
+    if (isSuperAdmin && isEdit && formCompanyId && String(formCompanyId) !== String(originalCompanyId)) {
+      payload.company_id = Number(formCompanyId);
+    }
     ['hsn_code', 'barcode', 'description', 'category_id', 'unit_id'].forEach(
       (k) => (payload[k] = payload[k] === '' ? null : payload[k]),
     );
@@ -150,7 +162,7 @@ export default function ProductForm() {
       setBarcode(res.data.data.barcode);
       if (isEdit) {
         seededRef.current = null;
-        navigate(`/products/${id}${editCompanyId ? `?company_id=${editCompanyId}` : ''}`);
+        navigate('/products');
       } else {
         navigate('/products');
       }
@@ -189,19 +201,28 @@ export default function ProductForm() {
         <div className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{fieldError(errors, '_')}</div>
       )}
 
-      {isSuperAdmin && !isEdit && (
+      {isSuperAdmin && (
         <Card className="p-4">
-          <Field label="Company" required>
+          <Field label="Company" required={!isEdit}>
             <select
               value={formCompanyId}
-              onChange={(e) => setFormCompanyId(e.target.value)}
+              onChange={(e) => {
+                setFormCompanyId(e.target.value);
+                if (isEdit) {
+                  setForm((f) => ({ ...f, category_id: '', subcategory_id: '', unit_id: '' }));
+                }
+              }}
               className={selectCls}
             >
-              <option value="">Select company first…</option>
+              {!isEdit && <option value="">Select company first…</option>}
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </Field>
-          <p className="mt-1.5 text-xs text-muted">Choose which company this product belongs to. Your workspace company stays unchanged.</p>
+          <p className="mt-1.5 text-xs text-muted">
+            {isEdit
+              ? 'Change company only when moving this product to another branch — re-select category and unit for the new company.'
+              : 'Choose which company this product belongs to. Your workspace company stays unchanged.'}
+          </p>
         </Card>
       )}
 
@@ -267,12 +288,20 @@ export default function ProductForm() {
           </div>
 
           <div className="mt-5 border-t border-line pt-5">
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="microlabel text-faint">Pricing</div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs text-muted">Suggest from cost + margin</span>
-                <input type="number" value={margin} onChange={(e) => setMargin(e.target.value)} className="tnum h-8 w-16 rounded-lg border border-line bg-surface px-2 text-right text-sm" />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={margin}
+                  onChange={(e) => setMargin(e.target.value)}
+                  className="tnum h-8 w-16 rounded-lg border border-line bg-surface px-2 text-right text-sm"
+                />
                 <span className="text-xs text-muted">%</span>
+                <span className="tnum text-xs text-muted">→ {suggestedRetail.toFixed(2)}</span>
                 <Button type="button" variant="soft" size="sm" onClick={applyMargin}>Apply</Button>
               </div>
             </div>
@@ -289,7 +318,17 @@ export default function ProductForm() {
             <div className="microlabel mb-3 text-faint">Stock</div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Field label="Reorder level"><Input type="number" step="0.01" value={form.reorder_level} onChange={set('reorder_level')} /></Field>
-              <Field label="Opening stock"><Input type="number" step="0.01" value={form.opening_stock} onChange={set('opening_stock')} /></Field>
+              <Field label="Opening stock"><Input type="number" step="0.01" min="0" value={form.opening_stock} onChange={set('opening_stock')} /></Field>
+              {isEdit && existing?.current_stock != null && (
+                <Field label="Stock on hand">
+                  <Input value={existing.current_stock} disabled readOnly className="bg-paper text-muted" />
+                </Field>
+              )}
+              {isEdit && (
+                <p className="sm:col-span-2 text-xs text-muted">
+                  Changing opening stock adjusts current stock by the difference (via inventory ledger).
+                </p>
+              )}
             </div>
           </div>
 

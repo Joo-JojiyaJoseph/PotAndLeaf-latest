@@ -62,12 +62,12 @@ export function DetailLoading() {
   return <div className="flex h-full items-center justify-center py-24"><Spinner className="size-6" /></div>;
 }
 
-export function DetailError({ backTo }) {
+export function DetailError({ backTo, message }) {
   const navigate = useNavigate();
   return (
     <div className="p-6">
       <Card className="p-10 text-center">
-        <p className="text-sm text-muted">Couldn't load this record.</p>
+        <p className="text-sm text-muted">{message ?? "Couldn't load this record."}</p>
         <Button variant="outline" size="sm" className="mt-4" onClick={() => navigate(backTo ?? -1)}>Go back</Button>
       </Card>
     </div>

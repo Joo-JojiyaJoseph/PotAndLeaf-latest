@@ -50,6 +50,7 @@ class ProductController extends Controller
 
         $categories = ProductCategory::query()
             ->where('company_id', $company->id)
+            ->where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name', 'parent_id']);
 
@@ -69,7 +70,7 @@ class ProductController extends Controller
     public function store(StoreProductRequest $request): JsonResponse
     {
         $company = $this->company($request);
-        $product = $this->products->create($company->id, $request->validated());
+        $product = $this->products->create($company->id, $request->validated(), $request->user()->id);
 
         return $this->created(new ProductResource($product->load(['category', 'brand', 'unit'])), 'Product created.');
     }
@@ -85,7 +86,7 @@ class ProductController extends Controller
     public function update(UpdateProductRequest $request, Product $product): JsonResponse
     {
         $this->assertRecordCompany($request, $product, writable: true);
-        $updated = $this->products->update($product, $request->validated());
+        $updated = $this->products->update($product, $request->validated(), $request->user()->id);
 
         return $this->ok(new ProductResource($updated->load(['category', 'brand', 'unit'])), 'Product updated.');
     }

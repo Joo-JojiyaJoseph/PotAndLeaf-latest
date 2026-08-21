@@ -27,6 +27,12 @@ class UpdateSupplier
                 $data['photo'] = MediaStorage::replace($supplier->photo, $data['photo']);
             }
 
+            if (array_key_exists('company_id', $data) && (string) $data['company_id'] !== (string) $supplier->company_id) {
+                $hasHistory = \App\Models\Purchase::query()->where('supplier_id', $supplier->id)->exists()
+                    || \App\Models\SupplierPayment::query()->where('supplier_id', $supplier->id)->exists();
+                abort_if($hasHistory, 422, 'Cannot change company — this supplier has purchase or payment history.');
+            }
+
             return $this->suppliers->update($supplier, $data);
         });
     }

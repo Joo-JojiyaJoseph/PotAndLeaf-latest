@@ -1,6 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import api, { getAuthToken, getCompanyId, setAuthToken, setCompanyId } from '../lib/api';
 
+function pickDefaultCompany(companies) {
+  if (!companies?.length) return null;
+  return companies.find((c) => c.is_default)?.id ?? companies[0]?.id ?? null;
+}
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -47,7 +52,7 @@ export function AuthProvider({ children }) {
         if (!active) return;
         setUser(data.data.user);
         setCompanies(data.data.companies);
-        const current = getCompanyId() ?? data.data.companies[0]?.id ?? null;
+        const current = getCompanyId() ?? pickDefaultCompany(data.data.companies);
         if (current) {
           setCompanyId(current);
           setCompany(current);
@@ -73,7 +78,7 @@ export function AuthProvider({ children }) {
       setToken(payload.token);
       setUser(payload.user);
       setCompanies(payload.companies);
-      const first = payload.companies[0]?.id ?? null;
+      const first = pickDefaultCompany(payload.companies);
       setCompanyId(first);
       setCompany(first);
       await loadPermissions();

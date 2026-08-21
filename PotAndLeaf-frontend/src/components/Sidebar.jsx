@@ -8,10 +8,7 @@ import {
   BeakerIcon,
   CalculatorIcon,
   ChartBarIcon,
-  Cog6ToothIcon,
   CubeIcon,
-  ServerStackIcon,
-  SignalIcon,
   GiftIcon,
   HomeIcon,
   ReceiptRefundIcon,
@@ -30,112 +27,67 @@ import {
   QrCodeIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
-import { useConfirm } from '../lib/confirm';
-import { useToast } from '../lib/toast';
 import { classNames } from '../lib/format';
-import { CompanySelectMenuBlock } from './CompanySelectMenu';
 
 const GROUPS = [
   {
     label: 'Main',
     items: [
-      { key: 'dashboard', label: 'Dashboard', to: '/', icon: HomeIcon, end: true },
-      { key: 'purchase', label: 'Purchase', to: '/purchases', icon: ShoppingCartIcon },
-      { key: 'purchase-orders', label: 'Purchase Orders', to: '/purchase-orders', icon: ClipboardDocumentListIcon },
-      { key: 'inventory', label: 'Inventory', to: '/inventory', icon: CubeIcon, end: true },
-      { key: 'batches', label: 'Batches & barcodes', to: '/inventory/batches', icon: QrCodeIcon },
-      { key: 'damage', label: 'Damage Entry', to: '/damage-entries', icon: ExclamationTriangleIcon },
-      { key: 'purchase-returns', label: 'Purch. Returns', to: '/purchase-returns', icon: ArrowUturnLeftIcon },
-      { key: 'stock-verifications', label: 'Stock Count', to: '/stock-verifications', icon: ClipboardDocumentCheckIcon },
-      { key: 'bulk-splits', label: 'Bulk Split', to: '/bulk-splits', icon: ScissorsIcon },
-      { key: 'transfers', label: 'Transfers', to: '/transfers', icon: ArrowsRightLeftIcon },
-      { key: 'production', label: 'Production', to: '/production', icon: BeakerIcon },
+      { key: 'dashboard', label: 'Dashboard', to: '/', icon: HomeIcon, end: true, permission: 'reports.view' },
+      { key: 'purchase', label: 'Purchase', to: '/purchases', icon: ShoppingCartIcon, permission: 'purchases.view' },
+      // { key: 'purchase-orders', label: 'Purchase Orders', to: '/purchase-orders', icon: ClipboardDocumentListIcon, permission: 'po.view' },
+      { key: 'inventory', label: 'Inventory', to: '/inventory', icon: CubeIcon, end: true, permission: 'inventory.view' },
+      { key: 'batches', label: 'Batches & barcodes', to: '/inventory/batches', icon: QrCodeIcon, permission: 'inventory.view' },
+      { key: 'damage', label: 'Damage Entry', to: '/damage-entries', icon: ExclamationTriangleIcon, permission: 'damage.view' },
+      { key: 'purchase-returns', label: 'Purch. Returns', to: '/purchase-returns', icon: ArrowUturnLeftIcon, permission: 'purchase_returns.view' },
+      { key: 'stock-verifications', label: 'Stock Count', to: '/stock-verifications', icon: ClipboardDocumentCheckIcon, permission: 'stock_verifications.view' },
+      { key: 'bulk-splits', label: 'Bulk Split', to: '/bulk-splits', icon: ScissorsIcon, permission: 'bulk_splits.view' },
+      // { key: 'transfers', label: 'Transfers', to: '/transfers', icon: ArrowsRightLeftIcon, permission: 'transfers.view' },
+      // { key: 'production', label: 'Production', to: '/production', icon: BeakerIcon, permission: 'production.view' },
     ],
   },
-  {
-    label: 'Commerce',
-    items: [
-      { key: 'sales', label: 'Sales', to: '/sales', icon: CalculatorIcon },
-      { key: 'backorders', label: 'Backorders', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
-      { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon },
-      { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon },
-      { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
-      { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
-    ],
-  },
+  // {
+  //   label: 'Commerce',
+  //   items: [
+  //     { key: 'sales', label: 'Sales', to: '/sales', icon: CalculatorIcon, permission: 'sales.view' },
+  //     { key: 'backorders', label: 'Backorders', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
+  //     { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon, permission: 'rental.view' },
+      { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon, permission: 'customers.view' },
+  //     { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
+  //     { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
+  //   ],
+  // },
   {
     label: 'Setup',
     items: [
-      { key: 'suppliers', label: 'Suppliers', to: '/suppliers', icon: TruckIcon },
-      { key: 'payments', label: 'Payments', to: '/payments', icon: BanknotesIcon },
-      { key: 'receipts', label: 'Receipts', to: '/receipts', icon: ReceiptRefundIcon },
-      // { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon },
-       { key: 'companies', label: 'Companies', to: '/companies', icon: BuildingOffice2Icon, superAdmin: true },
-       { key: 'roles', label: 'Roles', to: '/roles', icon: ShieldCheckIcon },
-      { key: 'users', label: 'Users', to: '/users', icon: UserGroupIcon },
-      { key: 'masters', label: 'Master data', to: '/masters', icon: TagIcon },
-      { key: 'products', label: 'Products', to: '/products', icon: TagIcon },
-      
-     
-      { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon },
-      // { key: 'activity', label: 'Activity Monitor', to: '/activity-monitoring', icon: SignalIcon, hoOnly: true },
-      // { key: 'backups', label: 'Backups', to: '/backups', icon: ServerStackIcon, hoOnly: true },
-      // { key: 'advance-orders', label: 'Advance Orders', to: '/advance-orders', icon: CalendarDaysIcon },
-      // { key: 'settings', label: 'Settings', to: '/settings', icon: Cog6ToothIcon },
+      { key: 'suppliers', label: 'Suppliers', to: '/suppliers', icon: TruckIcon, permission: 'suppliers.view' },
+      { key: 'payments', label: 'Payments', to: '/payments', icon: BanknotesIcon, permission: 'payments.view' },
+      // { key: 'receipts', label: 'Receipts', to: '/receipts', icon: ReceiptRefundIcon, permission: 'receipts.view' },
+      { key: 'companies', label: 'Companies', to: '/companies', icon: BuildingOffice2Icon, superAdmin: true },
+      { key: 'roles', label: 'Roles', to: '/roles', icon: ShieldCheckIcon, permission: 'roles.view' },
+      { key: 'users', label: 'Users', to: '/users', icon: UserGroupIcon, permission: 'users.view' },
+      { key: 'masters', label: 'Master data', to: '/masters', icon: TagIcon, anyOf: ['categories.view', 'subcategories.view', 'units.view'] },
+      { key: 'products', label: 'Products', to: '/products', icon: TagIcon, permission: 'products.view' },
+      // { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
     ],
   },
 ];
 
+function itemVisible(item, { isSuperAdmin, showHo, can }) {
+  if (item.superAdmin) return isSuperAdmin;
+  if (item.hoOnly && !showHo) return false;
+  if (item.anyOf?.length) return item.anyOf.some((p) => can(p));
+  if (item.permission) return can(item.permission);
+  return false;
+}
+
 function PotLeafMark() {
   return (
     <svg viewBox="0 0 32 32" className="size-7" aria-hidden>
-      {/* leaf */}
       <path d="M16 4c5 2 8 6 8 10-4 1-7-1-8-4-1 3-4 5-8 4 0-4 3-8 8-10z" fill="var(--color-leaf)" />
-      {/* pot */}
       <path d="M9 19h14l-1.6 7.2a2 2 0 0 1-2 1.6h-6.8a2 2 0 0 1-2-1.6L9 19z" fill="var(--color-terracotta)" />
       <rect x="8" y="17.4" width="16" height="2.2" rx="1.1" fill="var(--color-terracotta)" />
     </svg>
-  );
-}
-
-function CompanySwitcher() {
-  const { companies, companyId, selectCompany, isSuperAdmin } = useAuth();
-  const confirm = useConfirm();
-  const toast = useToast();
-
-  if (companies.length === 0) return null;
-
-  const options = companies.map((c) => ({
-    value: c.id,
-    label: c.name,
-    sublabel: c.code ? c.code.toUpperCase() : undefined,
-  }));
-
-  async function onBeforeChange(next) {
-    if (!isSuperAdmin) return true;
-    const name = companies.find((c) => String(c.id) === String(next))?.name ?? 'this company';
-    return confirm({
-      title: 'Switch company?',
-      message: `The whole workspace will switch to ${name}. Any unsaved changes on the current screen may be lost.`,
-      confirmLabel: 'Switch',
-      tone: 'primary',
-    });
-  }
-
-  function onChange(next) {
-    selectCompany(next);
-    const name = companies.find((c) => String(c.id) === String(next))?.name ?? 'this company';
-    toast.info(`Switched to ${name}`);
-  }
-
-  return (
-    <CompanySelectMenuBlock
-      value={companyId ?? ''}
-      options={options}
-      onChange={onChange}
-      onBeforeChange={onBeforeChange}
-      hint="Used for creating and updating records."
-    />
   );
 }
 
@@ -181,6 +133,8 @@ function Item({ item }) {
 export default function Sidebar({ open, onClose }) {
   const { isSuperAdmin, can } = useAuth();
   const showHo = isSuperAdmin || can('activity.view') || can('backup.view') || can('*');
+  const ctx = { isSuperAdmin, showHo, can };
+
   return (
     <>
       {open && (
@@ -200,25 +154,24 @@ export default function Sidebar({ open, onClose }) {
           </div>
         </div>
 
-        {/* <CompanySwitcher /> */}
-
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-6">
-          {GROUPS.map((group) => (
-            <div key={group.label}>
-              <div className="mb-1.5 px-3 font-mono text-[10px] uppercase tracking-wider text-muted/70">
-                {group.label}
-              </div>
-              <div className="space-y-0.5">
-                {group.items
-                  .filter((item) => !item.superAdmin || isSuperAdmin)
-                  .filter((item) => !item.hoOnly || showHo)
-                  .filter((item) => !item.permission || can(item.permission))
-                  .map((item) => (
+          {GROUPS.map((group) => {
+            const items = group.items.filter((item) => itemVisible(item, ctx));
+            if (items.length === 0) return null;
+
+            return (
+              <div key={group.label}>
+                <div className="mb-1.5 px-3 font-mono text-[10px] uppercase tracking-wider text-muted/70">
+                  {group.label}
+                </div>
+                <div className="space-y-0.5">
+                  {items.map((item) => (
                     <Item key={item.key} item={item} />
                   ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
       </aside>
     </>

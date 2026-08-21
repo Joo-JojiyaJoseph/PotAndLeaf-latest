@@ -44,8 +44,10 @@ export default function PurchaseForm() {
     notes: '',
   });
   const [lines, setLines] = useState([emptyLine()]);
-  const [errors, setErrors] = useState([]);
+  const [errors, setErrors] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const [formCompanyId, setFormCompanyId] = useState('');
 
   // Suppliers/products are company-scoped — keying by company prevents showing a
   // previous company's options (which would fail validation on submit).
@@ -68,7 +70,8 @@ export default function PurchaseForm() {
     if (!isEdit) {
       setHeader((h) => ({ ...h, supplier_id: '' }));
       setLines([emptyLine()]);
-      setErrors([]);
+      setErrors({});
+      setFieldErrors({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCompany?.id]);
@@ -98,7 +101,8 @@ export default function PurchaseForm() {
         set_product_id: it.set_product_id ?? '',
       })),
     );
-  }, [existing]);
+    setFormCompanyId(existing.company_id ?? headerCompanyId ?? '');
+  }, [existing, headerCompanyId]);
 
   const productsById = useMemo(() => {
     const map = {};
@@ -132,8 +136,25 @@ export default function PurchaseForm() {
     setLines((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
   }
 
+  function validateForm() {
+    const next = {};
+    if (!header.supplier_id) next.supplier_id = 'Supplier is required.';
+    if (!header.purchase_date) next.purchase_date = 'Purchase date is required.';
+    if (isSuperAdmin && !isEdit && !activeCompany?.id) next.company_id = 'Company is required.';
+    const validLines = lines.filter((l) => l.product_id);
+    if (validLines.length === 0) next.items = 'At least one product line is required.';
+    validLines.forEach((l, i) => {
+      if (!l.qty || Number(l.qty) <= 0) next[`items.${i}.qty`] = 'Quantity is required.';
+      if (!l.product_id) next[`items.${i}.product_id`] = 'Product is required.';
+    });
+    setFieldErrors(next);
+    return Object.keys(next).length === 0;
+  }
+
   async function save() {
-    setErrors([]);
+    setErrors({});
+    if (!validateForm()) return;
+
     setSaving(true);
     const payload = {
       supplier_id: header.supplier_id,
@@ -143,6 +164,9 @@ export default function PurchaseForm() {
       is_interstate: header.is_interstate,
       landed_cost_total: Number(header.landed_cost_total) || 0,
       notes: header.notes || null,
+      ...(isEdit && isSuperAdmin && formCompanyId && String(formCompanyId) !== String(existing?.company_id)
+        ? { company_id: formCompanyId }
+        : {}),
       items: lines
         .filter((l) => l.product_id)
         .map((l) => ({
@@ -163,8 +187,16 @@ export default function PurchaseForm() {
       else await api.post('/purchases', payload, withCompany(activeCompany?.id));
       navigate('/purchases');
     } catch (err) {
-      const bag = err.response?.data?.errors;
-      setErrors(bag ? Object.values(bag).flat() : [err.response?.data?.message ?? 'Could not save the purchase.']);
+      const bag = err.response?.data?.errors ?? {};
+      const flat = Object.entries(bag).flatMap(([k, msgs]) =>
+        (Array.isArray(msgs) ? msgs : [msgs]).map((m) => ({ key: k, message: m })),
+      );
+      setErrors({ message: err.response?.data?.message ?? 'Could not save the purchase.' });
+      if (flat.length) {
+        const mapped = {};
+        flat.forEach(({ key, message }) => { mapped[key] = message; });
+        setFieldErrors(mapped);
+      }
     } finally {
       setSaving(false);
     }
@@ -202,18 +234,30 @@ export default function PurchaseForm() {
         </Button>
       </div>
 
-      {errors.length > 0 && (
+      {errors.message && (
         <div className="rounded-[10px] border border-danger/30 bg-[#F7E9E6] px-4 py-3 text-sm text-danger">
-          <ul className="list-disc space-y-0.5 pl-4">
-            {errors.map((e, i) => (
-              <li key={i}>{e}</li>
-            ))}
-          </ul>
+          {errors.message}
         </div>
       )}
 
       {/* Header */}
       <Card className="p-5">
+        {isSuperAdmin && isEdit && (
+          <div className="mb-4 rounded-xl bg-leaf-soft/50 p-3">
+            <Field label="Company" required error={fieldErrors.company_id}>
+              <select
+                value={formCompanyId}
+                onChange={(e) => setFormCompanyId(e.target.value)}
+                className={selectCls}
+              >
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </Field>
+            <p className="mt-1.5 text-xs text-muted">Draft only — supplier and products must belong to the selected company.</p>
+          </div>
+        )}
         {isSuperAdmin && !isEdit && (
           <div className="mb-4 rounded-xl bg-leaf-soft/50 p-3">
             <Field label="Purchasing for company">
@@ -233,11 +277,11 @@ export default function PurchaseForm() {
           </div>
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Supplier" required>
+          <Field label="Supplier" required error={fieldErrors.supplier_id}>
             <select
               value={header.supplier_id}
               onChange={(e) => setHeader((h) => ({ ...h, supplier_id: e.target.value }))}
-              className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30"
+              className={`h-9 w-full rounded-[10px] border bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30 ${fieldErrors.supplier_id ? 'border-danger' : 'border-line'}`}
             >
               <option value="">Select supplier…</option>
               {(formData?.suppliers ?? []).map((s) => (
@@ -247,11 +291,12 @@ export default function PurchaseForm() {
               ))}
             </select>
           </Field>
-          <Field label="Purchase date" required>
+          <Field label="Purchase date" required error={fieldErrors.purchase_date}>
             <Input
               type="date"
               value={header.purchase_date}
               onChange={(e) => setHeader((h) => ({ ...h, purchase_date: e.target.value }))}
+              className={fieldErrors.purchase_date ? 'border-danger' : undefined}
             />
           </Field>
           <Field label="Invoice no.">

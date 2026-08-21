@@ -43,7 +43,9 @@ export default function BulkSplitForm() {
   const products = data?.products ?? [];
   const source = products.find((p) => String(p.id) === String(sourceId));
   const availableNum = Number(availableQty) || 0;
-  const stockCap = source ? Math.min(availableNum || source.current_stock, source.current_stock) : availableNum;
+  const maxStock = source ? Number(source.current_stock) || 0 : 0;
+  const stockCap = source ? Math.min(availableNum || maxStock, maxStock) : availableNum;
+  const availableExceedsStock = source && availableNum > maxStock;
 
   const totalSplitQty = lines.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
   const remainingQty = round3(stockCap - totalSplitQty);
@@ -96,6 +98,9 @@ export default function BulkSplitForm() {
     const clientErrors = {};
     if (!sourceId) clientErrors.source_product_id = ['Select a bulk product.'];
     if (stockCap <= 0) clientErrors.source_qty = ['Available quantity must be greater than zero.'];
+    if (availableExceedsStock) {
+      clientErrors.source_qty = [`Available quantity cannot exceed stock on hand (${maxStock}).`];
+    }
     if (lines.length === 0) clientErrors.items = ['Generate or add at least one split row.'];
     if (splitQtyInvalid) clientErrors.items = ['Each split quantity must be greater than zero.'];
     if (splitQtyExceeded) {
@@ -173,7 +178,7 @@ export default function BulkSplitForm() {
     return <div className="flex h-full items-center justify-center"><Spinner className="size-6" /></div>;
   }
 
-  const qtyValid = !splitQtyExceeded && !splitQtyInvalid && lines.length > 0 && stockCap > 0;
+  const qtyValid = !splitQtyExceeded && !splitQtyInvalid && !availableExceedsStock && lines.length > 0 && stockCap > 0;
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -216,7 +221,14 @@ export default function BulkSplitForm() {
           </Field>
           <Field label="Available quantity" required error={err('source_qty')}>
             <div className="flex gap-2">
-              <Input type="number" step="0.001" min="0" value={availableQty} onChange={(e) => setAvailableQty(e.target.value)} />
+              <Input
+                type="number"
+                step="0.001"
+                min="0"
+                max={source ? maxStock : undefined}
+                value={availableQty}
+                onChange={(e) => setAvailableQty(e.target.value)}
+              />
               {source && (
                 <Button type="button" variant="outline" size="sm" onClick={applySourceStock}>Max</Button>
               )}
@@ -228,9 +240,9 @@ export default function BulkSplitForm() {
         </div>
         {source && (
           <p className="mt-3 text-xs text-muted">
-            Unit cost {formatCurrency(source.cost_price)} · stock on hand {source.current_stock}
-            {stockCap > source.current_stock && (
-              <span className="ml-2 text-danger">— exceeds stock</span>
+            Unit cost {formatCurrency(source.cost_price)} · stock on hand {maxStock}
+            {availableExceedsStock && (
+              <span className="ml-2 text-danger">— exceeds stock on hand</span>
             )}
           </p>
         )}

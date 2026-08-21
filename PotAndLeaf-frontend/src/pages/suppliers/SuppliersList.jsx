@@ -76,6 +76,7 @@ export default function SuppliersList() {
   const [errors, setErrors] = useState({});
   const [pickedCompany, setPickedCompany] = useState(false);
   const [formCompanyId, setFormCompanyId] = useState('');
+  const [uploadBusy, setUploadBusy] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => { setPage(1); setDebounced(search.trim()); }, 400);
@@ -98,12 +99,13 @@ export default function SuppliersList() {
 
   const saveMutation = useMutation({
     mutationFn: (payload) => {
-      const { target_company_id, ...data } = payload;
-      const headerCompany = target_company_id ?? editing?.company_id;
+      const { target_company_id, company_id, ...data } = payload;
+      const headerCompany = target_company_id ?? company_id ?? editing?.company_id;
       const cfg = headerCompany ? withCompany(headerCompany) : {};
+      const body = editing && isSuperAdmin && company_id ? { ...data, company_id } : data;
       return editing
-        ? api.put(`/suppliers/${editing.id}`, data, cfg)
-        : api.post('/suppliers', data, cfg);
+        ? api.put(`/suppliers/${editing.id}`, body, cfg)
+        : api.post('/suppliers', body, cfg);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['suppliers'] });
@@ -131,6 +133,7 @@ export default function SuppliersList() {
     setEditing(row);
     setForm({ ...EMPTY, ...row, photo: row.photo ?? null });
     setErrors({});
+    setFormCompanyId(row.company_id ?? companyId ?? '');
     setPickedCompany(true);
     setModalOpen(true);
   }
@@ -158,6 +161,7 @@ export default function SuppliersList() {
       });
       if (!editing && isSuperAdmin) payload.target_company_id = formCompanyId;
       else if (editing?.company_id) payload.target_company_id = editing.company_id;
+      if (editing && isSuperAdmin && formCompanyId) payload.company_id = formCompanyId;
       delete payload.supplier_code;
       saveMutation.mutate(payload, { onSettled: release });
     });
@@ -290,7 +294,7 @@ export default function SuppliersList() {
         footer={
           <>
             <Button variant="outline" onClick={() => setModalOpen(false)} disabled={saveMutation.isPending}>Cancel</Button>
-            <Button onClick={onSubmit} disabled={locked || (!editing && isSuperAdmin && !companyReady)}>
+            <Button onClick={onSubmit} disabled={locked || uploadBusy || (!editing && isSuperAdmin && !companyReady)}>
               {saveMutation.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save supplier'}
             </Button>
           </>
@@ -313,10 +317,24 @@ export default function SuppliersList() {
             </div>
           )}
 
+          {isSuperAdmin && editing && (
+            <div className="rounded-xl bg-leaf-soft/50 p-3">
+              <Field label="Company" required>
+                <select
+                  value={formCompanyId}
+                  onChange={(e) => setFormCompanyId(e.target.value)}
+                  className={selectClass}
+                >
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+            </div>
+          )}
+
           {(editing || !isSuperAdmin || companyReady) && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <Field label="Photo"><ImageUpload value={form.photo} onChange={(url) => setForm((f) => ({ ...f, photo: url }))} /></Field>
+                <Field label="Photo"><ImageUpload value={form.photo} onChange={(url) => setForm((f) => ({ ...f, photo: url }))} onBusyChange={setUploadBusy} /></Field>
               </div>
               {editing ? (
                 <Field label="Supplier code"><Input value={form.supplier_code} disabled readOnly className="bg-paper text-muted" /></Field>

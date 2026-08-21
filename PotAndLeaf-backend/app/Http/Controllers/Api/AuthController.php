@@ -127,13 +127,30 @@ class AuthController extends Controller
 
     private function companies($user): array
     {
-        $query = $user->is_super_admin
-            ? \App\Models\Company::query()->active()->orderBy('name')
-            : $user->companies()->where('companies.is_active', true);
+        if ($user->is_super_admin) {
+            return \App\Models\Company::query()
+                ->active()
+                ->orderBy('name')
+                ->get(['id', 'name', 'code'])
+                ->map(fn ($c) => [
+                    'id'         => $c->id,
+                    'name'       => $c->name,
+                    'code'       => $c->code,
+                    'is_default' => false,
+                ])
+                ->all();
+        }
 
-        return $query
+        return $user->companies()
+            ->where('companies.is_active', true)
+            ->orderBy('name')
             ->get(['companies.id', 'companies.name', 'companies.code'])
-            ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code])
+            ->map(fn ($c) => [
+                'id'         => $c->id,
+                'name'       => $c->name,
+                'code'       => $c->code,
+                'is_default' => (bool) ($c->pivot->is_default ?? false),
+            ])
             ->all();
     }
 }

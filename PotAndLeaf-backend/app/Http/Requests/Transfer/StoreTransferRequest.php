@@ -2,8 +2,11 @@
 
 namespace App\Http\Requests\Transfer;
 
+use App\Models\Product;
+use App\Services\LocationStockService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreTransferRequest extends FormRequest
 {
@@ -30,5 +33,43 @@ class StoreTransferRequest extends FormRequest
             'items.*.product_batch_id' => ['nullable', 'uuid', Rule::exists('product_batches', 'id')->where('company_id', $companyId)],
             'items.*.qty'          => ['required', 'numeric', 'gt:0'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            $companyId = $this->route('current_company')->id;
+            $isIntra = $this->input('transfer_type') === 'intra_company';
+            $items = collect($this->input('items', []));
+            $locationStock = app(LocationStockService::class);
+
+            $byProduct = $items->groupBy('product_id')->map(fn ($rows) => $rows->sum(fn ($r) => (float) ($r['qty'] ?? 0)));
+
+            foreach ($byProduct as $productId => $requestedQty) {
+                $product = Product::forCompany($companyId)->find($productId);
+                if (! $product) {
+                    continue;
+                }
+
+                if ($isIntra) {
+                    $available = $locationStock->available((string) $this->input('from_location_id'), (string) $productId);
+                    if ($requestedQty > $available + 0.0001) {
+                        $validator->errors()->add(
+                            'items',
+                            "Not enough stock at source location for {$product->name}: {$available} available, {$requestedQty} requested.",
+                        );
+                    }
+                } elseif ($requestedQty > (float) $product->current_stock + 0.0001) {
+                    $validator->errors()->add(
+                        'items',
+                        "Not enough stock for {$product->name}: {$product->current_stock} available, {$requestedQty} requested.",
+                    );
+                }
+            }
+        });
     }
 }

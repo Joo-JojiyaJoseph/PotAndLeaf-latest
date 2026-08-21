@@ -25,15 +25,15 @@ class ProductService
     }
 
     /** @param array<string,mixed> $data */
-    public function create(int|string $companyId, array $data): Product
+    public function create(int|string $companyId, array $data, ?int $userId = null): Product
     {
-        return $this->createProduct->handle($companyId, $data);
+        return $this->createProduct->handle($companyId, $data, $userId);
     }
 
     /** @param array<string,mixed> $data */
-    public function update(Product $product, array $data): Product
+    public function update(Product $product, array $data, ?int $userId = null): Product
     {
-        return $this->updateProduct->handle($product, $data);
+        return $this->updateProduct->handle($product, $data, $userId);
     }
 
     public function delete(Product $product): void

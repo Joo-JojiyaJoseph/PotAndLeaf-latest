@@ -21,6 +21,8 @@ class DashboardController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        abort_unless($request->user()->hasPermission('reports.view', $this->company($request)->id), 403);
+
         $companyId = $this->listCompanyId($request);
 
         $lowStock = Product::query()

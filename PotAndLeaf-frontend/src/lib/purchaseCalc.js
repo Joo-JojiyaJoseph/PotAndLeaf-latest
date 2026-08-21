@@ -58,7 +58,7 @@ export function computePurchase(items, isInterstate, landedCostTotal = 0) {
       discount_total: round(discountTotal),
       tax_total: round(taxTotal),
       landed_cost_total: round(landedCostTotal),
-      grand_total: round(subtotal + round(taxTotal)),
+      grand_total: round(subtotal + round(taxTotal) + round(landedCostTotal)),
     },
   };
 }

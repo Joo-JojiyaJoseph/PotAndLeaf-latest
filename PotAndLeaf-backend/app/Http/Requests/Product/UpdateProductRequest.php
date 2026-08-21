@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Product;
 
+use Illuminate\Validation\Rule;
+
 class UpdateProductRequest extends StoreProductRequest
 {
     public function authorize(): bool
@@ -13,11 +15,17 @@ class UpdateProductRequest extends StoreProductRequest
 
     public function rules(): array
     {
-        $companyId = $this->route('current_company')->id;
+        $headerCompanyId = $this->route('current_company')->id;
         $productId = $this->route('product')->id;
+        $targetCompanyId = ($this->user()->is_super_admin && $this->filled('company_id'))
+            ? $this->input('company_id')
+            : $headerCompanyId;
 
-        return array_merge($this->baseRules($companyId, $productId), [
-            // SKU is immutable — not accepted on update (see UpdateProduct action).
+        return array_merge($this->baseRules($targetCompanyId, $productId), [
+            'company_id' => [
+                Rule::prohibitedIf(fn () => ! $this->user()->is_super_admin),
+                'sometimes', 'integer', Rule::exists('companies', 'id'),
+            ],
         ]);
     }
 

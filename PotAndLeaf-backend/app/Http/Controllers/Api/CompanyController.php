@@ -7,6 +7,11 @@ use App\Http\Requests\Company\StoreCompanyRequest;
 use App\Http\Requests\Company\UpdateCompanyRequest;
 use App\Http\Resources\CompanyResource;
 use App\Models\Company;
+use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Models\Purchase;
+use App\Models\Supplier;
+use App\Models\User;
 use App\Support\Api\ApiResponse;
 use App\Support\Media\MediaStorage;
 use App\Support\ProtectedRecords;
@@ -22,7 +27,21 @@ class CompanyController extends Controller
     {
         $this->ensureSuperAdmin($request);
 
-        $companies = Company::query()->where('is_protected', false)->withCount('users')->orderBy('name')->get();
+        $search = trim((string) $request->query('search', ''));
+
+        $companies = Company::query()
+            ->where('is_protected', false)
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($q2) use ($search) {
+                    $q2->where('name', 'like', "%{$search}%")
+                        ->orWhere('code', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
+            })
+            ->withCount('users')
+            ->orderBy('name')
+            ->get();
 
         return $this->ok(CompanyResource::collection($companies));
     }
@@ -31,6 +50,9 @@ class CompanyController extends Controller
     {
         $data = $request->validated();
         unset($data['photo']);
+        if (array_key_exists('logo', $data)) {
+            $data['logo'] = MediaStorage::replace(null, $data['logo']);
+        }
         if (empty($data['code'])) {
             $data['code'] = $this->nextCompanyCode();
         }
@@ -57,7 +79,30 @@ class CompanyController extends Controller
     {
         $this->ensureSuperAdmin($request);
 
-        return $this->ok(new CompanyResource($company));
+        $company->loadCount('users');
+
+        return $this->ok(CompanyResource::withStatistics($company, $this->companyStatistics($company)));
+    }
+
+    /** @return array<string, int> */
+    private function companyStatistics(Company $company): array
+    {
+        $companyId = $company->id;
+        $memberIds = User::query()
+            ->where('is_super_admin', false)
+            ->whereHas('companies', fn ($q) => $q->whereKey($companyId))
+            ->pluck('id');
+
+        return [
+            'users_total'         => $memberIds->count(),
+            'users_active'        => User::query()->whereIn('id', $memberIds)->where('is_active', true)->count(),
+            'users_inactive'      => User::query()->whereIn('id', $memberIds)->where('is_active', false)->count(),
+            'products_total'      => Product::forCompany($companyId)->count(),
+            'categories_total'    => ProductCategory::query()->where('company_id', $companyId)->whereNull('parent_id')->count(),
+            'subcategories_total' => ProductCategory::query()->where('company_id', $companyId)->whereNotNull('parent_id')->count(),
+            'suppliers_total'     => Supplier::forCompany($companyId)->count(),
+            'purchases_total'     => Purchase::forCompany($companyId)->count(),
+        ];
     }
 
     public function update(UpdateCompanyRequest $request, Company $company): JsonResponse

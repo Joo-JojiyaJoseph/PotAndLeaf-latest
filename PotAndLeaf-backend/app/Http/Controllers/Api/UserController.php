@@ -30,8 +30,11 @@ class UserController extends Controller
         $companyId = $this->listCompanyId($request);
         $this->allow($request, 'users.view');
 
+        $status = $request->query('status', 'active');
+        abort_unless(in_array($status, ['active', 'inactive', 'all'], true), 422, 'Invalid status filter.');
+
         $users = User::query()
-            ->activeMembers($companyId)
+            ->companyMembers($companyId, $status)
             ->with([
                 'companies:id,name',
                 'roles' => fn ($q) => $q->when($companyId !== null, fn ($q2) => $q2->wherePivot('company_id', $companyId)),
@@ -88,8 +91,9 @@ class UserController extends Controller
     {
         $companyId = $this->resolveUserCompanyContext($request, $user);
         $data = $request->validated();
+        $targetCompanyId = $companyId;
 
-        DB::transaction(function () use ($user, $companyId, $data) {
+        DB::transaction(function () use ($user, $companyId, $data, $request, &$targetCompanyId) {
             $user->fill([
                 'name'      => $data['name'],
                 'email'     => $data['email'],
@@ -100,10 +104,23 @@ class UserController extends Controller
                 $user->password = Hash::make($data['password']);
             }
             $user->save();
-            $this->syncCompanyRole($user, $companyId, $data['role_id'] ?? null);
+
+            $roleId = $data['role_id'] ?? null;
+
+            if ($request->user()->is_super_admin && filled($data['target_company_id'] ?? null)) {
+                $newCompanyId = $data['target_company_id'];
+                if ((string) $newCompanyId !== (string) $companyId) {
+                    $this->syncCompanyRole($user, $companyId, null);
+                    $user->companies()->detach($companyId);
+                    $user->companies()->syncWithoutDetaching([$newCompanyId => ['is_default' => true]]);
+                    $targetCompanyId = $newCompanyId;
+                }
+            }
+
+            $this->syncCompanyRole($user, $targetCompanyId, $roleId);
         });
 
-        return $this->ok($this->present($user->refresh(), $companyId), 'User updated.');
+        return $this->ok($this->present($user->refresh(), $targetCompanyId), 'User updated.');
     }
 
     public function destroy(Request $request, User $user): JsonResponse
@@ -196,6 +213,10 @@ class UserController extends Controller
         abort_if((bool) $user->is_super_admin, 403, 'A super admin cannot be deactivated here.');
         $data = $request->validate(['is_active' => ['required', 'boolean']]);
         $user->update(['is_active' => $data['is_active']]);
+
+        if (! $data['is_active']) {
+            $user->tokens()->delete();
+        }
 
         return $this->ok(['id' => $user->id, 'is_active' => (bool) $user->is_active], 'Status updated.');
     }

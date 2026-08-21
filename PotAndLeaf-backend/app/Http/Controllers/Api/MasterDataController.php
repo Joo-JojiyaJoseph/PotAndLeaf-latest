@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * One controller for the product master lists (categories, brands, units).
+ * One controller for the product master lists (categories, units).
  * Each is company-scoped; the {type} segment selects which.
  */
 class MasterDataController extends Controller
@@ -21,16 +21,22 @@ class MasterDataController extends Controller
     use ApiResponse, ResolvesFilterCompany;
 
     private const TYPES = [
-        'categories' => [ProductCategory::class, 'categories', ['name', 'code', 'description', 'parent_id', 'status'], true],
-        'brands'     => [ProductBrand::class, 'brands', ['name', 'code', 'description', 'status'], false],
-        'units'      => [ProductUnit::class, 'units', ['name', 'code', 'short_name', 'description', 'status'], false],
+        'categories' => [ProductCategory::class, ['name', 'code', 'description', 'parent_id', 'status'], true],
+        'brands'     => [ProductBrand::class, ['name', 'code', 'description', 'status'], false],
+        'units'      => [ProductUnit::class, ['name', 'code', 'short_name', 'description', 'status'], false],
     ];
 
     public function index(Request $request, string $type): JsonResponse
     {
-        [$model, $perm, , $hasParent] = $this->resolve($type);
+        [$model, , $hasParent] = $this->resolve($type);
         $companyId = $this->listCompanyId($request);
-        $this->allow($request, "{$perm}.view", $this->companyId($request));
+        $headerCompanyId = $this->companyId($request);
+
+        if ($type === 'categories') {
+            $this->allowCategoryAccess($request, $headerCompanyId, 'view');
+        } else {
+            $this->allow($request, "{$type}.view", $headerCompanyId);
+        }
 
         $rows = $model::query()
             ->when($companyId !== null, fn ($q) => $q->where('company_id', $companyId))
@@ -45,11 +51,17 @@ class MasterDataController extends Controller
 
     public function store(Request $request, string $type): JsonResponse
     {
-        [$model, $perm, , $hasParent] = $this->resolve($type);
+        [$model, , $hasParent] = $this->resolve($type);
         $companyId = $this->companyId($request);
-        $this->allow($request, "{$perm}.create", $companyId);
 
         $data = $this->validated($request, $type, $companyId, $hasParent, null);
+
+        if ($type === 'categories') {
+            $this->allow($request, $this->categoryPerm($data['parent_id'] ?? null).'.create', $companyId);
+        } else {
+            $this->allow($request, "{$type}.create", $companyId);
+        }
+
         if (empty($data['code'])) {
             $data['code'] = $this->nextCode($model, $companyId, $type, $data['parent_id'] ?? null);
         }
@@ -60,25 +72,58 @@ class MasterDataController extends Controller
 
     public function update(Request $request, string $type, string $id): JsonResponse
     {
-        [$model, $perm, , $hasParent] = $this->resolve($type);
+        [$model, , $hasParent] = $this->resolve($type);
         $companyId = $this->companyId($request);
-        $this->allow($request, "{$perm}.update", $companyId);
 
         $row = $model::where('company_id', $companyId)->findOrFail($id);
+
+        if ($type === 'categories') {
+            $this->allow($request, $this->categoryPerm($row->parent_id).'.update', $companyId);
+        } else {
+            $this->allow($request, "{$type}.update", $companyId);
+        }
+
         $data = $this->validated($request, $type, $companyId, $hasParent, $id);
-        unset($data['code']); // codes are auto-generated and immutable
+        unset($data['code']);
+
+        if ($request->user()->is_super_admin && $request->filled('company_id')) {
+            $targetCompanyId = $request->input('company_id');
+            if ((string) $targetCompanyId !== (string) $companyId) {
+                $this->assertMovableToCompany($type, $row);
+                $data['company_id'] = $targetCompanyId;
+                $request->validate([
+                    'company_id' => ['required', 'integer', Rule::exists('companies', 'id')],
+                ]);
+            }
+        }
+
         $row->update($data);
 
         return $this->ok($this->present($row->refresh(), $type, collect()), 'Updated.');
     }
 
+    private function assertMovableToCompany(string $type, $row): void
+    {
+        if ($type === 'categories') {
+            $count = \App\Models\Product::query()->where('category_id', $row->id)->count();
+            abort_if($count > 0, 422, 'Cannot change company — products are linked to this category.');
+        }
+    }
+
     public function destroy(Request $request, string $type, string $id): JsonResponse
     {
-        [$model, $perm] = $this->resolve($type);
+        [$model] = $this->resolve($type);
         $companyId = $this->companyId($request);
-        $this->allow($request, "{$perm}.delete", $companyId);
 
-        $model::where('company_id', $companyId)->findOrFail($id)->delete();
+        $row = $model::where('company_id', $companyId)->findOrFail($id);
+
+        if ($type === 'categories') {
+            $this->allow($request, $this->categoryPerm($row->parent_id).'.delete', $companyId);
+        } else {
+            $this->allow($request, "{$type}.delete", $companyId);
+        }
+
+        $row->delete();
 
         return $this->message('Deleted.');
     }
@@ -103,6 +148,7 @@ class MasterDataController extends Controller
             ],
             'description' => ['nullable', 'string', 'max:1000'],
             'status'      => ['nullable', 'in:active,inactive'],
+            'company_id'  => ['sometimes', 'integer', Rule::exists('companies', 'id')],
         ];
         if ($type === 'units') {
             $rules['short_name'] = ['nullable', 'string', 'max:20'];
@@ -124,6 +170,24 @@ class MasterDataController extends Controller
         }
 
         return $data;
+    }
+
+    private function categoryPerm(?string $parentId): string
+    {
+        return filled($parentId) ? 'subcategories' : 'categories';
+    }
+
+    private function allowCategoryAccess(Request $request, int|string $companyId, string $action): void
+    {
+        if ($request->user()->is_super_admin) {
+            return;
+        }
+
+        abort_unless(
+            $request->user()->hasPermission("categories.{$action}", $companyId)
+            || $request->user()->hasPermission("subcategories.{$action}", $companyId),
+            403
+        );
     }
 
     private function nextCode(string $modelClass, int|string $companyId, string $type, ?string $parentId): string

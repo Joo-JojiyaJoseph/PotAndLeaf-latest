@@ -11,9 +11,9 @@ import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../compone
 import { useConfirm } from '../../lib/confirm';
 
 const TABS = [
-  { key: 'categories', type: 'categories', label: 'Categories', singular: 'category', mode: 'root' },
-  { key: 'subcategories', type: 'categories', label: 'Subcategories', singular: 'subcategory', mode: 'child', hasParent: true },
-  { type: 'units', key: 'units', label: 'Units', singular: 'unit', hasShort: true },
+  { key: 'categories', type: 'categories', permission: 'categories', label: 'Categories', singular: 'category', mode: 'root' },
+  { key: 'subcategories', type: 'categories', permission: 'subcategories', label: 'Subcategories', singular: 'subcategory', mode: 'child', hasParent: true },
+  { type: 'units', key: 'units', permission: 'units', label: 'Units', singular: 'unit', hasShort: true },
 ];
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 
@@ -42,6 +42,9 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
       if (tab.hasShort) payload.short_name = form.short_name || null;
       if (tab.type === 'categories') {
         payload.parent_id = tab.mode === 'child' ? (form.parent_id || null) : null;
+      }
+      if (isSuperAdmin && editing?.id && formCompanyId && String(formCompanyId) !== String(editing.company_id)) {
+        payload.company_id = formCompanyId;
       }
       return editing
         ? api.put(`/masters/${tab.type}/${editing.id}`, payload, companyCfg)
@@ -117,6 +120,15 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
             <p className="mt-1.5 text-xs text-muted">Choose which company this {tab.singular} belongs to.</p>
           </div>
         )}
+        {isSuperAdmin && editing?.id && (
+          <div className="sm:col-span-2 rounded-xl bg-leaf-soft/50 p-3">
+            <Field label="Company" required>
+              <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+          </div>
+        )}
         {(editing?.id || !isSuperAdmin || companyReady) && (
           <>
             {editing?.code && (
@@ -151,14 +163,15 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
 }
 
 export default function MastersPage() {
-  const { activeCompany, can, companyId } = useAuth();
+  const { activeCompany, can, companyId, isSuperAdmin } = useAuth();
   const confirm = useConfirm();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const queryClient = useQueryClient();
-  const [tabKey, setTabKey] = useState('categories');
+  const visibleTabs = TABS.filter((t) => can(`${t.permission}.view`));
+  const [tabKey, setTabKey] = useState(visibleTabs[0]?.key ?? 'categories');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
-  const tab = TABS.find((t) => t.key === tabKey) ?? TABS[0];
+  const tab = visibleTabs.find((t) => t.key === tabKey) ?? visibleTabs[0] ?? TABS[0];
 
   const { data, isLoading } = useQuery({
     queryKey: ['masters', tab.type, activeCompany?.id, filterCompanyId],
@@ -183,12 +196,12 @@ export default function MastersPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
-          {can(`${tab.type}.create`) && <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true); }}><PlusIcon className="size-4" /> New {tab.singular}</Button>}
+          {can(`${tab.permission}.create`) && <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true); }}><PlusIcon className="size-4" /> New {tab.singular}</Button>}
         </div>
       </div>
 
       <div className="flex gap-1 border-b border-line">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button key={t.key} onClick={() => setTabKey(t.key)}
             className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (tabKey === t.key ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
             {t.label}
@@ -221,8 +234,8 @@ export default function MastersPage() {
                     <td className="px-4 py-2.5"><Badge tone={r.status === 'active' ? 'active' : 'inactive'}>{r.status}</Badge></td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1.5">
-                        {can(`${tab.type}.update`) && <button onClick={() => { setEditing(r); setModalOpen(true); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink"><PencilSquareIcon className="size-4" /></button>}
-                        {can(`${tab.type}.delete`) && <button onClick={async () => {
+                        {can(`${tab.permission}.update`) && <button onClick={() => { setEditing(r); setModalOpen(true); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink"><PencilSquareIcon className="size-4" /></button>}
+                        {can(`${tab.permission}.delete`) && <button onClick={async () => {
                           const ok = await confirm({ title: `Delete ${tab.singular}`, message: `Delete "${r.name}"? Products already using it keep their reference, but it can't be selected again.`, confirmLabel: 'Delete', tone: 'danger' });
                           if (ok) deleteM.mutate({ id: r.id, company_id: r.company_id });
                         }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>}

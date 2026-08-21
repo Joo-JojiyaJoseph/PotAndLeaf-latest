@@ -19,7 +19,7 @@ const QUICK = [
   { label: 'Add product', desc: 'Create a catalogue item', to: '/products/new', icon: PlusCircleIcon },
   // { label: 'Reports', desc: 'Sales, stock & dues', to: '/reports', icon: ChartBarIcon },
   // { label: 'Barcode labels', desc: 'Print a label sheet', to: '/products/labels', icon: QrCodeIcon },
-  { label: 'Masters', desc: 'Categories, brands, units', to: '/masters', icon: TagIcon },
+  { label: 'Masters', desc: 'Categories, subcategories, units', to: '/masters', icon: TagIcon },
   { label: 'Companies', desc: 'Manage your companies', to: '/companies', icon: BuildingOffice2Icon },
   { label: 'Suppliers', desc: 'Manage your suppliers', to: '/suppliers', icon: TruckIcon },
 ];
@@ -35,9 +35,18 @@ function StatTile({ label, value, sub, gradient }) {
 }
 
 export default function Dashboard() {
-  const { activeCompany } = useAuth();
+  const { activeCompany, isSuperAdmin, can } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const range = { from: daysAgo(29), to: iso(new Date()) };
+
+  const quickLinks = QUICK.filter((q) => {
+    if (q.to === '/companies') return isSuperAdmin;
+    if (q.to === '/products/new') return can('products.create');
+    if (q.to === '/purchases/new') return can('purchases.create');
+    if (q.to === '/masters') return can('categories.view') || can('subcategories.view') || can('units.view');
+    if (q.to === '/suppliers') return can('suppliers.view');
+    return true;
+  });
 
   const dashQ = useQuery({
     queryKey: ['dashboard', activeCompany?.id, filterCompanyId],
@@ -108,7 +117,7 @@ export default function Dashboard() {
             <div>
               <h2 className="mb-3 text-sm font-semibold text-ink">Quick actions</h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {QUICK.map((q) => {
+                {quickLinks.map((q) => {
                   const Icon = q.icon;
                   return (
                     <Link key={q.to} to={q.to}

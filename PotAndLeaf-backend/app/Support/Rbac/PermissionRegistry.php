@@ -159,9 +159,9 @@ class PermissionRegistry
                 'stock_verifications.create'  => 'Create & submit stock counts',
                 'stock_verifications.approve' => 'Approve or reject stock counts (HO)',
             ],
-            'Categories' => $crud('categories', 'categories'),
-            'Brands'     => $crud('brands', 'brands'),
-            'Units'      => $crud('units', 'units'),
+            'Categories'    => $crud('categories', 'categories'),
+            'Subcategories' => $crud('subcategories', 'subcategories'),
+            'Units'         => $crud('units', 'units'),
             'Roles'      => $crud('roles', 'roles'),
             'Users'      => [
                 'users.view'   => 'View users',

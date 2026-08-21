@@ -37,6 +37,12 @@ class CreateBulkSplit
             ]);
         }
 
+        if ($sourceQty > (float) $source->current_stock) {
+            throw ValidationException::withMessages([
+                'source_qty' => "Available quantity cannot exceed stock on hand ({$source->current_stock}).",
+            ]);
+        }
+
         $unitCost = (float) $source->cost_price;
         $totalCost = round($totalSplitQty * $unitCost, 2);
 

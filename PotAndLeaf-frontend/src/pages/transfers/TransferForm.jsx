@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
@@ -42,17 +42,41 @@ export default function TransferForm() {
   }
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const isIntra = transferType === 'intra_company';
 
   const { data, isLoading } = useQuery({
     queryKey: ['transfer-form-data', activeCompany?.id],
     queryFn: () => api.get('/transfers/form-data').then((r) => r.data.data),
     enabled: Boolean(activeCompany),
   });
+
   const companies = data?.companies ?? [];
   const products = data?.products ?? [];
   const locations = data?.locations ?? [];
   const fromCompany = data?.from_company ?? activeCompany;
-  const isIntra = transferType === 'intra_company';
+
+  const { data: locationBalances } = useQuery({
+    queryKey: ['location-stock', header.from_location_id],
+    queryFn: () => api.get('/inventory/by-location', { params: { location_id: header.from_location_id } }).then((r) => r.data.data.balances ?? []),
+    enabled: isIntra && Boolean(header.from_location_id),
+  });
+
+  const locationStockByProduct = useMemo(() => {
+    const map = {};
+    (locationBalances ?? []).forEach((row) => {
+      map[row.product_id] = (map[row.product_id] ?? 0) + Number(row.qty || 0);
+    });
+    return map;
+  }, [locationBalances]);
+
+  function availableForProduct(productId) {
+    if (!productId) return null;
+    if (isIntra && header.from_location_id) {
+      return locationStockByProduct[productId] ?? 0;
+    }
+    const prod = products.find((p) => p.id === productId);
+    return prod ? Number(prod.current_stock) : 0;
+  }
 
   useEffect(() => {
     if (!isIntra && companies.length === 1 && !header.to_company_id) {
@@ -73,7 +97,25 @@ export default function TransferForm() {
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
   async function save() {
-    setErrors({}); setSaving(true);
+    setErrors({});
+    const clientErrors = {};
+    const totals = {};
+    lines.filter((l) => l.product_id).forEach((l) => {
+      totals[l.product_id] = (totals[l.product_id] ?? 0) + (Number(l.qty) || 0);
+    });
+    Object.entries(totals).forEach(([productId, qty]) => {
+      const available = availableForProduct(productId);
+      if (available != null && qty > available + 0.0001) {
+        const prod = products.find((p) => p.id === productId);
+        clientErrors.items = [`Not enough stock for ${prod?.name ?? 'product'}: ${available} available, ${qty} requested.`];
+      }
+    });
+    if (Object.keys(clientErrors).length) {
+      setErrors(clientErrors);
+      return;
+    }
+
+    setSaving(true);
     try {
       const payload = {
         transfer_type: transferType,
@@ -164,13 +206,16 @@ export default function TransferForm() {
         <table className="w-full text-sm">
           <thead><tr className="border-b border-line text-left text-faint">
             <th className="microlabel px-3 py-2 font-semibold">Product</th>
-            <th className="microlabel px-3 py-2 text-right font-semibold">Stock</th>
+            <th className="microlabel px-3 py-2 text-right font-semibold">{isIntra ? 'At location' : 'Stock'}</th>
             <th className="microlabel px-3 py-2 text-right font-semibold">Qty</th>
             <th className="px-3 py-2" />
           </tr></thead>
           <tbody>
             {lines.map((line, i) => {
               const prod = products.find((p) => p.id === line.product_id);
+              const available = availableForProduct(line.product_id);
+              const lineQty = Number(line.qty) || 0;
+              const overStock = line.product_id && available != null && lineQty > available + 0.0001;
               return (
                 <tr key={i} className="border-b border-line/60 last:border-0">
                   <td className="px-3 py-2">
@@ -180,8 +225,19 @@ export default function TransferForm() {
                     </select>
                     {line.barcode && <span className="mt-1 block text-[11px] text-muted">Batch {line.batch_no} · {line.barcode}</span>}
                   </td>
-                  <td className="tnum px-3 py-2 text-right text-muted">{prod ? prod.current_stock : '—'}</td>
-                  <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
+                  <td className="tnum px-3 py-2 text-right text-muted">{line.product_id ? available : '—'}</td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="number"
+                      step="0.001"
+                      min="0"
+                      max={available != null ? available : undefined}
+                      className={numInput}
+                      value={line.qty}
+                      onChange={(e) => setLine(i, { qty: e.target.value })}
+                    />
+                    {overStock && <p className="mt-1 text-xs text-danger">Exceeds available ({available})</p>}
+                  </td>
                   <td className="px-3 py-2"><button onClick={() => setLines((p) => (p.length === 1 ? p : p.filter((_, idx) => idx !== i)))} className="rounded-md p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Remove"><TrashIcon className="size-4" /></button></td>
                 </tr>
               );

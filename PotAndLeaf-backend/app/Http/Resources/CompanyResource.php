@@ -12,6 +12,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class CompanyResource extends JsonResource
 {
     use ResolvesMediaUrls;
+
+    /** @var array<string, int>|null */
+    protected ?array $statistics = null;
+
+    /** Attach statistics for the company detail response (do not use a custom constructor — breaks ::collection()). */
+    public static function withStatistics(Company $company, array $statistics): self
+    {
+        $resource = new self($company);
+        $resource->statistics = $statistics;
+
+        return $resource;
+    }
+
     public function toArray(Request $request): array
     {
         return [
@@ -32,6 +45,9 @@ class CompanyResource extends JsonResource
             'is_active'    => (bool) $this->is_active,
             'is_protected' => ProtectedRecords::isProtectedCompany($this->resource),
             'users_count'  => $this->when($this->users_count !== null, $this->users_count),
+            'created_at'   => $this->created_at?->toIso8601String(),
+            'updated_at'   => $this->updated_at?->toIso8601String(),
+            'statistics'   => $this->when($this->statistics !== null, $this->statistics),
         ];
     }
 }

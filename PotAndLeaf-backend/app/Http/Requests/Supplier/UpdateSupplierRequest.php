@@ -63,6 +63,10 @@ class UpdateSupplierRequest extends FormRequest
             'opening_balance'   => ['nullable', 'numeric'],
             'notes'             => ['nullable', 'string', 'max:2000'],
             'status'            => ['required', new Enum(SupplierStatus::class)],
+            'company_id'        => [
+                'sometimes', 'integer',
+                Rule::exists('companies', 'id'),
+            ],
         ];
     }
 

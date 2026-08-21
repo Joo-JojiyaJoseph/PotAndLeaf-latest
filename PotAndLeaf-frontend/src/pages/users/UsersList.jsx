@@ -28,16 +28,18 @@ export default function UsersList() {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState('active');
   const [pickedCompany, setPickedCompany] = useState(false);
   const [formCompanyId, setFormCompanyId] = useState('');
 
   const isCreate = editing !== null && !editing?.id;
   const companyReady = !isSuperAdmin || !isCreate || Boolean(formCompanyId);
   const targetCompanyId = isCreate && isSuperAdmin ? formCompanyId : null;
+  const editCompanyId = editing?.id ? (formCompanyId || resolveUserCompany(editing)) : null;
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['users', activeCompany?.id, filterCompanyId, page],
-    queryFn: () => api.get('/users', { params: { ...companyParams, page, per_page: 25 } }).then((r) => r.data),
+    queryKey: ['users', activeCompany?.id, filterCompanyId, statusFilter, page],
+    queryFn: () => api.get('/users', { params: { ...companyParams, status: statusFilter, page, per_page: 25 } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -47,12 +49,18 @@ export default function UsersList() {
     enabled: Boolean(activeCompany) && (Boolean(editing?.id) || !isSuperAdmin || companyReady),
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['users'] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['users'] });
+    queryClient.invalidateQueries({ queryKey: ['user'] });
+  };
 
   const saveM = useMutation({
     mutationFn: (payload) => {
       const { id, target_company_id, header_company_id, ...data } = payload;
       const cfg = (target_company_id || header_company_id) ? withCompany(target_company_id || header_company_id) : {};
+      if (id && isSuperAdmin && target_company_id) {
+        data.target_company_id = target_company_id;
+      }
       return id ? api.put(`/users/${id}`, data, cfg) : api.post('/users', data, cfg);
     },
     onSuccess: (_r, payload) => { invalidate(); setEditing(null); toast.success(payload.id ? 'User updated.' : 'User created.'); },
@@ -88,6 +96,7 @@ export default function UsersList() {
       await api.delete(`/users/${u.id}`, withCompany(resolveUserCompany(u)));
       toast.success(`${u.name} removed`);
       invalidate();
+      if (window.location.pathname.startsWith(`/users/${u.id}`)) navigate('/users');
     } catch (e) { toast.error(e.response?.data?.message ?? 'Could not remove user.'); }
   }
 
@@ -99,7 +108,13 @@ export default function UsersList() {
     setFormCompanyId(createCompanyId);
     setPickedCompany(!isSuperAdmin || Boolean(createCompanyId));
   };
-  const openEdit = (u) => { setForm({ name: u.name, email: u.email, password: '', phone: u.phone ?? '', role_id: u.roles?.[0]?.id ?? '', is_active: u.is_active }); setErrors({}); setEditing(u); setPickedCompany(true); };
+  const openEdit = (u) => {
+    setForm({ name: u.name, email: u.email, password: '', phone: u.phone ?? '', role_id: u.roles?.[0]?.id ?? '', is_active: u.is_active });
+    setErrors({});
+    setEditing(u);
+    setFormCompanyId(resolveUserCompany(u) ?? '');
+    setPickedCompany(true);
+  };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const err = (k) => fieldError(errors, k);
   const rows = data?.data ?? [];
@@ -114,6 +129,21 @@ export default function UsersList() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
+          <div className="flex rounded-xl border border-line p-0.5">
+            {[
+              { key: 'active', label: 'Active' },
+              { key: 'inactive', label: 'Inactive' },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => { setStatusFilter(tab.key); setPage(1); }}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${statusFilter === tab.key ? 'bg-leaf text-white' : 'text-muted hover:text-ink'}`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
           {can('users.create') && <Button size="sm" onClick={openNew}><PlusIcon className="size-4" /> Add user</Button>}
         </div>
       </div>
@@ -124,7 +154,9 @@ export default function UsersList() {
         ) : isError ? (
           <div className="px-4 py-12 text-center text-sm text-muted">Couldn't load users.</div>
         ) : rows.length === 0 ? (
-          <div className="px-4 py-16 text-center text-sm text-muted">No users in this company yet.</div>
+          <div className="px-4 py-16 text-center text-sm text-muted">
+            {statusFilter === 'inactive' ? 'No inactive users in this company.' : 'No active users in this company yet.'}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -175,7 +207,12 @@ export default function UsersList() {
         footer={
           <>
             <Button variant="ghost" size="sm" onClick={() => setEditing(null)} disabled={saveM.isPending}>Cancel</Button>
-            <Button size="sm" disabled={locked || (isCreate && isSuperAdmin && !companyReady)} onClick={() => submit(() => saveM.mutate({ ...form, id: editing?.id, target_company_id: targetCompanyId, header_company_id: editing?.id ? resolveUserCompany(editing) : undefined }, { onSettled: release }))}>
+            <Button size="sm" disabled={locked || (isCreate && isSuperAdmin && !companyReady)} onClick={() => submit(() => saveM.mutate({
+              ...form,
+              id: editing?.id,
+              target_company_id: isSuperAdmin ? (isCreate ? targetCompanyId : editCompanyId) : undefined,
+              header_company_id: editing?.id ? resolveUserCompany(editing) : undefined,
+            }, { onSettled: release }))}>
               {saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save user'}
             </Button>
           </>
@@ -191,6 +228,16 @@ export default function UsersList() {
                 </select>
               </Field>
               <p className="mt-1.5 text-xs text-muted">Choose which company this user belongs to. Your workspace company stays unchanged.</p>
+            </div>
+          )}
+          {isSuperAdmin && editing?.id && (
+            <div className="rounded-xl bg-leaf-soft/50 p-3 sm:col-span-2">
+              <Field label="Company" required>
+                <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </Field>
+              <p className="mt-1.5 text-xs text-muted">Move this user to another company (role applies in the selected company).</p>
             </div>
           )}
           {(editing?.id || !isSuperAdmin || companyReady) && (
