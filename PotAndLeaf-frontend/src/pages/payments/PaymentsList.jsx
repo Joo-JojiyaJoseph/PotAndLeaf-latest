@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
-import { validatePaymentForm } from '../../lib/paymentValidation';
+import { executePaymentSubmit } from '../../lib/paymentValidation';
 
 const TABS = [{ value: 'payables', label: 'Payables' }, { value: 'history', label: 'Payment history' }];
 const payStatusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -63,23 +63,15 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   const supplier = suppliers.find((s) => String(s.id) === String(form.supplier_id));
 
   function handleSubmit() {
-    setErrors({});
-    const result = validatePaymentForm({
+    executePaymentSubmit({
       supplierId: form.supplier_id,
       amount: form.amount,
       supplierOutstanding: supplier?.outstanding,
       purchaseId: form.purchase_id || null,
       payables: payables ?? [],
+      mutate: () => saveM.mutate(),
+      setErrors,
     });
-    if (!result.valid) {
-      const next = {};
-      for (const [key, message] of Object.entries(result.errors)) {
-        next[key] = [message];
-      }
-      setErrors(next);
-      return;
-    }
-    saveM.mutate();
   }
 
   return (

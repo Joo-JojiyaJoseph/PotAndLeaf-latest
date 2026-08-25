@@ -1,9 +1,11 @@
+import { formatCurrency } from './format.js';
+
 /** Epsilon for float comparisons (mirrors backend StoreSupplierPaymentRequest). */
 const EPS = 1e-6;
 
 /**
  * Validate payment amount against supplier outstanding and optional GRN balance.
- * Messages mirror StoreSupplierPaymentRequest for consistent UX.
+ * Backend validation remains authoritative; these checks are an early UX guard.
  *
  * @returns {{ valid: boolean, errors: Record<string, string> }}
  */
@@ -15,14 +17,16 @@ export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance 
   }
 
   if (num <= 0) {
-    return { valid: false, errors: { amount: 'Amount must be greater than zero.' } };
+    return { valid: false, errors: { amount: 'Amount must be greater than 0.' } };
   }
 
   const outstanding = Number(supplierOutstanding ?? 0);
   if (num > outstanding + EPS) {
     return {
       valid: false,
-      errors: { amount: `Payment amount cannot exceed supplier outstanding (${outstanding}).` },
+      errors: {
+        amount: `Amount cannot exceed the supplier outstanding balance of ${formatCurrency(outstanding)}.`,
+      },
     };
   }
 
@@ -31,7 +35,9 @@ export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance 
     if (!Number.isNaN(balance) && num > balance + EPS) {
       return {
         valid: false,
-        errors: { amount: `Payment amount cannot exceed the remaining GRN balance (${balance}).` },
+        errors: {
+          amount: `Amount cannot exceed the selected GRN remaining balance of ${formatCurrency(balance)}.`,
+        },
       };
     }
   }
@@ -41,7 +47,6 @@ export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance 
 
 /**
  * Client-side checks before submitting a supplier payment.
- * Backend validation remains authoritative.
  *
  * @returns {{ valid: boolean, errors: Record<string, string> }}
  */
@@ -57,4 +62,42 @@ export function validatePaymentForm({ supplierId, amount, supplierOutstanding, p
   }
 
   return validatePaymentAmount({ amount, supplierOutstanding, grnBalance });
+}
+
+/** Normalise validation errors to Laravel-style field arrays for Field components. */
+export function paymentErrorsToFieldState(errors) {
+  const next = {};
+  for (const [key, message] of Object.entries(errors)) {
+    next[key] = [message];
+  }
+  return next;
+}
+
+/**
+ * Run client-side payment validation and invoke mutate only when valid.
+ * Returns true when the submit proceeds to the mutation.
+ */
+export function executePaymentSubmit({
+  supplierId,
+  amount,
+  supplierOutstanding,
+  purchaseId,
+  payables = [],
+  mutate,
+  setErrors,
+}) {
+  setErrors({});
+  const result = validatePaymentForm({
+    supplierId,
+    amount,
+    supplierOutstanding,
+    purchaseId,
+    payables,
+  });
+  if (!result.valid) {
+    setErrors(paymentErrorsToFieldState(result.errors));
+    return false;
+  }
+  mutate();
+  return true;
 }
