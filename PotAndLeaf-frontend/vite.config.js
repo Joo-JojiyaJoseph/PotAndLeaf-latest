@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), tailwindcss()],
+    test: {
+      environment: 'node',
+    },
     server: {
       port: 5173,
       strictPort: true,

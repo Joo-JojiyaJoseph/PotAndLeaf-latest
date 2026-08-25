@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { validatePaymentForm } from '../../lib/paymentValidation';
 
 const TABS = [{ value: 'payables', label: 'Payables' }, { value: 'history', label: 'Payment history' }];
 const payStatusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -36,18 +37,13 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   }
 
   const saveM = useMutation({
-    mutationFn: () => {
-      if (!form.supplier_id) {
-        return Promise.reject({ response: { data: { errors: { supplier_id: ['Please select a supplier.'] } } } });
-      }
-      return api.post('/supplier-payments', {
-        supplier_id: form.supplier_id,
-        purchase_id: form.purchase_id || null,
-        amount: Number(form.amount) || 0,
-        mode: form.mode, payment_date: form.payment_date,
-        reference: form.reference || null, notes: form.notes || null,
-      });
-    },
+    mutationFn: () => api.post('/supplier-payments', {
+      supplier_id: form.supplier_id,
+      purchase_id: form.purchase_id || null,
+      amount: Number(form.amount) || 0,
+      mode: form.mode, payment_date: form.payment_date,
+      reference: form.reference || null, notes: form.notes || null,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supplier-payments'] });
       queryClient.invalidateQueries({ queryKey: ['payables'] });
@@ -66,11 +62,31 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   const suppliers = formData?.suppliers ?? [];
   const supplier = suppliers.find((s) => String(s.id) === String(form.supplier_id));
 
+  function handleSubmit() {
+    setErrors({});
+    const result = validatePaymentForm({
+      supplierId: form.supplier_id,
+      amount: form.amount,
+      supplierOutstanding: supplier?.outstanding,
+      purchaseId: form.purchase_id || null,
+      payables: payables ?? [],
+    });
+    if (!result.valid) {
+      const next = {};
+      for (const [key, message] of Object.entries(result.errors)) {
+        next[key] = [message];
+      }
+      setErrors(next);
+      return;
+    }
+    saveM.mutate();
+  }
+
   return (
     <Modal open={open} onClose={handleClose} title="Record supplier payment"
       footer={<>
         <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-        <Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Record payment'}</Button>
+        <Button size="sm" disabled={saveM.isPending} onClick={handleSubmit}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Record payment'}</Button>
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

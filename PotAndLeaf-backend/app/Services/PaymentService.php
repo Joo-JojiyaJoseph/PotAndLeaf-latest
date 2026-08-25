@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Http\Requests\Payment\StoreSupplierPaymentRequest;
 use App\Models\Purchase;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class PaymentService
 {
@@ -29,23 +31,29 @@ class PaymentService
     public function record(int|string $companyId, array $data, ?int $userId = null): SupplierPayment
     {
         return DB::transaction(function () use ($companyId, $data, $userId) {
+            $amount = (float) $data['amount'];
+
+            $supplier = Supplier::where('company_id', $companyId)->lockForUpdate()->find($data['supplier_id']);
+            if (! $supplier) {
+                throw ValidationException::withMessages(['supplier_id' => 'Supplier not found.']);
+            }
+
+            $this->assertPayableAmount($supplier, $amount, $companyId, $data['purchase_id'] ?? null);
+
             $payment = SupplierPayment::create([
                 'company_id'   => $companyId,
                 'supplier_id'  => $data['supplier_id'],
                 'purchase_id'  => $data['purchase_id'] ?? null,
                 'payment_no'   => $this->nextPaymentNo($companyId),
                 'payment_date' => $data['payment_date'],
-                'amount'       => $data['amount'],
+                'amount'       => $amount,
                 'mode'         => $data['mode'] ?? 'cash',
                 'reference'    => $data['reference'] ?? null,
                 'notes'        => $data['notes'] ?? null,
             ]);
 
-            $supplier = Supplier::where('company_id', $companyId)->lockForUpdate()->find($data['supplier_id']);
-            if ($supplier) {
-                $supplier->outstanding = (float) $supplier->outstanding - (float) $data['amount'];
-                $supplier->save();
-            }
+            $supplier->outstanding = (float) $supplier->outstanding - $amount;
+            $supplier->save();
 
             if (! empty($data['purchase_id'])) {
                 $this->syncPurchasePaid($data['purchase_id']);
@@ -111,6 +119,45 @@ class PaymentService
             })
             ->values()
             ->all();
+    }
+
+    /** Re-check under row lock (same rules as StoreSupplierPaymentRequest). */
+    private function assertPayableAmount(
+        Supplier $supplier,
+        float $amount,
+        int|string $companyId,
+        int|string|null $purchaseId = null,
+    ): void {
+        $outstanding = (float) $supplier->outstanding;
+        if ($amount > $outstanding + 1e-6) {
+            throw ValidationException::withMessages([
+                'amount' => "Payment amount cannot exceed supplier outstanding ({$outstanding}).",
+            ]);
+        }
+
+        if (! filled($purchaseId)) {
+            return;
+        }
+
+        $purchase = Purchase::forCompany($companyId)->lockForUpdate()->find($purchaseId);
+        if (! $purchase || ! $purchase->isConfirmed()) {
+            throw ValidationException::withMessages([
+                'purchase_id' => 'Payment can only be allocated to a confirmed purchase.',
+            ]);
+        }
+
+        if ((string) $purchase->supplier_id !== (string) $supplier->id) {
+            throw ValidationException::withMessages([
+                'purchase_id' => 'Purchase does not belong to the selected supplier.',
+            ]);
+        }
+
+        $balance = StoreSupplierPaymentRequest::remainingPurchaseBalance($purchase);
+        if ($amount > $balance + 1e-6) {
+            throw ValidationException::withMessages([
+                'amount' => "Payment amount cannot exceed the remaining GRN balance ({$balance}).",
+            ]);
+        }
     }
 
     private function syncPurchasePaid(string $purchaseId): void
