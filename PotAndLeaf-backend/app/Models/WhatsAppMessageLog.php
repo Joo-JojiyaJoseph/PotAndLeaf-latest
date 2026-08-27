@@ -9,6 +9,8 @@ class WhatsAppMessageLog extends Model
 {
     use HasUuids;
 
+    protected $table = 'whatsapp_message_logs';
+
     protected $fillable = [
         'company_id', 'recipient_type', 'recipient_id', 'recipient_phone',
         'message_type', 'message', 'status', 'error', 'retry_count', 'business_date', 'sent_at',

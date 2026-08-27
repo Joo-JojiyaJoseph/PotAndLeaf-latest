@@ -16,11 +16,12 @@ class DatabaseSeeder extends Seeder
             StandardRolesSeeder::class, // global branch roles: Manager, Cashier, etc.
             BranchUserSeeder::class,    // sample per-company logins (manager/cashier)
             LookupSeeder::class,
-            // LocationSeeder::class,     // default godown + shop per company
-            // SupplierSeeder::class,     // sample suppliers per company
-            // ProductSeeder::class,      // sample products per company
-            // CustomerSeeder::class,
-            // DemoSeeder::class,         // live demo activity (purchases, sales, payments) — must run last
+            LocationSeeder::class,     // default godown + shop per company
+            SupplierSeeder::class,     // sample suppliers per company
+            ProductSeeder::class,      // sample products per company
+            CustomerSeeder::class,
+            DemoSeeder::class,         // live demo activity (purchases, sales, payments) — must run last
+            SupplementalDataSeeder::class,
         ]);
     }
 }
