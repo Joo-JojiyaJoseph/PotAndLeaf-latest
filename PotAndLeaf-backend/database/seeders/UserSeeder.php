@@ -13,8 +13,9 @@ class UserSeeder extends Seeder
     {
         $admin = User::firstOrCreate(
             ['email' => 'admin@potandleaf.test'],
-            ['name' => 'Pot & Leaf Admin', 'password' => Hash::make('password'), 'is_super_admin' => true, 'is_active' => true],
+            ['name' => 'Admin', 'password' => Hash::make('password'), 'is_super_admin' => true, 'is_active' => true],
         );
+        $admin->forceFill(['name' => 'Admin', 'is_super_admin' => true, 'is_active' => true])->save();
 
         // Give the admin access to every company; default to the HO.
         $companies = Company::orderBy('id')->get();

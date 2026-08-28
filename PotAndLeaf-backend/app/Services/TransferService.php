@@ -221,7 +221,7 @@ class TransferService
             'to_company_id' => $newToCompanyId,
         ]);
 
-        return $transfer->load(['items', 'fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name']);
+        return $transfer->load(['items', 'fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name', 'redirectedFromCompany:id,name']);
     }
 
     /** Dispatch: deduct stock from the source company or location. */

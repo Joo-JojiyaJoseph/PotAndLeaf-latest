@@ -183,5 +183,43 @@ it('returns rental automation settings with defaults', function () {
         ->assertJsonPath('data.rental_auto_bill', '1')
         ->assertJsonPath('data.rental_whatsapp_on_bill', '1')
         ->assertJsonPath('data.rental_payment_due_days', '7')
-        ->assertJsonPath('data.rental_overdue_alert_days', '0');
+        ->assertJsonPath('data.rental_overdue_alert_days', '0')
+        ->assertJsonPath('data.rental_reminder_lead_days', '3')
+        ->assertJsonPath('data.sms_enabled', '0');
 });
+
+it('sends upcoming return reminders within the lead window', function () {
+    $this->mock(WhatsAppService::class, function ($mock) {
+        $mock->shouldReceive('sendMessage')->andReturn(['success' => true, 'message' => 'sent', 'provider' => 'test']);
+    });
+
+    $rental = phase4Rental($this, [
+        'expected_end_date' => now()->addDays(2)->toDateString(),
+    ]);
+
+    $notifications = app(RentalNotificationService::class);
+    $first = $notifications->sendOverdueAlerts($this->company->id);
+    $second = $notifications->sendOverdueAlerts($this->company->id);
+
+    expect($first['return_reminders'])->toBe(1);
+    expect($first['return_alerts'])->toBe(0);
+    expect($second['return_reminders'])->toBe(0);
+    expect(RentalNotificationLog::query()
+        ->where('rental_id', $rental->id)
+        ->where('event', 'return_reminder')
+        ->whereDate('created_at', now()->toDateString())
+        ->count())->toBe(1);
+});
+
+it('auto-prices damaged rental units at half retail when no charge is given', function () {
+    $rental = phase4Rental($this);
+    $item = $rental->items()->first();
+
+    $settled = app(RentalService::class)->settle($rental, [
+        $item->id => ['returned' => 1, 'damaged' => 1, 'missing' => 0],
+    ], null, null, $this->user->id);
+
+    expect((float) $settled->damage_charge)->toBe(200.0);
+    expect((float) $item->fresh()->damaged_qty)->toBe(1.0);
+});
+

@@ -87,6 +87,17 @@ it('super admin can view a company detail with statistics', function () {
     ]);
 });
 
+it('workspace switcher omits the dummy super-admin company', function () {
+    $admin = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
+    Company::create(['name' => 'Pot & Leaf _ Super Admin', 'code' => 'POTLEAF', 'is_active' => true, 'is_protected' => true]);
+    Company::create(['name' => 'Cheerakuzhy Main Nursery', 'code' => 'CHK-NSY', 'is_active' => true, 'is_protected' => false]);
+
+    $names = collect($this->actingAs($admin)->getJson('/api/me')->assertOk()->json('data.companies'))->pluck('name');
+
+    expect($names)->not->toContain('Pot & Leaf _ Super Admin')
+        ->and($names)->toContain('Cheerakuzhy Main Nursery');
+});
+
 it('non super admin cannot view company detail', function () {
     $user = User::factory()->create(['is_super_admin' => false, 'is_active' => true]);
     $company = Company::create(['name' => 'Branch B', 'code' => 'BRBB', 'is_active' => true]);

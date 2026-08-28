@@ -56,6 +56,11 @@ class StockTransfer extends Model
         return $this->belongsTo(Company::class, 'to_company_id');
     }
 
+    public function redirectedFromCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'redirected_from_company_id');
+    }
+
     public function scopeForCompany($query, int|string $companyId)
     {
         return $query->where(fn ($q) => $q->where('company_id', $companyId)->orWhere('to_company_id', $companyId));

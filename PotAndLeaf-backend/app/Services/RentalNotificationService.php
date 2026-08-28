@@ -8,12 +8,12 @@ use App\Models\RentalInvoice;
 use App\Models\RentalNotificationLog;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class RentalNotificationService
 {
     public function __construct(
         private readonly WhatsAppService $whatsapp,
+        private readonly SmsService $sms,
         private readonly SettingsService $settings,
     ) {}
 
@@ -30,14 +30,8 @@ class RentalNotificationService
             return ['success' => false, 'message' => 'Rental invoice is missing related data.'];
         }
 
-        if ($this->settings->get($company->id, 'whatsapp_enabled') !== '1') {
-            $this->log($company->id, $rental->id, $invoice->id, 'invoice_sent', null, 'skipped', 'WhatsApp disabled for company.');
-
-            return ['success' => false, 'message' => 'WhatsApp sharing is disabled for this company.'];
-        }
-
         if ($requireAutoSetting && $this->settings->get($company->id, 'rental_whatsapp_on_bill') !== '1') {
-            $this->log($company->id, $rental->id, $invoice->id, 'invoice_sent', null, 'skipped', 'Auto WhatsApp on bill disabled.');
+            $this->log($company->id, $rental->id, $invoice->id, 'invoice_sent', 'whatsapp', null, 'skipped', 'Auto WhatsApp on bill disabled.');
 
             return ['success' => false, 'message' => 'Automatic WhatsApp on billing is disabled in settings.'];
         }
@@ -45,18 +39,7 @@ class RentalNotificationService
         $customer = $rental->customer;
         $to = $customer?->whatsapp ?: $customer?->phone;
         $message = $this->buildInvoiceMessage($company, $rental, $invoice);
-        $result = $this->whatsapp->sendMessage($to, $message);
-
-        $this->log(
-            $company->id,
-            $rental->id,
-            $invoice->id,
-            'invoice_sent',
-            $to,
-            $result['success'] ? 'sent' : 'failed',
-            $result['message'],
-            $message,
-        );
+        $result = $this->dispatchCustomerMessage($company->id, $rental->id, $invoice->id, 'invoice_sent', $to, $message);
 
         if ($result['success']) {
             $invoice->update(['sent_at' => now()]);
@@ -65,11 +48,17 @@ class RentalNotificationService
         return $result;
     }
 
-    /** @return array{return_alerts: int, payment_alerts: int} */
+    /**
+     * Overdue alerts plus upcoming return/payment reminders (lead days in settings).
+     *
+     * @return array{return_alerts: int, payment_alerts: int, return_reminders: int, payment_reminders: int}
+     */
     public function sendOverdueAlerts(?int $companyId = null): array
     {
         $returnAlerts = 0;
         $paymentAlerts = 0;
+        $returnReminders = 0;
+        $paymentReminders = 0;
         $today = Carbon::today();
 
         $rentalQuery = Rental::query()
@@ -82,21 +71,32 @@ class RentalNotificationService
         }
 
         foreach ($rentalQuery->get() as $rental) {
-            if ($this->settings->get($rental->company_id, 'whatsapp_enabled') !== '1') {
+            if (! $this->channelsEnabled($rental->company_id)) {
                 continue;
             }
 
+            $end = Carbon::parse($rental->expected_end_date);
             $graceCutoff = $today->copy()->subDays(max(0, $this->settings->getInt($rental->company_id, 'rental_overdue_alert_days')));
-            if (Carbon::parse($rental->expected_end_date)->gt($graceCutoff)) {
+            $leadDays = max(0, $this->settings->getInt($rental->company_id, 'rental_reminder_lead_days'));
+            $reminderUntil = $today->copy()->addDays($leadDays);
+
+            if ($end->lte($graceCutoff)) {
+                if ($this->alreadyLoggedToday($rental->company_id, $rental->id, null, 'return_overdue')) {
+                    continue;
+                }
+                if ($this->sendReturnOverdueAlert($rental)) {
+                    $returnAlerts++;
+                }
                 continue;
             }
 
-            if ($this->alreadyLoggedToday($rental->company_id, $rental->id, null, 'return_overdue')) {
-                continue;
-            }
-
-            if ($this->sendReturnOverdueAlert($rental)) {
-                $returnAlerts++;
+            if ($leadDays > 0 && $end->gt($today) && $end->lte($reminderUntil)) {
+                if ($this->alreadyLoggedToday($rental->company_id, $rental->id, null, 'return_reminder')) {
+                    continue;
+                }
+                if ($this->sendReturnReminder($rental)) {
+                    $returnReminders++;
+                }
             }
         }
 
@@ -110,25 +110,41 @@ class RentalNotificationService
         }
 
         foreach ($invoiceQuery->get() as $invoice) {
-            if ($this->settings->get($invoice->company_id, 'whatsapp_enabled') !== '1') {
+            if (! $this->channelsEnabled($invoice->company_id)) {
                 continue;
             }
 
+            $due = Carbon::parse($invoice->due_date);
             $graceCutoff = $today->copy()->subDays(max(0, $this->settings->getInt($invoice->company_id, 'rental_overdue_alert_days')));
-            if (Carbon::parse($invoice->due_date)->gt($graceCutoff)) {
+            $leadDays = max(0, $this->settings->getInt($invoice->company_id, 'rental_reminder_lead_days'));
+            $reminderUntil = $today->copy()->addDays($leadDays);
+
+            if ($due->lte($graceCutoff)) {
+                if ($this->alreadyLoggedToday($invoice->company_id, $invoice->rental_id, $invoice->id, 'payment_overdue')) {
+                    continue;
+                }
+                if ($this->sendPaymentOverdueAlert($invoice)) {
+                    $paymentAlerts++;
+                }
                 continue;
             }
 
-            if ($this->alreadyLoggedToday($invoice->company_id, $invoice->rental_id, $invoice->id, 'payment_overdue')) {
-                continue;
-            }
-
-            if ($this->sendPaymentOverdueAlert($invoice)) {
-                $paymentAlerts++;
+            if ($leadDays > 0 && $due->gt($today) && $due->lte($reminderUntil)) {
+                if ($this->alreadyLoggedToday($invoice->company_id, $invoice->rental_id, $invoice->id, 'payment_reminder')) {
+                    continue;
+                }
+                if ($this->sendPaymentReminder($invoice)) {
+                    $paymentReminders++;
+                }
             }
         }
 
-        return ['return_alerts' => $returnAlerts, 'payment_alerts' => $paymentAlerts];
+        return [
+            'return_alerts'     => $returnAlerts,
+            'payment_alerts'    => $paymentAlerts,
+            'return_reminders'  => $returnReminders,
+            'payment_reminders' => $paymentReminders,
+        ];
     }
 
     public function buildInvoiceMessage(Company $company, Rental $rental, RentalInvoice $invoice): string
@@ -171,10 +187,6 @@ class RentalNotificationService
 
     private function sendReturnOverdueAlert(Rental $rental): bool
     {
-        if ($this->settings->get($rental->company_id, 'whatsapp_enabled') !== '1') {
-            return false;
-        }
-
         $customer = $rental->customer;
         $to = $customer?->whatsapp ?: $customer?->phone;
         $companyName = $rental->company?->name ?? 'Pot & Leaf';
@@ -182,18 +194,11 @@ class RentalNotificationService
             ."Rental {$rental->rental_no} was expected back by ".Carbon::parse($rental->expected_end_date)->format('d M Y').".\n"
             ."Please return the plants or contact {$companyName} to extend the rental.";
 
-        $result = $this->whatsapp->sendMessage($to, $message);
-        $this->log($rental->company_id, $rental->id, null, 'return_overdue', $to, $result['success'] ? 'sent' : 'failed', $result['message'], $message);
-
-        return $result['success'];
+        return $this->dispatchCustomerMessage($rental->company_id, $rental->id, null, 'return_overdue', $to, $message)['success'];
     }
 
     private function sendPaymentOverdueAlert(RentalInvoice $invoice): bool
     {
-        if ($this->settings->get($invoice->company_id, 'whatsapp_enabled') !== '1') {
-            return false;
-        }
-
         $rental = $invoice->rental;
         $customer = $rental?->customer;
         $to = $customer?->whatsapp ?: $customer?->phone;
@@ -204,14 +209,90 @@ class RentalNotificationService
             ."Due date was ".Carbon::parse($invoice->due_date)->format('d M Y').".\n"
             ."Please contact {$companyName} to settle the balance.";
 
-        $result = $this->whatsapp->sendMessage($to, $message);
-        $this->log($invoice->company_id, $invoice->rental_id, $invoice->id, 'payment_overdue', $to, $result['success'] ? 'sent' : 'failed', $result['message'], $message);
+        $result = $this->dispatchCustomerMessage($invoice->company_id, $invoice->rental_id, $invoice->id, 'payment_overdue', $to, $message);
 
         if ($result['success']) {
             $invoice->increment('reminder_count');
         }
 
         return $result['success'];
+    }
+
+    private function sendReturnReminder(Rental $rental): bool
+    {
+        $customer = $rental->customer;
+        $to = $customer?->whatsapp ?: $customer?->phone;
+        $companyName = $rental->company?->name ?? 'Pot & Leaf';
+        $message = "*Rental return reminder*\n\n"
+            ."Rental {$rental->rental_no} is due back on ".Carbon::parse($rental->expected_end_date)->format('d M Y').".\n"
+            ."Please return the plants on time or contact {$companyName} to extend.";
+
+        return $this->dispatchCustomerMessage($rental->company_id, $rental->id, null, 'return_reminder', $to, $message)['success'];
+    }
+
+    private function sendPaymentReminder(RentalInvoice $invoice): bool
+    {
+        $rental = $invoice->rental;
+        $customer = $rental?->customer;
+        $to = $customer?->whatsapp ?: $customer?->phone;
+        $companyName = $rental?->company?->name ?? 'Pot & Leaf';
+        $message = "*Rental payment reminder*\n\n"
+            ."Invoice {$invoice->invoice_no} for rental {$rental?->rental_no} is due on ".Carbon::parse($invoice->due_date)->format('d M Y').".\n"
+            ."Amount due: ₹".number_format((float) $invoice->amount, 2)."\n"
+            ."Please contact {$companyName} to settle.";
+
+        return $this->dispatchCustomerMessage($invoice->company_id, $invoice->rental_id, $invoice->id, 'payment_reminder', $to, $message)['success'];
+    }
+
+    /** @return array{success: bool, message: string, provider?: string} */
+    private function dispatchCustomerMessage(
+        int|string $companyId,
+        ?string $rentalId,
+        ?string $invoiceId,
+        string $event,
+        ?string $to,
+        string $message,
+    ): array {
+        $whatsappOn = $this->settings->get($companyId, 'whatsapp_enabled') === '1';
+        $smsOn = $this->settings->get($companyId, 'sms_enabled') === '1';
+
+        if (! $whatsappOn && ! $smsOn) {
+            $this->log($companyId, $rentalId, $invoiceId, $event, 'none', $to, 'skipped', 'WhatsApp and SMS are disabled for this company.');
+
+            return ['success' => false, 'message' => 'WhatsApp and SMS sharing are disabled for this company.'];
+        }
+
+        $success = false;
+        $notes = [];
+        $provider = null;
+
+        if ($whatsappOn) {
+            $result = $this->whatsapp->sendMessage($to, $message);
+            $this->log($companyId, $rentalId, $invoiceId, $event, 'whatsapp', $to, $result['success'] ? 'sent' : 'failed', $result['message'], $message);
+            $success = $success || $result['success'];
+            $notes[] = 'WhatsApp: '.$result['message'];
+            $provider = $result['provider'] ?? $provider;
+        }
+
+        if ($smsOn) {
+            $result = $this->sms->sendMessage($to, $message);
+            $this->log($companyId, $rentalId, $invoiceId, $event, 'sms', $to, $result['success'] ? 'sent' : 'failed', $result['message'], $message);
+            $success = $success || $result['success'];
+            $notes[] = 'SMS: '.$result['message'];
+            $provider = $provider ? $provider.','.($result['provider'] ?? 'sms') : ($result['provider'] ?? 'sms');
+        }
+
+        return [
+            'success'  => $success,
+            'message'  => implode(' ', $notes) ?: 'No message sent.',
+            'provider' => $provider,
+        ];
+    }
+
+    private function channelsEnabled(int|string $companyId): bool
+    {
+        return $this->settings->get($companyId, 'whatsapp_enabled') === '1'
+            || $this->settings->get($companyId, 'sms_enabled') === '1';
     }
 
     private function alreadyLoggedToday(int|string $companyId, ?string $rentalId, ?string $invoiceId, string $event): bool
@@ -230,6 +311,7 @@ class RentalNotificationService
         ?string $rentalId,
         ?string $invoiceId,
         string $event,
+        string $channel,
         ?string $recipient,
         string $status,
         ?string $note = null,
@@ -239,7 +321,7 @@ class RentalNotificationService
             'company_id'         => $companyId,
             'rental_id'          => $rentalId,
             'rental_invoice_id'  => $invoiceId,
-            'channel'            => 'whatsapp',
+            'channel'            => $channel,
             'event'              => $event,
             'recipient'          => $recipient,
             'status'             => $status,

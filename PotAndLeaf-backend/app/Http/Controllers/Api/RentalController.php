@@ -40,9 +40,16 @@ class RentalController extends Controller
 
         $customers = Customer::forCompany($company->id)->where('status', 'active')->orderBy('name')
             ->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name]);
-        $products = Product::forCompany($company->id)->orderBy('name')
-            ->get(['id', 'sku', 'name', 'retail_price'])
-            ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'retail_price' => (float) $p->retail_price]);
+        $products = Product::forCompany($company->id)->orderByDesc('is_rental')->orderBy('name')
+            ->get(['id', 'sku', 'name', 'retail_price', 'is_rental', 'rental_daily_rate'])
+            ->map(fn ($p) => [
+                'id'                => $p->id,
+                'sku'               => $p->sku,
+                'name'              => $p->name,
+                'retail_price'      => (float) $p->retail_price,
+                'is_rental'         => (bool) $p->is_rental,
+                'rental_daily_rate' => $p->rental_daily_rate !== null ? (float) $p->rental_daily_rate : null,
+            ]);
         $locations = Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'is_default'])->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'is_default' => (bool) $l->is_default]);
 
@@ -62,7 +69,7 @@ class RentalController extends Controller
         $this->allow($request, 'rental.view');
         $this->assertRecordCompany($request, $rental);
 
-        return $this->ok(new RentalResource($rental->load(['items', 'invoices', 'customer:id,name,type', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
+        return $this->ok(new RentalResource($rental->load(['items.product:id,retail_price', 'invoices', 'customer:id,name,type', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
     }
 
     public function activate(Request $request, Rental $rental): JsonResponse

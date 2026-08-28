@@ -9,6 +9,12 @@ import { Button, Card, Field, Input, Spinner } from '../../components/ui';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', qty: '1', rate_per_cycle: '' });
+const CYCLE_DAYS = { daily: 1, weekly: 7, monthly: 30 };
+const cycleRate = (product, cycle) => {
+  const daily = Number(product?.rental_daily_rate);
+  if (!daily) return '';
+  return String(daily * (CYCLE_DAYS[cycle] ?? 1));
+};
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
 
@@ -18,7 +24,7 @@ export default function RentalForm() {
   const { activeCompany, isSuperAdmin, companies, companyId } = useAuth();
   const presetCompanyId = searchParams.get('company_id') ?? '';
   const [formCompanyId, setFormCompanyId] = useState(() => defaultCreateCompanyId({ filterCompanyId: presetCompanyId, companyId }));
-  const [header, setHeader] = useState({ customer_id: '', start_date: today(), expected_end_date: '', billing_cycle: 'monthly', deposit: '', notes: '' });
+  const [header, setHeader] = useState({ customer_id: '', location_id: '', start_date: today(), expected_end_date: '', billing_cycle: 'daily', deposit: '', auto_bill: true, notes: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -39,6 +45,13 @@ export default function RentalForm() {
   });
   const customers = data?.customers ?? [];
   const products = data?.products ?? [];
+  const locations = data?.locations ?? [];
+
+  useEffect(() => {
+    if (!locations.length || header.location_id) return;
+    const def = locations.find((l) => l.is_default) ?? locations[0];
+    if (def) setHeader((h) => ({ ...h, location_id: def.id }));
+  }, [locations, header.location_id]);
 
   const err = (k) => errors[k]?.[0];
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -53,8 +66,11 @@ export default function RentalForm() {
     try {
       const res = await api.post('/rentals', {
         customer_id: header.customer_id,
+        location_id: header.location_id || null,
         start_date: header.start_date, expected_end_date: header.expected_end_date || null,
-        billing_cycle: header.billing_cycle, deposit: Number(header.deposit) || 0, notes: header.notes || null,
+        billing_cycle: header.billing_cycle,
+        auto_bill: header.auto_bill,
+        deposit: Number(header.deposit) || 0, notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, qty: Number(l.qty) || 0, rate_per_cycle: Number(l.rate_per_cycle) || 0 })),
       }, companyCfg);
       const cid = res.data.data.company_id ?? targetCompanyId;
@@ -88,7 +104,7 @@ export default function RentalForm() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-lg font-semibold">New rental</h1><p className="text-sm text-muted">Rent plants to a customer on a billing cycle.</p></div>
+        <div><h1 className="text-lg font-semibold">New rental</h1><p className="text-sm text-muted">Daily-rate plants, security deposit, and cycle billing. Damage and loss are assessed on settle.</p></div>
         <Button variant="outline" size="sm" onClick={() => navigate('/rentals')}><ArrowLeftIcon className="size-4" /> Back</Button>
       </div>
 
@@ -115,13 +131,33 @@ export default function RentalForm() {
             </select>
           </Field>
           <Field label="Billing cycle" error={err('billing_cycle')}>
-            <select value={header.billing_cycle} onChange={(e) => setHeader((h) => ({ ...h, billing_cycle: e.target.value }))} className={selectCls}>
+            <select value={header.billing_cycle} onChange={(e) => {
+              const cycle = e.target.value;
+              setHeader((h) => ({ ...h, billing_cycle: cycle }));
+              setLines((prev) => prev.map((l) => {
+                const p = products.find((x) => x.id === l.product_id);
+                const next = cycleRate(p, cycle);
+                return next ? { ...l, rate_per_cycle: next } : l;
+              }));
+            }} className={selectCls}>
               <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
             </select>
           </Field>
           <Field label="Start date" required error={err('start_date')}><Input type="date" value={header.start_date} onChange={(e) => setHeader((h) => ({ ...h, start_date: e.target.value }))} /></Field>
           <Field label="Expected end (optional)" error={err('expected_end_date')}><Input type="date" value={header.expected_end_date} onChange={(e) => setHeader((h) => ({ ...h, expected_end_date: e.target.value }))} /></Field>
-          <Field label="Deposit" error={err('deposit')}><Input type="number" step="0.01" value={header.deposit} onChange={(e) => setHeader((h) => ({ ...h, deposit: e.target.value }))} /></Field>
+          <Field label="Security deposit (₹)" error={err('deposit')}><Input type="number" step="0.01" value={header.deposit} onChange={(e) => setHeader((h) => ({ ...h, deposit: e.target.value }))} /></Field>
+          <Field label="Issue from location" error={err('location_id')}>
+            <select value={header.location_id} onChange={(e) => setHeader((h) => ({ ...h, location_id: e.target.value }))} className={selectCls}>
+              <option value="">Company stock</option>
+              {locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.is_default ? ' (default)' : ''}</option>)}
+            </select>
+          </Field>
+          <Field label="Auto-bill on cycle">
+            <label className="flex h-10 items-center gap-2 text-sm">
+              <input type="checkbox" checked={header.auto_bill} onChange={(e) => setHeader((h) => ({ ...h, auto_bill: e.target.checked }))} className="size-4 rounded border-line" />
+              Generate invoices automatically
+            </label>
+          </Field>
         </div>
       </Card>
 
@@ -138,9 +174,17 @@ export default function RentalForm() {
               {lines.map((line, i) => (
                 <tr key={i} className="border-b border-line/60 last:border-0">
                   <td className="px-3 py-2">
-                    <select value={line.product_id} onChange={(e) => setLine(i, { product_id: e.target.value })} className={selectCls}>
+                    <select value={line.product_id} onChange={(e) => {
+                      const id = e.target.value;
+                      const p = products.find((x) => x.id === id);
+                      setLine(i, { product_id: id, rate_per_cycle: cycleRate(p, header.billing_cycle) || '' });
+                    }} className={selectCls}>
                       <option value="">Select…</option>
-                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}{p.is_rental && p.rental_daily_rate != null ? ` · ₹${p.rental_daily_rate}/day` : ''}
+                        </option>
+                      ))}
                     </select>
                   </td>
                   <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>

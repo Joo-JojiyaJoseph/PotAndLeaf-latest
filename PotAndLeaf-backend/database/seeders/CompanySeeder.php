@@ -8,22 +8,13 @@ use Illuminate\Database\Seeder;
 /**
  * Seeds the Cheerakuzhy Group entities as separate companies (Tally-style
  * multi-company). Each operates under its own name/legal identity but shares
- * the same centralized database. Pot & Leaf is the flagship retail brand and
- * is protected (cannot be deleted) since it is the default/primary company.
+ * the same centralized database. HO access is a user (Admin), not a company.
  */
 class CompanySeeder extends Seeder
 {
     public function run(): void
     {
         $companies = [
-            [
-                'code'         => 'POTLEAF',
-                'name'         => 'Pot & Leaf _ Super Admin',
-                'legal_name'   => 'Pot & Leaf Retail Network',
-                'state'        => 'Kerala',
-                'state_code'   => '32',
-                'is_protected' => true,
-            ],
             [
                 'code'         => 'CHK-NSY',
                 'name'         => 'Cheerakuzhy Main Nursery',

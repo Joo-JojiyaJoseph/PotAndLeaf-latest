@@ -37,9 +37,10 @@ class ProductionOrderResource extends JsonResource
             'notes'            => $this->notes,
             'completed_at'     => optional($this->completed_at)->toIso8601String(),
             'barcodes'         => $this->whenLoaded('batches', fn () => $this->batches->map(fn ($b) => [
-                'id'      => $b->id,
-                'barcode' => $b->barcode,
-                'qty'     => (float) $b->qty,
+                'id'            => $b->id,
+                'barcode'       => $b->barcode,
+                'qty'           => (float) $b->qty,
+                'supervisor_id' => $b->supervisor_id,
             ])->values()),
             'items'            => $this->whenLoaded('items', fn () => $this->items->map(fn ($i) => [
                 'id' => $i->id,
@@ -63,6 +64,7 @@ class ProductionOrderResource extends JsonResource
                         'status'        => $stage->status,
                         'material_cost' => (float) $stage->material_cost,
                         'supervisor'    => $stage->relationLoaded('supervisor') ? $stage->supervisor?->name : null,
+                        'supervisor_id' => $stage->supervisor_id,
                         'started_at'    => optional($stage->started_at)->toIso8601String(),
                         'completed_at'  => optional($stage->completed_at)->toIso8601String(),
                         'can'           => [

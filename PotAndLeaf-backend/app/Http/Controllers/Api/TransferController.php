@@ -112,6 +112,7 @@ class TransferController extends Controller
         return $this->ok(new StockTransferResource($stockTransfer->load([
             'items.batch.purchase:id,purchase_no',
             'fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name',
+            'redirectedFromCompany:id,name',
         ])));
     }
 

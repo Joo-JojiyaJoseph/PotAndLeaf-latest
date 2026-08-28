@@ -20,7 +20,7 @@ class StoreProductionOrderRequest extends FormRequest
             'bom_id'          => ['required', 'uuid', Rule::exists('boms', 'id')->where('company_id', $companyId)->where('is_active', true)],
             'output_quantity' => ['required', 'numeric', 'gt:0'],
             'location_id'     => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)],
-            'supervisor_id'   => ['nullable', 'integer', Rule::exists('users', 'id')],
+            'supervisor_id'   => ['required', 'integer', Rule::exists('users', 'id')],
             'order_date'      => ['required', 'date'],
             'notes'           => ['nullable', 'string', 'max:1000'],
         ];

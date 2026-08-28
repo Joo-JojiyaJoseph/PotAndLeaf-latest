@@ -53,8 +53,10 @@ const GROUPS = [
     keys: [
       { key: 'rental_auto_bill', label: 'Auto-generate invoices on billing cycle', type: 'toggle' },
       { key: 'rental_whatsapp_on_bill', label: 'WhatsApp when auto-billing', type: 'toggle' },
+      { key: 'sms_enabled', label: 'SMS rental reminders & overdue alerts', type: 'toggle' },
       { key: 'rental_payment_due_days', label: 'Payment due days after period end', type: 'number', step: '1' },
       { key: 'rental_overdue_alert_days', label: 'Overdue alert grace (days)', type: 'number', step: '1' },
+      { key: 'rental_reminder_lead_days', label: 'Reminder lead time (days before due)', type: 'number', step: '1' },
     ],
   },
 ];

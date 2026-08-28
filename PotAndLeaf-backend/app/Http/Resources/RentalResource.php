@@ -54,6 +54,7 @@ class RentalResource extends JsonResource
             'items'             => $this->whenLoaded('items', fn () => $this->items->map(fn ($i) => [
                 'id' => $i->id, 'product_id' => $i->product_id, 'product_name' => $i->product_name,
                 'qty' => (float) $i->qty, 'rate_per_cycle' => (float) $i->rate_per_cycle,
+                'retail_price' => $i->relationLoaded('product') ? (float) ($i->product?->retail_price ?? 0) : null,
                 'returned_qty' => (float) $i->returned_qty, 'damaged_qty' => (float) $i->damaged_qty, 'missing_qty' => (float) $i->missing_qty,
                 'outstanding_qty' => (float) $i->qty - (float) $i->returned_qty - (float) $i->damaged_qty - (float) $i->missing_qty,
             ])->values()),

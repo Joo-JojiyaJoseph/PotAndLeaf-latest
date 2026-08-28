@@ -121,6 +121,7 @@ export default function ProductionOrderDetail() {
                   <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
                     {stage.started_at && <span>Started {formatDate(stage.started_at)}</span>}
                     {stage.completed_at && <span>Completed {formatDate(stage.completed_at)}</span>}
+                    {stage.supervisor && <span>Supervisor {stage.supervisor}</span>}
                     {stage.material_cost > 0 && <span>Material cost {formatCurrency(stage.material_cost)}</span>}
                   </div>
                 </div>

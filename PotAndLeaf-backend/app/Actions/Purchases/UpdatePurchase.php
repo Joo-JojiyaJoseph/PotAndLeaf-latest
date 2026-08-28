@@ -61,7 +61,7 @@ class UpdatePurchase
             $this->purchases->update($purchase, [
                 'company_id'    => $companyId,
                 'supplier_id'   => $data['supplier_id'],
-                'invoice_no'    => $data['invoice_no'] ?? null,
+                'invoice_no'    => filled($data['invoice_no'] ?? null) ? $data['invoice_no'] : $purchase->invoice_no,
                 'invoice_date'  => $data['invoice_date'] ?? null,
                 'purchase_date' => $data['purchase_date'],
                 'is_interstate' => (bool) ($data['is_interstate'] ?? false),

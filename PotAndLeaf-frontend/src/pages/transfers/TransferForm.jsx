@@ -193,9 +193,9 @@ export default function TransferForm() {
       {errors._ && <div className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{errors._[0]}</div>}
 
       <Card className="p-5">
-        <div className="mb-4 flex gap-2">
-          <button type="button" onClick={() => setTransferType('inter_company')} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (!isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Between companies</button>
-          {/* <button type="button" onClick={() => setTransferType('intra_company')} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Godown → shop</button> */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button type="button" onClick={() => { setTransferType('inter_company'); setHeader((h) => ({ ...h, from_location_id: '', to_location_id: '' })); }} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (!isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Shop → shop</button>
+          <button type="button" onClick={() => { setTransferType('intra_company'); setHeader((h) => ({ ...h, to_company_id: '' })); }} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Godown → shop</button>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="From company" required={isSuperAdmin} error={err('from_company_id')}>

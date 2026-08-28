@@ -19,4 +19,6 @@ interface PurchaseRepositoryInterface
     public function update(Purchase $purchase, array $data): Purchase;
 
     public function nextPurchaseNo(int|string $companyId): string;
+
+    public function nextInvoiceNo(int|string $companyId): string;
 }

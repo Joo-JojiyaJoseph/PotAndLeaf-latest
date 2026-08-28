@@ -36,7 +36,7 @@ export default function TransfersList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Stock transfers</h1>
-          <p className="text-sm text-muted">Move stock between companies. Dispatch from source; receive at destination (matched by SKU){companyHint}.</p>
+          <p className="text-sm text-muted">Shop → shop, godown → shop, and HO redirect of in-transit stock. Partial approve or reject per line{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />

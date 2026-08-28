@@ -54,4 +54,20 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 
         return 'PO-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
     }
+
+    public function nextInvoiceNo(int|string $companyId): string
+    {
+        $last = Purchase::withTrashed()
+            ->forCompany($companyId)
+            ->where('invoice_no', 'like', 'INV-%')
+            ->orderByDesc('invoice_no')
+            ->value('invoice_no');
+
+        $n = 0;
+        if (is_string($last) && preg_match('/INV-(\d+)$/', $last, $m)) {
+            $n = (int) $m[1];
+        }
+
+        return 'INV-'.str_pad((string) ($n + 1), 6, '0', STR_PAD_LEFT);
+    }
 }

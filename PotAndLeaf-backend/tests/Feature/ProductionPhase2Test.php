@@ -66,6 +66,7 @@ it('spawns order stages from a multi-stage bom', function () {
         'bom_id'          => $bom->id,
         'output_quantity' => 10,
         'order_date'      => now()->toDateString(),
+        'supervisor_id'   => $this->user->id,
     ], $this->apiHeaders())->assertCreated();
 
     $order = ProductionOrder::find($response->json('data.id'));
@@ -109,6 +110,7 @@ it('completes multi-stage production sequentially', function () {
         'bom_id'          => $bom->id,
         'output_quantity' => 2,
         'order_date'      => now()->toDateString(),
+        'supervisor_id'   => $this->user->id,
     ], $this->apiHeaders())->assertCreated();
 
     $order = ProductionOrder::find($orderResponse->json('data.id'));
@@ -138,6 +140,8 @@ it('completes multi-stage production sequentially', function () {
     expect((float) $output->fresh()->current_stock)->toBe(2.0);
     expect((float) $order->fresh()->total_input_cost)->toBe(26.0);
     expect($order->fresh()->items)->toHaveCount(2);
+    expect($order->fresh()->stages->every(fn ($s) => (int) $s->supervisor_id === (int) $this->user->id))->toBeTrue();
+    expect((int) $order->fresh()->batches->first()->supervisor_id)->toBe($this->user->id);
 });
 
 it('returns stage permissions on order detail', function () {

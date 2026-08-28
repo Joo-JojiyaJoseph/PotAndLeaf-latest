@@ -51,7 +51,7 @@ export default function RentalDetail() {
   const settleM = useMutation({
     mutationFn: () => api.post(`/rentals/${id}/settle`, {
       return_date: settleDate || null,
-      damage_charge: Number(damageCharge) || 0,
+      ...(damageCharge === '' ? {} : { damage_charge: Number(damageCharge) || 0 }),
       lines: Object.entries(settleLines).map(([itemId, v]) => ({ id: itemId, returned: Number(v.returned) || 0, damaged: Number(v.damaged) || 0, missing: Number(v.missing) || 0 })),
     }, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); setSettling(false); },
@@ -137,6 +137,8 @@ export default function RentalDetail() {
               <th className="microlabel px-3 py-2 text-right font-semibold">Qty</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Rate / cycle</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Returned</th>
+              <th className="microlabel px-3 py-2 text-right font-semibold">Damaged</th>
+              <th className="microlabel px-3 py-2 text-right font-semibold">Missing</th>
               <th className="microlabel py-2 pl-3 text-right font-semibold">Still out</th>
             </tr></thead>
             <tbody>
@@ -146,6 +148,8 @@ export default function RentalDetail() {
                   <td className="tnum px-3 py-2 text-right text-muted">{it.qty}</td>
                   <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(it.rate_per_cycle)}</td>
                   <td className="tnum px-3 py-2 text-right text-muted">{it.returned_qty}</td>
+                  <td className="tnum px-3 py-2 text-right text-muted">{it.damaged_qty}</td>
+                  <td className="tnum px-3 py-2 text-right text-muted">{it.missing_qty}</td>
                   <td className="tnum py-2 pl-3 text-right font-medium">{it.outstanding_qty}</td>
                 </tr>
               ))}
@@ -230,7 +234,7 @@ export default function RentalDetail() {
       >
         <p className="mb-3 text-sm text-muted">
           Enter what came back, what's damaged, and what's missing. Rental, damage, and missing charges are deducted from the
-          deposit of {formatCurrency(r.deposit)} and the balance refunded. Missing items are billed at product value and stay out of stock.
+          deposit of {formatCurrency(r.deposit)} and the balance refunded. Missing items are billed at retail; damaged items default to 50% of retail.
         </p>
         <div className="mb-4">
           <Field label="Return date"><Input type="date" value={settleDate} onChange={(e) => setSettleDate(e.target.value)} /></Field>
@@ -252,7 +256,15 @@ export default function RentalDetail() {
           ))}
         </div>
         <div className="mt-4">
-          <Field label="Damage charge (₹)"><Input type="number" step="0.01" min="0" value={damageCharge} onChange={(e) => setDamageCharge(e.target.value)} placeholder="0.00" /></Field>
+          <Field label="Damage charge (₹)">
+            <Input type="number" step="0.01" min="0" value={damageCharge} onChange={(e) => setDamageCharge(e.target.value)} placeholder="Auto (50% of retail)" />
+          </Field>
+          {damageCharge === '' && (
+            <p className="mt-1.5 text-xs text-muted">
+              Leave blank to charge 50% of retail for damaged qty
+              {' '}({formatCurrency((r.items ?? []).reduce((sum, it) => sum + (Number(settleLines[it.id]?.damaged) || 0) * 0.5 * Number(it.retail_price || 0), 0))}).
+            </p>
+          )}
         </div>
       </Modal>
     </div>

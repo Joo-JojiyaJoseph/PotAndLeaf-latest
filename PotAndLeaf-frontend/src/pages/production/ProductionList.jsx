@@ -483,9 +483,9 @@ function OrderModal({ open, onClose, editing, recordCtx, isSuperAdmin, companies
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.is_default ? ' (default)' : ''}</option>)}
           </select>
         </Field>
-        <Field label="Supervisor (commission)" error={err('supervisor_id')}>
+        <Field label="Supervisor" required error={err('supervisor_id')}>
           <select value={form.supervisor_id} onChange={(e) => setForm((f) => ({ ...f, supervisor_id: e.target.value }))} className={selectCls}>
-            <option value="">None</option>
+            <option value="">Select supervisor…</option>
             {supervisors.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </Field>
@@ -553,6 +553,7 @@ export default function ProductionList() {
       'Quantity': o.output_quantity,
       'Unit cost': o.status === 'completed' ? o.output_unit_cost : '',
       'Total input cost': o.status === 'completed' ? o.total_input_cost : '',
+      'Supervisor': o.supervisor || '',
       'Status': o.status,
     })));
   }
@@ -590,6 +591,7 @@ export default function ProductionList() {
             >
               <option value="">All statuses</option>
               <option value="draft">Draft</option>
+              <option value="in_progress">In progress</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
@@ -612,6 +614,7 @@ export default function ProductionList() {
                     <th className="microlabel px-4 py-2.5 font-semibold">Output</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Qty</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Unit cost</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Supervisor</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                     <th className="microlabel px-4 py-2.5 font-semibold"></th>
                   </tr></thead>
@@ -623,7 +626,8 @@ export default function ProductionList() {
                         <td className="px-4 py-2.5 font-medium">{o.output_product}</td>
                         <td className="tnum px-4 py-2.5 text-right">{o.output_quantity}</td>
                         <td className="tnum px-4 py-2.5 text-right text-muted">{o.status === 'completed' ? formatCurrency(o.output_unit_cost) : '—'}</td>
-                        <td className="px-4 py-2.5"><Badge tone={statusTone[o.status] ?? 'default'}>{o.status}</Badge></td>
+                        <td className="px-4 py-2.5 text-muted">{o.supervisor || '—'}</td>
+                        <td className="px-4 py-2.5"><Badge tone={statusTone[o.status] ?? 'default'}>{o.status.replace('_', ' ')}</Badge></td>
                         <td className="px-4 py-2.5 text-right">
                           {o.can?.update && (
                             <button onClick={() => { setEditingOrder(o); setOrderModal(true); }} title="Edit order" className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink">

@@ -112,7 +112,8 @@ export default function TransferDetail() {
           <InfoItem label="Type" value={t.is_intra_company ? 'Location transfer' : 'Inter-company'} />
           <InfoItem label="From" value={t.from_location ?? t.from_company} />
           <InfoItem label="To" value={t.to_location ?? t.to_company} />
-          {t.redirected_at && <InfoItem label="Redirected" value={formatDate(t.redirected_at)} />}
+          {t.redirected_at && <InfoItem label="Redirected from" value={t.redirected_from_company || formatDate(t.redirected_at)} />}
+          {t.redirected_at && <InfoItem label="Redirected on" value={formatDate(t.redirected_at)} />}
           <InfoItem label="Dispatched" value={t.dispatched_at ? formatDate(t.dispatched_at) : null} />
           <InfoItem label="Received" value={t.received_at ? formatDate(t.received_at) : null} />
           <InfoItem label="Notes" value={t.notes} />
@@ -125,6 +126,7 @@ export default function TransferDetail() {
             <th className="microlabel py-2 pr-3 font-semibold">Product</th>
             <th className="microlabel px-3 py-2 text-right font-semibold">Requested</th>
             <th className="microlabel px-3 py-2 text-right font-semibold">Approved</th>
+            <th className="microlabel px-3 py-2 text-right font-semibold">Rejected</th>
             <th className="microlabel py-2 pl-3 text-right font-semibold">Received</th>
           </tr></thead>
           <tbody>
@@ -137,9 +139,13 @@ export default function TransferDetail() {
                       {it.batch_no ? `Batch ${it.batch_no}` : ''}{it.source_purchase ? ` · from ${it.source_purchase}` : ''}{it.barcode ? ` · ${it.barcode}` : ''}
                     </span>
                   )}
+                  {it.rejection_reason && (
+                    <span className="mt-0.5 block text-[11px] font-normal text-danger">{it.rejection_reason}</span>
+                  )}
                 </td>
                 <td className="tnum px-3 py-2 text-right text-muted">{it.qty}</td>
                 <td className="tnum px-3 py-2 text-right text-muted">{it.approved_qty != null ? it.approved_qty : (t.status === 'draft' || t.status === 'in_transit' || t.status === 'received' ? (it.dispatch_qty ?? it.qty) : '—')}</td>
+                <td className="tnum px-3 py-2 text-right text-muted">{it.rejected_qty > 0 ? it.rejected_qty : '—'}</td>
                 <td className="tnum py-2 pl-3 text-right font-medium">{t.status === 'received' ? it.received_qty : '—'}</td>
               </tr>
             ))}

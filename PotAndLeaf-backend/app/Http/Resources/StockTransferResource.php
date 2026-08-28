@@ -43,6 +43,7 @@ class StockTransferResource extends JsonResource
             'approved_at'     => optional($this->approved_at)->toIso8601String(),
             'rejection_reason'=> $this->rejection_reason,
             'redirected_from_company_id' => $this->redirected_from_company_id,
+            'redirected_from_company' => $this->redirectedFromCompany?->name,
             'redirected_at'   => optional($this->redirected_at)->toIso8601String(),
             'is_incoming'     => $isDest && ! $isSource,
             'is_intra_company'=> $this->isIntraCompany(),

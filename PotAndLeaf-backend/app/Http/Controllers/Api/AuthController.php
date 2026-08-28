@@ -130,6 +130,7 @@ class AuthController extends Controller
         if ($user->is_super_admin) {
             return \App\Models\Company::query()
                 ->active()
+                ->where('is_protected', false)
                 ->orderBy('name')
                 ->get(['id', 'name', 'code'])
                 ->map(fn ($c) => [

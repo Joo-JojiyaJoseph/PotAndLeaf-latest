@@ -198,10 +198,11 @@ class ProductionService
         if ($bom->isMultiStage()) {
             foreach ($bom->stages as $stage) {
                 $order->stages()->create([
-                    'bom_stage_id' => $stage->id,
-                    'sort_order'   => $stage->sort_order,
-                    'name'         => $stage->name,
-                    'status'       => 'pending',
+                    'bom_stage_id'  => $stage->id,
+                    'sort_order'    => $stage->sort_order,
+                    'name'          => $stage->name,
+                    'status'        => 'pending',
+                    'supervisor_id' => $data['supervisor_id'] ?? null,
                 ]);
             }
         }
@@ -314,8 +315,9 @@ class ProductionService
         }
 
         $stage->update([
-            'status'     => 'in_progress',
-            'started_at' => now(),
+            'status'        => 'in_progress',
+            'started_at'    => now(),
+            'supervisor_id' => $stage->supervisor_id ?? $order->supervisor_id,
         ]);
 
         if ($order->isDraft()) {
@@ -503,6 +505,7 @@ class ProductionService
             'company_id'          => $order->company_id,
             'product_id'          => $output->id,
             'production_order_id' => $order->id,
+            'supervisor_id'       => $order->supervisor_id,
             'location_id'         => $order->location_id,
             'batch_no'            => $order->order_no,
             'barcode'             => $this->barcodes->forProduction($order->company_id, $order->order_no),

@@ -44,9 +44,11 @@ class RentalService
     {
         $names = Product::forCompany($companyId)
             ->whereIn('id', collect($data['items'])->pluck('product_id')->filter())
-            ->pluck('name', 'id');
+            ->get(['id', 'name', 'rental_daily_rate'])
+            ->keyBy('id');
+        $cycleDays = ['daily' => 1, 'weekly' => 7, 'monthly' => 30][$data['billing_cycle'] ?? 'monthly'] ?? 30;
 
-        return DB::transaction(function () use ($companyId, $data, $names, $userId) {
+        return DB::transaction(function () use ($companyId, $data, $names, $cycleDays, $userId) {
             $rental = Rental::create([
                 'company_id'        => $companyId,
                 'customer_id'       => $data['customer_id'],
@@ -61,13 +63,21 @@ class RentalService
                 'notes'             => $data['notes'] ?? null,
             ]);
 
-            $rental->items()->createMany(collect($data['items'])->map(fn ($i) => [
-                'product_id'     => $i['product_id'],
-                'product_name'   => $names[$i['product_id']] ?? 'Item',
-                'qty'            => $i['qty'],
-                'rate_per_cycle' => $i['rate_per_cycle'] ?? 0,
-                'returned_qty'   => 0,
-            ])->all());
+            $rental->items()->createMany(collect($data['items'])->map(function ($i) use ($names, $cycleDays) {
+                $product = $names[$i['product_id']] ?? null;
+                $rate = isset($i['rate_per_cycle']) ? (float) $i['rate_per_cycle'] : 0;
+                if ($rate <= 0 && $product && (float) $product->rental_daily_rate > 0) {
+                    $rate = (float) $product->rental_daily_rate * $cycleDays;
+                }
+
+                return [
+                    'product_id'     => $i['product_id'],
+                    'product_name'   => $product?->name ?? 'Item',
+                    'qty'            => $i['qty'],
+                    'rate_per_cycle' => $rate,
+                    'returned_qty'   => 0,
+                ];
+            })->all());
 
             $this->logEvent($companyId, $userId, 'create', $rental, 'Rental draft created');
 
@@ -151,6 +161,7 @@ class RentalService
                 ->pluck('retail_price', 'id');
 
             $missingCharge = 0.0;
+            $autoDamage = 0.0;
 
             foreach ($rental->items as $item) {
                 $line = $lines[$item->id] ?? [];
@@ -177,7 +188,9 @@ class RentalService
                     }
                 }
 
-                $missingCharge += $missing * (float) ($prices[$item->product_id] ?? 0);
+                $retail = (float) ($prices[$item->product_id] ?? 0);
+                $missingCharge += $missing * $retail;
+                $autoDamage += $damaged * $retail * 0.5;
 
                 $item->update([
                     'returned_qty' => (float) $item->returned_qty + $good,
@@ -193,7 +206,9 @@ class RentalService
             $cycles = max(1, (int) ceil($days / $cycleDays));
             $rentalCharge = round($rental->items->sum(fn ($i) => (float) $i->qty * (float) $i->rate_per_cycle * $cycles), 2);
 
-            $damage = round((float) ($damageCharge ?? 0), 2);
+            $damage = $damageCharge === null
+                ? round($autoDamage, 2)
+                : round((float) $damageCharge, 2);
             $missingCharge = round($missingCharge, 2);
             $totalCharges = round($rentalCharge + $damage + $missingCharge, 2);
             $deposit = (float) $rental->deposit;

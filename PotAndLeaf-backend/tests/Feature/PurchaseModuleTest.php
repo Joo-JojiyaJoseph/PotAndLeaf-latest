@@ -93,7 +93,8 @@ describe('Purchase module — API', function () {
             ->assertJsonPath('data.supplier.id', $this->supplier->id);
 
         expect(Purchase::forCompany($this->company->id)->count())->toBe(1)
-            ->and($response->json('data.purchase_no'))->not->toBeEmpty();
+            ->and($response->json('data.purchase_no'))->not->toBeEmpty()
+            ->and($response->json('data.invoice_no'))->toBe('INV-000001');
     })->group('purchase', 'PURCHASE-002');
 
     it('PURCHASE-003 select supplier requires valid active supplier', function () {
@@ -349,6 +350,14 @@ describe('Purchase module — API', function () {
             ->and($response->json('data.notes'))->toBe('Updated purchase')
             ->and((float) $response->json('data.subtotal'))->toBe($expected['subtotal']);
     })->group('purchase', 'PURCHASE-017');
+
+    it('auto-increments purchase invoice numbers when omitted', function () {
+        $first = createDraftPurchase($this, [purchaseLine($this->productA->id, 1, 100)]);
+        $second = createDraftPurchase($this, [purchaseLine($this->productA->id, 1, 100)]);
+
+        expect($first->invoice_no)->toBe('INV-000001')
+            ->and($second->invoice_no)->toBe('INV-000002');
+    })->group('purchase');
 
     it('PURCHASE-018 cancel draft purchase', function () {
         $purchase = createDraftPurchase($this, [purchaseLine($this->productA->id, 4, 100)]);

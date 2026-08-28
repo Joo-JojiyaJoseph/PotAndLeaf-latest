@@ -21,6 +21,8 @@ class SettingsService
         'rental_whatsapp_on_bill'      => '1',     // queue WhatsApp when auto-billing creates an invoice
         'rental_payment_due_days'      => '7',     // days after period end before invoice is due
         'rental_overdue_alert_days'    => '0',     // grace days after due/expected return before alerting
+        'rental_reminder_lead_days'    => '3',     // days before return/payment due to send a reminder
+        'sms_enabled'                  => '0',     // send rental reminders/overdue alerts via SMS
         'sale_cancel_requires_approval'=> '1',     // confirmed sales need HO approval to cancel
         'cash_opening_balance'         => '0',     // opening cash balance for cash book
         'bank_opening_balance'         => '0',     // opening bank balance for bank book
