@@ -10,7 +10,7 @@ import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { fieldError } from '../../lib/formErrors';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import Pagination from '../../components/Pagination';
 import StatusToggle from '../../components/StatusToggle';
 
@@ -222,10 +222,10 @@ export default function UsersList() {
           {isSuperAdmin && isCreate && (
             <div className="rounded-xl bg-leaf-soft/50 p-3">
               <Field label="Company" required>
-                <select value={formCompanyId} onChange={(e) => { setFormCompanyId(e.target.value); setPickedCompany(Boolean(e.target.value)); }} className={selectCls}>
+                <Select value={formCompanyId} onChange={(e) => { setFormCompanyId(e.target.value); setPickedCompany(Boolean(e.target.value)); }} className={selectCls}>
                   <option value="">Select company first…</option>
                   {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                </Select>
               </Field>
               <p className="mt-1.5 text-xs text-muted">Choose which company this user belongs to. Your workspace company stays unchanged.</p>
             </div>
@@ -233,9 +233,9 @@ export default function UsersList() {
           {isSuperAdmin && editing?.id && (
             <div className="rounded-xl bg-leaf-soft/50 p-3 sm:col-span-2">
               <Field label="Company" required>
-                <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+                <Select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
                   {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                </Select>
               </Field>
               <p className="mt-1.5 text-xs text-muted">Move this user to another company (role applies in the selected company).</p>
             </div>
@@ -249,16 +249,16 @@ export default function UsersList() {
           </Field>
           <Field label="Phone / WhatsApp" error={err('phone')}><Input value={form.phone} onChange={set('phone')} /></Field>
           <Field label="Role" error={err('role_id')}>
-            <select value={form.role_id} onChange={set('role_id')} className={selectCls}>
+            <Select value={form.role_id} onChange={set('role_id')} className={selectCls}>
               <option value="">No role</option>
               {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Status">
-            <select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}>
+            <Select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}>
               <option value="1">Active</option>
               <option value="0">Inactive</option>
-            </select>
+            </Select>
           </Field>
         </div>
           )}

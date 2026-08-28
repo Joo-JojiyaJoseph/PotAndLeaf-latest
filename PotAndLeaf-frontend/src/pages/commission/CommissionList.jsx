@@ -4,7 +4,7 @@ import { PlusIcon, TrashIcon, PencilSquareIcon } from '@heroicons/react/24/outli
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
 const TABS = [
@@ -79,16 +79,16 @@ function RuleModal({ open, onClose, staff, editing }) {
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Staff member" required error={err('user_id')}>
-          <select value={form.user_id} onChange={set('user_id')} className={selectCls} disabled={Boolean(editing)}>
+          <Select value={form.user_id} onChange={set('user_id')} className={selectCls} disabled={Boolean(editing)}>
             <option value="">Select…</option>
             {staff.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+          </Select>
         </Field>
         <Field label="Rate type" error={err('rate_type')}>
-          <select value={form.rate_type} onChange={set('rate_type')} className={selectCls}>
+          <Select value={form.rate_type} onChange={set('rate_type')} className={selectCls}>
             <option value="percent">% of value</option>
             <option value="per_unit">Per unit</option>
-          </select>
+          </Select>
         </Field>
         {form.rate_type === 'per_unit' ? (
           <Field label="Per-unit amount (₹)" error={err('per_unit_amount')}><Input type="number" step="0.01" value={form.per_unit_amount} onChange={set('per_unit_amount')} /></Field>
@@ -98,14 +98,14 @@ function RuleModal({ open, onClose, staff, editing }) {
         <Field label="Monthly target (₹)" error={err('monthly_target')}><Input type="number" step="0.01" value={form.monthly_target} onChange={set('monthly_target')} /></Field>
         <Field label="Target bonus (₹, flat)" error={err('target_bonus')}><Input type="number" step="0.01" value={form.target_bonus} onChange={set('target_bonus')} /></Field>
         <Field label="Active">
-          <select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}>
+          <Select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}>
             <option value="1">Active</option><option value="0">Inactive</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Supervisor production rule">
-          <select value={form.is_supervisor ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_supervisor: e.target.value === '1' }))} className={selectCls}>
+          <Select value={form.is_supervisor ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_supervisor: e.target.value === '1' }))} className={selectCls}>
             <option value="0">No</option><option value="1">Yes — accrues on sale or transfer of produced stock</option>
-          </select>
+          </Select>
         </Field>
         <div className="sm:col-span-2"><Field label="Notes" error={err('notes')}><Input value={form.notes} onChange={set('notes')} /></Field></div>
       </div>
@@ -292,10 +292,10 @@ function PayoutModal({ open, onClose, staff }) {
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Staff member" required error={err('user_id')}>
-          <select value={userId} onChange={(e) => setUserId(e.target.value)} className={selectCls}>
+          <Select value={userId} onChange={(e) => setUserId(e.target.value)} className={selectCls}>
             <option value="">Select…</option>
             {staff.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+          </Select>
         </Field>
         <Field label="Month" required error={err('period')}><Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} /></Field>
       </div>
@@ -321,16 +321,16 @@ function PayoutModal({ open, onClose, staff }) {
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Amount to pay (blank = due)" error={err('amount')}><Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={computed ? formatCurrency(computed.commission) : ''} /></Field>
         <Field label="Mode" error={err('mode')}>
-          <select value={mode} onChange={(e) => setMode(e.target.value)} className={selectCls}>
+          <Select value={mode} onChange={(e) => setMode(e.target.value)} className={selectCls}>
             <option value="cash">Cash</option><option value="bank">Bank</option><option value="upi">UPI</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Payment date" error={err('payment_date')}><Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} /></Field>
         <Field label="Reference" error={err('reference')}><Input value={reference} onChange={(e) => setReference(e.target.value)} /></Field>
         <Field label="Status">
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
+          <Select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
             <option value="paid">Paid</option><option value="draft">Draft</option>
-          </select>
+          </Select>
         </Field>
       </div>
     </Modal>

@@ -6,7 +6,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { useToast } from '../../lib/toast';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { allocateSplit, buildSplitLines, splitByNumSplits, splitByQtyPerSplit } from '../../lib/bulkSplitCalc';
 
@@ -202,7 +202,7 @@ export default function BulkSplitForm() {
         <h2 className="mb-3 text-sm font-semibold text-ink">Source product</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Bulk product" required error={err('source_product_id')}>
-            <select
+            <Select
               value={sourceId}
               onChange={(e) => {
                 setSourceId(e.target.value);
@@ -217,7 +217,7 @@ export default function BulkSplitForm() {
                   {p.name} · stock {p.current_stock}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Available quantity" required error={err('source_qty')}>
             <div className="flex gap-2">

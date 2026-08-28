@@ -4,7 +4,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useCompanyFilter } from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
-import { Card, StatCard, Spinner, Badge } from '../../components/ui';
+import { Card, StatCard, Spinner, Badge, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
 import AccountingReportPanels from './AccountingReportPanels';
@@ -358,10 +358,10 @@ export default function ReportsPage() {
   const ActiveIcon = activeMeta.icon;
 
   const branchFilter = (show) => show && filterCompanyId !== 'all' && locations.length > 0 ? (
-    <select value={locationId} onChange={(e) => setLocationId(e.target.value)} className={selectCls}>
+    <Select value={locationId} onChange={(e) => setLocationId(e.target.value)} className={selectCls}>
       <option value="">All branches</option>
       {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-    </select>
+    </Select>
   ) : null;
 
   const subtitle = `Business summary and insights for ${isSuperAdmin ? viewingCompany : activeCompany?.name}${user?.name ? ` · ${user.name}` : ''}`;
@@ -385,44 +385,44 @@ export default function ReportsPage() {
           <>
             {branchFilter(tab === 'sales_analytics' || tab === 'leaderboard' || isRentalTab)}
             {tab === 'leaderboard' && (
-              <select value={leaderboardPeriod} onChange={(e) => setLeaderboardPeriod(e.target.value)} className={selectCls}>
+              <Select value={leaderboardPeriod} onChange={(e) => setLeaderboardPeriod(e.target.value)} className={selectCls}>
                 <option value="month">Monthly</option>
                 <option value="year">Financial year</option>
-              </select>
+              </Select>
             )}
             {tab === 'inventory_movement' && (
               <>
-                <select value={movementDays} onChange={(e) => setMovementDays(Number(e.target.value))} className={selectCls}>
+                <Select value={movementDays} onChange={(e) => setMovementDays(Number(e.target.value))} className={selectCls}>
                   <option value={7}>7 days</option>
                   <option value={30}>30 days</option>
                   <option value={90}>90 days</option>
                   <option value={180}>180 days</option>
-                </select>
-                <select value={movementClass} onChange={(e) => setMovementClass(e.target.value)} className={selectCls}>
+                </Select>
+                <Select value={movementClass} onChange={(e) => setMovementClass(e.target.value)} className={selectCls}>
                   <option value="all">All items</option>
                   <option value="fast">Fast moving</option>
                   <option value="slow">Slow moving</option>
                   <option value="dead">Dead stock</option>
-                </select>
+                </Select>
               </>
             )}
             {tab === 'debtor_ledger' && (
-              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={selectCls}>
+              <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={selectCls}>
                 <option value="">Select customer</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             )}
             {tab === 'creditor_ledger' && (
-              <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={selectCls}>
+              <Select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className={selectCls}>
                 <option value="">Select supplier</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              </Select>
             )}
             {tab === 'rental_customer' && (
-              <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={selectCls}>
+              <Select value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={selectCls}>
                 <option value="">Select customer</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             )}
             {filterCompanyId === 'all' && ['debtor_ledger', 'creditor_ledger', 'rental_customer'].includes(tab) && (
               <span className="text-xs text-warning">Select a company for party lists</span>
@@ -532,11 +532,11 @@ export default function ReportsPage() {
       {tab === 'margin' && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} className={selectCls}>
+            <Select value={sortKey} onChange={(e) => setSortKey(e.target.value)} className={selectCls}>
               <option value="margin_pct">Sort by margin %</option>
               <option value="margin">Sort by margin ₹</option>
               <option value="revenue">Sort by revenue</option>
-            </select>
+            </Select>
           </div>
           <Card className="overflow-hidden">
             {marginQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
@@ -574,12 +574,12 @@ export default function ReportsPage() {
       {tab === 'profit' && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <select value={period} onChange={(e) => setPeriod(e.target.value)} className={selectCls}>
+            <Select value={period} onChange={(e) => setPeriod(e.target.value)} className={selectCls}>
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>
-            </select>
+            </Select>
           </div>
           {profitQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
             : !profitQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Couldn't load profit report.</Card>
@@ -703,11 +703,11 @@ export default function ReportsPage() {
       {tab === 'rental_income' && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <select value={period} onChange={(e) => setPeriod(e.target.value)} className={selectCls}>
+            <Select value={period} onChange={(e) => setPeriod(e.target.value)} className={selectCls}>
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
-            </select>
+            </Select>
           </div>
           {rentalIncomeQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
             : !rentalIncomeQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Couldn't load rental income.</Card>

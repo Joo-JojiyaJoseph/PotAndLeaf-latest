@@ -4,7 +4,7 @@ import { PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outli
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 
 const empty = { name: '', code: '', type: 'godown', is_default: false, is_active: true };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
@@ -99,13 +99,13 @@ export default function LocationsList() {
           <Field label="Name" required error={err('name')}><Input value={form.name} onChange={set('name')} /></Field>
           <Field label="Code" required error={err('code')}><Input value={form.code} onChange={set('code')} placeholder="GDN" /></Field>
           <Field label="Type" error={err('type')}>
-            <select value={form.type} onChange={set('type')} className={selectCls}><option value="godown">Godown</option><option value="shop">Shop</option></select>
+            <Select value={form.type} onChange={set('type')} className={selectCls}><option value="godown">Godown</option><option value="shop">Shop</option></Select>
           </Field>
           <Field label="Default location">
-            <select value={form.is_default ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_default: e.target.value === '1' }))} className={selectCls}><option value="0">No</option><option value="1">Yes</option></select>
+            <Select value={form.is_default ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_default: e.target.value === '1' }))} className={selectCls}><option value="0">No</option><option value="1">Yes</option></Select>
           </Field>
           <Field label="Status">
-            <select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}><option value="1">Active</option><option value="0">Inactive</option></select>
+            <Select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}><option value="1">Active</option><option value="0">Inactive</option></Select>
           </Field>
         </div>
       </Modal>

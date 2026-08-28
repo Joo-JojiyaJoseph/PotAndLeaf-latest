@@ -5,7 +5,7 @@ import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
 const TABS = [{ value: 'receivables', label: 'Receivables' }, { value: 'history', label: 'Receipt history' }];
@@ -67,23 +67,23 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Customer" required error={err('customer_id')}>
-          <select value={form.customer_id} onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value, sale_id: '' }))} className={selectCls}>
+          <Select value={form.customer_id} onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value, sale_id: '' }))} className={selectCls}>
             <option value="">Select customer…</option>
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          </Select>
           {customer && <span className="mt-1 block text-xs text-muted">Outstanding: {formatCurrency(customer.outstanding)}</span>}
         </Field>
         <Field label="Against invoice (optional)" error={err('sale_id')}>
-          <select value={form.sale_id} onChange={set('sale_id')} className={selectCls} disabled={!form.customer_id}>
+          <Select value={form.sale_id} onChange={set('sale_id')} className={selectCls} disabled={!form.customer_id}>
             <option value="">On account</option>
             {(receivables ?? []).filter((r) => r.balance > 0).map((r) => <option key={r.id} value={r.id}>{r.sale_no} · bal {formatCurrency(r.balance)}</option>)}
-          </select>
+          </Select>
         </Field>
         <Field label="Amount" required error={err('amount')}><Input type="number" step="0.01" value={form.amount} onChange={set('amount')} /></Field>
         <Field label="Mode" error={err('mode')}>
-          <select value={form.mode} onChange={set('mode')} className={selectCls}>
+          <Select value={form.mode} onChange={set('mode')} className={selectCls}>
             <option value="cash">Cash</option><option value="bank">Bank</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="card">Card</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Receipt date" required error={err('receipt_date')}><Input type="date" value={form.receipt_date} onChange={set('receipt_date')} /></Field>
         <Field label="Reference" error={err('reference')}><Input value={form.reference} onChange={set('reference')} /></Field>

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, PaperAirplaneIcon, XCircleIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Badge, Button, Modal } from '../../components/ui';
+import { Badge, Button, Modal, Select } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatDate } from '../../lib/format';
 
@@ -212,13 +212,13 @@ export default function TransferDetail() {
         </>}
       >
         <p className="mb-3 text-sm text-muted">Send this in-transit stock to a different shop instead of {t.to_company ?? t.to_location}. The new shop receives and approves it.</p>
-        <select value={redirectTo} onChange={(e) => setRedirectTo(e.target.value)}
+        <Select value={redirectTo} onChange={(e) => setRedirectTo(e.target.value)}
           className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25">
           <option value="">Select destination shop…</option>
           {(companies ?? [])
             .filter((c) => String(c.id) !== String(t.from_company_id) && String(c.id) !== String(t.to_company_id))
             .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        </Select>
       </Modal>
     </div>
   );

@@ -5,7 +5,7 @@ import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', qty: '1', rate_per_cycle: '' });
@@ -89,10 +89,10 @@ export default function RentalForm() {
         </div>
         <Card className="p-5">
           <Field label="Company" required error={err('company_id')}>
-            <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+            <Select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
               <option value="">Select company first…</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            </Select>
           </Field>
         </Card>
       </div>
@@ -113,10 +113,10 @@ export default function RentalForm() {
       {isSuperAdmin && (
         <Card className="p-5">
           <Field label="Company" required error={err('company_id')}>
-            <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+            <Select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
               <option value="">Select company first…</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            </Select>
           </Field>
           <p className="mt-1.5 text-xs text-muted">Customers, products and stock load for the selected company.</p>
         </Card>
@@ -125,13 +125,13 @@ export default function RentalForm() {
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Customer" required error={err('customer_id')}>
-            <select value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
+            <Select value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
               <option value="">Select…</option>
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Billing cycle" error={err('billing_cycle')}>
-            <select value={header.billing_cycle} onChange={(e) => {
+            <Select value={header.billing_cycle} onChange={(e) => {
               const cycle = e.target.value;
               setHeader((h) => ({ ...h, billing_cycle: cycle }));
               setLines((prev) => prev.map((l) => {
@@ -141,16 +141,16 @@ export default function RentalForm() {
               }));
             }} className={selectCls}>
               <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Start date" required error={err('start_date')}><Input type="date" value={header.start_date} onChange={(e) => setHeader((h) => ({ ...h, start_date: e.target.value }))} /></Field>
           <Field label="Expected end (optional)" error={err('expected_end_date')}><Input type="date" value={header.expected_end_date} onChange={(e) => setHeader((h) => ({ ...h, expected_end_date: e.target.value }))} /></Field>
           <Field label="Security deposit (₹)" error={err('deposit')}><Input type="number" step="0.01" value={header.deposit} onChange={(e) => setHeader((h) => ({ ...h, deposit: e.target.value }))} /></Field>
           <Field label="Issue from location" error={err('location_id')}>
-            <select value={header.location_id} onChange={(e) => setHeader((h) => ({ ...h, location_id: e.target.value }))} className={selectCls}>
+            <Select value={header.location_id} onChange={(e) => setHeader((h) => ({ ...h, location_id: e.target.value }))} className={selectCls}>
               <option value="">Company stock</option>
               {locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.is_default ? ' (default)' : ''}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Auto-bill on cycle">
             <label className="flex h-10 items-center gap-2 text-sm">
@@ -174,7 +174,7 @@ export default function RentalForm() {
               {lines.map((line, i) => (
                 <tr key={i} className="border-b border-line/60 last:border-0">
                   <td className="px-3 py-2">
-                    <select value={line.product_id} onChange={(e) => {
+                    <Select value={line.product_id} onChange={(e) => {
                       const id = e.target.value;
                       const p = products.find((x) => x.id === id);
                       setLine(i, { product_id: id, rate_per_cycle: cycleRate(p, header.billing_cycle) || '' });
@@ -185,7 +185,7 @@ export default function RentalForm() {
                           {p.name}{p.is_rental && p.rental_daily_rate != null ? ` · ₹${p.rental_daily_rate}/day` : ''}
                         </option>
                       ))}
-                    </select>
+                    </Select>
                   </td>
                   <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
                   <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.rate_per_cycle} onChange={(e) => setLine(i, { rate_per_cycle: e.target.value })} /></td>

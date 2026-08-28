@@ -9,7 +9,7 @@ import {
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../lib/toast';
-import { Badge, Button, Card, Input, Spinner, StatCard } from '../../components/ui';
+import { Badge, Button, Card, Input, Spinner, StatCard, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
 
@@ -153,25 +153,25 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <label className="microlabel mb-1.5 block text-faint">Product</label>
-              <select value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))} className={selectCls}>
+              <Select value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))} className={selectCls}>
                 <option value="">All products</option>
                 {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` · ${p.sku}` : ''}</option>)}
-              </select>
+              </Select>
             </div>
             <div>
               <label className="microlabel mb-1.5 block text-faint">Direction</label>
-              <select value={filters.direction} onChange={(e) => setFilters((f) => ({ ...f, direction: e.target.value }))} className={selectCls}>
+              <Select value={filters.direction} onChange={(e) => setFilters((f) => ({ ...f, direction: e.target.value }))} className={selectCls}>
                 <option value="">All</option>
                 <option value="in">Stock in</option>
                 <option value="out">Stock out</option>
-              </select>
+              </Select>
             </div>
             <div>
               <label className="microlabel mb-1.5 block text-faint">Source</label>
-              <select value={filters.reference_type} onChange={(e) => setFilters((f) => ({ ...f, reference_type: e.target.value }))} className={selectCls}>
+              <Select value={filters.reference_type} onChange={(e) => setFilters((f) => ({ ...f, reference_type: e.target.value }))} className={selectCls}>
                 <option value="">All sources</option>
                 {refTypes.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+              </Select>
             </div>
             <div>
               <label className="microlabel mb-1.5 block text-faint">Search note / SKU</label>

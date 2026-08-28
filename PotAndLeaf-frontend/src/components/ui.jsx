@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { Children, isValidElement, useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { classNames } from '../lib/format';
+import SearchSelect from './SearchSelect';
 
 const variants = {
   primary: 'bg-leaf text-white shadow-soft hover:bg-leaf-hover',
@@ -117,6 +118,49 @@ export function Input({ className, ...props }) {
         className,
       )}
       {...props}
+    />
+  );
+}
+
+function textOf(node) {
+  if (node == null || node === false) return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join('');
+  if (isValidElement(node)) return textOf(node.props.children);
+  return '';
+}
+
+function optionsFromSelectChildren(children) {
+  return Children.toArray(children).flatMap((child) => {
+    if (!isValidElement(child)) return [];
+    if (child.type === 'optgroup') {
+      return optionsFromSelectChildren(child.props.children);
+    }
+    const value = child.props.value ?? '';
+    const label = textOf(child.props.children).replace(/\s+/g, ' ').trim();
+    return [{
+      value: String(value),
+      label: label || (value === '' ? 'Select…' : String(value)),
+      disabled: Boolean(child.props.disabled),
+    }];
+  });
+}
+
+/** Drop-in replacement for native select — green focus, hover, and selected option. */
+export function Select({ value, onChange, children, className = '', disabled, name, id, placeholder }) {
+  const options = optionsFromSelectChildren(children);
+  const size = /\bh-[89]\b/.test(className) ? 'sm' : 'md';
+  const empty = options.find((o) => o.value === '');
+  return (
+    <SearchSelect
+      id={id}
+      value={value ?? ''}
+      onChange={(v) => onChange?.({ target: { value: v, name }, currentTarget: { value: v, name } })}
+      options={options}
+      disabled={disabled}
+      className={className}
+      size={size}
+      placeholder={placeholder || empty?.label || 'Select…'}
     />
   );
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Badge, Card, Spinner, StatCard } from '../../components/ui';
+import { Badge, Card, Spinner, StatCard, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
 const selectCls = 'h-9 rounded-lg border border-line bg-surface px-2 text-sm';
@@ -39,10 +39,10 @@ export default function ActivityMonitoringPage() {
           <p className="text-sm text-muted">Company activity for {data?.company?.name ?? activeCompany?.name}.</p>
         </div>
         {/* {isSuperAdmin && companies.length > 0 && (
-          <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={selectCls}>
+          <Select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={selectCls}>
             <option value="">Current company ({activeCompany?.name})</option>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          </Select>
         )} */}
       </div>
 

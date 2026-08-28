@@ -5,7 +5,7 @@ import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { executePaymentSubmit } from '../../lib/paymentValidation';
 
@@ -83,23 +83,23 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Supplier" required error={err('supplier_id')}>
-          <select value={form.supplier_id} onChange={(e) => setForm((f) => ({ ...f, supplier_id: e.target.value, purchase_id: '' }))} className={selectCls}>
+          <Select value={form.supplier_id} onChange={(e) => setForm((f) => ({ ...f, supplier_id: e.target.value, purchase_id: '' }))} className={selectCls}>
             <option value="">Select supplier…</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          </Select>
           {supplier && <span className="mt-1 block text-xs text-muted">Outstanding: {formatCurrency(supplier.outstanding)}</span>}
         </Field>
         <Field label="Against GRN (optional)" error={err('purchase_id')}>
-          <select value={form.purchase_id} onChange={set('purchase_id')} className={selectCls} disabled={!form.supplier_id}>
+          <Select value={form.purchase_id} onChange={set('purchase_id')} className={selectCls} disabled={!form.supplier_id}>
             <option value="">On account</option>
             {(payables ?? []).filter((p) => p.balance > 0).map((p) => <option key={p.id} value={p.id}>{p.purchase_no} · bal {formatCurrency(p.balance)}</option>)}
-          </select>
+          </Select>
         </Field>
         <Field label="Amount" required error={err('amount')}><Input type="number" step="0.01" value={form.amount} onChange={set('amount')} /></Field>
         <Field label="Mode" error={err('mode')}>
-          <select value={form.mode} onChange={set('mode')} className={selectCls}>
+          <Select value={form.mode} onChange={set('mode')} className={selectCls}>
             <option value="cash">Cash</option><option value="bank">Bank</option><option value="upi">UPI</option><option value="cheque">Cheque</option>
-          </select>
+          </Select>
         </Field>
         <Field label="Payment date" required error={err('payment_date')}><Input type="date" value={form.payment_date} onChange={set('payment_date')} /></Field>
         <Field label="Reference (UTR / cheque)" error={err('reference')}><Input value={form.reference} onChange={set('reference')} /></Field>

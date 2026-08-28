@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { computeSale } from '../../lib/saleCalc';
 
@@ -102,7 +102,7 @@ export default function SalesReturnForm() {
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Original sale" required>
-            <select
+            <Select
               value={saleId}
               onChange={(e) => setSaleId(e.target.value)}
               className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30"
@@ -113,7 +113,7 @@ export default function SalesReturnForm() {
                   {s.sale_no} · {s.customer_name || s.customer?.name || 'Walk-in'} · {formatCurrency(s.grand_total)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Return date" required>
             <Input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { computeSale, tierPrice } from '../../lib/saleCalc';
 import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
@@ -150,31 +150,31 @@ export default function SaleForm() {
         {isSuperAdmin && (
           <div className="mb-4 rounded-xl bg-leaf-soft/50 p-3">
             <Field label="Billing for company">
-              <select value={companyId ?? ''} onChange={(e) => selectCompany(e.target.value)} className={selectCls}>
+              <Select value={companyId ?? ''} onChange={(e) => selectCompany(e.target.value)} className={selectCls}>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             </Field>
           </div>
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Customer" error={err('customer_id')}>
-            <select value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
+            <Select value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
               <option value="">Walk-in</option>
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.type}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Sale date" required error={err('sale_date')}>
             <Input type="date" value={header.sale_date} onChange={(e) => setHeader((h) => ({ ...h, sale_date: e.target.value }))} />
           </Field>
           <Field label="Payment mode" error={err('payment_mode')}>
-            <select value={header.payment_mode} onChange={(e) => setHeader((h) => ({ ...h, payment_mode: e.target.value }))} className={selectCls}>
+            <Select value={header.payment_mode} onChange={(e) => setHeader((h) => ({ ...h, payment_mode: e.target.value }))} className={selectCls}>
               <option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="credit">Credit</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Bill type" error={err('bill_kind')}>
-            <select value={header.bill_kind} onChange={(e) => setHeader((h) => ({ ...h, bill_kind: e.target.value }))} className={selectCls}>
+            <Select value={header.bill_kind} onChange={(e) => setHeader((h) => ({ ...h, bill_kind: e.target.value }))} className={selectCls}>
               {BILL_KINDS.map((bk) => <option key={bk.value} value={bk.value}>{bk.label}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Amount paid (blank = full)" error={err('amount_paid')}>
             <Input type="number" step="0.01" value={header.amount_paid} onChange={(e) => setHeader((h) => ({ ...h, amount_paid: e.target.value }))} placeholder={formatCurrency(dueTotal)} />
@@ -242,17 +242,17 @@ export default function SaleForm() {
                 return (
                   <tr key={i} className="border-b border-line/60 last:border-0">
                     <td className="px-3 py-2">
-                      <select value={line.product_id} onChange={(e) => pickProduct(i, e.target.value)} className={selectCls + ' min-w-[180px]'}>
+                      <Select value={line.product_id} onChange={(e) => pickProduct(i, e.target.value)} className={selectCls + ' min-w-[180px]'}>
                         <option value="">Select…</option>
                         {products.map((pr) => <option key={pr.id} value={pr.id}>{pr.name} · stock {pr.current_stock}</option>)}
-                      </select>
+                      </Select>
                       {p && Number(line.qty) > p.current_stock && <span className="mt-1 block text-xs text-danger">Only {p.current_stock} in stock</span>}
                       {line.barcode && <span className="mt-1 block text-[11px] text-muted">Batch {line.batch_no} · {line.barcode}</span>}
                     </td>
                     <td className="px-3 py-2">
-                      <select value={line.price_level || 'retail'} onChange={(e) => applyPriceLevel(i, e.target.value)} className={selectCls + ' min-w-[110px]'}>
+                      <Select value={line.price_level || 'retail'} onChange={(e) => applyPriceLevel(i, e.target.value)} className={selectCls + ' min-w-[110px]'}>
                         {PRICE_LEVELS.map((pl) => <option key={pl.value} value={pl.value}>{pl.label}</option>)}
-                      </select>
+                      </Select>
                     </td>
                     <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
                     <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></td>

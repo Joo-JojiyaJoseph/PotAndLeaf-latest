@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -76,10 +76,10 @@ export default function BackorderForm() {
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Customer" required error={err('customer_id')}>
-            <select value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
+            <Select value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
               <option value="">Select…</option>
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Order date" required error={err('order_date')}><Input type="date" value={header.order_date} onChange={(e) => setHeader((h) => ({ ...h, order_date: e.target.value }))} /></Field>
           <Field label="Expected date" error={err('expected_date')}><Input type="date" value={header.expected_date} onChange={(e) => setHeader((h) => ({ ...h, expected_date: e.target.value }))} /></Field>
@@ -102,10 +102,10 @@ export default function BackorderForm() {
                 return (
                   <tr key={i} className="border-b border-line/60 last:border-0">
                     <td className="px-3 py-2">
-                      <select value={line.product_id} onChange={(e) => onPickProduct(i, e.target.value)} className={selectCls + ' min-w-[200px]'}>
+                      <Select value={line.product_id} onChange={(e) => onPickProduct(i, e.target.value)} className={selectCls + ' min-w-[200px]'}>
                         <option value="">Select…</option>
                         {products.map((pr) => <option key={pr.id} value={pr.id}>{pr.name} · {pr.sku}</option>)}
-                      </select>
+                      </Select>
                     </td>
                     <td className="tnum px-3 py-2 text-right text-muted">{p ? p.current_stock : '—'}</td>
                     <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.ordered_qty} onChange={(e) => setLine(i, { ordered_qty: e.target.value })} /></td>

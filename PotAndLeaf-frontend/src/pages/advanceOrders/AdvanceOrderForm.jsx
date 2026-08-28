@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -72,10 +72,10 @@ export default function AdvanceOrderForm() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="sm:col-span-2">
             <Field label="Customer" required error={err('customer_id')}>
-              <select value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
+              <Select value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
                 <option value="">Select…</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             </Field>
           </div>
           <Field label="Order date" required error={err('order_date')}><Input type="date" value={header.order_date} onChange={(e) => setHeader((h) => ({ ...h, order_date: e.target.value }))} /></Field>
@@ -98,10 +98,10 @@ export default function AdvanceOrderForm() {
               {lines.map((line, i) => (
                 <tr key={i} className="border-b border-line/60 last:border-0">
                   <td className="px-3 py-2">
-                    <select value={line.product_id} onChange={(e) => onPickProduct(i, e.target.value)} className={selectCls}>
+                    <Select value={line.product_id} onChange={(e) => onPickProduct(i, e.target.value)} className={selectCls}>
                       <option value="">Select…</option>
                       {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                    </Select>
                   </td>
                   <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
                   <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></td>
@@ -125,9 +125,9 @@ export default function AdvanceOrderForm() {
           <Input type="number" step="0.01" value={header.advance_amount} onChange={(e) => setHeader((h) => ({ ...h, advance_amount: e.target.value }))} className="w-40" placeholder="0.00" />
         </Field>
         <Field label="Advance mode">
-          <select value={header.advance_mode} onChange={(e) => setHeader((h) => ({ ...h, advance_mode: e.target.value }))} className={selectCls + ' w-32'}>
+          <Select value={header.advance_mode} onChange={(e) => setHeader((h) => ({ ...h, advance_mode: e.target.value }))} className={selectCls + ' w-32'}>
             <option value="cash">Cash</option><option value="upi">UPI</option><option value="bank">Bank</option><option value="card">Card</option>
-          </select>
+          </Select>
         </Field>
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
         <Button onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Book order'}</Button>

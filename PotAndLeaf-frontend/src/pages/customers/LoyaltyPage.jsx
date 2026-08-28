@@ -5,7 +5,7 @@ import { SparklesIcon, PlusIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import Pagination from '../../components/Pagination';
 
 const ledgerTone = { earn: 'active', redeem: 'pending', reverse: 'blocked' };
@@ -195,12 +195,12 @@ export default function LoyaltyPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Name" className="sm:col-span-2"><Input value={ruleForm.name} onChange={(e) => setRuleForm((f) => ({ ...f, name: e.target.value }))} /></Field>
           <Field label="Type">
-            <select className={selectCls} value={ruleForm.rule_type} onChange={(e) => setRuleForm((f) => ({ ...f, rule_type: e.target.value }))}>
+            <Select className={selectCls} value={ruleForm.rule_type} onChange={(e) => setRuleForm((f) => ({ ...f, rule_type: e.target.value }))}>
               <option value="spend">Spend-based</option>
               <option value="customer_tier">Customer tier</option>
               <option value="product">Product bonus</option>
               <option value="category">Category bonus</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Customer tier (optional)"><Input value={ruleForm.customer_tier} onChange={(e) => setRuleForm((f) => ({ ...f, customer_tier: e.target.value }))} placeholder="silver / gold / retail" /></Field>
           <Field label="₹ per earn unit"><Input type="number" value={ruleForm.earn_rupees} onChange={(e) => setRuleForm((f) => ({ ...f, earn_rupees: e.target.value }))} /></Field>

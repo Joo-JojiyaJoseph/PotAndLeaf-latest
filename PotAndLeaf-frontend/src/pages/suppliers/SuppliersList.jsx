@@ -15,7 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { fieldError } from '../../lib/formErrors';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { ImageUpload, mediaUrl } from '../../components/media';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
@@ -304,14 +304,14 @@ export default function SuppliersList() {
           {isSuperAdmin && !editing && (
             <div className="rounded-xl bg-leaf-soft/50 p-3">
               <Field label="Company" required>
-                <select
+                <Select
                   value={formCompanyId}
                   onChange={(e) => { setFormCompanyId(e.target.value); setPickedCompany(Boolean(e.target.value)); }}
                   className={selectClass}
                 >
                   <option value="">Select company first…</option>
                   {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                </Select>
               </Field>
               <p className="mt-1.5 text-xs text-muted">Choose which company this supplier belongs to. Your workspace company stays unchanged.</p>
             </div>
@@ -320,13 +320,13 @@ export default function SuppliersList() {
           {isSuperAdmin && editing && (
             <div className="rounded-xl bg-leaf-soft/50 p-3">
               <Field label="Company" required>
-                <select
+                <Select
                   value={formCompanyId}
                   onChange={(e) => setFormCompanyId(e.target.value)}
                   className={selectClass}
                 >
                   {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                </Select>
               </Field>
             </div>
           )}
@@ -407,9 +407,9 @@ export default function SuppliersList() {
                 <Input type="number" step="0.01" value={form.opening_balance ?? ''} onChange={set('opening_balance')} />
               </Field>
               <Field label="Status" required error={err('status')}>
-                <select value={form.status} onChange={set('status')} className={selectClass}>
+                <Select value={form.status} onChange={set('status')} className={selectClass}>
                   {STATUS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
+                </Select>
               </Field>
               <div className="sm:col-span-2">
                 <Field label="Notes" error={err('notes')}>

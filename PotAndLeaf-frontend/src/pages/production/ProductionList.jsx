@@ -6,7 +6,7 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, resolveRecordCompany, defaultCreateCompanyId } from '../../lib/recordCompany';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import SearchSelect from '../../components/SearchSelect';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadCsv } from '../../lib/csv';
@@ -211,10 +211,10 @@ function BomModal({ open, onClose, editing, isSuperAdmin, companies, createCompa
         {isSuperAdmin && !editing && (
           <div className="rounded-xl bg-leaf-soft/50 p-3">
             <Field label="Company" required error={err('company_id')}>
-              <select value={formCompanyId} onChange={(e) => changeFormCompany(e.target.value)} className={selectCls}>
+              <Select value={formCompanyId} onChange={(e) => changeFormCompany(e.target.value)} className={selectCls}>
                 <option value="">Select company first…</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             </Field>
             <p className="mt-1.5 text-xs text-muted">Applies only to this recipe. Your workspace company stays unchanged.</p>
           </div>
@@ -267,10 +267,10 @@ function BomModal({ open, onClose, editing, isSuperAdmin, companies, createCompa
               </Field>
               <div className="sm:col-span-2">
                 <Field label="Unit" error={newErr('unit_id')}>
-                  <select value={newProduct.unit_id} onChange={(e) => setNewProduct((p) => ({ ...p, unit_id: e.target.value }))} className={selectCls} disabled={!optionsReady}>
+                  <Select value={newProduct.unit_id} onChange={(e) => setNewProduct((p) => ({ ...p, unit_id: e.target.value }))} className={selectCls} disabled={!optionsReady}>
                     <option value="">— Optional —</option>
                     {units.map((u) => <option key={u.id} value={u.id}>{u.name}{u.short_name ? ` (${u.short_name})` : ''}</option>)}
-                  </select>
+                  </Select>
                 </Field>
               </div>
               <p className="sm:col-span-2 text-xs text-muted">A new product master record is created and linked to this recipe. Stock is added when you complete a production order.</p>
@@ -284,7 +284,7 @@ function BomModal({ open, onClose, editing, isSuperAdmin, companies, createCompa
           </div>
           <Field label="Yields (output units)" required error={err('output_qty')}><Input type="number" step="0.001" value={form.output_qty} onChange={(e) => setForm((f) => ({ ...f, output_qty: e.target.value }))} /></Field>
           <Field label="Status">
-            <select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}><option value="1">Active</option><option value="0">Inactive</option></select>
+            <Select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}><option value="1">Active</option><option value="0">Inactive</option></Select>
           </Field>
         </section>
 
@@ -445,7 +445,7 @@ function OrderModal({ open, onClose, editing, recordCtx, isSuperAdmin, companies
         {isSuperAdmin && !editing && (
           <div className="sm:col-span-2 rounded-xl bg-leaf-soft/50 p-3">
             <Field label="Company" required error={err('company_id')}>
-              <select
+              <Select
                 value={formCompanyId}
                 onChange={(e) => {
                   setFormCompanyId(e.target.value);
@@ -455,7 +455,7 @@ function OrderModal({ open, onClose, editing, recordCtx, isSuperAdmin, companies
               >
                 <option value="">Select company first…</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             </Field>
             <p className="mt-1.5 text-xs text-muted">Applies only to this order. Your workspace company stays unchanged.</p>
           </div>
@@ -478,16 +478,16 @@ function OrderModal({ open, onClose, editing, recordCtx, isSuperAdmin, companies
         </div>
         <Field label="Output quantity" required error={err('output_quantity')}><Input type="number" step="0.001" value={form.output_quantity} onChange={(e) => setForm((f) => ({ ...f, output_quantity: e.target.value }))} /></Field>
         <Field label="Location / godown" error={err('location_id')}>
-          <select value={form.location_id} onChange={(e) => setForm((f) => ({ ...f, location_id: e.target.value }))} className={selectCls}>
+          <Select value={form.location_id} onChange={(e) => setForm((f) => ({ ...f, location_id: e.target.value }))} className={selectCls}>
             <option value="">Default / company stock</option>
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.is_default ? ' (default)' : ''}</option>)}
-          </select>
+          </Select>
         </Field>
         <Field label="Supervisor" required error={err('supervisor_id')}>
-          <select value={form.supervisor_id} onChange={(e) => setForm((f) => ({ ...f, supervisor_id: e.target.value }))} className={selectCls}>
+          <Select value={form.supervisor_id} onChange={(e) => setForm((f) => ({ ...f, supervisor_id: e.target.value }))} className={selectCls}>
             <option value="">Select supervisor…</option>
             {supervisors.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+          </Select>
         </Field>
         <Field label="Order date" required error={err('order_date')}><Input type="date" value={form.order_date} onChange={(e) => setForm((f) => ({ ...f, order_date: e.target.value }))} /></Field>
         <div className="sm:col-span-2"><Field label="Notes" error={err('notes')}><Input value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} /></Field></div>
@@ -584,7 +584,7 @@ export default function ProductionList() {
       {tab === 'orders' && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <select
+            <Select
               value={orderStatus}
               onChange={(e) => setOrderStatus(e.target.value)}
               className="h-9 rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25"
@@ -594,7 +594,7 @@ export default function ProductionList() {
               <option value="in_progress">In progress</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
-            </select>
+            </Select>
             <span className="text-xs text-muted">{orders.length} order{orders.length === 1 ? '' : 's'}</span>
             <div className="ml-auto">
               <Button variant="outline" size="sm" onClick={exportOrders} disabled={orders.length === 0}>

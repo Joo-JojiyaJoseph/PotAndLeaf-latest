@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { fieldError } from '../../lib/formErrors';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { ImageUpload } from '../../components/media';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
@@ -115,9 +115,9 @@ export default function CustomersList() {
           <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, code, phone or GST…" className="pl-9" />
         </form>
-        <select value={type} onChange={(e) => { setPage(1); setType(e.target.value); }} className={selectCls + ' max-w-[160px]'}>
+        <Select value={type} onChange={(e) => { setPage(1); setType(e.target.value); }} className={selectCls + ' max-w-[160px]'}>
           {TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
-        </select>
+        </Select>
       </div>
 
       {isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
@@ -186,10 +186,10 @@ export default function CustomersList() {
           {isSuperAdmin && isCreate && (
             <div className="rounded-xl bg-leaf-soft/50 p-3">
               <Field label="Company" required>
-                <select value={formCompanyId} onChange={(e) => { setFormCompanyId(e.target.value); setPickedCompany(Boolean(e.target.value)); }} className={selectCls}>
+                <Select value={formCompanyId} onChange={(e) => { setFormCompanyId(e.target.value); setPickedCompany(Boolean(e.target.value)); }} className={selectCls}>
                   <option value="">Select company first…</option>
                   {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                </Select>
               </Field>
               <p className="mt-1.5 text-xs text-muted">Choose which company this customer belongs to. Your workspace company stays unchanged.</p>
             </div>
@@ -201,9 +201,9 @@ export default function CustomersList() {
               </div>
               <Field label="Name" required error={err('name')}><Input value={form.name} onChange={set('name')} /></Field>
               <Field label="Type" required error={err('type')}>
-                <select value={form.type} onChange={set('type')} className={selectCls}>
+                <Select value={form.type} onChange={set('type')} className={selectCls}>
                   <option value="retail">Retail</option><option value="wholesale">Wholesale</option><option value="dealer">Dealer</option>
-                </select>
+                </Select>
               </Field>
               {editing?.id && (
                 <Field label="Code"><Input value={form.customer_code || ''} disabled readOnly className="bg-paper text-muted" /></Field>
@@ -222,9 +222,9 @@ export default function CustomersList() {
               <Field label="Opening balance" error={err('opening_balance')}><Input type="number" step="0.01" value={form.opening_balance ?? ''} onChange={set('opening_balance')} /></Field>
               <div className="sm:col-span-2"><Field label="Address" error={err('address_line1')}><Input value={form.address_line1 || ''} onChange={set('address_line1')} /></Field></div>
               <Field label="Status">
-                <select value={form.status} onChange={set('status')} className={selectCls}>
+                <Select value={form.status} onChange={set('status')} className={selectCls}>
                   <option value="active">Active</option><option value="inactive">Inactive</option><option value="blocked">Blocked</option>
-                </select>
+                </Select>
               </Field>
             </div>
           )}

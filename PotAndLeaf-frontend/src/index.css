@@ -83,6 +83,21 @@ html.dark {
 html, body, #root { transition: background-color 0.2s ease, color 0.2s ease; }
 button, a, input, select, textarea { transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease; }
 
+/* Native selects (fallback): leaf accent instead of browser blue. */
+select {
+  accent-color: var(--color-leaf);
+}
+select:focus {
+  border-color: color-mix(in srgb, var(--color-leaf) 40%, var(--color-line));
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-leaf) 25%, transparent);
+}
+select option:checked,
+select option:hover {
+  background-color: var(--color-leaf);
+  color: #fff;
+}
+
 /* Thin, theme-aware scrollbars. */
 * { scrollbar-width: thin; scrollbar-color: var(--color-line-strong) transparent; }
 *::-webkit-scrollbar { width: 8px; height: 8px; }

@@ -88,11 +88,11 @@ export default function Topbar({ onMenu }) {
           {dark ? <SunIcon className="size-[18px]" /> : <MoonIcon className="size-[18px]" />}
         </button>
 
-        {activeCompany && (
+        {/* {activeCompany && (
           <span className="hidden max-w-44 truncate rounded-full border border-line bg-paper px-3 py-1 font-mono text-xs text-muted md:inline">
             {activeCompany.name}
           </span>
-        )}
+        )} */}
 
         <div className="relative" ref={menuRef}>
           <button

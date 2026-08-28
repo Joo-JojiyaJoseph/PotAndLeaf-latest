@@ -13,7 +13,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { fieldError } from '../../lib/formErrors';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { ImageUpload, mediaUrl } from '../../components/media';
 import StatusToggle from '../../components/StatusToggle';
 import { useToast } from '../../lib/toast';
@@ -322,10 +322,10 @@ export default function CompaniesList() {
             </Field>
           </div>
           <Field label="Status">
-            <select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}>
+            <Select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}>
               <option value="1">Active</option>
               <option value="0">Inactive</option>
-            </select>
+            </Select>
           </Field>
         </div>
       </Modal>

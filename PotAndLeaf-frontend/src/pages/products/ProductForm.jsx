@@ -7,7 +7,7 @@ import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { useAuth } from '../../context/AuthContext';
 import { fieldError } from '../../lib/formErrors';
 import { useToast } from '../../lib/toast';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { ImageGallery } from '../../components/media';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 
@@ -204,7 +204,7 @@ export default function ProductForm() {
       {isSuperAdmin && (
         <Card className="p-4">
           <Field label="Company" required={!isEdit}>
-            <select
+            <Select
               value={formCompanyId}
               onChange={(e) => {
                 setFormCompanyId(e.target.value);
@@ -216,7 +216,7 @@ export default function ProductForm() {
             >
               {!isEdit && <option value="">Select company first…</option>}
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            </Select>
           </Field>
           <p className="mt-1.5 text-xs text-muted">
             {isEdit
@@ -242,25 +242,25 @@ export default function ProductForm() {
               <Input value={form.hsn_code} onChange={set('hsn_code')} />
             </Field>
             <Field label="Status" error={err('status')}>
-              <select value={form.status} onChange={set('status')} className={selectCls}>
+              <Select value={form.status} onChange={set('status')} className={selectCls}>
                 {STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s}</option>)}
-              </select>
+              </Select>
             </Field>
             <Field label="Category" required error={err('category_id')}>
-              <select
+              <Select
                 value={form.category_id}
                 onChange={(e) => setForm((f) => ({ ...f, category_id: e.target.value, subcategory_id: '' }))}
                 className={selectCls}
               >
                 <option value="">—</option>
                 {rootCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
               {!rootCategories.length && (
                 <p className="mt-1 text-xs text-muted">No categories yet — add them under Master data.</p>
               )}
             </Field>
             <Field label="Subcategory" error={err('subcategory_id')}>
-              <select
+              <Select
                 value={form.subcategory_id}
                 onChange={set('subcategory_id')}
                 className={selectCls}
@@ -268,22 +268,22 @@ export default function ProductForm() {
               >
                 <option value="">—</option>
                 {subcategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             </Field>
             <Field label="Unit" error={err('unit_id')}>
-              <select value={form.unit_id} onChange={set('unit_id')} className={selectCls}>
+              <Select value={form.unit_id} onChange={set('unit_id')} className={selectCls}>
                 <option value="">—</option>
                 {(formData?.units ?? []).map((u) => <option key={u.id} value={u.id}>{u.name}{u.short_name ? ` (${u.short_name})` : ''}</option>)}
-              </select>
+              </Select>
               {!formData?.units?.length && (
                 <p className="mt-1 text-xs text-muted">No units yet — add them under Master data.</p>
               )}
             </Field>
             <Field label="GST %">
-              <select value={form.gst_rate} onChange={set('gst_rate')} className={selectCls}>
+              <Select value={form.gst_rate} onChange={set('gst_rate')} className={selectCls}>
                 <option value="">—</option>
                 {(formData?.tax_rates ?? [0, 5, 12, 18, 28]).map((r) => <option key={r} value={r}>{r}%</option>)}
-              </select>
+              </Select>
             </Field>
           </div>
 

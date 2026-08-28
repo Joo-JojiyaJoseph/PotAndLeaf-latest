@@ -5,7 +5,7 @@ import { ArrowLeftIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { classNames } from '../../lib/format';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -106,10 +106,10 @@ export default function StockVerificationForm() {
         </div>
         <Card className="p-5">
           <Field label="Company" required>
-            <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+            <Select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
               <option value="">Select company first…</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            </Select>
           </Field>
           <p className="mt-1.5 text-xs text-muted">Products and stock levels load after you pick a company.</p>
         </Card>
@@ -150,10 +150,10 @@ export default function StockVerificationForm() {
       {isSuperAdmin && (
         <Card className="p-5">
           <Field label="Company" required>
-            <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+            <Select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
               <option value="">Select company first…</option>
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            </Select>
           </Field>
           <p className="mt-1.5 text-xs text-muted">Count sheet and saved draft belong to this company. Your workspace company stays unchanged.</p>
         </Card>

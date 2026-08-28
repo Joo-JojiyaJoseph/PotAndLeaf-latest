@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { useToast } from '../../lib/toast';
 
 const GROUPS = [
@@ -120,14 +120,14 @@ export default function SettingsPage() {
             <h2 className="text-sm font-semibold">Appearance</h2>
             <div className="mt-4 max-w-xs">
               <Field label="Dark mode">
-                <select
+                <Select
                   value={darkMode ? '1' : '0'}
                   onChange={(e) => setDarkMode(e.target.value === '1')}
                   className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25"
                 >
                   <option value="0">Light</option>
                   <option value="1">Dark</option>
-                </select>
+                </Select>
               </Field>
             </div>
           </Card>
@@ -138,7 +138,7 @@ export default function SettingsPage() {
               {group.keys.map((field) => (
                 <Field key={field.key} label={field.label}>
                   {field.type === 'toggle' ? (
-                    <select
+                    <Select
                       value={form[field.key] === '1' || form[field.key] === true ? '1' : '0'}
                       disabled={!canEdit}
                       onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
@@ -146,7 +146,7 @@ export default function SettingsPage() {
                     >
                       <option value="0">Off</option>
                       <option value="1">On</option>
-                    </select>
+                    </Select>
                   ) : field.type === 'text' ? (
                     <Input
                       type="text"

@@ -15,7 +15,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
-import { Badge, Button, Card, Input, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Input, Spinner, Select } from '../../components/ui';
 import Pagination from '../../components/Pagination';
 import StatusToggle from '../../components/StatusToggle';
 import { MediaImg } from '../../components/media';
@@ -132,15 +132,15 @@ export default function ProductsList() {
           <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, SKU or barcode…" className="pl-9" />
         </form>
-        <select
+        <Select
           value={categoryId}
           onChange={(e) => { setCategoryId(e.target.value); setPage(1); }}
           className={selectCls}
         >
           <option value="">All categories</option>
           {(formData?.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select
+        </Select>
+        <Select
           value={status}
           onChange={(e) => { setStatus(e.target.value); setPage(1); }}
           className={selectCls}
@@ -148,7 +148,7 @@ export default function ProductsList() {
           <option value="">All status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
-        </select>
+        </Select>
         <label className="flex items-center gap-2 text-sm text-muted">
           <input
             type="checkbox"

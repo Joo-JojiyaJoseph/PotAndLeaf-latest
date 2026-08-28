@@ -5,7 +5,7 @@ import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../lib/confirm';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import SearchSelect from '../../components/SearchSelect';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -217,16 +217,16 @@ export default function TransferForm() {
           {isIntra ? (
             <>
               <Field label="From location" required error={err('from_location_id')}>
-                <select value={header.from_location_id} onChange={(e) => setHeader((h) => ({ ...h, from_location_id: e.target.value }))} className={selectCls}>
+                <Select value={header.from_location_id} onChange={(e) => setHeader((h) => ({ ...h, from_location_id: e.target.value }))} className={selectCls}>
                   <option value="">Select…</option>
                   {locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.type ? ` (${l.type})` : ''}</option>)}
-                </select>
+                </Select>
               </Field>
               <Field label="To location" required error={err('to_location_id')}>
-                <select value={header.to_location_id} onChange={(e) => setHeader((h) => ({ ...h, to_location_id: e.target.value }))} className={selectCls}>
+                <Select value={header.to_location_id} onChange={(e) => setHeader((h) => ({ ...h, to_location_id: e.target.value }))} className={selectCls}>
                   <option value="">Select…</option>
                   {locations.filter((l) => String(l.id) !== String(header.from_location_id)).map((l) => <option key={l.id} value={l.id}>{l.name}{l.type ? ` (${l.type})` : ''}</option>)}
-                </select>
+                </Select>
               </Field>
             </>
           ) : (

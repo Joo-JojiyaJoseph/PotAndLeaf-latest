@@ -5,7 +5,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { ImageUpload } from '../../components/media';
 import { formatDate } from '../../lib/format';
 import Pagination from '../../components/Pagination';
@@ -152,12 +152,12 @@ function DamageFormModal({ open, onClose }) {
         </div>
         <div className="sm:col-span-2">
           <Field label="Product" required error={err('product_id')}>
-            <select value={form.product_id} onChange={set('product_id')} className={selectCls}>
+            <Select value={form.product_id} onChange={set('product_id')} className={selectCls}>
               <option value="">Select product…</option>
               {(formData?.products ?? []).map((p) => (
                 <option key={p.id} value={p.id}>{p.sku} — {p.name} (stock {p.current_stock})</option>
               ))}
-            </select>
+            </Select>
             {product && <span className="mt-1 block text-xs text-muted">Available: {product.current_stock}</span>}
           </Field>
         </div>
@@ -165,10 +165,10 @@ function DamageFormModal({ open, onClose }) {
           <Input type="number" step="0.001" min="0" value={form.qty} onChange={set('qty')} />
         </Field>
         <Field label="Reason" required error={err('reason')}>
-          <select value={form.reason} onChange={set('reason')} className={selectCls}>
+          <Select value={form.reason} onChange={set('reason')} className={selectCls}>
             <option value="">Select reason…</option>
             {(formData?.reasons ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
+          </Select>
         </Field>
         <Field label="Date" required error={err('entry_date')}>
           <Input type="date" value={form.entry_date} onChange={set('entry_date')} />

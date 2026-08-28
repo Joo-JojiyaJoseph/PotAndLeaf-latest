@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { computePurchase } from '../../lib/purchaseCalc';
@@ -251,7 +251,7 @@ export default function PurchaseForm() {
         {isSuperAdmin && isEdit && (
           <div className="mb-4 rounded-xl bg-leaf-soft/50 p-3">
             <Field label="Company" required error={fieldErrors.company_id}>
-              <select
+              <Select
                 value={formCompanyId}
                 onChange={(e) => setFormCompanyId(e.target.value)}
                 className={selectCls}
@@ -259,7 +259,7 @@ export default function PurchaseForm() {
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <p className="mt-1.5 text-xs text-muted">Draft only — supplier and products must belong to the selected company.</p>
           </div>
@@ -267,7 +267,7 @@ export default function PurchaseForm() {
         {isSuperAdmin && !isEdit && (
           <div className="mb-4 rounded-xl bg-leaf-soft/50 p-3">
             <Field label="Purchasing for company" required error={fieldErrors.company_id}>
-              <select
+              <Select
                 value={formCompanyId}
                 onChange={(e) => setFormCompanyId(e.target.value)}
                 className={selectCls}
@@ -276,7 +276,7 @@ export default function PurchaseForm() {
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <p className="mt-1.5 text-xs text-muted">
               Applies only to this purchase. Your workspace company stays unchanged.
@@ -285,7 +285,7 @@ export default function PurchaseForm() {
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Supplier" required error={fieldErrors.supplier_id}>
-            <select
+            <Select
               value={header.supplier_id}
               onChange={(e) => setHeader((h) => ({ ...h, supplier_id: e.target.value }))}
               className={`h-9 w-full rounded-[10px] border bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30 ${fieldErrors.supplier_id ? 'border-danger' : 'border-line'}`}
@@ -296,7 +296,7 @@ export default function PurchaseForm() {
                   {s.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Purchase date" required error={fieldErrors.purchase_date}>
             <Input
@@ -359,7 +359,7 @@ export default function PurchaseForm() {
                   <Fragment key={i}>
                     <tr className={line.is_bulk ? 'border-b-0' : 'border-b border-line/60 last:border-0'}>
                       <td className="px-3 py-2">
-                        <select
+                        <Select
                           value={line.product_id}
                           onChange={(e) => onPickProduct(i, e.target.value)}
                           className="h-9 w-full min-w-[180px] rounded-[10px] border border-line bg-surface px-2 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30"
@@ -370,7 +370,7 @@ export default function PurchaseForm() {
                               {p.name} {p.sku ? `· ${p.sku}` : ''}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </td>
                       <td className="px-3 py-2">
                         <input
@@ -427,7 +427,7 @@ export default function PurchaseForm() {
                           <div className="flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-3">
                             <div className="min-w-[160px]">
                               <span className="mb-1 block text-xs font-medium text-muted">Sell as</span>
-                              <select
+                              <Select
                                 value={line.sell_as}
                                 onChange={(e) => setLine(i, { sell_as: e.target.value })}
                                 className={miniSelectCls}
@@ -436,7 +436,7 @@ export default function PurchaseForm() {
                                 {SELL_AS_OPTIONS.map((o) => (
                                   <option key={o.value} value={o.value}>{o.label}</option>
                                 ))}
-                              </select>
+                              </Select>
                             </div>
                             {line.sell_as && line.sell_as !== 'set_only' && (
                               <div className="w-[140px]">
@@ -452,7 +452,7 @@ export default function PurchaseForm() {
                             {line.sell_as && line.sell_as !== 'set_only' && (
                               <div className="min-w-[200px] flex-1">
                                 <span className="mb-1 block text-xs font-medium text-muted">Split (unit) product</span>
-                                <select
+                                <Select
                                   value={line.split_product_id}
                                   onChange={(e) => setLine(i, { split_product_id: e.target.value })}
                                   className={miniSelectCls}
@@ -461,7 +461,7 @@ export default function PurchaseForm() {
                                   {(formData?.products ?? []).map((p) => (
                                     <option key={p.id} value={p.id}>{p.name} {p.sku ? `· ${p.sku}` : ''}</option>
                                   ))}
-                                </select>
+                                </Select>
                               </div>
                             )}
                             {line.sell_as && (
@@ -469,7 +469,7 @@ export default function PurchaseForm() {
                                 <span className="mb-1 block text-xs font-medium text-muted">
                                   Set product <span className="font-normal text-faint">(blank = this purchased product)</span>
                                 </span>
-                                <select
+                                <Select
                                   value={line.set_product_id}
                                   onChange={(e) => setLine(i, { set_product_id: e.target.value })}
                                   className={miniSelectCls}
@@ -478,7 +478,7 @@ export default function PurchaseForm() {
                                   {(formData?.products ?? []).map((p) => (
                                     <option key={p.id} value={p.id}>{p.name} {p.sku ? `· ${p.sku}` : ''}</option>
                                   ))}
-                                </select>
+                                </Select>
                               </div>
                             )}
                             {line.sell_as === 'both' && (

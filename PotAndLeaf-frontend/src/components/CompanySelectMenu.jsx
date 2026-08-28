@@ -3,7 +3,7 @@ import { BuildingOffice2Icon, CheckIcon, ChevronDownIcon, FunnelIcon } from '@he
 import { classNames } from '../lib/format';
 
 /**
- * Custom company picker — avoids native <select> menus that look inconsistent across browsers.
+ * Custom company picker — avoids native select menus that look inconsistent across browsers.
  */
 export function CompanySelectMenu({
   value,
@@ -74,8 +74,8 @@ export function CompanySelectMenu({
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
           {selected?.label ?? placeholder}
         </span>
-        <ChevronDownIcon
-          className={classNames('size-4 shrink-0 text-muted transition-transform', open && 'rotate-180')}
+          <ChevronDownIcon
+          className={classNames('size-4 shrink-0 text-leaf transition-transform', open && 'rotate-180')}
         />
       </button>
 
@@ -100,7 +100,7 @@ export function CompanySelectMenu({
                 onClick={() => pick(opt.value)}
                 className={classNames(
                   'mx-1.5 flex w-[calc(100%-12px)] items-start gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors',
-                  active ? 'bg-leaf-soft text-leaf-hover' : 'text-ink hover:bg-sidebar',
+                    active ? 'bg-leaf text-white' : 'text-ink hover:bg-leaf-soft hover:text-leaf-hover',
                 )}
               >
                 <span className="min-w-0 flex-1">
@@ -109,7 +109,7 @@ export function CompanySelectMenu({
                     <span className="mt-0.5 block truncate font-mono text-[11px] text-muted">{opt.sublabel}</span>
                   )}
                 </span>
-                {active && <CheckIcon className="mt-0.5 size-4 shrink-0 text-leaf" />}
+                {active && <CheckIcon className="mt-0.5 size-4 shrink-0 text-white" />}
               </button>
             );
           })}
@@ -201,7 +201,7 @@ export function CompanySelectMenuBlock({
           )}
         >
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{selected?.label ?? 'Select company'}</span>
-          <ChevronDownIcon className={classNames('size-4 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+          <ChevronDownIcon className={classNames('size-4 shrink-0 text-leaf transition-transform', open && 'rotate-180')} />
         </button>
 
         {open && (
@@ -220,7 +220,7 @@ export function CompanySelectMenuBlock({
                   onClick={() => pick(opt.value)}
                   className={classNames(
                     'mx-1.5 flex w-[calc(100%-12px)] items-start gap-2 rounded-lg px-3 py-2.5 text-left transition-colors',
-                    active ? 'bg-leaf-soft text-leaf-hover' : 'hover:bg-sidebar',
+                    active ? 'bg-leaf text-white' : 'hover:bg-leaf-soft hover:text-leaf-hover',
                   )}
                 >
                   <span className="min-w-0 flex-1">
@@ -229,7 +229,7 @@ export function CompanySelectMenuBlock({
                       <span className="mt-0.5 block truncate font-mono text-[11px] text-muted">{opt.sublabel}</span>
                     )}
                   </span>
-                  {active && <CheckIcon className="mt-0.5 size-4 shrink-0 text-leaf" />}
+                  {active && <CheckIcon className="mt-0.5 size-4 shrink-0 text-white" />}
                 </button>
               );
             })}

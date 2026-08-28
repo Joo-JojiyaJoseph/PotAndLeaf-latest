@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { computePurchase } from '../../lib/purchaseCalc';
 
@@ -122,7 +122,7 @@ export default function PurchaseReturnForm() {
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Original purchase" required>
-            <select
+            <Select
               value={purchaseId}
               onChange={(e) => setPurchaseId(e.target.value)}
               className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30"
@@ -133,7 +133,7 @@ export default function PurchaseReturnForm() {
                   {p.purchase_no} · {p.supplier?.name ?? 'supplier'} · {formatCurrency(p.grand_total)}
                 </option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Return date" required>
             <Input type="date" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
@@ -177,7 +177,7 @@ export default function PurchaseReturnForm() {
                         <td className="px-4 py-2">
                           <div className="font-medium">{it.product_name}</div>
                           {hasBatches && (
-                            <select
+                            <Select
                               value={batchIds[it.purchase_item_id] ?? ''}
                               disabled={disabled}
                               onChange={(e) => {
@@ -200,7 +200,7 @@ export default function PurchaseReturnForm() {
                                   {b.batch_no} · {b.product_name ?? it.product_name} · avail {b.remaining_qty}
                                 </option>
                               ))}
-                            </select>
+                            </Select>
                           )}
                         </td>
                         <td className="tnum px-4 py-2 text-right text-muted">{it.qty}</td>

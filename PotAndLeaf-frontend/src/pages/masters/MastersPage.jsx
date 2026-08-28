@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { fieldError } from '../../lib/formErrors';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { useConfirm } from '../../lib/confirm';
 
 const TABS = [
@@ -112,10 +112,10 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
         {isSuperAdmin && isCreate && (
           <div className="sm:col-span-2 rounded-xl bg-leaf-soft/50 p-3">
             <Field label="Company" required error={err('company_id')}>
-              <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+              <Select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
                 <option value="">Select company first…</option>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             </Field>
             <p className="mt-1.5 text-xs text-muted">Choose which company this {tab.singular} belongs to.</p>
           </div>
@@ -123,9 +123,9 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
         {isSuperAdmin && editing?.id && (
           <div className="sm:col-span-2 rounded-xl bg-leaf-soft/50 p-3">
             <Field label="Company" required>
-              <select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+              <Select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
             </Field>
           </div>
         )}
@@ -141,16 +141,16 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
             {tab.hasShort && <Field label="Short name" error={err('short_name')}><Input value={form.short_name} onChange={(e) => setForm((f) => ({ ...f, short_name: e.target.value }))} placeholder="e.g. kg, pc" /></Field>}
             {tab.hasParent && (
               <Field label="Parent category" required error={err('parent_id')}>
-                <select value={form.parent_id} onChange={(e) => setForm((f) => ({ ...f, parent_id: e.target.value }))} className={selectCls}>
+                <Select value={form.parent_id} onChange={(e) => setForm((f) => ({ ...f, parent_id: e.target.value }))} className={selectCls}>
                   <option value="">Select parent…</option>
                   {rootCategories.filter((c) => c.id !== editing?.id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                </Select>
               </Field>
             )}
             <Field label="Status">
-              <select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={selectCls}>
+              <Select value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))} className={selectCls}>
                 <option value="active">Active</option><option value="inactive">Inactive</option>
-              </select>
+              </Select>
             </Field>
             <div className="sm:col-span-2">
               <Field label="Description" error={err('description')}><Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></Field>

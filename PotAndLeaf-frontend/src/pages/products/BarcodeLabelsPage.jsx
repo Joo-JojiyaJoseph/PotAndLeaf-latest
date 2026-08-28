@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Spinner } from '../../components/ui';
+import { Button, Card, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { printBarcodeSheet, expandLabels } from '../../lib/barcodeSheet';
 
@@ -62,9 +62,9 @@ export default function BarcodeLabelsPage() {
         <Button variant="ghost" size="sm" onClick={fillFromStock}>Match stock</Button>
         <Button variant="ghost" size="sm" onClick={clearAll}>Clear</Button>
         <span className="ml-auto text-sm text-muted">Columns</span>
-        <select value={columns} onChange={(e) => setColumns(Number(e.target.value))} className="h-8 rounded-lg border border-line bg-surface px-2 text-sm">
+        <Select value={columns} onChange={(e) => setColumns(Number(e.target.value))} className="h-8 rounded-lg border border-line bg-surface px-2 text-sm">
           {[2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
+        </Select>
       </Card>
 
       <Card className="overflow-hidden">
