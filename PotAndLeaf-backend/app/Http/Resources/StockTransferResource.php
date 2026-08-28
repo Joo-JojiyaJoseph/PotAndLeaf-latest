@@ -17,6 +17,9 @@ class StockTransferResource extends JsonResource
         $isDest = $this->isIntraCompany()
             ? $isSource
             : (string) $this->to_company_id === (string) $currentCompanyId;
+        $isHo = (bool) $user?->is_super_admin;
+        $canAct = $isHo || $isSource || $isDest;
+        $approveCompanyId = $isHo ? $this->company_id : $currentCompanyId;
 
         return [
             'id'              => $this->id,
@@ -62,12 +65,12 @@ class StockTransferResource extends JsonResource
                 'source_purchase'  => $i->batch?->purchase?->purchase_no,
             ])->values()),
             'can'             => [
-                'approve'  => $this->status === 'requested' && ($isSource || $isDest) && $user?->hasPermission('transfers.approve', $currentCompanyId),
-                'reject'   => $this->status === 'requested' && ($isSource || $isDest) && $user?->hasPermission('transfers.approve', $currentCompanyId),
-                'dispatch' => $this->status === 'draft' && $isSource && $user?->hasPermission('transfers.dispatch', $this->company_id),
-                'redirect' => $this->status === 'in_transit' && ! $this->isIntraCompany() && $isSource && $user?->hasPermission('transfers.approve', $currentCompanyId),
-                'receive'  => $this->status === 'in_transit' && $isDest && $user?->hasPermission('transfers.receive', $currentCompanyId),
-                'cancel'   => in_array($this->status, ['draft', 'in_transit', 'requested'], true) && $isSource && $user?->hasPermission('transfers.delete', $this->company_id),
+                'approve'  => $this->status === 'requested' && $canAct && $user?->hasPermission('transfers.approve', $approveCompanyId),
+                'reject'   => $this->status === 'requested' && $canAct && $user?->hasPermission('transfers.approve', $approveCompanyId),
+                'dispatch' => $this->status === 'draft' && ($isHo || $isSource) && $user?->hasPermission('transfers.dispatch', $this->company_id),
+                'redirect' => $this->status === 'in_transit' && ! $this->isIntraCompany() && ($isHo || $isSource) && $user?->hasPermission('transfers.approve', $approveCompanyId),
+                'receive'  => $this->status === 'in_transit' && ($isHo || $isDest) && $user?->hasPermission('transfers.receive', $isHo ? ($this->to_company_id ?? $this->company_id) : $currentCompanyId),
+                'cancel'   => in_array($this->status, ['draft', 'in_transit', 'requested'], true) && ($isHo || $isSource) && $user?->hasPermission('transfers.delete', $this->company_id),
             ],
         ];
     }

@@ -146,7 +146,13 @@ export function Spinner({ className }) {
   );
 }
 
-export function Modal({ open, onClose, title, children, footer, dismissible = true }) {
+const modalWidths = {
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-3xl',
+};
+
+export function Modal({ open, onClose, title, children, footer, dismissible = true, size = 'md' }) {
   useEffect(() => {
     if (!open || !dismissible) return;
     const onKey = (e) => e.key === 'Escape' && onClose();
@@ -160,7 +166,10 @@ export function Modal({ open, onClose, title, children, footer, dismissible = tr
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
       <div className="absolute inset-0" onClick={dismissible ? onClose : undefined} aria-hidden />
       <div
-        className="dialog-in relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col rounded-t-[20px] bg-surface shadow-pop sm:max-h-[85dvh] sm:rounded-[20px]"
+        className={classNames(
+          'dialog-in relative z-10 flex max-h-[92dvh] w-full flex-col rounded-t-[20px] bg-surface shadow-pop sm:max-h-[88dvh] sm:rounded-[20px]',
+          modalWidths[size] ?? modalWidths.md,
+        )}
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -170,7 +179,7 @@ export function Modal({ open, onClose, title, children, footer, dismissible = tr
             <XMarkIcon className="size-5" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-4">{children}</div>
         {footer && (
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-line px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {footer}

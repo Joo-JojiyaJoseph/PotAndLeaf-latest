@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { useConfirm } from '../../lib/confirm';
 import { Button, Card, Field, Input, Spinner } from '../../components/ui';
+import SearchSelect from '../../components/SearchSelect';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', product_batch_id: '', barcode: '', batch_no: '', qty: '' });
@@ -13,8 +15,10 @@ const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 t
 
 export default function TransferForm() {
   const navigate = useNavigate();
-  const { activeCompany } = useAuth();
+  const { activeCompany, isSuperAdmin, companies: authCompanies } = useAuth();
+  const confirmDialog = useConfirm();
   const [transferType, setTransferType] = useState('inter_company');
+  const [fromCompanyId, setFromCompanyId] = useState(() => activeCompany?.id ? String(activeCompany.id) : '');
   const [header, setHeader] = useState({ to_company_id: '', from_location_id: '', to_location_id: '', transfer_date: today(), notes: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [scanValue, setScanValue] = useState('');
@@ -26,7 +30,7 @@ export default function TransferForm() {
     const code = scanValue.trim();
     if (!code) return;
     try {
-      const b = (await api.get('/batches/scan', { params: { barcode: code } })).data.data;
+      const b = (await api.get('/batches/scan', { params: { barcode: code }, ...withCompany(fromCompanyId) })).data.data;
       setLines((prev) => {
         const idx = prev.findIndex((l) => l.product_batch_id === b.batch_id);
         if (idx >= 0) return prev.map((l, i) => (i === idx ? { ...l, qty: String((Number(l.qty) || 0) + 1) } : l));
@@ -44,21 +48,32 @@ export default function TransferForm() {
   const [saving, setSaving] = useState(false);
   const isIntra = transferType === 'intra_company';
 
+  const sourceCompanyId = fromCompanyId || (activeCompany?.id ? String(activeCompany.id) : '');
+  const companyCfg = sourceCompanyId ? withCompany(sourceCompanyId) : {};
+
+  useEffect(() => {
+    if (!fromCompanyId && activeCompany?.id) setFromCompanyId(String(activeCompany.id));
+  }, [activeCompany?.id, fromCompanyId]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ['transfer-form-data', activeCompany?.id],
-    queryFn: () => api.get('/transfers/form-data').then((r) => r.data.data),
-    enabled: Boolean(activeCompany),
+    queryKey: ['transfer-form-data', sourceCompanyId],
+    queryFn: () => api.get('/transfers/form-data', companyCfg).then((r) => r.data.data),
+    enabled: Boolean(sourceCompanyId),
   });
 
   const companies = data?.companies ?? [];
   const products = data?.products ?? [];
   const locations = data?.locations ?? [];
-  const fromCompany = data?.from_company ?? activeCompany;
+  const fromCompany = data?.from_company ?? authCompanies.find((c) => String(c.id) === String(sourceCompanyId)) ?? activeCompany;
+  const productOptions = products.map((p) => ({ value: p.id, label: p.name, sublabel: p.sku || undefined }));
+  const toCompanyOptions = companies.map((c) => ({ value: String(c.id), label: c.name, sublabel: c.code || undefined }));
+  const fromCompanyOptions = (isSuperAdmin ? authCompanies : authCompanies.filter((c) => String(c.id) === String(sourceCompanyId)))
+    .map((c) => ({ value: String(c.id), label: c.name, sublabel: c.code || undefined }));
 
   const { data: locationBalances } = useQuery({
-    queryKey: ['location-stock', header.from_location_id],
-    queryFn: () => api.get('/inventory/by-location', { params: { location_id: header.from_location_id } }).then((r) => r.data.data.balances ?? []),
-    enabled: isIntra && Boolean(header.from_location_id),
+    queryKey: ['location-stock', sourceCompanyId, header.from_location_id],
+    queryFn: () => api.get('/inventory/by-location', { params: { location_id: header.from_location_id }, ...companyCfg }).then((r) => r.data.data.balances ?? []),
+    enabled: isIntra && Boolean(header.from_location_id) && Boolean(sourceCompanyId),
   });
 
   const locationStockByProduct = useMemo(() => {
@@ -96,9 +111,21 @@ export default function TransferForm() {
   const err = (k) => errors[k]?.[0];
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
-  async function save() {
+  function changeFromCompany(id) {
+    setFromCompanyId(id);
+    setHeader((h) => ({ ...h, to_company_id: '', from_location_id: '', to_location_id: '' }));
+    setLines([emptyLine()]);
     setErrors({});
+  }
+
+  async function save({ confirm = false } = {}) {
+    setErrors({});
+    if (isSuperAdmin && !sourceCompanyId) {
+      setErrors({ from_company_id: ['Select a from company.'] });
+      return;
+    }
     const clientErrors = {};
+    if (!isIntra && !header.to_company_id) clientErrors.to_company_id = ['Select a destination company.'];
     const totals = {};
     lines.filter((l) => l.product_id).forEach((l) => {
       totals[l.product_id] = (totals[l.product_id] ?? 0) + (Number(l.qty) || 0);
@@ -115,12 +142,24 @@ export default function TransferForm() {
       return;
     }
 
+    if (confirm && isSuperAdmin) {
+      const toName = companies.find((c) => String(c.id) === String(header.to_company_id))?.name ?? 'destination';
+      const ok = await confirmDialog({
+        title: 'Confirm transfer',
+        message: `Approve moving stock from ${fromCompany?.name ?? 'source'} to ${toName}? This skips the pending-request step.`,
+        confirmLabel: 'Confirm transfer',
+        tone: 'default',
+      });
+      if (!ok) return;
+    }
+
     setSaving(true);
     try {
       const payload = {
         transfer_type: transferType,
         transfer_date: header.transfer_date,
         notes: header.notes || null,
+        confirm: Boolean(confirm && isSuperAdmin),
         items: lines.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, product_batch_id: l.product_batch_id || undefined, qty: Number(l.qty) || 0 })),
       };
       if (isIntra) {
@@ -129,8 +168,9 @@ export default function TransferForm() {
       } else {
         payload.to_company_id = Number(header.to_company_id);
       }
-      const res = await api.post('/transfers', payload);
-      navigate(`/transfers/${res.data.data.id}`);
+      const res = await api.post('/transfers', payload, companyCfg);
+      const created = res.data.data;
+      navigate(created.company_id ? `/transfers/${created.id}?company_id=${created.company_id}` : `/transfers/${created.id}`);
     } catch (e) {
       setErrors(e.response?.data?.errors ?? { _: [e.response?.data?.message ?? 'Could not save transfer.'] });
     } finally { setSaving(false); }
@@ -155,11 +195,24 @@ export default function TransferForm() {
       <Card className="p-5">
         <div className="mb-4 flex gap-2">
           <button type="button" onClick={() => setTransferType('inter_company')} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (!isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Between companies</button>
-          <button type="button" onClick={() => setTransferType('intra_company')} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Godown → shop</button>
+          {/* <button type="button" onClick={() => setTransferType('intra_company')} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Godown → shop</button> */}
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field label="From company">
-            <Input value={fromCompany?.name ?? ''} readOnly className="bg-paper" />
+          <Field label="From company" required={isSuperAdmin} error={err('from_company_id')}>
+            {isSuperAdmin ? (
+              <SearchSelect
+                value={fromCompanyId}
+                onChange={changeFromCompany}
+                options={fromCompanyOptions}
+                placeholder="Select source company…"
+                emptyLabel="No companies"
+              />
+            ) : (
+              <Input value={fromCompany?.name ?? ''} readOnly className="bg-paper" />
+            )}
+            {isSuperAdmin && (
+              <p className="mt-1.5 text-xs text-muted">Applies only to this transfer. Your workspace company stays unchanged.</p>
+            )}
           </Field>
           {isIntra ? (
             <>
@@ -179,10 +232,13 @@ export default function TransferForm() {
           ) : (
             <>
               <Field label="To company" required error={err('to_company_id')}>
-                <select value={header.to_company_id} onChange={(e) => setHeader((h) => ({ ...h, to_company_id: e.target.value }))} className={selectCls}>
-                  <option value="">Select…</option>
-                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}{c.code ? ` · ${c.code}` : ''}</option>)}
-                </select>
+                <SearchSelect
+                  value={header.to_company_id}
+                  onChange={(v) => setHeader((h) => ({ ...h, to_company_id: v }))}
+                  options={toCompanyOptions}
+                  placeholder="Select destination…"
+                  emptyLabel="No other companies"
+                />
               </Field>
               <Field label="Date" required error={err('transfer_date')}><Input type="date" value={header.transfer_date} onChange={(e) => setHeader((h) => ({ ...h, transfer_date: e.target.value }))} /></Field>
             </>
@@ -212,17 +268,19 @@ export default function TransferForm() {
           </tr></thead>
           <tbody>
             {lines.map((line, i) => {
-              const prod = products.find((p) => p.id === line.product_id);
               const available = availableForProduct(line.product_id);
               const lineQty = Number(line.qty) || 0;
               const overStock = line.product_id && available != null && lineQty > available + 0.0001;
               return (
                 <tr key={i} className="border-b border-line/60 last:border-0">
                   <td className="px-3 py-2">
-                    <select value={line.product_id} onChange={(e) => setLine(i, { product_id: e.target.value })} className={selectCls}>
-                      <option value="">Select…</option>
-                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` · ${p.sku}` : ''}</option>)}
-                    </select>
+                    <SearchSelect
+                      value={line.product_id}
+                      onChange={(v) => setLine(i, { product_id: v, product_batch_id: '', barcode: '', batch_no: '' })}
+                      options={productOptions}
+                      placeholder="Select product…"
+                      emptyLabel="No products in this company"
+                    />
                     {line.barcode && <span className="mt-1 block text-[11px] text-muted">Batch {line.batch_no} · {line.barcode}</span>}
                   </td>
                   <td className="tnum px-3 py-2 text-right text-muted">{line.product_id ? available : '—'}</td>
@@ -250,9 +308,20 @@ export default function TransferForm() {
         </div>
       </Card>
 
-      <div className="flex items-center justify-end gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
-        <Button onClick={save} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
+        {isSuperAdmin ? (
+          <>
+            <Button variant="outline" onClick={() => save({ confirm: false })} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>
+              {saving ? <Spinner /> : 'Save request'}
+            </Button>
+            <Button onClick={() => save({ confirm: true })} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>
+              {saving ? <Spinner className="border-white/40 border-t-white" /> : 'Confirm transfer'}
+            </Button>
+          </>
+        ) : (
+          <Button onClick={() => save()} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
+        )}
       </div>
       {!isIntra && !companies.length && <p className="text-sm text-muted">No other companies available to transfer to. Add another company or switch context.</p>}
       {isIntra && locations.length < 2 && <p className="text-sm text-muted">Add at least two locations (e.g. godown and shop) before moving stock internally.</p>}

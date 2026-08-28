@@ -28,6 +28,7 @@ class StoreTransferRequest extends FormRequest
             'to_location_id'       => [$isIntra ? 'required' : 'nullable', 'uuid', $loc(), Rule::notIn([$this->input('from_location_id')])],
             'transfer_date'        => ['required', 'date'],
             'notes'                => ['nullable', 'string', 'max:1000'],
+            'confirm'              => ['nullable', 'boolean'],
             'items'                => ['required', 'array', 'min:1'],
             'items.*.product_id'   => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],
             'items.*.product_batch_id' => ['nullable', 'uuid', Rule::exists('product_batches', 'id')->where('company_id', $companyId)],

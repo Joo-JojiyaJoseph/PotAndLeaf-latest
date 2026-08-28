@@ -6,6 +6,7 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
+import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { computePurchase } from '../../lib/purchaseCalc';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -31,7 +32,7 @@ export default function PurchaseForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
-  const { isSuperAdmin, companies, companyId, selectCompany, activeCompany } = useAuth();
+  const { isSuperAdmin, companies, companyId } = useAuth();
   const headerCompanyId = searchParams.get('company_id') || companyId;
 
   const [header, setHeader] = useState({
@@ -47,7 +48,9 @@ export default function PurchaseForm() {
   const [errors, setErrors] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const [formCompanyId, setFormCompanyId] = useState('');
+  const [formCompanyId, setFormCompanyId] = useState(() => (
+    isEdit ? '' : defaultCreateCompanyId({ filterCompanyId: searchParams.get('company_id') ?? '', companyId })
+  ));
 
   // Suppliers/products are company-scoped — keying by company prevents showing a
   // previous company's options (which would fail validation on submit).
@@ -58,11 +61,14 @@ export default function PurchaseForm() {
   });
 
   const purchaseCompanyId = existing?.company_id ?? headerCompanyId;
+  const targetCompanyId = isEdit
+    ? purchaseCompanyId
+    : (isSuperAdmin ? formCompanyId : companyId);
 
   const { data: formData, isLoading: loadingForm } = useQuery({
-    queryKey: ['purchase-form-data', purchaseCompanyId],
-    queryFn: () => api.get('/purchases/form-data', withCompany(purchaseCompanyId)).then((r) => r.data.data),
-    enabled: Boolean(purchaseCompanyId) && (!isEdit || Boolean(existing)),
+    queryKey: ['purchase-form-data', targetCompanyId],
+    queryFn: () => api.get('/purchases/form-data', withCompany(targetCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(targetCompanyId) && (!isEdit || Boolean(existing)),
   });
 
   // When a super admin switches the company on a new purchase, clear stale picks.
@@ -74,7 +80,7 @@ export default function PurchaseForm() {
       setFieldErrors({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCompany?.id]);
+  }, [targetCompanyId]);
 
   useEffect(() => {
     if (!existing) return;
@@ -140,7 +146,7 @@ export default function PurchaseForm() {
     const next = {};
     if (!header.supplier_id) next.supplier_id = 'Supplier is required.';
     if (!header.purchase_date) next.purchase_date = 'Purchase date is required.';
-    if (isSuperAdmin && !isEdit && !activeCompany?.id) next.company_id = 'Company is required.';
+    if (isSuperAdmin && !isEdit && !formCompanyId) next.company_id = 'Company is required.';
     const validLines = lines.filter((l) => l.product_id);
     if (validLines.length === 0) next.items = 'At least one product line is required.';
     validLines.forEach((l, i) => {
@@ -184,7 +190,7 @@ export default function PurchaseForm() {
     };
     try {
       if (isEdit) await api.put(`/purchases/${id}`, payload, withCompany(purchaseCompanyId));
-      else await api.post('/purchases', payload, withCompany(activeCompany?.id));
+      else await api.post('/purchases', payload, withCompany(targetCompanyId));
       navigate('/purchases');
     } catch (err) {
       const bag = err.response?.data?.errors ?? {};
@@ -202,7 +208,7 @@ export default function PurchaseForm() {
     }
   }
 
-  if (loadingForm || (isEdit && loadingExisting)) {
+    if ((isEdit && loadingExisting) || (Boolean(targetCompanyId) && loadingForm)) {
     return (
       <div className="flex h-full items-center justify-center">
         <Spinner className="size-6" />
@@ -260,19 +266,20 @@ export default function PurchaseForm() {
         )}
         {isSuperAdmin && !isEdit && (
           <div className="mb-4 rounded-xl bg-leaf-soft/50 p-3">
-            <Field label="Purchasing for company">
+            <Field label="Purchasing for company" required error={fieldErrors.company_id}>
               <select
-                value={companyId ?? ''}
-                onChange={(e) => selectCompany(e.target.value)}
+                value={formCompanyId}
+                onChange={(e) => setFormCompanyId(e.target.value)}
                 className={selectCls}
               >
+                <option value="">Select company first…</option>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </Field>
             <p className="mt-1.5 text-xs text-muted">
-              As HO, choose which company this purchase belongs to — suppliers and products update to match.
+              Applies only to this purchase. Your workspace company stays unchanged.
             </p>
           </div>
         )}

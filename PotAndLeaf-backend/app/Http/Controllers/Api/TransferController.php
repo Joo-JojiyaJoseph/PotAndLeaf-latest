@@ -60,10 +60,15 @@ class TransferController extends Controller
     public function store(StoreTransferRequest $request): JsonResponse
     {
         $company = $this->company($request);
-        // Users who can approve create ready-to-dispatch drafts; everyone else
-        // creates a request that HO must approve first.
-        $autoApprove = $request->user()->hasPermission('transfers.approve', $company->id);
-        $transfer = $this->transfers->create($company->id, $request->validated(), $request->user()->id, $autoApprove);
+        $user = $request->user();
+        // Super-admins always create a request unless they explicitly confirm.
+        // Other users who can approve still get a ready-to-dispatch draft.
+        $autoApprove = $user->is_super_admin
+            ? $request->boolean('confirm')
+            : $user->hasPermission('transfers.approve', $company->id);
+        $data = $request->validated();
+        unset($data['confirm']);
+        $transfer = $this->transfers->create($company->id, $data, $user->id, $autoApprove);
 
         return $this->created(
             new StockTransferResource($transfer),
