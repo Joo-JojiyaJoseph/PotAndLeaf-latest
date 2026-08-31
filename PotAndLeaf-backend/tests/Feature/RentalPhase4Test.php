@@ -11,6 +11,7 @@ use App\Services\SettingsService;
 use App\Services\WhatsApp\WhatsAppService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Validation\ValidationException;
 use Tests\Support\CreatesErpFixtures;
 
 uses(RefreshDatabase::class, CreatesErpFixtures::class);
@@ -248,5 +249,25 @@ it('bills unallocated units as missing when settling', function () {
 
     expect((float) $item->fresh()->missing_qty)->toBe(2.0);
     expect((float) $settled->missing_charge)->toBe(800.0);
+});
+
+it('rejects generating an invoice that overlaps an existing period', function () {
+    $rental = phase4Rental($this);
+    $svc = app(RentalService::class);
+    $period = ['period_from' => now()->toDateString(), 'period_to' => now()->toDateString()];
+    $svc->generateInvoice($this->company->id, $rental, $period, $this->user->id);
+
+    expect(fn () => $svc->generateInvoice($this->company->id, $rental, $period, $this->user->id))
+        ->toThrow(ValidationException::class);
+});
+
+it('rejects generating an invoice when no plants are still out', function () {
+    $rental = phase4Rental($this);
+    $rental->items()->first()->update(['returned_qty' => 2]);
+
+    expect(fn () => app(RentalService::class)->generateInvoice($this->company->id, $rental->fresh(['items']), [
+        'period_from' => now()->toDateString(),
+        'period_to' => now()->toDateString(),
+    ], $this->user->id))->toThrow(ValidationException::class);
 });
 

@@ -347,9 +347,16 @@ class RentalService
 
         $rental->loadMissing('items');
         $amount = round($rental->items->sum(function ($i) use ($cycles) {
-            $activeQty = (float) $i->qty - (float) $i->returned_qty;
+            $activeQty = max(0.0, (float) $i->qty - (float) $i->returned_qty - (float) $i->damaged_qty - (float) $i->missing_qty);
+
             return $activeQty * (float) $i->rate_per_cycle * $cycles;
         }), 2);
+
+        if ($amount <= 0) {
+            throw ValidationException::withMessages([
+                'period_from' => 'No plants are still out to bill for this period.',
+            ]);
+        }
 
         $dueDays = max(0, $this->settings->getInt($companyId, 'rental_payment_due_days'));
 

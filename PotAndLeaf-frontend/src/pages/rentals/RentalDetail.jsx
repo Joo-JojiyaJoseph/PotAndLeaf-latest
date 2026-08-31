@@ -56,6 +56,30 @@ function clampedSettleLine(outstanding, line) {
   return { returned: good, damaged, missing: out - good - damaged };
 }
 
+function addDaysIso(iso, n) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(+d)) return iso;
+  d.setDate(d.getDate() + n);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function overlappingInvoice(rental, from, to) {
+  if (!from || !to || to < from) return null;
+  return (rental.invoices ?? []).find((inv) => inv.period_from <= to && inv.period_to >= from) ?? null;
+}
+
+function billPreview(rental, from, to) {
+  if (!from || !to || to < from) return { cycles: 0, amount: 0 };
+  const days = inclusiveDays(from, to);
+  const cycleDays = { daily: 1, weekly: 7, monthly: 30 }[rental.billing_cycle] ?? 30;
+  const cycles = Math.max(1, Math.ceil(days / cycleDays));
+  const amount = (rental.items ?? []).reduce((s, it) => s + (Number(it.outstanding_qty) || 0) * Number(it.rate_per_cycle) * cycles, 0);
+  return { cycles, amount };
+}
+
 function settlePreview(rental, settleLines, settleDate, damageCharge) {
   const days = inclusiveDays(rental.start_date, settleDate);
   const cycleDays = { daily: 1, weekly: 7, monthly: 30 }[rental.billing_cycle] ?? 30;
@@ -134,7 +158,8 @@ export default function RentalDetail() {
   });
   const billM = useMutation({
     mutationFn: () => api.post(`/rentals/${id}/invoices`, period, withCompany(recordCompanyId)),
-    onSuccess: () => { invalidate(); setBilling(false); },
+    onSuccess: () => { invalidate(); setBilling(false); toast.success('Invoice generated.'); },
+    onError: (err) => toast.error(apiMessage(err, 'Could not generate invoice.')),
   });
   const payM = useMutation({ mutationFn: (invId) => api.post(`/rental-invoices/${invId}/paid`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
   const delInvM = useMutation({ mutationFn: (invId) => api.delete(`/rental-invoices/${invId}`, withCompany(recordCompanyId)), onSuccess: invalidate });
@@ -160,7 +185,27 @@ export default function RentalDetail() {
     setSettleLines(seed); setDamageCharge(''); setSettleDate(today()); setSettling(true);
   };
 
+  const openBill = () => {
+    const ends = (r.invoices ?? []).map((i) => i.period_to).concat(r.last_billed_to ? [r.last_billed_to] : []).filter(Boolean);
+    const latest = ends.length ? [...ends].sort().at(-1) : null;
+    const cap = r.return_date || today();
+    const next = latest ? addDaysIso(latest, 1) : (r.start_date || today());
+    if (latest && next > cap) {
+      const lastInv = [...(r.invoices ?? [])].sort((a, b) => String(a.period_to).localeCompare(String(b.period_to))).at(-1);
+      setPeriod({
+        period_from: lastInv?.period_from || r.start_date || today(),
+        period_to: lastInv?.period_to || cap,
+      });
+    } else {
+      setPeriod({ period_from: next, period_to: cap < next ? next : cap });
+    }
+    setBilling(true);
+  };
+
   const preview = settlePreview(r, settleLines, settleDate, damageCharge);
+  const invoicePreview = billPreview(r, period.period_from, period.period_to);
+  const clash = overlappingInvoice(r, period.period_from, period.period_to);
+  const billBlocked = Boolean(clash) || invoicePreview.amount <= 0 || period.period_to < period.period_from;
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -171,7 +216,7 @@ export default function RentalDetail() {
         actions={<>
           <Badge tone={tone[r.status] ?? 'default'}>{r.status}</Badge>
           {r.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
-          {r.can?.bill && <Button variant="outline" size="sm" onClick={() => setBilling(true)}><PlusIcon className="size-4" /> Generate invoice</Button>}
+          {r.can?.bill && <Button variant="outline" size="sm" onClick={openBill}><PlusIcon className="size-4" /> Generate invoice</Button>}
           {r.can?.return && <Button variant="outline" size="sm" onClick={openReturn}><ArrowUturnLeftIcon className="size-4" /> Return</Button>}
           {r.can?.settle && <Button size="sm" onClick={openSettle}><CheckCircleIcon className="size-4" /> Return &amp; settle</Button>}
           {r.can?.activate && <Button size="sm" onClick={() => activateM.mutate()} disabled={activateM.isPending}><CheckCircleIcon className="size-4" /> Activate</Button>}
@@ -297,14 +342,40 @@ export default function RentalDetail() {
       </Modal>
 
       <Modal open={billing} onClose={() => setBilling(false)} title={`Generate invoice — ${r.rental_no}`}
-        footer={<><Button variant="ghost" size="sm" onClick={() => setBilling(false)}>Cancel</Button>
-          <Button size="sm" disabled={billM.isPending} onClick={() => billM.mutate()}>Generate</Button></>}
+        footer={<>
+          <Button variant="ghost" size="sm" onClick={() => setBilling(false)}>Cancel</Button>
+          <Button size="sm" disabled={billM.isPending || billBlocked} onClick={() => billM.mutate()}>
+            {billM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Generate'}
+          </Button>
+        </>}
       >
-        <p className="mb-3 text-sm text-muted">Bills the plants still out × rate × billing cycles in the period. Raises the customer's outstanding.</p>
+        <p className="mb-3 text-sm text-muted">
+          Bills plants still out × rate × billing cycles in the period. Raises the customer's outstanding.
+          {r.status === 'returned' ? ' Settlement already billed the rental period — generate only if a different period was missed.' : ''}
+        </p>
         <div className="grid grid-cols-2 gap-4">
           <Field label="Period from"><Input type="date" value={period.period_from} onChange={(e) => setPeriod((p) => ({ ...p, period_from: e.target.value }))} /></Field>
           <Field label="Period to"><Input type="date" value={period.period_to} onChange={(e) => setPeriod((p) => ({ ...p, period_to: e.target.value }))} /></Field>
         </div>
+        {clash && (
+          <p className="mt-3 text-sm text-danger">
+            {clash.invoice_no} already covers {formatDate(clash.period_from)} – {formatDate(clash.period_to)}. Pick a period that does not overlap.
+          </p>
+        )}
+        {!clash && invoicePreview.amount <= 0 && (
+          <p className="mt-3 text-sm text-danger">
+            Nothing to bill — no plants are still out
+            {r.status === 'returned' ? ', and this rental is already returned.' : '.'}
+          </p>
+        )}
+        {!clash && invoicePreview.amount > 0 && (
+          <p className="mt-3 text-sm text-muted">
+            This will invoice {formatCurrency(invoicePreview.amount)} for {invoicePreview.cycles} {r.billing_cycle === 'daily' ? (invoicePreview.cycles === 1 ? 'day' : 'days') : `cycle${invoicePreview.cycles === 1 ? '' : 's'}`}.
+          </p>
+        )}
+        {billM.isError && (
+          <p className="mt-3 text-sm text-danger">{apiMessage(billM.error, 'Could not generate invoice.')}</p>
+        )}
       </Modal>
       <Modal open={settling} onClose={() => setSettling(false)} title={`Return & settle — ${r.rental_no}`}
         footer={<><Button variant="ghost" size="sm" onClick={() => setSettling(false)}>Cancel</Button>
