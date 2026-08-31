@@ -172,7 +172,8 @@ class RentalService
 
                 $good = max(0.0, min((float) ($line['returned'] ?? 0), $outstanding));
                 $damaged = max(0.0, min((float) ($line['damaged'] ?? 0), $outstanding - $good));
-                $missing = max(0.0, min((float) ($line['missing'] ?? 0), $outstanding - $good - $damaged));
+                // Anything not marked good or damaged is missing — settle closes the rental.
+                $missing = $outstanding - $good - $damaged;
 
                 // Only good units return to available stock. Damaged units are
                 // written off; missing units are sold (stock stays reduced).

@@ -214,11 +214,10 @@ class TransferController extends Controller
             return;
         }
 
+        // Super-admin may receive from either shop (the UI often keeps the
+        // source company in X-Company-Id while viewing an incoming transfer).
         if ($request->user()->is_super_admin) {
-            $queryId = $request->query('company_id');
-            if ($destId === $headerId || (filled($queryId) && $destId === (string) $queryId)) {
-                return;
-            }
+            return;
         }
 
         abort(404, 'Switch to the destination company to receive this transfer.');

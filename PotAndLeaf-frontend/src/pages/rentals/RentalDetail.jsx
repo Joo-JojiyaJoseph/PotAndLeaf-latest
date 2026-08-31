@@ -9,9 +9,81 @@ import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError }
 import { formatCurrency, formatDate } from '../../lib/format';
 import { printRentalInvoice } from '../../lib/invoicePrint';
 import { useToast } from '../../lib/toast';
+import { apiMessage } from '../../lib/formErrors';
 
 const tone = { draft: 'inactive', active: 'active', returned: 'approved', cancelled: 'blocked' };
 const today = () => new Date().toISOString().slice(0, 10);
+
+function inclusiveDays(fromStr, toStr) {
+  const a = new Date(`${fromStr}T00:00:00`);
+  const b = new Date(`${toStr}T00:00:00`);
+  if (Number.isNaN(+a) || Number.isNaN(+b)) return 1;
+  return Math.max(1, Math.round((b - a) / 86400000) + 1);
+}
+
+function qtyOrEmpty(n) {
+  return n > 0 ? String(n) : '';
+}
+
+/** Keep Good + Damaged + Missing ≤ outstanding; the edited field wins. */
+function allocateSettle(outstanding, current, field, raw) {
+  const max = Math.max(0, Number(outstanding) || 0);
+  const next = {
+    returned: Number(current?.returned) || 0,
+    damaged: Number(current?.damaged) || 0,
+    missing: Number(current?.missing) || 0,
+  };
+  next[field] = Math.max(0, Math.min(Number(raw) || 0, max));
+  const others = ['returned', 'damaged', 'missing'].filter((k) => k !== field);
+  const remaining = max - next[field];
+  const otherSum = others.reduce((s, k) => s + next[k], 0);
+  if (otherSum > remaining) {
+    let overflow = otherSum - remaining;
+    for (const k of [...others].reverse()) {
+      if (overflow <= 0) break;
+      const take = Math.min(next[k], overflow);
+      next[k] -= take;
+      overflow -= take;
+    }
+  }
+  return { returned: qtyOrEmpty(next.returned), damaged: qtyOrEmpty(next.damaged), missing: qtyOrEmpty(next.missing) };
+}
+
+function clampedSettleLine(outstanding, line) {
+  const out = Math.max(0, Number(outstanding) || 0);
+  const good = Math.max(0, Math.min(Number(line?.returned) || 0, out));
+  const damaged = Math.max(0, Math.min(Number(line?.damaged) || 0, out - good));
+  return { returned: good, damaged, missing: out - good - damaged };
+}
+
+function settlePreview(rental, settleLines, settleDate, damageCharge) {
+  const days = inclusiveDays(rental.start_date, settleDate);
+  const cycleDays = { daily: 1, weekly: 7, monthly: 30 }[rental.billing_cycle] ?? 30;
+  const cycles = Math.max(1, Math.ceil(days / cycleDays));
+  const rentalCharge = (rental.items ?? []).reduce((s, it) => s + Number(it.qty) * Number(it.rate_per_cycle) * cycles, 0);
+  let autoDamage = 0;
+  let missingCharge = 0;
+  (rental.items ?? []).forEach((it) => {
+    const line = clampedSettleLine(it.outstanding_qty, settleLines[it.id]);
+    const retail = Number(it.retail_price) || 0;
+    autoDamage += line.damaged * retail * 0.5;
+    missingCharge += line.missing * retail;
+  });
+  const damage = damageCharge === '' ? autoDamage : Number(damageCharge) || 0;
+  const total = rentalCharge + damage + missingCharge;
+  const deposit = Number(rental.deposit) || 0;
+  return {
+    days,
+    cycles,
+    rentalCharge,
+    damage,
+    missingCharge,
+    total,
+    deposit,
+    refund: Math.max(0, deposit - total),
+    balanceDue: Math.max(0, total - deposit),
+  };
+}
 
 export default function RentalDetail() {
   const { id } = useParams();
@@ -52,9 +124,13 @@ export default function RentalDetail() {
     mutationFn: () => api.post(`/rentals/${id}/settle`, {
       return_date: settleDate || null,
       ...(damageCharge === '' ? {} : { damage_charge: Number(damageCharge) || 0 }),
-      lines: Object.entries(settleLines).map(([itemId, v]) => ({ id: itemId, returned: Number(v.returned) || 0, damaged: Number(v.damaged) || 0, missing: Number(v.missing) || 0 })),
+      lines: (data?.items ?? []).map((it) => ({
+        id: it.id,
+        ...clampedSettleLine(it.outstanding_qty, settleLines[it.id]),
+      })),
     }, withCompany(recordCompanyId)),
-    onSuccess: () => { invalidate(); setSettling(false); },
+    onSuccess: () => { invalidate(); setSettling(false); toast.success('Rental settled.'); },
+    onError: (err) => toast.error(apiMessage(err, 'Could not settle this rental.')),
   });
   const billM = useMutation({
     mutationFn: () => api.post(`/rentals/${id}/invoices`, period, withCompany(recordCompanyId)),
@@ -83,6 +159,8 @@ export default function RentalDetail() {
     (r.items ?? []).forEach((it) => { if (it.outstanding_qty > 0) seed[it.id] = { returned: String(it.outstanding_qty), damaged: '', missing: '' }; });
     setSettleLines(seed); setDamageCharge(''); setSettleDate(today()); setSettling(true);
   };
+
+  const preview = settlePreview(r, settleLines, settleDate, damageCharge);
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -233,7 +311,8 @@ export default function RentalDetail() {
           <Button size="sm" disabled={settleM.isPending} onClick={() => settleM.mutate()}>{settleM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Settle & refund'}</Button></>}
       >
         <p className="mb-3 text-sm text-muted">
-          Enter what came back, what's damaged, and what's missing. Rental, damage, and missing charges are deducted from the
+          Enter what came back, what's damaged, and what's missing. Quantities cannot exceed plants still out.
+          Unallocated qty is billed as missing. Rental, damage, and missing charges are deducted from the
           deposit of {formatCurrency(r.deposit)} and the balance refunded. Missing items are billed at retail; damaged items default to 50% of retail.
         </p>
         <div className="mb-4">
@@ -249,7 +328,7 @@ export default function RentalDetail() {
               {['returned', 'damaged', 'missing'].map((k) => (
                 <input key={k} type="number" step="0.001" min="0" max={it.outstanding_qty}
                   value={settleLines[it.id]?.[k] ?? ''}
-                  onChange={(e) => setSettleLines((s) => ({ ...s, [it.id]: { ...(s[it.id] ?? {}), [k]: e.target.value } }))}
+                  onChange={(e) => setSettleLines((s) => ({ ...s, [it.id]: allocateSettle(it.outstanding_qty, s[it.id], k, e.target.value) }))}
                   className="h-9 w-16 rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums" />
               ))}
             </div>
@@ -261,11 +340,33 @@ export default function RentalDetail() {
           </Field>
           {damageCharge === '' && (
             <p className="mt-1.5 text-xs text-muted">
-              Leave blank to charge 50% of retail for damaged qty
-              {' '}({formatCurrency((r.items ?? []).reduce((sum, it) => sum + (Number(settleLines[it.id]?.damaged) || 0) * 0.5 * Number(it.retail_price || 0), 0))}).
+              Leave blank to charge 50% of retail for damaged qty ({formatCurrency(preview.damage)}).
             </p>
           )}
         </div>
+        <div className="mt-4 rounded-xl border border-line bg-paper/60 px-3 py-3 text-sm">
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-faint">Settlement preview</p>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+            <dt className="text-muted">Rental ({preview.cycles} {r.billing_cycle === 'daily' ? (preview.cycles === 1 ? 'day' : 'days') : `cycle${preview.cycles === 1 ? '' : 's'}`})</dt>
+            <dd className="tnum text-right">{formatCurrency(preview.rentalCharge)}</dd>
+            <dt className="text-muted">Damage</dt>
+            <dd className="tnum text-right">{formatCurrency(preview.damage)}</dd>
+            <dt className="text-muted">Missing</dt>
+            <dd className="tnum text-right">{formatCurrency(preview.missingCharge)}</dd>
+            <dt className="text-muted">Total charges</dt>
+            <dd className="tnum text-right font-medium">{formatCurrency(preview.total)}</dd>
+            <dt className="text-muted">Deposit</dt>
+            <dd className="tnum text-right">{formatCurrency(preview.deposit)}</dd>
+            {preview.balanceDue > 0 ? (
+              <><dt className="font-medium text-danger">Balance due</dt><dd className="tnum text-right font-medium text-danger">{formatCurrency(preview.balanceDue)}</dd></>
+            ) : (
+              <><dt className="font-medium text-leaf">Refund</dt><dd className="tnum text-right font-medium text-leaf">{formatCurrency(preview.refund)}</dd></>
+            )}
+          </dl>
+        </div>
+        {settleM.isError && (
+          <p className="mt-3 text-sm text-danger">{apiMessage(settleM.error, 'Could not settle this rental.')}</p>
+        )}
       </Modal>
     </div>
   );

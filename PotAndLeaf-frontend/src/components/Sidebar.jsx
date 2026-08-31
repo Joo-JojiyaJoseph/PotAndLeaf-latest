@@ -42,8 +42,8 @@ const GROUPS = [
       { key: 'purchase-returns', label: 'Purch. Returns', to: '/purchase-returns', icon: ArrowUturnLeftIcon, permission: 'purchase_returns.view' },
       { key: 'stock-verifications', label: 'Stock Count', to: '/stock-verifications', icon: ClipboardDocumentCheckIcon, permission: 'stock_verifications.view' },
       { key: 'bulk-splits', label: 'Bulk Split', to: '/bulk-splits', icon: ScissorsIcon, permission: 'bulk_splits.view' },
-      // { key: 'transfers', label: 'Transfers', to: '/transfers', icon: ArrowsRightLeftIcon, permission: 'transfers.view' },
-      // { key: 'production', label: 'Production', to: '/production', icon: BeakerIcon, permission: 'production.view' },
+      { key: 'transfers', label: 'Transfers', to: '/transfers', icon: ArrowsRightLeftIcon, permission: 'transfers.view' },
+      { key: 'production', label: 'Production', to: '/production', icon: BeakerIcon, permission: 'production.view' },
     ],
   },
   {
@@ -51,7 +51,7 @@ const GROUPS = [
     items: [
       // { key: 'sales', label: 'Sales', to: '/sales', icon: CalculatorIcon, permission: 'sales.view' },
       // { key: 'backorders', label: 'Backorders', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
-      // { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon, permission: 'rental.view' },
+      { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon, permission: 'rental.view' },
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon, permission: 'customers.view' },
       // { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
       // { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },

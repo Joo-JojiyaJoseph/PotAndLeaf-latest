@@ -4,9 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, PaperAirplaneIcon, XCircleIcon, ArrowsRightLeftIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Badge, Button, Modal, Select } from '../../components/ui';
+import { Badge, Button, Modal, Select, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatDate } from '../../lib/format';
+import { apiMessage } from '../../lib/formErrors';
+import { useToast } from '../../lib/toast';
 
 const tone = { requested: 'warning', draft: 'inactive', in_transit: 'warning', received: 'active', rejected: 'blocked', cancelled: 'blocked' };
 
@@ -15,6 +17,7 @@ export default function TransferDetail() {
   const [searchParams] = useSearchParams();
   const { companies, companyId } = useAuth();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const headerCompanyId = searchParams.get('company_id') || companyId;
   const [receiving, setReceiving] = useState(false);
   const [receipts, setReceipts] = useState({});
@@ -31,15 +34,27 @@ export default function TransferDetail() {
     enabled: Boolean(headerCompanyId && id),
   });
 
-  const recordCompanyId = data?.company_id ?? headerCompanyId;
+  const sourceCompanyId = data?.company_id ?? headerCompanyId;
+  const destCompanyId = data?.is_intra_company
+    ? sourceCompanyId
+    : (data?.to_company_id ?? sourceCompanyId);
+  const fail = (fallback) => (err) => toast.error(apiMessage(err, fallback));
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['transfer', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['transfers'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
-  const dispatchM = useMutation({ mutationFn: () => api.post(`/transfers/${id}/dispatch`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/transfers/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const dispatchM = useMutation({
+    mutationFn: () => api.post(`/transfers/${id}/dispatch`, {}, withCompany(sourceCompanyId)),
+    onSuccess: invalidate,
+    onError: fail('Could not dispatch this transfer.'),
+  });
+  const cancelM = useMutation({
+    mutationFn: () => api.delete(`/transfers/${id}`, withCompany(sourceCompanyId)),
+    onSuccess: invalidate,
+    onError: fail('Could not cancel this transfer.'),
+  });
   const approveM = useMutation({
     mutationFn: () => api.post(`/transfers/${id}/approve`, {
       approvals: Object.entries(approvals).map(([itemId, row]) => ({
@@ -47,20 +62,24 @@ export default function TransferDetail() {
         approved_qty: Number(row.qty) || 0,
         rejection_reason: row.reason || null,
       })),
-    }, withCompany(recordCompanyId)),
+    }, withCompany(sourceCompanyId)),
     onSuccess: () => { invalidate(); setApproving(false); },
+    onError: fail('Could not approve this transfer.'),
   });
   const redirectM = useMutation({
-    mutationFn: () => api.post(`/transfers/${id}/redirect`, { to_company_id: redirectTo }, withCompany(recordCompanyId)),
+    mutationFn: () => api.post(`/transfers/${id}/redirect`, { to_company_id: redirectTo }, withCompany(sourceCompanyId)),
     onSuccess: () => { invalidate(); setRedirecting(false); setRedirectTo(''); },
+    onError: fail('Could not redirect this transfer.'),
   });
   const rejectM = useMutation({
-    mutationFn: () => api.post(`/transfers/${id}/reject`, { reason: rejectReason || null }, withCompany(recordCompanyId)),
+    mutationFn: () => api.post(`/transfers/${id}/reject`, { reason: rejectReason || null }, withCompany(sourceCompanyId)),
     onSuccess: () => { invalidate(); setRejecting(false); setRejectReason(''); },
+    onError: fail('Could not reject this transfer.'),
   });
   const receiveM = useMutation({
-    mutationFn: () => api.post(`/transfers/${id}/receive`, { receipts: Object.entries(receipts).map(([itemId, q]) => ({ id: itemId, received_qty: Number(q) || 0 })) }, withCompany(recordCompanyId)),
-    onSuccess: () => { invalidate(); setReceiving(false); },
+    mutationFn: () => api.post(`/transfers/${id}/receive`, { receipts: Object.entries(receipts).map(([itemId, q]) => ({ id: itemId, received_qty: Number(q) || 0 })) }, withCompany(destCompanyId)),
+    onSuccess: () => { invalidate(); setReceiving(false); toast.success('Transfer received.'); },
+    onError: fail('Could not confirm receipt.'),
   });
 
   if (isLoading) return <DetailLoading />;
@@ -179,7 +198,9 @@ export default function TransferDetail() {
       <Modal open={receiving} onClose={() => setReceiving(false)} title={`Receive ${t.transfer_no}`}
         footer={<>
           <Button variant="ghost" size="sm" onClick={() => setReceiving(false)}>Cancel</Button>
-          <Button size="sm" disabled={receiveM.isPending} onClick={() => receiveM.mutate()}>Confirm receipt</Button>
+          <Button size="sm" disabled={receiveM.isPending} onClick={() => receiveM.mutate()}>
+            {receiveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Confirm receipt'}
+          </Button>
         </>}
       >
         <p className="mb-3 text-sm text-muted">Enter the quantity actually received at {t.to_company ?? t.to_location}. Any shortfall returns to {t.from_company ?? t.from_location}.</p>
@@ -192,6 +213,9 @@ export default function TransferDetail() {
             </div>
           ))}
         </div>
+        {receiveM.isError && (
+          <p className="mt-3 text-sm text-danger">{apiMessage(receiveM.error, 'Could not confirm receipt.')}</p>
+        )}
       </Modal>
 
       <Modal open={rejecting} onClose={() => setRejecting(false)} title={`Reject ${t.transfer_no}`}

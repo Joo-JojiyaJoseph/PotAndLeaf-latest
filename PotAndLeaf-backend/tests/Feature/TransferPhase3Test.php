@@ -4,6 +4,7 @@ use App\Models\Company;
 use App\Models\LocationStock;
 use App\Models\Product;
 use App\Models\StockTransfer;
+use App\Models\User;
 use App\Services\LocationStockService;
 use App\Services\TransferService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -157,4 +158,63 @@ it('partially receives inter-company transfer and returns shortfall', function (
     expect((float) $sourceProduct->fresh()->current_stock)->toBe(85.0);
     expect((float) $destProduct->fresh()->current_stock)->toBe(15.0);
     expect((float) $item->fresh()->received_qty)->toBe(15.0);
+});
+
+function inTransitInterCompany(object $test): array
+{
+    $dest = Company::create(['name' => 'Receive Shop', 'code' => 'RS'.Str::upper(Str::random(3)), 'is_active' => true]);
+    $sourceProduct = $test->createProduct(['sku' => 'RECV-01', 'current_stock' => 50, 'cost_price' => 20]);
+    $destProduct = Product::create([
+        'company_id'      => $dest->id,
+        'sku'             => 'RECV-01',
+        'name'            => $sourceProduct->name,
+        'gst_rate'        => 18,
+        'mrp'             => 500,
+        'cost_price'      => 20,
+        'retail_price'    => 400,
+        'wholesale_price' => 350,
+        'dealer_price'    => 300,
+        'current_stock'   => 0,
+        'opening_stock'   => 0,
+        'status'          => 'active',
+    ]);
+
+    $transfer = StockTransfer::create([
+        'company_id'    => $test->company->id,
+        'to_company_id' => $dest->id,
+        'transfer_type' => 'inter_company',
+        'transfer_no'   => 'TRF-RECV01',
+        'transfer_date' => now()->toDateString(),
+        'status'        => 'draft',
+    ]);
+    $item = $transfer->items()->create([
+        'product_id'   => $sourceProduct->id,
+        'product_name' => $sourceProduct->name,
+        'qty'          => 10,
+        'received_qty' => 0,
+    ]);
+
+    app(TransferService::class)->dispatch($transfer->fresh(), $test->user->id);
+
+    return compact('dest', 'destProduct', 'transfer', 'item');
+}
+
+it('rejects receive when posted as the source company', function () {
+    ['transfer' => $transfer, 'item' => $item] = inTransitInterCompany($this);
+
+    $this->postJson("/api/transfers/{$transfer->id}/receive", [
+        'receipts' => [['id' => $item->id, 'received_qty' => 10]],
+    ], $this->apiHeaders())->assertNotFound();
+});
+
+it('lets a super-admin receive even when the company header is the source shop', function () {
+    ['destProduct' => $destProduct, 'transfer' => $transfer, 'item' => $item] = inTransitInterCompany($this);
+    $admin = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
+
+    $this->postJson("/api/transfers/{$transfer->id}/receive", [
+        'receipts' => [['id' => $item->id, 'received_qty' => 10]],
+    ], $this->apiHeaders($admin))->assertOk();
+
+    expect($transfer->fresh()->status)->toBe('received');
+    expect((float) $destProduct->fresh()->current_stock)->toBe(10.0);
 });

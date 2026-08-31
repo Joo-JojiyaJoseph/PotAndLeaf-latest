@@ -223,3 +223,30 @@ it('auto-prices damaged rental units at half retail when no charge is given', fu
     expect((float) $item->fresh()->damaged_qty)->toBe(1.0);
 });
 
+it('clamps over-allocated settle quantities to plants still out', function () {
+    $rental = phase4Rental($this);
+    $item = $rental->items()->first();
+
+    $settled = app(RentalService::class)->settle($rental, [
+        $item->id => ['returned' => 10, 'damaged' => 20, 'missing' => 10],
+    ], now()->toDateString(), null, $this->user->id);
+
+    expect((float) $item->fresh()->returned_qty)->toBe(2.0);
+    expect((float) $item->fresh()->damaged_qty)->toBe(0.0);
+    expect((float) $item->fresh()->missing_qty)->toBe(0.0);
+    expect((float) $settled->damage_charge)->toBe(0.0);
+    expect((float) $settled->missing_charge)->toBe(0.0);
+});
+
+it('bills unallocated units as missing when settling', function () {
+    $rental = phase4Rental($this);
+    $item = $rental->items()->first();
+
+    $settled = app(RentalService::class)->settle($rental, [
+        $item->id => ['returned' => 0, 'damaged' => 0, 'missing' => 0],
+    ], now()->toDateString(), null, $this->user->id);
+
+    expect((float) $item->fresh()->missing_qty)->toBe(2.0);
+    expect((float) $settled->missing_charge)->toBe(800.0);
+});
+
