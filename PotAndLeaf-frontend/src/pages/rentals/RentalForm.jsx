@@ -6,6 +6,8 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
+import { useToast } from '../../lib/toast';
+import { apiMessage } from '../../lib/formErrors';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', qty: '1', rate_per_cycle: '' });
@@ -22,9 +24,10 @@ export default function RentalForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { activeCompany, isSuperAdmin, companies, companyId } = useAuth();
+  const toast = useToast();
   const presetCompanyId = searchParams.get('company_id') ?? '';
   const [formCompanyId, setFormCompanyId] = useState(() => defaultCreateCompanyId({ filterCompanyId: presetCompanyId, companyId }));
-  const [header, setHeader] = useState({ customer_id: '', location_id: '', start_date: today(), expected_end_date: '', billing_cycle: 'daily', deposit: '', auto_bill: true, notes: '' });
+  const [header, setHeader] = useState({ customer_id: '', start_date: today(), expected_end_date: '', billing_cycle: 'daily', deposit: '', auto_bill: true, notes: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -45,16 +48,11 @@ export default function RentalForm() {
   });
   const customers = data?.customers ?? [];
   const products = data?.products ?? [];
-  const locations = data?.locations ?? [];
-
-  useEffect(() => {
-    if (!locations.length || header.location_id) return;
-    const def = locations.find((l) => l.is_default) ?? locations[0];
-    if (def) setHeader((h) => ({ ...h, location_id: def.id }));
-  }, [locations, header.location_id]);
 
   const err = (k) => errors[k]?.[0];
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+  const stockFor = (productId) => Number(products.find((p) => p.id === productId)?.current_stock) || 0;
+  const lowStockLines = () => lines.filter((l) => l.product_id && Number(l.qty) > stockFor(l.product_id));
 
   async function save() {
     if (!companyReady || !targetCompanyId) {
@@ -64,9 +62,13 @@ export default function RentalForm() {
 
     setErrors({}); setSaving(true);
     try {
+      const short = lowStockLines();
+      if (short.length) {
+        const p = products.find((x) => x.id === short[0].product_id);
+        toast.info(`Not enough ${p?.name ?? 'stock'}: ${stockFor(short[0].product_id)} available, ${short[0].qty} required. Activation will need more stock.`);
+      }
       const res = await api.post('/rentals', {
         customer_id: header.customer_id,
-        location_id: header.location_id || null,
         start_date: header.start_date, expected_end_date: header.expected_end_date || null,
         billing_cycle: header.billing_cycle,
         auto_bill: header.auto_bill,
@@ -76,7 +78,9 @@ export default function RentalForm() {
       const cid = res.data.data.company_id ?? targetCompanyId;
       navigate(cid ? `/rentals/${res.data.data.id}?company_id=${cid}` : `/rentals/${res.data.data.id}`);
     } catch (e) {
-      setErrors(e.response?.data?.errors ?? { _: [e.response?.data?.message ?? 'Could not save rental.'] });
+      const message = apiMessage(e, 'Could not save rental.');
+      setErrors(e.response?.data?.errors ?? { _: [message] });
+      toast.error(message);
     } finally { setSaving(false); }
   }
 
@@ -146,12 +150,6 @@ export default function RentalForm() {
           <Field label="Start date" required error={err('start_date')}><Input type="date" value={header.start_date} onChange={(e) => setHeader((h) => ({ ...h, start_date: e.target.value }))} /></Field>
           <Field label="Expected end (optional)" error={err('expected_end_date')}><Input type="date" value={header.expected_end_date} onChange={(e) => setHeader((h) => ({ ...h, expected_end_date: e.target.value }))} /></Field>
           <Field label="Security deposit (₹)" error={err('deposit')}><Input type="number" step="0.01" value={header.deposit} onChange={(e) => setHeader((h) => ({ ...h, deposit: e.target.value }))} /></Field>
-          <Field label="Issue from location" error={err('location_id')}>
-            <Select value={header.location_id} onChange={(e) => setHeader((h) => ({ ...h, location_id: e.target.value }))} className={selectCls}>
-              <option value="">Company stock</option>
-              {locations.map((l) => <option key={l.id} value={l.id}>{l.name}{l.is_default ? ' (default)' : ''}</option>)}
-            </Select>
-          </Field>
           <Field label="Auto-bill on cycle">
             <label className="flex h-10 items-center gap-2 text-sm">
               <input type="checkbox" checked={header.auto_bill} onChange={(e) => setHeader((h) => ({ ...h, auto_bill: e.target.checked }))} className="size-4 rounded border-line" />
@@ -182,12 +180,17 @@ export default function RentalForm() {
                       <option value="">Select…</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name}{p.is_rental && p.rental_daily_rate != null ? ` · ₹${p.rental_daily_rate}/day` : ''}
+                          {p.name}{p.is_rental && p.rental_daily_rate != null ? ` · ₹${p.rental_daily_rate}/day` : ''} · {p.current_stock ?? 0} in stock
                         </option>
                       ))}
                     </Select>
                   </td>
-                  <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
+                  <td className="px-3 py-2">
+                    <input type="number" step="0.001" min="0" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} />
+                    {line.product_id && Number(line.qty) > stockFor(line.product_id) && (
+                      <p className="mt-1 text-[11px] text-danger">Only {stockFor(line.product_id)} in stock</p>
+                    )}
+                  </td>
                   <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.rate_per_cycle} onChange={(e) => setLine(i, { rate_per_cycle: e.target.value })} /></td>
                   <td className="px-3 py-2"><button onClick={() => setLines((p) => (p.length === 1 ? p : p.filter((_, idx) => idx !== i)))} className="rounded-md p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button></td>
                 </tr>

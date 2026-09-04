@@ -56,6 +56,14 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
     setPage(1);
   }, [initialProductId]);
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setApplied((a) => (a.search === filters.search ? a : { ...a, search: filters.search }));
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [filters.search]);
+
   const { data: formData } = useQuery({
     queryKey: ['inventory-ledger-form', activeCompany?.id, companyParams],
     queryFn: () => api.get('/inventory/ledger/form-data', { params: companyParams }).then((r) => r.data.data),
@@ -181,7 +189,7 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
                   value={filters.search}
                   onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
                   onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
-                  placeholder="Search…"
+                  placeholder="Search as you type…"
                   className="pl-9"
                 />
               </div>

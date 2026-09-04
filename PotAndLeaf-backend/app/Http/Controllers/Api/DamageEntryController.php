@@ -24,7 +24,7 @@ class DamageEntryController extends Controller
         abort_unless($request->user()->hasPermission('damage.view', $this->company($request)->id), 403);
 
         return $this->ok(DamageEntryResource::collection(
-            $this->damage->list($this->listCompanyId($request), $request->only(['product_id', 'location_id', 'from', 'to', 'per_page']))
+            $this->damage->list($this->listCompanyId($request), $request->only(['product_id', 'location_id', 'from', 'to', 'search', 'per_page']))
         ));
     }
 

@@ -23,6 +23,11 @@ function LevelsTab({ onViewLedger, companyParams }) {
   const [debounced, setDebounced] = useState('');
   const [lowOnly, setLowOnly] = useState(false);
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const { data, isLoading } = useQuery({
     queryKey: ['inventory', 'stock', activeCompany?.id, companyParams, debounced, lowOnly],
     queryFn: () => api.get('/inventory/stock', { params: { ...companyParams, search: debounced, low_only: lowOnly ? 1 : 0 } }).then((r) => r.data),
@@ -45,10 +50,10 @@ function LevelsTab({ onViewLedger, companyParams }) {
         </div>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        <form onSubmit={(e) => { e.preventDefault(); setDebounced(search); }} className="relative max-w-md flex-1">
+        <div className="relative max-w-md flex-1">
           <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" className="pl-9" />
-        </form>
+        </div>
         <label className="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} className="size-4 rounded border-line text-leaf focus:ring-leaf/40" />
           Low stock only
@@ -100,15 +105,22 @@ function LevelsTab({ onViewLedger, companyParams }) {
 
 function ValuationTab({ companyParams }) {
   const { activeCompany } = useAuth();
+  const [search, setSearch] = useState('');
   const { data, isLoading } = useQuery({
     queryKey: ['inventory', 'valuation', activeCompany?.id, companyParams],
     queryFn: () => api.get('/inventory/valuation', { params: companyParams }).then((r) => r.data.data),
   });
   if (isLoading) return <div className="flex justify-center py-16"><Spinner className="size-6" /></div>;
-  const rows = data?.items ?? [];
+  const all = data?.items ?? [];
+  const q = search.trim().toLowerCase();
+  const rows = q ? all.filter((p) => `${p.name} ${p.sku}`.toLowerCase().includes(q)) : all;
   const t = data?.totals ?? {};
   return (
     <div className="space-y-4">
+      <div className="relative max-w-md">
+        <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" className="pl-9" />
+      </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Products" value={t.products ?? 0} tone="info" />
         <StatCard label="Total units" value={t.total_units ?? 0} tone="default" />
@@ -143,15 +155,22 @@ function ValuationTab({ companyParams }) {
 function MovementTab({ companyParams }) {
   const { activeCompany } = useAuth();
   const [days, setDays] = useState(30);
+  const [search, setSearch] = useState('');
   const { data, isLoading } = useQuery({
     queryKey: ['inventory', 'movement', activeCompany?.id, companyParams, days],
     queryFn: () => api.get('/inventory/movement', { params: { ...companyParams, days } }).then((r) => r.data.data),
   });
-  const rows = data?.items ?? [];
+  const all = data?.items ?? [];
+  const q = search.trim().toLowerCase();
+  const rows = q ? all.filter((p) => `${p.name} ${p.sku}`.toLowerCase().includes(q)) : all;
   const s = data?.summary ?? {};
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="relative max-w-md flex-1">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" className="pl-9" />
+        </div>
         <div className="flex gap-2">
           {[30, 60, 90].map((d) => (
             <button key={d} onClick={() => setDays(d)} className={'rounded-lg px-3 py-1.5 text-sm ' + (days === d ? 'bg-leaf text-white' : 'bg-surface text-muted shadow-soft')}>{d}d</button>

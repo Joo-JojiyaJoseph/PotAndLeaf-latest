@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
@@ -194,14 +194,21 @@ export default function DamageEntriesPage() {
   const [modal, setModal] = useState(false);
   const [page, setPage] = useState(1);
   const [movementFilter, setMovementFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
 
   useEffect(() => {
     setPage(1);
   }, [filterCompanyId]);
 
+  useEffect(() => {
+    const t = setTimeout(() => { setPage(1); setDebounced(search.trim()); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const listQ = useQuery({
-    queryKey: ['damage-entries', activeCompany?.id, filterCompanyId, page],
-    queryFn: () => api.get('/damage-entries', { params: { ...companyParams, per_page: 25, page } }).then((r) => r.data),
+    queryKey: ['damage-entries', activeCompany?.id, filterCompanyId, page, debounced],
+    queryFn: () => api.get('/damage-entries', { params: { ...companyParams, per_page: 25, page, search: debounced } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     keepPreviousData: true,
   });
@@ -237,6 +244,10 @@ export default function DamageEntriesPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        <div className="relative max-w-md flex-1">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product, entry no, reason…" className="pl-9" />
+        </div>
         <Button
           size="sm"
           variant={movementFilter === '' ? 'primary' : 'outline'}

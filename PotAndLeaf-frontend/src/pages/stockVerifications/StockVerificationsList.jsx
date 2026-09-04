@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { CheckCircleIcon, PlusIcon, XCircleIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, PlusIcon, XCircleIcon, PaperAirplaneIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
@@ -23,8 +23,15 @@ export default function StockVerificationsList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
   const [rejecting, setRejecting] = useState(null); // verification being rejected
   const [reason, setReason] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['stock-verifications'] });
@@ -34,8 +41,8 @@ export default function StockVerificationsList() {
   const recordCtx = { filterCompanyId, companyId };
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['stock-verifications', activeCompany?.id, filterCompanyId, status],
-    queryFn: () => api.get('/stock-verifications', { params: { ...companyParams, status } }).then((r) => r.data),
+    queryKey: ['stock-verifications', activeCompany?.id, filterCompanyId, status, debounced],
+    queryFn: () => api.get('/stock-verifications', { params: { ...companyParams, status, search: debounced } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -80,6 +87,11 @@ export default function StockVerificationsList() {
             </Link>
           )}
         </div>
+      </div>
+
+      <div className="relative max-w-md">
+        <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search count no…" className="pl-9" />
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line">

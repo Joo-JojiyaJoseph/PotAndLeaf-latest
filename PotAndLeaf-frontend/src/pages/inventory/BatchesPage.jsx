@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExclamationTriangleIcon, PrinterIcon, QrCodeIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon, MagnifyingGlassIcon, PrinterIcon, QrCodeIcon } from '@heroicons/react/24/outline';
 import { useToast } from '../../lib/toast';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -103,12 +103,15 @@ export default function BatchesPage() {
         </Card>
       )}
 
-      <input
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        placeholder="Filter by product, SKU, barcode, batch, source…"
-        className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25"
-      />
+      <div className="relative">
+        <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+        <input
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter by product, SKU, barcode, batch, source…"
+          className="h-10 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25"
+        />
+      </div>
 
       {isLoading ? (
         <div className="flex justify-center py-16"><Spinner className="size-6" /></div>

@@ -49,26 +49,26 @@ const GROUPS = [
   {
     label: 'Commerce',
     items: [
-      { key: 'sales', label: 'Sales', to: '/sales', icon: CalculatorIcon, permission: 'sales.view' },
-      { key: 'backorders', label: 'Backorders', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
+      // { key: 'sales', label: 'Sales', to: '/sales', icon: CalculatorIcon, permission: 'sales.view' },
+      // { key: 'backorders', label: 'Backorders', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
       { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon, permission: 'rental.view' },
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon, permission: 'customers.view' },
-      { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
-      { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
+      // { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
+      // { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
     ],
   },
   {
     label: 'Setup',
     items: [
       { key: 'suppliers', label: 'Suppliers', to: '/suppliers', icon: TruckIcon, permission: 'suppliers.view' },
-      { key: 'payments', label: 'Payments', to: '/payments', icon: BanknotesIcon, permission: 'payments.view' },
-      { key: 'receipts', label: 'Receipts', to: '/receipts', icon: ReceiptRefundIcon, permission: 'receipts.view' },
+      // { key: 'payments', label: 'Payments', to: '/payments', icon: BanknotesIcon, permission: 'payments.view' },
+      // { key: 'receipts', label: 'Receipts', to: '/receipts', icon: ReceiptRefundIcon, permission: 'receipts.view' },
       { key: 'companies', label: 'Companies', to: '/companies', icon: BuildingOffice2Icon, superAdmin: true },
       { key: 'roles', label: 'Roles', to: '/roles', icon: ShieldCheckIcon, permission: 'roles.view' },
       { key: 'users', label: 'Users', to: '/users', icon: UserGroupIcon, permission: 'users.view' },
       { key: 'masters', label: 'Master data', to: '/masters', icon: TagIcon, anyOf: ['categories.view', 'subcategories.view', 'units.view'] },
       { key: 'products', label: 'Products', to: '/products', icon: TagIcon, permission: 'products.view' },
-      { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
+      // { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
     ],
   },
 ];

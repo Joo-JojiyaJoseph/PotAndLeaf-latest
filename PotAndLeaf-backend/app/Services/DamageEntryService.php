@@ -20,6 +20,14 @@ class DamageEntryService
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['product:id,sku,name'])
             ->when(filled($filters['product_id'] ?? null), fn ($q) => $q->where('product_id', $filters['product_id']))
+            ->when(filled($filters['search'] ?? null), function ($q) use ($filters) {
+                $term = '%'.$filters['search'].'%';
+                $q->where(function ($inner) use ($term) {
+                    $inner->where('entry_no', 'like', $term)
+                        ->orWhere('reason', 'like', $term)
+                        ->orWhereHas('product', fn ($p) => $p->where('name', 'like', $term)->orWhere('sku', 'like', $term));
+                });
+            })
             ->when(filled($filters['from'] ?? null), fn ($q) => $q->whereDate('entry_date', '>=', $filters['from']))
             ->when(filled($filters['to'] ?? null), fn ($q) => $q->whereDate('entry_date', '<=', $filters['to']))
             ->orderByDesc('entry_date')

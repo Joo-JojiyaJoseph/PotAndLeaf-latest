@@ -138,11 +138,21 @@ export default function RentalDetail() {
     queryClient.invalidateQueries({ queryKey: ['rentals'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
-  const activateM = useMutation({ mutationFn: () => api.post(`/rentals/${id}/activate`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/rentals/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const fail = (fallback) => (err) => toast.error(apiMessage(err, fallback));
+  const activateM = useMutation({
+    mutationFn: () => api.post(`/rentals/${id}/activate`, {}, withCompany(recordCompanyId)),
+    onSuccess: () => { invalidate(); toast.success('Rental activated — stock issued.'); },
+    onError: fail('Not enough stock to activate this rental.'),
+  });
+  const cancelM = useMutation({
+    mutationFn: () => api.delete(`/rentals/${id}`, withCompany(recordCompanyId)),
+    onSuccess: invalidate,
+    onError: fail('Could not cancel this rental.'),
+  });
   const returnM = useMutation({
     mutationFn: () => api.post(`/rentals/${id}/return`, { returns: Object.entries(returns).map(([itemId, q]) => ({ id: itemId, qty: Number(q) || 0 })) }, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); setReturning(false); },
+    onError: fail('Could not record the return.'),
   });
   const settleM = useMutation({
     mutationFn: () => api.post(`/rentals/${id}/settle`, {
@@ -219,9 +229,15 @@ export default function RentalDetail() {
           {r.can?.bill && <Button variant="outline" size="sm" onClick={openBill}><PlusIcon className="size-4" /> Generate invoice</Button>}
           {r.can?.return && <Button variant="outline" size="sm" onClick={openReturn}><ArrowUturnLeftIcon className="size-4" /> Return</Button>}
           {r.can?.settle && <Button size="sm" onClick={openSettle}><CheckCircleIcon className="size-4" /> Return &amp; settle</Button>}
-          {r.can?.activate && <Button size="sm" onClick={() => activateM.mutate()} disabled={activateM.isPending}><CheckCircleIcon className="size-4" /> Activate</Button>}
+          {r.can?.activate && <Button size="sm" onClick={() => activateM.mutate()} disabled={activateM.isPending}><CheckCircleIcon className="size-4" /> {activateM.isPending ? 'Activating…' : 'Activate'}</Button>}
         </>}
       />
+
+      {activateM.isError && (
+        <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+          {apiMessage(activateM.error, 'Not enough stock to activate this rental.')}
+        </div>
+      )}
 
       <Section title="Details">
         <InfoGrid cols={4}>

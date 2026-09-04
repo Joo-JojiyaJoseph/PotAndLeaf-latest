@@ -41,12 +41,13 @@ class RentalController extends Controller
         $customers = Customer::forCompany($company->id)->where('status', 'active')->orderBy('name')
             ->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name]);
         $products = Product::forCompany($company->id)->orderByDesc('is_rental')->orderBy('name')
-            ->get(['id', 'sku', 'name', 'retail_price', 'is_rental', 'rental_daily_rate'])
+            ->get(['id', 'sku', 'name', 'retail_price', 'current_stock', 'is_rental', 'rental_daily_rate'])
             ->map(fn ($p) => [
                 'id'                => $p->id,
                 'sku'               => $p->sku,
                 'name'              => $p->name,
                 'retail_price'      => (float) $p->retail_price,
+                'current_stock'     => (float) $p->current_stock,
                 'is_rental'         => (bool) $p->is_rental,
                 'rental_daily_rate' => $p->rental_daily_rate !== null ? (float) $p->rental_daily_rate : null,
             ]);
