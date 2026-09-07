@@ -1,10 +1,12 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircleIcon, XCircleIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, PencilSquareIcon, XCircleIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../lib/toast';
-import { Badge, Button, Card } from '../../components/ui';
+import { useConfirm } from '../../lib/confirm';
+import { Badge, Button, Card, Select } from '../../components/ui';
+import { apiMessage } from '../../lib/formErrors';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
@@ -16,8 +18,9 @@ export default function ProductionOrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { companyId } = useAuth();
+  const { companyId, isSuperAdmin } = useAuth();
   const toast = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const headerCompanyId = searchParams.get('company_id') || companyId;
 
@@ -46,17 +49,22 @@ export default function ProductionOrderDetail() {
   const completeM = useMutation({
     mutationFn: () => api.post(`/production/orders/${id}/complete`, {}, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Production completed — stock updated.'); },
-    onError: (err) => toast.error(err.response?.data?.message ?? 'Could not complete production.'),
+    onError: (err) => toast.error(apiMessage(err, 'Could not complete production.')),
   });
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/production/orders/${id}`, withCompany(recordCompanyId)),
-    onSuccess: () => { invalidate(); toast.success('Production order cancelled.'); navigate('/production'); },
-    onError: (err) => toast.error(err.response?.data?.message ?? 'Could not cancel production order.'),
+    onSuccess: () => { invalidate(); toast.success('Production deleted.'); navigate('/production'); },
+    onError: (err) => toast.error(apiMessage(err, 'Could not delete production.')),
+  });
+  const statusM = useMutation({
+    mutationFn: (status) => api.patch(`/production/orders/${id}/status`, { status }, withCompany(recordCompanyId)),
+    onSuccess: () => { invalidate(); toast.success('Status updated.'); },
+    onError: (err) => toast.error(apiMessage(err, 'Could not change status.')),
   });
   const startStageM = useMutation({
     mutationFn: (stageId) => api.post(`/production/orders/${id}/stages/${stageId}/start`, {}, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Stage started.'); },
-    onError: (err) => toast.error(err.response?.data?.message ?? err.response?.data?.errors?.stage?.[0] ?? 'Could not start stage.'),
+    onError: (err) => toast.error(apiMessage(err, 'Could not start stage.')),
   });
   const completeStageM = useMutation({
     mutationFn: (stageId) => api.post(`/production/orders/${id}/stages/${stageId}/complete`, {}, withCompany(recordCompanyId)),
@@ -65,7 +73,7 @@ export default function ProductionOrderDetail() {
       toast.success(res.data?.message ?? 'Stage completed.');
       if (res.data?.data?.status === 'completed') toast.success('Production completed — stock updated.');
     },
-    onError: (err) => toast.error(err.response?.data?.message ?? err.response?.data?.errors?.items?.[0] ?? 'Could not complete stage.'),
+    onError: (err) => toast.error(apiMessage(err, 'Could not complete stage.')),
   });
 
   if (isLoading) return <DetailLoading />;
@@ -87,25 +95,46 @@ export default function ProductionOrderDetail() {
         subtitle={`${o.output_quantity} × ${o.output_product} · ${formatDate(o.order_date)}`}
         backTo="/production"
         actions={<>
-          <Badge tone={statusTone[o.status] ?? 'default'}>{o.status}</Badge>
-          {o.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
+          <Badge tone={statusTone[o.status] ?? 'default'}>{o.status.replace('_', ' ')}</Badge>
+          {o.can?.update && (
+            <Button variant="outline" size="sm" onClick={() => navigate(o.company_id ? `/production/${o.id}/edit?company_id=${o.company_id}` : `/production/${o.id}/edit`)}>
+              <PencilSquareIcon className="size-4" /> Edit
+            </Button>
+          )}
+          {o.can?.cancel && (
+            <Button variant="ghost" size="sm" disabled={cancelM.isPending} onClick={async () => {
+              const ok = await confirm({ title: 'Delete production?', message: 'Are you sure you want to delete this production?', confirmLabel: 'Delete' });
+              if (ok) cancelM.mutate();
+            }}><XCircleIcon className="size-4" /> Delete</Button>
+          )}
           {o.can?.complete && <Button size="sm" onClick={() => completeM.mutate()} disabled={completeM.isPending}><CheckCircleIcon className="size-4" /> Complete</Button>}
         </>}
       />
 
       <Section title="Details">
         <InfoGrid cols={4}>
-          <InfoItem label="Recipe" value={o.bom_name} />
-          <InfoItem label="Output product" value={o.output_product} />
+          <InfoItem label="Product" value={o.output_product} />
           <InfoItem label="Output quantity" value={o.output_quantity} />
-          <InfoItem label="Unit cost" value={o.status === 'completed' ? formatCurrency(o.output_unit_cost) : '—'} mono />
-          <InfoItem label="Total input cost" value={o.status === 'completed' ? formatCurrency(o.total_input_cost) : '—'} mono />
+          <InfoItem label="Unit cost" value={o.status === 'completed' ? formatCurrency(o.output_unit_cost) : (estimateQ.data ? formatCurrency(estimateQ.data.unit_cost) : '—')} mono />
+          <InfoItem label="Material cost" value={o.status === 'completed' ? formatCurrency(o.total_input_cost) : (estimateQ.data ? formatCurrency(estimateQ.data.total_material_cost) : '—')} mono />
           <InfoItem label="Supervisor" value={o.supervisor || '—'} />
-          <InfoItem label="Location" value={o.location || '—'} />
           <InfoItem label="Completed" value={o.completed_at ? formatDate(o.completed_at) : null} />
           <InfoItem label="Notes" value={o.notes} />
         </InfoGrid>
       </Section>
+
+      {isSuperAdmin && o.can?.change_status && (
+        <Section title="Super admin">
+          <div className="max-w-xs">
+            <Select value={o.status} onChange={(e) => statusM.mutate(e.target.value)} className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm" disabled={statusM.isPending}>
+              <option value="draft">Draft</option>
+              <option value="in_progress">In progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </Select>
+          </div>
+        </Section>
+      )}
 
       {o.is_multi_stage && (o.stages?.length ?? 0) > 0 && o.status !== 'cancelled' && (
         <Section title="Production pipeline">
@@ -166,14 +195,16 @@ export default function ProductionOrderDetail() {
                 <th className="microlabel py-2 pr-3 font-semibold">Component</th>
                 <th className="microlabel px-3 py-2 text-right font-semibold">Required</th>
                 <th className="microlabel px-3 py-2 text-right font-semibold">Available</th>
+                <th className="microlabel px-3 py-2 text-right font-semibold">Shortage</th>
                 <th className="microlabel py-2 pl-3 text-right font-semibold">Line cost</th>
               </tr></thead>
               <tbody>
                 {(estimateQ.data.items ?? []).map((it) => (
                   <tr key={it.product_id} className="border-b border-line/60 last:border-0">
-                    <td className="py-2 pr-3 font-medium">{it.product_name}{it.wastage_pct > 0 ? ` (+${it.wastage_pct}% wastage)` : ''}</td>
+                    <td className="py-2 pr-3 font-medium">{it.product_name}</td>
                     <td className={`tnum px-3 py-2 text-right ${it.sufficient ? 'text-muted' : 'text-danger'}`}>{it.required_qty}</td>
                     <td className="tnum px-3 py-2 text-right text-muted">{it.available_stock}</td>
+                    <td className={`tnum px-3 py-2 text-right ${it.shortage_qty > 0 ? 'text-danger' : 'text-muted'}`}>{it.shortage_qty || '—'}</td>
                     <td className="tnum py-2 pl-3 text-right">{formatCurrency(it.line_cost)}</td>
                   </tr>
                 ))}

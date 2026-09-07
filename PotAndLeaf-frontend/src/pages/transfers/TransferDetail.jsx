@@ -203,7 +203,7 @@ export default function TransferDetail() {
           </Button>
         </>}
       >
-        <p className="mb-3 text-sm text-muted">Enter the quantity actually received at {t.to_company ?? t.to_location}. Any shortfall returns to {t.from_company ?? t.from_location}.</p>
+        <p className="mb-3 text-sm text-muted">Enter the quantity actually received at {t.to_company ?? t.to_location}. Any shortfall returns to {t.from_company ?? t.from_location}. Missing products are created at the destination shop automatically.</p>
         <div className="space-y-2">
           {(t.items ?? []).map((it) => (
             <div key={it.id} className="flex items-center justify-between gap-3">

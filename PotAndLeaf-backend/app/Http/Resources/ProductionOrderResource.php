@@ -23,8 +23,33 @@ class ProductionOrderResource extends JsonResource
             'output_product_id' => $this->output_product_id,
             'output_product'   => $this->outputProduct?->name,
             'bom_id'           => $this->bom_id,
-            'bom_name'         => $this->bom?->name,
+            'bom_name'         => $this->outputProduct?->name ?? $this->bom?->name,
             'is_multi_stage'   => $isMultiStage,
+            'recipe'           => $this->whenLoaded('bom', function () {
+                $bom = $this->bom;
+                if (! $bom) {
+                    return null;
+                }
+                $mapItem = fn ($i) => [
+                    'component_product_id' => $i->component_product_id,
+                    'component_name'       => $i->component?->name,
+                    'qty'                  => (float) $i->qty,
+                    'current_stock'        => $i->component ? (float) $i->component->current_stock : null,
+                    'cost_price'           => $i->component ? (float) $i->component->cost_price : null,
+                ];
+
+                return [
+                    'items'  => $bom->relationLoaded('items')
+                        ? $bom->items->whereNull('bom_stage_id')->values()->map($mapItem)
+                        : [],
+                    'stages' => $bom->relationLoaded('stages')
+                        ? $bom->stages->map(fn ($s) => [
+                            'name'  => $s->name,
+                            'items' => $s->relationLoaded('items') ? $s->items->map($mapItem)->values() : [],
+                        ])->values()
+                        : [],
+                ];
+            }),
             'output_quantity'  => (float) $this->output_quantity,
             'commission_pending_qty' => (float) ($this->commission_pending_qty ?? 0),
             'supervisor_id'    => $this->supervisor_id,
@@ -79,9 +104,10 @@ class ProductionOrderResource extends JsonResource
                 })->values();
             }),
             'can'              => [
-                'update'   => $this->status === 'draft' && $user?->hasPermission('production.create', $companyId),
-                'complete' => $this->status === 'draft' && ! $isMultiStage && $user?->hasPermission('production.complete', $companyId),
-                'cancel'   => in_array($this->status, ['draft', 'in_progress', 'completed'], true) && $user?->hasPermission('production.delete', $companyId),
+                'update'        => $this->status === 'draft' && $user?->hasPermission('production.create', $companyId),
+                'complete'      => $this->status === 'draft' && ! $isMultiStage && $user?->hasPermission('production.complete', $companyId),
+                'cancel'        => in_array($this->status, ['draft', 'in_progress', 'completed'], true) && $user?->hasPermission('production.delete', $companyId),
+                'change_status' => (bool) $user?->is_super_admin,
             ],
         ];
     }

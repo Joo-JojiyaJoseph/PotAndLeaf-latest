@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, PlusIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
@@ -67,6 +67,7 @@ export default function TransfersList() {
                   <th className="microlabel px-4 py-2.5 font-semibold">To</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Items</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
+                  <th className="microlabel px-4 py-2.5" />
                 </tr></thead>
                 <tbody>
                   {rows.map((t) => (
@@ -77,6 +78,11 @@ export default function TransfersList() {
                       <td className="px-4 py-2.5">{t.to_company ?? t.to_location}</td>
                       <td className="tnum px-4 py-2.5 text-right text-muted">{t.items_count ?? '—'}</td>
                       <td className="px-4 py-2.5"><Badge tone={tone[t.status] ?? 'default'}>{t.status.replace('_', ' ')}</Badge></td>
+                      <td className="px-4 py-2.5 text-right">
+                        <Button variant="outline" size="sm" onClick={() => navigate(recordDetailPath('/transfers', t, recordCtx))}>
+                          <EyeIcon className="size-4" /> View
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

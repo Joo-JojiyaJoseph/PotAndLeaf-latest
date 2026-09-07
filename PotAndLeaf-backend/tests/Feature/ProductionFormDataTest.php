@@ -24,6 +24,26 @@ it('loads production form-data including supervisors', function () {
         ]);
 });
 
+it('includes stock and recipe lines on form-data products and boms', function () {
+    $output = $this->createProduct(['name' => 'Finished Rose']);
+    $component = $this->createProduct(['name' => 'Soil Mix', 'sku' => 'SOIL-FD', 'current_stock' => 15, 'cost_price' => 6]);
+
+    Bom::create([
+        'company_id' => $this->company->id,
+        'product_id' => $output->id,
+        'name' => 'Rose recipe',
+        'output_qty' => 1,
+        'is_active' => true,
+    ])->items()->create(['component_product_id' => $component->id, 'qty' => 2]);
+
+    $response = $this->getJson('/api/production/form-data', $this->apiHeaders())->assertOk();
+    $product = collect($response->json('data.products'))->firstWhere('id', $component->id);
+    expect($product)->toMatchArray(['current_stock' => 15, 'cost_price' => 6]);
+
+    $bom = collect($response->json('data.boms'))->firstWhere('product_id', $output->id);
+    expect($bom['items'][0]['qty'])->toBe(2);
+});
+
 it('excludes inactive boms from form-data', function () {
     $output = $this->createProduct(['name' => 'Finished Rose']);
     $component = $this->createProduct(['name' => 'Soil Mix', 'sku' => 'SOIL-1']);

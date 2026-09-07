@@ -291,6 +291,9 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::delete('production/boms/{bom}', [ProductionController::class, 'destroyBom']);
         Route::get('production/orders', [ProductionController::class, 'orders']);
         Route::post('production/orders', [ProductionController::class, 'storeOrder']);
+        Route::post('production', [ProductionController::class, 'storeProduction']);
+        Route::put('production/{productionOrder}', [ProductionController::class, 'updateProduction']);
+        Route::patch('production/orders/{productionOrder}/status', [ProductionController::class, 'updateStatus']);
         Route::get('production/orders/{productionOrder}', [ProductionController::class, 'showOrder']);
         Route::put('production/orders/{productionOrder}', [ProductionController::class, 'updateOrder']);
         Route::post('production/orders/{productionOrder}/complete', [ProductionController::class, 'complete']);

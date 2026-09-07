@@ -13,11 +13,21 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('phone')->nullable()->after('email');
-            $table->boolean('is_super_admin')->default(false)->after('phone');
-            $table->boolean('is_active')->default(true)->after('is_super_admin');
-        });
+        if (! Schema::hasColumn('users', 'phone')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('phone')->nullable();
+            });
+        }
+        if (! Schema::hasColumn('users', 'is_super_admin')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->boolean('is_super_admin')->default(false);
+            });
+        }
+        if (! Schema::hasColumn('users', 'is_active')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->boolean('is_active')->default(true);
+            });
+        }
     }
 
     public function down(): void

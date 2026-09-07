@@ -6,6 +6,9 @@ use App\Models\Company;
 use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductBatch;
+use App\Models\ProductBrand;
+use App\Models\ProductCategory;
+use App\Models\ProductUnit;
 use App\Models\StockTransfer;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -398,22 +401,11 @@ class TransferService
     private function receiveInterLine(StockTransfer $transfer, $item, float $received, float $rejected, ?int $userId): void
     {
         $destCompanyId = $transfer->to_company_id;
-        $sourceProduct = Product::forCompany($transfer->company_id)->lockForUpdate()->find($item->product_id);
+        $sourceProduct = Product::query()->lockForUpdate()->find($item->product_id);
         $sourceBatch = $item->product_batch_id ? ProductBatch::find($item->product_batch_id) : null;
 
         if ($received > 0 && $destCompanyId) {
-            $sku = $sourceProduct?->sku;
-            $destProduct = Product::forCompany($destCompanyId)
-                ->when(filled($sku), fn ($q) => $q->where('sku', $sku))
-                ->when(blank($sku), fn ($q) => $q->where('name', $item->product_name))
-                ->lockForUpdate()
-                ->first();
-
-            if (! $destProduct) {
-                throw ValidationException::withMessages([
-                    'items' => "No matching product at destination for {$item->product_name}".($sku ? " (SKU {$sku})" : '').'.',
-                ]);
-            }
+            $destProduct = $this->ensureDestinationProduct($destCompanyId, $sourceProduct, $item);
 
             $destBatch = ProductBatch::create([
                 'company_id'       => $destCompanyId,
@@ -526,6 +518,157 @@ class TransferService
 
             return $transfer->refresh();
         });
+    }
+
+    /**
+     * Match the destination SKU if it already exists; otherwise copy the source
+     * product into the destination company so receive is never blocked.
+     */
+    private function ensureDestinationProduct(int|string $destCompanyId, ?Product $sourceProduct, $item): Product
+    {
+        $sourceProduct?->loadMissing(['category', 'brand', 'unit']);
+        $sku = $sourceProduct?->sku;
+        $name = $sourceProduct?->name ?: ($item->product_name ?? 'Transferred product');
+
+        $destProduct = $this->findDestinationProduct($destCompanyId, $sku, $name);
+        if ($destProduct) {
+            return $destProduct;
+        }
+
+        if (filled($sku)) {
+            $trashed = Product::onlyTrashed()->forCompany($destCompanyId)->whereRaw('LOWER(sku) = ?', [mb_strtolower($sku)])->first();
+            if ($trashed) {
+                $trashed->restore();
+
+                return $this->findDestinationProduct($destCompanyId, $sku, $name) ?? $trashed;
+            }
+        }
+
+        try {
+            return $this->copyProductToCompany($destCompanyId, $sourceProduct, $sku, $name);
+        } catch (\Illuminate\Database\QueryException $e) {
+            $existing = $this->findDestinationProduct($destCompanyId, $sku, $name);
+            if ($existing) {
+                return $existing;
+            }
+            throw $e;
+        }
+    }
+
+    private function findDestinationProduct(int|string $destCompanyId, ?string $sku, string $name): ?Product
+    {
+        $query = Product::forCompany($destCompanyId)->lockForUpdate();
+        if (filled($sku)) {
+            return $query->whereRaw('LOWER(sku) = ?', [mb_strtolower($sku)])->first();
+        }
+
+        return $query->where('name', $name)->first();
+    }
+
+    private function copyProductToCompany(int|string $destCompanyId, ?Product $sourceProduct, ?string $sku, string $name): Product
+    {
+        $destSku = filled($sku) ? $sku : $this->nextDestinationSku($destCompanyId);
+
+        if (! $sourceProduct) {
+            return Product::create([
+                'company_id'      => $destCompanyId,
+                'sku'             => $destSku,
+                'name'            => $name ?: 'Transferred product',
+                'gst_rate'        => 0,
+                'mrp'             => 0,
+                'cost_price'      => 0,
+                'dealer_price'    => 0,
+                'wholesale_price' => 0,
+                'retail_price'    => 0,
+                'opening_stock'   => 0,
+                'current_stock'   => 0,
+                'status'          => 'active',
+            ]);
+        }
+
+        $payload = [
+            'company_id'        => $destCompanyId,
+            'sku'               => $destSku,
+            'name'              => $sourceProduct->name,
+            'barcode'           => $sourceProduct->barcode,
+            'hsn_code'          => $sourceProduct->hsn_code,
+            'description'       => $sourceProduct->description,
+            'gst_rate'          => $sourceProduct->gst_rate ?? 0,
+            'mrp'               => $sourceProduct->mrp ?? 0,
+            'cost_price'        => $sourceProduct->cost_price ?? 0,
+            'dealer_price'      => $sourceProduct->dealer_price ?? 0,
+            'wholesale_price'   => $sourceProduct->wholesale_price ?? 0,
+            'retail_price'      => $sourceProduct->retail_price ?? 0,
+            'reorder_level'     => $sourceProduct->reorder_level ?? 0,
+            'opening_stock'     => 0,
+            'current_stock'     => 0,
+            'length_cm'         => $sourceProduct->length_cm,
+            'width_cm'          => $sourceProduct->width_cm,
+            'height_cm'         => $sourceProduct->height_cm,
+            'images'            => $sourceProduct->images,
+            'status'            => $sourceProduct->status ?: 'active',
+            'is_rental'         => (bool) $sourceProduct->is_rental,
+            'rental_daily_rate' => $sourceProduct->rental_daily_rate,
+        ];
+
+        try {
+            $payload['category_id'] = $this->replicateMaster(ProductCategory::class, $destCompanyId, $sourceProduct->category);
+            $payload['brand_id'] = $this->replicateMaster(ProductBrand::class, $destCompanyId, $sourceProduct->brand);
+            $payload['unit_id'] = $this->replicateMaster(ProductUnit::class, $destCompanyId, $sourceProduct->unit, ['short_name']);
+        } catch (\Throwable) {
+            $payload['category_id'] = $payload['category_id'] ?? null;
+            $payload['brand_id'] = $payload['brand_id'] ?? null;
+            $payload['unit_id'] = $payload['unit_id'] ?? null;
+        }
+
+        return Product::create($payload);
+    }
+
+    private function replicateMaster(string $model, int|string $companyId, ?object $source, array $extra = []): ?string
+    {
+        if (! $source) {
+            return null;
+        }
+
+        $existing = $model::query()
+            ->where('company_id', $companyId)
+            ->where(fn ($q) => $q->where('code', $source->code)->orWhere('name', $source->name))
+            ->first();
+        if ($existing) {
+            return $existing->id;
+        }
+
+        $payload = [
+            'company_id'  => $companyId,
+            'code'        => $this->uniqueMasterCode($model, $companyId, (string) $source->code),
+            'name'        => $source->name,
+            'description' => $source->description,
+            'status'      => $source->status ?: 'active',
+        ];
+        foreach ($extra as $field) {
+            $payload[$field] = $source->{$field} ?? null;
+        }
+
+        return $model::create($payload)->id;
+    }
+
+    private function uniqueMasterCode(string $model, int|string $companyId, string $code): string
+    {
+        $base = $code !== '' ? $code : 'X';
+        $candidate = $base;
+        $n = 1;
+        while ($model::query()->where('company_id', $companyId)->where('code', $candidate)->exists()) {
+            $candidate = $base.'-'.$n++;
+        }
+
+        return $candidate;
+    }
+
+    private function nextDestinationSku(int|string $companyId): string
+    {
+        $count = Product::withTrashed()->forCompany($companyId)->count();
+
+        return 'SKU-'.str_pad((string) ($count + 1), 5, '0', STR_PAD_LEFT);
     }
 
     private function logTransfer(int|string $companyId, ?int $userId, string $action, StockTransfer $transfer, string $description, ?array $meta = null): void

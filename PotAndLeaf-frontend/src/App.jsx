@@ -38,6 +38,7 @@ import TransferForm from './pages/transfers/TransferForm';
 import TransferDetail from './pages/transfers/TransferDetail';
 import LocationsList from './pages/locations/LocationsList';
 import ProductionList from './pages/production/ProductionList';
+import ProductionForm from './pages/production/ProductionForm';
 import ProductionOrderDetail from './pages/production/ProductionOrderDetail';
 import RentalsList from './pages/rentals/RentalsList';
 import RentalForm from './pages/rentals/RentalForm';
@@ -123,6 +124,8 @@ export default function App() {
           <Route path="transfers/:id" element={<PermissionRoute permission="transfers.view"><TransferDetail /></PermissionRoute>} />
           <Route path="locations" element={<PermissionRoute permission="locations.view"><LocationsList /></PermissionRoute>} />
           <Route path="production" element={<PermissionRoute permission="production.view"><ProductionList /></PermissionRoute>} />
+          <Route path="production/new" element={<PermissionRoute permission="production.create"><ProductionForm /></PermissionRoute>} />
+          <Route path="production/:id/edit" element={<PermissionRoute permission="production.create"><ProductionForm /></PermissionRoute>} />
           <Route path="production/orders/:id" element={<PermissionRoute permission="production.view"><ProductionOrderDetail /></PermissionRoute>} />
           <Route path="rentals" element={<PermissionRoute permission="rental.view"><RentalsList /></PermissionRoute>} />
           <Route path="rentals/new" element={<PermissionRoute permission="rental.create"><RentalForm /></PermissionRoute>} />

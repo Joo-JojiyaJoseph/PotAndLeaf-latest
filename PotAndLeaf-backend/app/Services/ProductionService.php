@@ -89,7 +89,7 @@ class ProductionService
                     }
                 }
             } else {
-                $bom->items()->createMany(collect($data['items'])->map(fn ($i) => [
+                $bom->items()->createMany(collect($data['items'] ?? [])->map(fn ($i) => [
                     'component_product_id' => $i['component_product_id'],
                     'qty'                  => $i['qty'],
                     'wastage_pct'          => $i['wastage_pct'] ?? 0,
@@ -139,17 +139,135 @@ class ProductionService
             throw ValidationException::withMessages(['bom_id' => 'Bill of materials not found or has no components.']);
         }
 
-        $plan = $this->buildConsumptionPlan($bom, $outputQuantity, $companyId, lock: false);
-        $totalCost = round(collect($plan)->sum('line_cost'), 2);
-        $unitCost = $outputQuantity > 0 ? round($totalCost / $outputQuantity, 4) : 0.0;
+        return $this->summarizePlan($this->buildConsumptionPlan($bom, $outputQuantity, $companyId, lock: false), $outputQuantity);
+    }
 
-        return [
-            'output_quantity'     => round($outputQuantity, 3),
-            'total_material_cost' => $totalCost,
-            'unit_cost'           => $unitCost,
-            'can_complete'        => collect($plan)->every(fn ($row) => $row['sufficient']),
-            'items'               => $plan,
-        ];
+    /** Live estimate from the form lines (no BOM required). */
+    public function estimateFromLines(int|string $companyId, float $outputQuantity, array $lines): array
+    {
+        $ids = collect($lines)->pluck('component_product_id')->filter()->unique()->values();
+        $products = Product::forCompany($companyId)->whereIn('id', $ids)->get(['id', 'name', 'cost_price', 'current_stock'])->keyBy('id');
+        $plan = [];
+        foreach ($lines as $line) {
+            $product = $products[$line['component_product_id'] ?? ''] ?? null;
+            if (! $product) {
+                continue;
+            }
+            $needed = round((float) ($line['qty'] ?? 0) * $outputQuantity, 3);
+            $available = (float) $product->current_stock;
+            $unitCost = (float) $product->cost_price;
+            $plan[] = [
+                'product_id'      => $product->id,
+                'product_name'    => $product->name,
+                'recipe_qty'      => $needed,
+                'wastage_pct'     => 0,
+                'required_qty'    => $needed,
+                'available_stock' => $available,
+                'shortage_qty'    => round(max(0, $needed - $available), 3),
+                'unit_cost'       => $unitCost,
+                'line_cost'       => round($needed * $unitCost, 2),
+                'sufficient'      => $available >= $needed,
+            ];
+        }
+
+        return $this->summarizePlan($plan, $outputQuantity);
+    }
+
+    /**
+     * Create or update a production from one form: product + components (or stages),
+     * then optionally complete a single-step run.
+     */
+    public function saveProduction(int|string $companyId, array $data, ?int $userId = null, ?ProductionOrder $order = null): ProductionOrder
+    {
+        if ($order && ! $order->isDraft()) {
+            throw ValidationException::withMessages(['status' => 'Only draft production can be edited.']);
+        }
+
+        return DB::transaction(function () use ($companyId, $data, $userId, $order) {
+            $bomPayload = [
+                'product_id' => $data['product_id'] ?? null,
+                'new_product' => $data['new_product'] ?? null,
+                'name' => 'Production',
+                'output_qty' => 1,
+                'is_active' => true,
+                'items' => $data['items'] ?? null,
+                'stages' => $data['stages'] ?? null,
+            ];
+            if ($order?->bom_id && (string) $order->company_id === (string) $companyId) {
+                $bomPayload['id'] = $order->bom_id;
+            } elseif (! empty($data['product_id'])) {
+                $existing = Bom::forCompany($companyId)->where('product_id', $data['product_id'])->where('is_active', true)->first();
+                if ($existing) {
+                    $bomPayload['id'] = $existing->id;
+                }
+            }
+
+            $bom = $this->upsertBom($companyId, $bomPayload, $userId);
+            $productName = $bom->product?->name ?? $bom->name;
+            if ($bom->name === 'Production' || $bom->name === '') {
+                $bom->update(['name' => $productName]);
+            }
+
+            $orderPayload = [
+                'bom_id'          => $bom->id,
+                'output_quantity' => $data['output_quantity'],
+                'supervisor_id'   => $data['supervisor_id'] ?? null,
+                'order_date'      => $data['order_date'],
+                'notes'           => $data['notes'] ?? null,
+            ];
+
+            if ($order) {
+                if ((string) $order->company_id !== (string) $companyId) {
+                    $order->update(['company_id' => $companyId, 'location_id' => null]);
+                }
+                $order = $this->updateOrder($order->fresh(), $orderPayload, $userId);
+                $this->syncDraftStages($order, $bom, $data['supervisor_id'] ?? $order->supervisor_id);
+            } else {
+                $order = $this->createOrder($companyId, $orderPayload, $userId);
+            }
+
+            if (! empty($data['complete']) && ! $bom->isMultiStage()) {
+                return $this->complete($order->fresh(), $userId);
+            }
+
+            return $order->fresh()->load([
+                'items', 'stages.supervisor:id,name', 'outputProduct:id,sku,name',
+                'bom.items.component:id,sku,name,current_stock,cost_price',
+                'bom.stages.items.component:id,sku,name,current_stock,cost_price',
+                'supervisor:id,name',
+            ]);
+        });
+    }
+
+    public function updateStatus(ProductionOrder $order, string $status, ?int $userId = null): ProductionOrder
+    {
+        if ($status === $order->status) {
+            return $order->fresh(['items', 'stages', 'outputProduct:id,sku,name', 'supervisor:id,name']);
+        }
+
+        if ($status === 'cancelled') {
+            return $this->cancel($order, $userId);
+        }
+
+        if ($status === 'completed') {
+            if ($order->isMultiStage()) {
+                throw ValidationException::withMessages(['status' => 'Complete each production stage individually.']);
+            }
+
+            return $this->complete($order, $userId);
+        }
+
+        if (! $order->isDraft() && ! $order->isInProgress()) {
+            throw ValidationException::withMessages(['status' => 'Only open production can change to this status.']);
+        }
+
+        if (! in_array($status, ['draft', 'in_progress'], true)) {
+            throw ValidationException::withMessages(['status' => 'Unsupported status.']);
+        }
+
+        $order->update(['status' => $status]);
+
+        return $order->fresh(['items', 'stages', 'outputProduct:id,sku,name', 'supervisor:id,name']);
     }
 
     // ---- Production orders ----
@@ -244,7 +362,7 @@ class ProductionService
         $order->update([
             'bom_id'            => $bom->id,
             'output_product_id' => $bom->product_id,
-            'location_id'       => $data['location_id'] ?? null,
+            'location_id'       => $data['location_id'] ?? $order->location_id,
             'supervisor_id'     => $data['supervisor_id'] ?? null,
             'order_date'        => $data['order_date'],
             'output_quantity'   => $data['output_quantity'],
@@ -621,6 +739,7 @@ class ProductionService
                 'wastage_pct'     => (float) ($bomItem->wastage_pct ?? 0),
                 'required_qty'    => $needed,
                 'available_stock' => $available,
+                'shortage_qty'    => round(max(0, $needed - $available), 3),
                 'unit_cost'       => $unitCost,
                 'line_cost'       => round($needed * $unitCost, 2),
                 'sufficient'      => $available >= $needed,
@@ -636,6 +755,38 @@ class ProductionService
         $wastage = max(0.0, (float) ($bomItem->wastage_pct ?? 0));
 
         return round($base * (1 + ($wastage / 100)), 3);
+    }
+
+    private function summarizePlan(array $plan, float $outputQuantity): array
+    {
+        $totalCost = round(collect($plan)->sum('line_cost'), 2);
+        $unitCost = $outputQuantity > 0 ? round($totalCost / $outputQuantity, 4) : 0.0;
+
+        return [
+            'output_quantity'     => round($outputQuantity, 3),
+            'total_material_cost' => $totalCost,
+            'unit_cost'           => $unitCost,
+            'can_complete'        => collect($plan)->every(fn ($row) => $row['sufficient']),
+            'items'               => $plan,
+        ];
+    }
+
+    private function syncDraftStages(ProductionOrder $order, Bom $bom, ?int $supervisorId): void
+    {
+        $order->stages()->delete();
+        $bom->loadMissing('stages');
+        if (! $bom->isMultiStage()) {
+            return;
+        }
+        foreach ($bom->stages as $stage) {
+            $order->stages()->create([
+                'bom_stage_id'  => $stage->id,
+                'sort_order'    => $stage->sort_order,
+                'name'          => $stage->name,
+                'status'        => 'pending',
+                'supervisor_id' => $supervisorId,
+            ]);
+        }
     }
 
     private function nextOrderNo(int|string $companyId): string

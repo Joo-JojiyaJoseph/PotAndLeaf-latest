@@ -218,3 +218,94 @@ it('lets a super-admin receive even when the company header is the source shop',
     expect($transfer->fresh()->status)->toBe('received');
     expect((float) $destProduct->fresh()->current_stock)->toBe(10.0);
 });
+
+it('creates a destination product on receive when the shop does not have it yet', function () {
+    $dest = Company::create(['name' => 'New Shop', 'code' => 'NS'.Str::upper(Str::random(3)), 'is_active' => true]);
+    $sourceProduct = $this->createProduct([
+        'sku' => 'ARECA-01',
+        'name' => 'Areca Palm',
+        'description' => 'Indoor palm',
+        'current_stock' => 40,
+        'cost_price' => 25,
+        'mrp' => 600,
+        'retail_price' => 500,
+        'wholesale_price' => 450,
+        'dealer_price' => 400,
+        'gst_rate' => 18,
+        'hsn_code' => '0602',
+        'barcode' => 'BAR-ARECA-01',
+    ]);
+
+    $transfer = StockTransfer::create([
+        'company_id'    => $this->company->id,
+        'to_company_id' => $dest->id,
+        'transfer_type' => 'inter_company',
+        'transfer_no'   => 'TRF-AUTO01',
+        'transfer_date' => now()->toDateString(),
+        'status'        => 'draft',
+    ]);
+    $item = $transfer->items()->create([
+        'product_id'   => $sourceProduct->id,
+        'product_name' => $sourceProduct->name,
+        'qty'          => 10,
+        'received_qty' => 0,
+    ]);
+
+    app(TransferService::class)->dispatch($transfer->fresh(), $this->user->id);
+    expect((float) $sourceProduct->fresh()->current_stock)->toBe(30.0);
+
+    app(TransferService::class)->receive($transfer->fresh(), [$item->id => 10], $this->user->id);
+
+    $destProduct = Product::forCompany($dest->id)->where('sku', 'ARECA-01')->first();
+    expect($destProduct)->not->toBeNull();
+    expect($destProduct->name)->toBe('Areca Palm');
+    expect($destProduct->description)->toBe('Indoor palm');
+    expect($destProduct->barcode)->toBe('BAR-ARECA-01');
+    expect($destProduct->hsn_code)->toBe('0602');
+    expect((float) $destProduct->cost_price)->toBe(25.0);
+    expect((float) $destProduct->mrp)->toBe(600.0);
+    expect((float) $destProduct->retail_price)->toBe(500.0);
+    expect((float) $destProduct->current_stock)->toBe(10.0);
+    expect((float) $sourceProduct->fresh()->current_stock)->toBe(30.0);
+    expect($transfer->fresh()->status)->toBe('received');
+});
+
+it('adds transferred quantity onto existing destination stock', function () {
+    $dest = Company::create(['name' => 'Stocked Shop', 'code' => 'SS'.Str::upper(Str::random(3)), 'is_active' => true]);
+    $sourceProduct = $this->createProduct(['sku' => 'FICUS-01', 'name' => 'Ficus', 'current_stock' => 20, 'cost_price' => 15]);
+    $destProduct = Product::create([
+        'company_id'      => $dest->id,
+        'sku'             => 'FICUS-01',
+        'name'            => 'Ficus',
+        'gst_rate'        => 18,
+        'mrp'             => 400,
+        'cost_price'      => 15,
+        'retail_price'    => 300,
+        'wholesale_price' => 250,
+        'dealer_price'    => 220,
+        'current_stock'   => 7,
+        'opening_stock'   => 7,
+        'status'          => 'active',
+    ]);
+
+    $transfer = StockTransfer::create([
+        'company_id'    => $this->company->id,
+        'to_company_id' => $dest->id,
+        'transfer_type' => 'inter_company',
+        'transfer_no'   => 'TRF-ADD01',
+        'transfer_date' => now()->toDateString(),
+        'status'        => 'draft',
+    ]);
+    $item = $transfer->items()->create([
+        'product_id'   => $sourceProduct->id,
+        'product_name' => $sourceProduct->name,
+        'qty'          => 5,
+        'received_qty' => 0,
+    ]);
+
+    app(TransferService::class)->dispatch($transfer->fresh(), $this->user->id);
+    app(TransferService::class)->receive($transfer->fresh(), [$item->id => 5], $this->user->id);
+
+    expect((float) $destProduct->fresh()->current_stock)->toBe(12.0);
+    expect((float) $sourceProduct->fresh()->current_stock)->toBe(15.0);
+});

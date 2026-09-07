@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Production\StoreProductionOrderRequest;
+use App\Http\Requests\Production\StoreProductionRequest;
 use App\Http\Requests\Production\UpsertBomRequest;
 use App\Http\Resources\BomResource;
 use App\Http\Resources\ProductionOrderResource;
@@ -29,11 +30,17 @@ class ProductionController extends Controller
 
     public function formData(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
+        $company = $this->company($request);
         $this->allow($request, 'production.view');
 
-        $products = Product::forCompany($company->id)->orderBy('name')->get(['id', 'sku', 'name'])
-            ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name]);
+        $products = Product::forCompany($company->id)->orderBy('name')->get(['id', 'sku', 'name', 'current_stock', 'cost_price'])
+            ->map(fn ($p) => [
+                'id'            => $p->id,
+                'sku'           => $p->sku,
+                'name'          => $p->name,
+                'current_stock' => (float) $p->current_stock,
+                'cost_price'    => (float) $p->cost_price,
+            ]);
         $units = ProductUnit::query()->where('company_id', $company->id)->orderBy('name')
             ->get(['id', 'name', 'short_name'])
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'short_name' => $u->short_name]);
@@ -43,10 +50,22 @@ class ProductionController extends Controller
         $boms = $this->production->boms($company->id, activeOnly: true)
             ->map(fn ($b) => [
                 'id'             => $b->id,
+                'product_id'     => $b->product_id,
                 'name'           => $b->name,
                 'product_name'   => $b->product?->name,
                 'output_qty'     => (float) $b->output_qty,
                 'is_multi_stage' => $b->isMultiStage(),
+                'items'          => $b->items->whereNull('bom_stage_id')->values()->map(fn ($i) => [
+                    'component_product_id' => $i->component_product_id,
+                    'qty'                  => (float) $i->qty,
+                ]),
+                'stages'         => $b->stages->map(fn ($s) => [
+                    'name'  => $s->name,
+                    'items' => $s->items->map(fn ($i) => [
+                        'component_product_id' => $i->component_product_id,
+                        'qty'                  => (float) $i->qty,
+                    ])->values(),
+                ])->values(),
             ]);
 
         $supervisors = User::query()
@@ -113,6 +132,54 @@ class ProductionController extends Controller
         return $this->created(new ProductionOrderResource($order), 'Production order created.');
     }
 
+    public function storeProduction(StoreProductionRequest $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $order = $this->production->saveProduction($company->id, $request->validated(), $request->user()->id);
+        $completed = $order->status === 'completed';
+
+        return $this->created(
+            new ProductionOrderResource($order),
+            $completed ? 'Production completed — stock updated.' : 'Production saved as draft.',
+        );
+    }
+
+    public function updateProduction(StoreProductionRequest $request, ProductionOrder $productionOrder): JsonResponse
+    {
+        $targetCompany = $this->company($request);
+        if ((string) $productionOrder->company_id !== (string) $targetCompany->id) {
+            abort_unless($request->user()->is_super_admin, 404, 'Switch to the record company to modify this item.');
+        } else {
+            $this->assertRecordCompany($request, $productionOrder, writable: true);
+        }
+        $order = $this->production->saveProduction(
+            $this->company($request)->id,
+            $request->validated(),
+            $request->user()->id,
+            $productionOrder,
+        );
+        $completed = $order->status === 'completed';
+
+        return $this->ok(
+            new ProductionOrderResource($order),
+            $completed ? 'Production completed — stock updated.' : 'Production updated.',
+        );
+    }
+
+    public function updateStatus(Request $request, ProductionOrder $productionOrder): JsonResponse
+    {
+        abort_unless($request->user()->is_super_admin, 403);
+        $this->assertRecordCompany($request, $productionOrder, writable: true);
+        $data = $request->validate([
+            'status' => ['required', 'in:draft,in_progress,completed,cancelled'],
+        ]);
+
+        return $this->ok(
+            new ProductionOrderResource($this->production->updateStatus($productionOrder, $data['status'], $request->user()->id)),
+            'Production status updated.',
+        );
+    }
+
     public function showOrder(Request $request, ProductionOrder $productionOrder): JsonResponse
     {
         $this->allow($request, 'production.view');
@@ -120,7 +187,9 @@ class ProductionController extends Controller
 
         return $this->ok(new ProductionOrderResource($productionOrder->load([
             'items', 'stages.supervisor:id,name', 'outputProduct:id,sku,name',
-            'bom:id,name', 'batches', 'supervisor:id,name', 'location:id,name',
+            'bom.items.component:id,sku,name,current_stock,cost_price',
+            'bom.stages.items.component:id,sku,name,current_stock,cost_price',
+            'batches', 'supervisor:id,name',
         ])));
     }
 
@@ -148,9 +217,20 @@ class ProductionController extends Controller
     {
         $this->allow($request, 'production.view');
         $data = $request->validate([
-            'bom_id'          => ['required', 'uuid'],
+            'bom_id'          => ['required_without:items', 'nullable', 'uuid'],
             'output_quantity' => ['required', 'numeric', 'gt:0'],
+            'items'           => ['required_without:bom_id', 'array'],
+            'items.*.component_product_id' => ['required_with:items', 'uuid'],
+            'items.*.qty'                  => ['required_with:items', 'numeric', 'min:0'],
         ]);
+
+        if (! empty($data['items'])) {
+            return $this->ok($this->production->estimateFromLines(
+                $this->company($request)->id,
+                (float) $data['output_quantity'],
+                $data['items'],
+            ));
+        }
 
         return $this->ok($this->production->estimate(
             $this->company($request)->id,
@@ -181,7 +261,7 @@ class ProductionController extends Controller
         $this->assertRecordCompany($request, $productionOrder, writable: true);
         $this->production->cancel($productionOrder, $request->user()->id);
 
-        return $this->message('Production order cancelled.');
+        return $this->message('Production deleted.');
     }
 
     private function company(Request $request)
