@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
@@ -13,9 +13,28 @@ const statusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const today = () => new Date().toISOString().slice(0, 10);
 
+function writeCompanyId(prefill, party, filterCompanyId) {
+  return prefill?.company_id || party?.company_id || (filterCompanyId && filterCompanyId !== 'all' ? filterCompanyId : undefined);
+}
+
+function withPrefillParty(list, prefill, idKey, nameKey) {
+  const rows = [...(list ?? [])];
+  const id = prefill?.[idKey];
+  if (id && !rows.some((r) => String(r.id) === String(id))) {
+    rows.unshift({
+      id,
+      name: prefill[nameKey] || 'Selected',
+      outstanding: 0,
+      advance_balance: prefill.advance_balance ?? 0,
+      company_id: prefill.company_id,
+    });
+  }
+  return rows;
+}
+
 function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyParams }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ customer_id: '', sale_id: '', amount: '', mode: 'cash', receipt_date: today(), reference: '', notes: '' });
+  const [form, setForm] = useState({ customer_id: '', sale_id: '', amount: '', mode: 'cash', receipt_date: today(), reference: '', notes: '', is_advance: false });
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
 
@@ -36,11 +55,15 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
   }
 
   const saveM = useMutation({
-    mutationFn: () => api.post('/customer-receipts', {
-      customer_id: form.customer_id, sale_id: form.sale_id || null,
-      amount: Number(form.amount) || 0, mode: form.mode, receipt_date: form.receipt_date,
-      reference: form.reference || null, notes: form.notes || null,
-    }),
+    mutationFn: () => {
+      const party = (formData?.customers ?? []).find((c) => String(c.id) === String(form.customer_id));
+      return api.post('/customer-receipts', {
+        customer_id: form.customer_id, sale_id: form.is_advance ? null : (form.sale_id || null),
+        amount: Number(form.amount) || 0, mode: form.mode, receipt_date: form.receipt_date,
+        reference: form.reference || null, notes: form.notes || null,
+        is_advance: form.is_advance,
+      }, withCompany(writeCompanyId(prefill, party, filterCompanyId)));
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-receipts'] });
       queryClient.invalidateQueries({ queryKey: ['receivables'] });
@@ -50,19 +73,26 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
   });
 
   function handleClose() {
-    setForm({ customer_id: '', sale_id: '', amount: '', mode: 'cash', receipt_date: today(), reference: '', notes: '' });
+    setForm({ customer_id: '', sale_id: '', amount: '', mode: 'cash', receipt_date: today(), reference: '', notes: '', is_advance: false });
     setErrors({}); setApplied(null); onClose();
   }
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const err = (k) => errors[k]?.[0];
-  const customers = formData?.customers ?? [];
+  const customers = withPrefillParty(formData?.customers, prefill, 'customer_id', 'customer_name');
   const customer = customers.find((c) => String(c.id) === String(form.customer_id));
+  const invoices = (() => {
+    const list = [...(receivables ?? [])].filter((r) => r.balance > 0);
+    if (form.sale_id && !list.some((r) => String(r.id) === String(form.sale_id))) {
+      list.unshift({ id: form.sale_id, sale_no: prefill?.sale_no || 'Selected invoice', balance: Number(prefill?.balance ?? form.amount) || 0 });
+    }
+    return list;
+  })();
 
   return (
     <Modal open={open} onClose={handleClose} title="Record customer receipt"
       footer={<>
         <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-        <Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Record receipt'}</Button>
+        <Button size="sm" disabled={saveM.isPending || !form.customer_id} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Record receipt'}</Button>
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -71,12 +101,12 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
             <option value="">Select customer…</option>
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
-          {customer && <span className="mt-1 block text-xs text-muted">Outstanding: {formatCurrency(customer.outstanding)}</span>}
+          {customer && <span className="mt-1 block text-xs text-muted">Outstanding: {formatCurrency(customer.outstanding)} · Advance: {formatCurrency(customer.advance_balance ?? 0)}</span>}
         </Field>
         <Field label="Against invoice (optional)" error={err('sale_id')}>
-          <Select value={form.sale_id} onChange={set('sale_id')} className={selectCls} disabled={!form.customer_id}>
+          <Select value={form.sale_id} onChange={set('sale_id')} className={selectCls} disabled={!form.customer_id || form.is_advance}>
             <option value="">On account</option>
-            {(receivables ?? []).filter((r) => r.balance > 0).map((r) => <option key={r.id} value={r.id}>{r.sale_no} · bal {formatCurrency(r.balance)}</option>)}
+            {invoices.map((r) => <option key={r.id} value={r.id}>{r.sale_no} · bal {formatCurrency(r.balance)}</option>)}
           </Select>
         </Field>
         <Field label="Amount" required error={err('amount')}><Input type="number" step="0.01" value={form.amount} onChange={set('amount')} /></Field>
@@ -88,6 +118,101 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
         <Field label="Receipt date" required error={err('receipt_date')}><Input type="date" value={form.receipt_date} onChange={set('receipt_date')} /></Field>
         <Field label="Reference" error={err('reference')}><Input value={form.reference} onChange={set('reference')} /></Field>
         <div className="sm:col-span-2"><Field label="Notes" error={err('notes')}><Input value={form.notes} onChange={set('notes')} /></Field></div>
+        <label className="sm:col-span-2 flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-0.5 size-4 rounded border-line text-leaf" checked={form.is_advance} onChange={(e) => setForm((f) => ({ ...f, is_advance: e.target.checked, sale_id: e.target.checked ? '' : f.sale_id }))} />
+          <span>Record as customer advance (does not reduce outstanding until applied to an invoice)</span>
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
+function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyParams }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState({ customer_id: '', sale_id: '', amount: '' });
+  const [errors, setErrors] = useState({});
+  const [applied, setApplied] = useState(null);
+
+  const { data: formData } = useQuery({
+    queryKey: ['receipt-form-data', filterCompanyId],
+    queryFn: () => api.get('/customer-receipts/form-data', { params: companyParams }).then((r) => r.data.data),
+    enabled: open,
+  });
+  const { data: receivables } = useQuery({
+    queryKey: ['receivables', 'advance', filterCompanyId, form.customer_id],
+    queryFn: () => api.get('/customer-receipts/receivables', { params: { ...companyParams, customer_id: form.customer_id } }).then((r) => r.data.data.receivables),
+    enabled: open && Boolean(form.customer_id),
+  });
+
+  if (open && prefill && applied !== prefill.key) {
+    const available = Number(prefill.advance_balance ?? 0);
+    const due = Number(prefill.balance ?? 0);
+    const applyAmt = available > 0 && due > 0 ? Math.min(available, due) : (available || due);
+    setForm({
+      customer_id: String(prefill.customer_id || ''),
+      sale_id: prefill.sale_id ?? '',
+      amount: applyAmt ? String(applyAmt) : '',
+    });
+    setApplied(prefill.key);
+  }
+
+  const saveM = useMutation({
+    mutationFn: () => {
+      const party = (formData?.customers ?? []).find((c) => String(c.id) === String(form.customer_id));
+      return api.post('/customer-receipts/apply-advance', {
+        customer_id: form.customer_id,
+        sale_id: form.sale_id,
+        amount: Number(form.amount) || 0,
+      }, withCompany(writeCompanyId(prefill, party, filterCompanyId)));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['receivables'] });
+      queryClient.invalidateQueries({ queryKey: ['receipt-form-data'] });
+      setForm({ customer_id: '', sale_id: '', amount: '' });
+      setErrors({});
+      setApplied(null);
+      onClose();
+    },
+    onError: (err) => setErrors(err.response?.data?.errors ?? {}),
+  });
+
+  const err = (k) => errors[k]?.[0];
+  const customers = withPrefillParty(formData?.customers, prefill, 'customer_id', 'customer_name');
+  const customer = customers.find((c) => String(c.id) === String(form.customer_id));
+  const invoices = (() => {
+    const list = [...(receivables ?? [])].filter((r) => r.balance > 0);
+    if (form.sale_id && !list.some((r) => String(r.id) === String(form.sale_id))) {
+      list.unshift({ id: form.sale_id, sale_no: prefill?.sale_no || 'Selected invoice', balance: Number(prefill?.balance ?? 0) });
+    }
+    return list;
+  })();
+  const availableAdvance = Number(customer?.advance_balance ?? prefill?.advance_balance ?? 0);
+
+  return (
+    <Modal open={open} onClose={onClose} title="Apply customer advance"
+      footer={<>
+        <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
+        <Button size="sm" disabled={saveM.isPending || !form.customer_id || !form.sale_id || availableAdvance <= 0} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Apply advance'}</Button>
+      </>}
+    >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Customer" required error={err('customer_id')}>
+          <Select value={form.customer_id} onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value, sale_id: '' }))} className={selectCls}>
+            <option value="">Select customer…</option>
+            {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+          {customer && <span className="mt-1 block text-xs text-muted">Available advance: {formatCurrency(availableAdvance)}</span>}
+        </Field>
+        <Field label="Against invoice" required error={err('sale_id')}>
+          <Select value={form.sale_id} onChange={(e) => setForm((f) => ({ ...f, sale_id: e.target.value }))} className={selectCls} disabled={!form.customer_id}>
+            <option value="">Select invoice…</option>
+            {invoices.map((r) => <option key={r.id} value={r.id}>{r.sale_no} · bal {formatCurrency(r.balance)}</option>)}
+          </Select>
+        </Field>
+        <Field label="Amount" required error={err('amount')}>
+          <Input type="number" step="0.01" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} />
+        </Field>
       </div>
     </Modal>
   );
@@ -99,6 +224,7 @@ export default function ReceiptsList() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState('receivables');
   const [modal, setModal] = useState(false);
+  const [advanceModal, setAdvanceModal] = useState(false);
   const [prefill, setPrefill] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -127,7 +253,17 @@ export default function ReceiptsList() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer-receipts'] }); queryClient.invalidateQueries({ queryKey: ['receivables'] }); },
   });
 
-  const openRecord = (row) => { setPrefill(row ? { key: row.id, customer_id: row.customer_id, sale_id: row.id, balance: row.balance } : null); setModal(true); };
+  const rowPrefill = (row) => ({
+    key: row.id,
+    customer_id: row.customer_id,
+    customer_name: row.customer_name,
+    sale_id: row.id,
+    sale_no: row.sale_no,
+    balance: row.balance,
+    company_id: row.company_id,
+    advance_balance: row.advance_balance,
+  });
+  const openRecord = (row) => { setPrefill(row ? rowPrefill(row) : null); setModal(true); };
   const receivables = receivablesQ.data ?? [];
   const history = historyQ.data?.data ?? [];
 
@@ -140,6 +276,7 @@ export default function ReceiptsList() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
+          {can('receipts.create') && <Button variant="outline" size="sm" onClick={() => { setPrefill(null); setAdvanceModal(true); }}>Apply advance</Button>}
           {can('receipts.create') && <Button size="sm" onClick={() => openRecord(null)}><PlusIcon className="size-4" /> Record receipt</Button>}
         </div>
       </div>
@@ -180,7 +317,16 @@ export default function ReceiptsList() {
                         <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.balance)}</td>
                         <td className="px-4 py-2.5 text-muted">{r.due_date ? formatDate(r.due_date) : '—'}</td>
                         <td className="px-4 py-2.5"><Badge tone={statusTone[r.status] ?? 'default'}>{r.status}</Badge></td>
-                        <td className="px-4 py-2.5 text-right">{r.balance > 0 && can('receipts.create') && <Button variant="outline" size="sm" onClick={() => openRecord(r)}>Collect</Button>}</td>
+                        <td className="px-4 py-2.5 text-right">
+                          {r.balance > 0 && can('receipts.create') && (
+                            <div className="flex justify-end gap-1">
+                              {Number(r.advance_balance ?? 0) > 0 && (
+                                <Button variant="outline" size="sm" onClick={() => { setPrefill(rowPrefill(r)); setAdvanceModal(true); }}>Apply advance</Button>
+                              )}
+                              <Button variant="outline" size="sm" onClick={() => openRecord(r)}>Collect</Button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -214,7 +360,7 @@ export default function ReceiptsList() {
                         <td className="px-4 py-2.5 text-muted">{formatDate(r.receipt_date)}</td>
                         <td className="px-4 py-2.5 font-medium">{r.customer_name}</td>
                         <td className="tnum px-4 py-2.5 text-xs text-muted">{r.sale_no ?? '—'}</td>
-                        <td className="px-4 py-2.5"><Badge tone="info">{r.mode}</Badge></td>
+                        <td className="px-4 py-2.5"><Badge tone={r.is_advance ? 'warning' : r.applied_from_advance ? 'info' : 'info'}>{r.is_advance ? 'advance' : r.applied_from_advance ? 'applied' : r.mode}</Badge></td>
                         <td className="px-4 py-2.5 text-muted">{r.reference || '—'}</td>
                         <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.amount)}</td>
                         <td className="px-4 py-2.5 text-right">{can('receipts.delete') && <button onClick={() => voidM.mutate(r.id)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Void"><TrashIcon className="size-4" /></button>}</td>
@@ -228,6 +374,7 @@ export default function ReceiptsList() {
       )}
 
       <RecordReceiptModal open={modal} onClose={() => { setModal(false); setPrefill(null); }} prefill={prefill} filterCompanyId={filterCompanyId} companyParams={companyParams} />
+      <ApplyAdvanceModal open={advanceModal} onClose={() => { setAdvanceModal(false); setPrefill(null); }} prefill={advanceModal ? prefill : null} filterCompanyId={filterCompanyId} companyParams={companyParams} />
     </div>
   );
 }

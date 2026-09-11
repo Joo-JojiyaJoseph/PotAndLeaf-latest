@@ -152,7 +152,7 @@ export default function PurchasesList() {
                           </Button>
                         )}
                         {p.status === 'confirmed' && p.supplier?.id && p.payment_status !== 'paid' && (p.balance ?? 0) > 0.001 && (
-                          <Button variant="outline" size="sm" onClick={() => navigate('/payments', { state: { prefill: { key: p.id, supplier_id: p.supplier.id, purchase_id: p.id, balance: p.balance } } })}>
+                          <Button variant="outline" size="sm" onClick={() => navigate('/payments', { state: { prefill: { key: p.id, supplier_id: p.supplier.id, supplier_name: p.supplier.name, purchase_id: p.id, purchase_no: p.purchase_no, balance: p.balance, company_id: p.company_id } } })}>
                             <BanknotesIcon className="size-4" /> Pay
                           </Button>
                         )}

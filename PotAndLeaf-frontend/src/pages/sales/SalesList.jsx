@@ -89,7 +89,7 @@ export default function SalesList() {
                       <td className="px-4 py-2.5 text-right">
                         {s.can?.confirm && <Button size="sm" onClick={() => confirmM.mutate(s)} disabled={confirmM.isPending}><CheckCircleIcon className="size-4" /> Confirm</Button>}
                         {s.status === 'confirmed' && s.customer_id && ['unpaid', 'partial'].includes(s.payment_status) && (
-                          <Button variant="outline" size="sm" onClick={() => navigate('/receipts', { state: { prefill: { key: s.id, customer_id: s.customer_id, sale_id: s.id, balance: s.balance ?? +(s.grand_total - (s.amount_paid ?? 0)).toFixed(2) } } })}>
+                          <Button variant="outline" size="sm" onClick={() => navigate('/receipts', { state: { prefill: { key: s.id, customer_id: s.customer_id, customer_name: s.customer_name, sale_id: s.id, sale_no: s.sale_no, balance: s.balance ?? +(s.grand_total - (s.amount_paid ?? 0)).toFixed(2), company_id: s.company_id } } })}>
                             <BanknotesIcon className="size-4" /> Receipt
                           </Button>
                         )}

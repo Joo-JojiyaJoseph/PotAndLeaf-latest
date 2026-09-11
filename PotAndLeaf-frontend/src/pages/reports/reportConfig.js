@@ -50,9 +50,10 @@ export const REPORT_TABS = [
   { value: 'creditor_ledger', label: 'Creditor Ledger', shortLabel: 'Creditors', icon: BookOpenIcon, accounting: true },
   { value: 'ageing_receivables', label: 'Ageing (AR)', shortLabel: 'Ageing AR', icon: CalendarDaysIcon, accounting: true },
   { value: 'ageing_payables', label: 'Ageing (AP)', shortLabel: 'Ageing AP', icon: CalendarDaysIcon, accounting: true },
+  { value: 'reorder', label: 'Reorder Report', shortLabel: 'Reorder', icon: ClipboardDocumentListIcon, po: true },
 ];
 
-export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory }) {
+export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo }) {
   return tabs.filter((t) => {
     if (t.rental) return canRentalReports;
     if (t.production) return canProductionReports;
@@ -60,6 +61,7 @@ export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProduction
     if (t.accounting) return canAccounting;
     if (t.commission) return canCommissionReport;
     if (t.inventory) return canInventory;
+    if (t.po) return canPo;
     if (t.ho) return canHo;
     return true;
   });

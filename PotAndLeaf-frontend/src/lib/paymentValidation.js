@@ -9,7 +9,7 @@ const EPS = 1e-6;
  *
  * @returns {{ valid: boolean, errors: Record<string, string> }}
  */
-export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance = null }) {
+export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance = null, isAdvance = false }) {
   const num = Number(amount);
 
   if (amount === '' || amount == null || Number.isNaN(num)) {
@@ -18,6 +18,10 @@ export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance 
 
   if (num <= 0) {
     return { valid: false, errors: { amount: 'Amount must be greater than 0.' } };
+  }
+
+  if (isAdvance) {
+    return { valid: true, errors: {} };
   }
 
   const outstanding = Number(supplierOutstanding ?? 0);
@@ -50,18 +54,18 @@ export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance 
  *
  * @returns {{ valid: boolean, errors: Record<string, string> }}
  */
-export function validatePaymentForm({ supplierId, amount, supplierOutstanding, purchaseId, payables = [] }) {
+export function validatePaymentForm({ supplierId, amount, supplierOutstanding, purchaseId, payables = [], isAdvance = false }) {
   if (!supplierId) {
     return { valid: false, errors: { supplier_id: 'Please select a supplier.' } };
   }
 
   let grnBalance = null;
-  if (purchaseId) {
+  if (purchaseId && !isAdvance) {
     const grn = payables.find((p) => String(p.id) === String(purchaseId));
     if (grn) grnBalance = grn.balance;
   }
 
-  return validatePaymentAmount({ amount, supplierOutstanding, grnBalance });
+  return validatePaymentAmount({ amount, supplierOutstanding, grnBalance, isAdvance });
 }
 
 /** Normalise validation errors to Laravel-style field arrays for Field components. */
@@ -83,6 +87,7 @@ export function executePaymentSubmit({
   supplierOutstanding,
   purchaseId,
   payables = [],
+  isAdvance = false,
   mutate,
   setErrors,
 }) {
@@ -93,6 +98,7 @@ export function executePaymentSubmit({
     supplierOutstanding,
     purchaseId,
     payables,
+    isAdvance,
   });
   if (!result.valid) {
     setErrors(paymentErrorsToFieldState(result.errors));

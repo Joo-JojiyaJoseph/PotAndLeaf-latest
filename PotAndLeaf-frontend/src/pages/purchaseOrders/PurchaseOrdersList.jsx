@@ -5,7 +5,7 @@ import { PlusIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { recordDetailPath } from '../../lib/recordCompany';
+import { recordDetailPath, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
@@ -16,7 +16,7 @@ const STATUS_TABS = [
 const tone = { draft: 'inactive', sent: 'submitted', received: 'active', cancelled: 'blocked' };
 
 export default function PurchaseOrdersList() {
-  const { activeCompany, can, companyId } = useAuth();
+  const { activeCompany, can, companyId, isSuperAdmin } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
@@ -29,6 +29,9 @@ export default function PurchaseOrdersList() {
     placeholderData: keepPreviousData,
   });
   const rows = data?.data ?? [];
+  const createCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId: isSuperAdmin ? '' : companyId });
+  const newPoPath = createCompanyId && isSuperAdmin ? `/purchase-orders/new?company_id=${createCompanyId}` : '/purchase-orders/new';
+  const reorderPath = createCompanyId && isSuperAdmin ? `/purchase-orders/reorder?company_id=${createCompanyId}` : '/purchase-orders/reorder';
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -40,11 +43,11 @@ export default function PurchaseOrdersList() {
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
           {can('po.view') && (
-            <Link to="/purchase-orders/reorder">
+            <Link to={reorderPath}>
               <Button variant="outline" size="sm"><SparklesIcon className="size-4" /> Reorder report</Button>
             </Link>
           )}
-          {can('po.create') && <Link to="/purchase-orders/new"><Button size="sm"><PlusIcon className="size-4" /> New PO</Button></Link>}
+          {can('po.create') && <Link to={newPoPath}><Button size="sm"><PlusIcon className="size-4" /> New PO</Button></Link>}
         </div>
       </div>
 

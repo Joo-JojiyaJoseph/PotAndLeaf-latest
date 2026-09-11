@@ -1,4 +1,4 @@
-import api, { getAuthToken, getCompanyId } from './api';
+import api, { getAuthToken, getCompanyId, withCompany } from './api';
 
 /** Download a binary PDF from an authenticated API route. */
 export async function downloadPdf(path, filename, companyId) {

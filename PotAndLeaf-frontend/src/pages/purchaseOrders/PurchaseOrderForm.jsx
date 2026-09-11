@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, SparklesIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
@@ -14,17 +14,29 @@ const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 t
 
 export default function PurchaseOrderForm() {
   const navigate = useNavigate();
-  const { activeCompany } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { activeCompany, isSuperAdmin, companies, companyId } = useAuth();
+  const presetCompanyId = searchParams.get('company_id') ?? '';
+  const [formCompanyId, setFormCompanyId] = useState(() => (presetCompanyId && presetCompanyId !== 'all' ? String(presetCompanyId) : ''));
   const [header, setHeader] = useState({ supplier_id: '', po_date: today(), expected_date: '', notes: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [loadingSug, setLoadingSug] = useState(false);
 
+  const targetCompanyId = isSuperAdmin ? formCompanyId : companyId;
+  const companyCfg = targetCompanyId ? withCompany(targetCompanyId) : {};
+  const companyReady = !isSuperAdmin || Boolean(formCompanyId);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    if (presetCompanyId && presetCompanyId !== 'all') setFormCompanyId(String(presetCompanyId));
+  }, [isSuperAdmin, presetCompanyId]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ['po-form-data', activeCompany?.id],
-    queryFn: () => api.get('/purchase-orders/form-data').then((r) => r.data.data),
-    enabled: Boolean(activeCompany),
+    queryKey: ['po-form-data', targetCompanyId],
+    queryFn: () => api.get('/purchase-orders/form-data', companyCfg).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && companyReady && Boolean(targetCompanyId),
   });
   const suppliers = data?.suppliers ?? [];
   const products = data?.products ?? [];
@@ -38,6 +50,13 @@ export default function PurchaseOrderForm() {
     setLine(i, { product_id: productId, rate: p ? String(p.cost_price) : '', gst_rate: p ? String(p.gst_rate) : '' });
   }
 
+  function onCompanyChange(id) {
+    setFormCompanyId(id);
+    setHeader({ supplier_id: '', po_date: today(), expected_date: '', notes: '' });
+    setLines([emptyLine()]);
+    setErrors({});
+  }
+
   const lineTotal = (l) => {
     const taxable = (Number(l.qty) || 0) * (Number(l.rate) || 0);
     return taxable + taxable * (Number(l.gst_rate) || 0) / 100;
@@ -45,9 +64,13 @@ export default function PurchaseOrderForm() {
   const grand = lines.reduce((s, l) => s + lineTotal(l), 0);
 
   async function loadSuggestions() {
+    if (!companyReady || !targetCompanyId) {
+      setErrors({ company_id: ['Select a company first.'] });
+      return;
+    }
     setLoadingSug(true);
     try {
-      const res = await api.get('/purchase-orders/suggestions');
+      const res = await api.get('/purchase-orders/suggestions', companyCfg);
       let sug = res.data.data.suggestions ?? [];
       if (header.supplier_id) {
         const filtered = sug.filter((s) => !s.supplier_id || s.supplier_id === header.supplier_id);
@@ -61,17 +84,41 @@ export default function PurchaseOrderForm() {
   }
 
   async function save() {
+    if (!companyReady || !targetCompanyId) {
+      setErrors({ company_id: ['Select a company first.'] });
+      return;
+    }
     setErrors({}); setSaving(true);
     try {
       const res = await api.post('/purchase-orders', {
         supplier_id: header.supplier_id, po_date: header.po_date,
         expected_date: header.expected_date || null, notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, qty: Number(l.qty) || 0, rate: Number(l.rate) || 0, gst_rate: Number(l.gst_rate) || 0 })),
-      });
-      navigate(`/purchase-orders/${res.data.data.id}`);
+      }, companyCfg);
+      const cid = res.data.data.company_id ?? targetCompanyId;
+      navigate(cid ? `/purchase-orders/${res.data.data.id}?company_id=${cid}` : `/purchase-orders/${res.data.data.id}`);
     } catch (e) {
       setErrors(e.response?.data?.errors ?? { _: [e.response?.data?.message ?? 'Could not save PO.'] });
     } finally { setSaving(false); }
+  }
+
+  if (isSuperAdmin && !companyReady) {
+    return (
+      <div className="space-y-5 p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h1 className="text-lg font-semibold">New purchase order</h1><p className="text-sm text-muted">Choose which company this purchase order belongs to.</p></div>
+          <Button variant="outline" size="sm" onClick={() => navigate('/purchase-orders')}><ArrowLeftIcon className="size-4" /> Back</Button>
+        </div>
+        <Card className="p-5">
+          <Field label="Company" required error={err('company_id')}>
+            <Select value={formCompanyId} onChange={(e) => onCompanyChange(e.target.value)} className={selectCls}>
+              <option value="">Select company first…</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </Field>
+        </Card>
+      </div>
+    );
   }
 
   if (isLoading) return <div className="flex h-full items-center justify-center"><Spinner className="size-6" /></div>;
@@ -84,6 +131,18 @@ export default function PurchaseOrderForm() {
       </div>
 
       {errors._ && <div className="rounded-xl bg-amber-soft px-4 py-3 text-sm text-amber">{errors._[0]}</div>}
+
+      {isSuperAdmin && (
+        <Card className="p-5">
+          <Field label="Company" required error={err('company_id')}>
+            <Select value={formCompanyId} onChange={(e) => onCompanyChange(e.target.value)} className={selectCls}>
+              <option value="">Select company first…</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
+          </Field>
+          <p className="mt-1.5 text-xs text-muted">Suppliers and products load for the selected company.</p>
+        </Card>
+      )}
 
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

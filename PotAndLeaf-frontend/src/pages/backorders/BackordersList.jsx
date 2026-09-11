@@ -5,7 +5,7 @@ import { PlusIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
-import { recordDetailPath } from '../../lib/recordCompany';
+import { recordDetailPath, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatDate } from '../../lib/format';
 
@@ -16,7 +16,7 @@ const STATUS_TABS = [
 const tone = { open: 'submitted', partial: 'warning', fulfilled: 'active', cancelled: 'blocked' };
 
 export default function BackordersList() {
-  const { activeCompany, can, companyId } = useAuth();
+  const { activeCompany, can, companyId, isSuperAdmin } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
@@ -29,6 +29,8 @@ export default function BackordersList() {
     placeholderData: keepPreviousData,
   });
   const rows = data?.data ?? [];
+  const createCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId: isSuperAdmin ? '' : companyId });
+  const newBackorderPath = createCompanyId && isSuperAdmin ? `/backorders/new?company_id=${createCompanyId}` : '/backorders/new';
   const loadError = error?.response?.status === 403
     ? 'You do not have permission to view backorders in this company. Ask an admin to grant backorder access to your role.'
     : error?.response?.data?.message ?? 'Couldn\'t load backorders.';
@@ -42,7 +44,7 @@ export default function BackordersList() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Filter />
-          {can('backorder.create') && <Link to="/backorders/new"><Button size="sm"><PlusIcon className="size-4" /> New backorder</Button></Link>}
+          {can('backorder.create') && <Link to={newBackorderPath}><Button size="sm"><PlusIcon className="size-4" /> New backorder</Button></Link>}
         </div>
       </div>
 

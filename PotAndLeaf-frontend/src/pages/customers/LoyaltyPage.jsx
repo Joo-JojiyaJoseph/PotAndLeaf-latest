@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { SparklesIcon, PlusIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
@@ -11,7 +11,7 @@ import Pagination from '../../components/Pagination';
 const ledgerTone = { earn: 'active', redeem: 'pending', reverse: 'blocked' };
 
 export default function LoyaltyPage() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, companies, isSuperAdmin } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
@@ -36,7 +36,10 @@ export default function LoyaltyPage() {
   const [ruleForm, setRuleForm] = useState({ name: '', rule_type: 'spend', earn_rupees: '100', earn_points: '1', customer_tier: '' });
 
   const adjustM = useMutation({
-    mutationFn: () => api.post('/loyalty/adjust', { customer_id: adjustForm.customer_id, points: Number(adjustForm.points), reason: adjustForm.reason }),
+    mutationFn: () => {
+      const party = (data?.customers?.data ?? []).find((c) => String(c.id) === String(adjustForm.customer_id));
+      return api.post('/loyalty/adjust', { customer_id: adjustForm.customer_id, points: Number(adjustForm.points), reason: adjustForm.reason }, withCompany(party?.company_id));
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loyalty'] }); setAdjustOpen(false); setAdjustForm({ customer_id: '', points: '', reason: '' }); },
   });
 
@@ -119,6 +122,7 @@ export default function LoyaltyPage() {
                     <thead><tr className="border-b border-line text-left text-faint">
                       <th className="microlabel px-4 py-2.5 font-semibold">Code</th>
                       <th className="microlabel px-4 py-2.5 font-semibold">Customer</th>
+                      {isSuperAdmin && filterCompanyId === 'all' && <th className="microlabel px-4 py-2.5 font-semibold">Company</th>}
                       <th className="microlabel px-4 py-2.5 font-semibold">Phone</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Points</th>
                     </tr></thead>
@@ -129,7 +133,10 @@ export default function LoyaltyPage() {
                           <td className="px-4 py-2.5">
                             <button onClick={() => navigate(`/customers/${c.id}`)} className="font-medium text-ink hover:text-leaf">{c.name}</button>
                           </td>
-                          <td className="tnum px-4 py-2.5 text-xs text-muted">{c.phone || '—'}</td>
+                          {isSuperAdmin && filterCompanyId === 'all' && (
+                            <td className="px-4 py-2.5 text-muted">{companies.find((co) => String(co.id) === String(c.company_id))?.name || '—'}</td>
+                          )}
+                          <td className="tnum px-4 py-2.5 text-xs text-muted">{c.contact_phone || c.phone || c.whatsapp || '—'}</td>
                           <td className="tnum px-4 py-2.5 text-right font-semibold">{c.loyalty_points?.toLocaleString('en-IN') ?? 0}</td>
                         </tr>
                       ))}

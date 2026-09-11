@@ -91,7 +91,7 @@ export default function PurchaseDetail() {
             <Button variant="outline" size="sm" onClick={() => printGRN(p)}><PrinterIcon className="size-4" /> Print</Button>
             <Button variant="outline" size="sm" onClick={downloadGrnPdf}><PrinterIcon className="size-4" /> PDF</Button>
             {p.status === 'confirmed' && p.supplier?.id && (p.balance ?? 0) > 0.001 && (
-              <Button size="sm" onClick={() => navigate('/payments', { state: { prefill: { key: p.id, supplier_id: p.supplier.id, purchase_id: p.id, balance: p.balance } } })}>
+              <Button size="sm" onClick={() => navigate('/payments', { state: { prefill: { key: p.id, supplier_id: p.supplier.id, supplier_name: p.supplier.name, purchase_id: p.id, purchase_no: p.purchase_no, balance: p.balance, company_id: p.company_id } } })}>
                 <BanknotesIcon className="size-4" /> Pay {formatCurrency(p.balance)}
               </Button>
             )}

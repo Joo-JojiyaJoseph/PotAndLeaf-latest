@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircleIcon, XCircleIcon, PrinterIcon, BanknotesIcon, ChatBubbleLeftRightIcon, ArrowPathIcon, ClockIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, Modal, Spinner, Textarea } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { printInvoice } from '../../lib/invoicePrint';
@@ -126,7 +126,7 @@ export default function SaleDetail() {
             </Button>
           )}
           {s.status === 'confirmed' && s.customer_id && ['unpaid', 'partial'].includes(s.payment_status) && (
-            <Button size="sm" onClick={() => navigate('/receipts', { state: { prefill: { key: s.id, customer_id: s.customer_id, sale_id: s.id, balance: s.balance ?? +(s.grand_total - s.amount_paid).toFixed(2) } } })}>
+            <Button size="sm" onClick={() => navigate('/receipts', { state: { prefill: { key: s.id, customer_id: s.customer_id, customer_name: s.customer_name, sale_id: s.id, sale_no: s.sale_no, balance: s.balance ?? +(s.grand_total - s.amount_paid).toFixed(2), company_id: s.company_id } } })}>
               <BanknotesIcon className="size-4" /> Record receipt · {formatCurrency(s.balance ?? (s.grand_total - s.amount_paid))} due
             </Button>
           )}
@@ -230,8 +230,8 @@ export default function SaleDetail() {
 
       <Modal open={cancelModal} onClose={() => setCancelModal(false)} title="Request cancellation">
         <div className="space-y-4">
-          <Field label="Reason" required>
-            <Input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Why should this sale be cancelled?" />
+          <Field label="Cancellation reason" required>
+            <Textarea rows={5} value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="Describe why this bill should be cancelled." />
           </Field>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setCancelModal(false)}>Close</Button>

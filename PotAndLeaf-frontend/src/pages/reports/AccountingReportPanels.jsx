@@ -21,7 +21,9 @@ function BookTable({ data, loading }) {
                 <th className="microlabel px-4 py-2.5 font-semibold">Type</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Reference</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Party</th>
-                <th className="microlabel px-4 py-2.5 text-right font-semibold">Amount</th>
+                <th className="microlabel px-4 py-2.5 font-semibold">Description</th>
+                <th className="microlabel px-4 py-2.5 text-right font-semibold">Debit</th>
+                <th className="microlabel px-4 py-2.5 text-right font-semibold">Credit</th>
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
               </tr></thead>
               <tbody>
@@ -31,9 +33,9 @@ function BookTable({ data, loading }) {
                     <td className="px-4 py-2.5">{r.type === 'in' ? 'In' : 'Out'}</td>
                     <td className="px-4 py-2.5 font-medium">{r.reference}</td>
                     <td className="px-4 py-2.5 text-muted">{r.party || '—'}</td>
-                    <td className={'tnum px-4 py-2.5 text-right font-medium ' + (r.type === 'in' ? 'text-leaf' : 'text-danger')}>
-                      {r.type === 'in' ? '+' : '−'}{formatCurrency(r.amount)}
-                    </td>
+                    <td className="px-4 py-2.5 text-muted">{r.description || '—'}</td>
+                    <td className="tnum px-4 py-2.5 text-right text-leaf">{r.type === 'in' ? formatCurrency(r.debit ?? r.amount) : '—'}</td>
+                    <td className="tnum px-4 py-2.5 text-right text-danger">{r.type === 'out' ? formatCurrency(r.credit ?? r.amount) : '—'}</td>
                     <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.balance)}</td>
                   </tr>
                 ))}
@@ -63,18 +65,22 @@ function LedgerTable({ data, loading, partyLabel }) {
             <table className="w-full text-sm">
               <thead><tr className="border-b border-line text-left text-faint">
                 <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
-                <th className="microlabel px-4 py-2.5 font-semibold">Type</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Reference</th>
-                <th className="microlabel px-4 py-2.5 text-right font-semibold">Amount</th>
+                <th className="microlabel px-4 py-2.5 font-semibold">Invoice</th>
+                <th className="microlabel px-4 py-2.5 font-semibold">Description</th>
+                <th className="microlabel px-4 py-2.5 text-right font-semibold">Debit</th>
+                <th className="microlabel px-4 py-2.5 text-right font-semibold">Credit</th>
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
               </tr></thead>
               <tbody>
                 {data.rows.map((r, i) => (
                   <tr key={i} className="border-b border-line/60 last:border-0">
                     <td className="px-4 py-2.5 text-muted">{formatDate(r.date)}</td>
-                    <td className="px-4 py-2.5 capitalize">{r.type}</td>
-                    <td className="px-4 py-2.5"><div className="font-medium">{r.reference}</div><div className="text-xs text-muted">{r.description}</div></td>
-                    <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.amount)}</td>
+                    <td className="px-4 py-2.5 font-medium">{r.reference}</td>
+                    <td className="px-4 py-2.5 text-muted">{r.invoice || '—'}</td>
+                    <td className="px-4 py-2.5 text-muted">{r.description}</td>
+                    <td className="tnum px-4 py-2.5 text-right">{(r.debit ?? (r.type === 'debit' ? r.amount : 0)) ? formatCurrency(r.debit ?? r.amount) : '—'}</td>
+                    <td className="tnum px-4 py-2.5 text-right">{(r.credit ?? (r.type === 'credit' ? r.amount : 0)) ? formatCurrency(r.credit ?? r.amount) : '—'}</td>
                     <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.balance)}</td>
                   </tr>
                 ))}

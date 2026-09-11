@@ -8,6 +8,7 @@ import { Card, StatCard, Spinner, Badge, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
 import AccountingReportPanels from './AccountingReportPanels';
+import ReorderReportPanel from './ReorderReportPanel';
 import ReportsToolbar from './ReportsToolbar';
 import ReportNavGrid from './ReportNavGrid';
 import ReportEmptyState from './ReportEmptyState';
@@ -71,16 +72,17 @@ export default function ReportsPage() {
   const canAccounting = isSuperAdmin || can('*') || (can('reports.view') && (can('receipts.view') || can('payments.view')));
   const canCommissionReport = isSuperAdmin || can('*') || (can('reports.view') && can('commission.view'));
   const canInventory = isSuperAdmin || can('*') || (can('reports.view') && can('inventory.view'));
+  const canPo = isSuperAdmin || can('*') || can('po.view');
   const isRentalTab = tab.startsWith('rental_');
   const isProductionTab = tab.startsWith('production_');
   const isTransferTab = tab.startsWith('transfer_');
   const isAccountingTab = ['cash_book', 'bank_book', 'debtor_ledger', 'creditor_ledger', 'ageing_receivables', 'ageing_payables'].includes(tab);
-  const hideDateRange = tab === 'rental_current' || tab === 'transfer_in_transit' || tab === 'ageing_receivables' || tab === 'ageing_payables' || tab === 'sales_analytics' || tab === 'leaderboard' || tab === 'inventory_movement';
+  const hideDateRange = tab === 'rental_current' || tab === 'transfer_in_transit' || tab === 'ageing_receivables' || tab === 'ageing_payables' || tab === 'sales_analytics' || tab === 'leaderboard' || tab === 'inventory_movement' || tab === 'reorder';
   const [leaderboardPeriod, setLeaderboardPeriod] = useState('month');
 
   const visibleTabs = useMemo(() => filterVisibleTabs(REPORT_TABS, {
-    canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory,
-  }), [canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory]);
+    canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo,
+  }), [canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo]);
 
   const { data: formData } = useQuery({
     queryKey: ['reports-form-data', activeCompany?.id, filterCompanyId],
@@ -294,6 +296,14 @@ export default function ReportsPage() {
     placeholderData: keepPreviousData,
   });
 
+  const reorderNeedsCompany = filterCompanyId === 'all';
+  const reorderQ = useQuery({
+    queryKey: ['reports-reorder', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/purchase-orders/reorder-report', { params: companyParams }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'reorder' && canPo && !reorderNeedsCompany,
+    placeholderData: keepPreviousData,
+  });
+
   const movementRows = useMemo(() => {
     const items = movementQ.data?.items ?? [];
     if (movementClass === 'all') return items;
@@ -331,8 +341,24 @@ export default function ReportsPage() {
       opts.push({ label: 'Export PDF', path: `/reports/rental/customer/${customerId}/export`, params: { ...base, location_id: locationParam, format: 'pdf' }, file: 'rental-customer.pdf', mime: 'application/pdf' });
       opts.push({ label: 'Export Excel', path: `/reports/rental/customer/${customerId}/export`, params: { ...base, location_id: locationParam, format: 'excel' }, file: 'rental-customer.csv', mime: 'text/csv' });
     }
+    if (tab === 'cash_book') {
+      opts.push({ label: 'Export PDF', path: '/reports/accounting/cash-book/export', params: { ...base }, file: `cash-book-${range.from}.pdf`, mime: 'application/pdf' });
+    }
+    if (tab === 'bank_book') {
+      opts.push({ label: 'Export PDF', path: '/reports/accounting/bank-book/export', params: { ...base }, file: `bank-book-${range.from}.pdf`, mime: 'application/pdf' });
+    }
+    if (tab === 'debtor_ledger' && customerId) {
+      opts.push({ label: 'Export PDF', path: '/reports/accounting/debtor-ledger/export', params: { ...base, customer_id: customerId }, file: `debtor-ledger-${range.from}.pdf`, mime: 'application/pdf' });
+    }
+    if (tab === 'creditor_ledger' && supplierId) {
+      opts.push({ label: 'Export PDF', path: '/reports/accounting/creditor-ledger/export', params: { ...base, supplier_id: supplierId }, file: `creditor-ledger-${range.from}.pdf`, mime: 'application/pdf' });
+    }
+    if (tab === 'reorder' && !reorderNeedsCompany) {
+      opts.push({ label: 'Export PDF', path: '/purchase-orders/reorder-report/export', params: { ...companyParams, layout: 'flat' }, file: 'reorder-report.pdf', mime: 'application/pdf' });
+      opts.push({ label: 'Supplier-wise PDF', path: '/purchase-orders/reorder-report/export', params: { ...companyParams, layout: 'supplier' }, file: 'reorder-report-supplier.pdf', mime: 'application/pdf' });
+    }
     return opts;
-  }, [tab, range, companyParams, period, locationParam, customerId]);
+  }, [tab, range, companyParams, period, locationParam, customerId, supplierId, reorderNeedsCompany]);
 
   const modeRows = useMemo(() => Object.entries(dashQ.data?.sales?.by_mode ?? {}), [dashQ.data]);
   const marginRows = useMemo(() => {
@@ -424,7 +450,7 @@ export default function ReportsPage() {
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
             )}
-            {filterCompanyId === 'all' && ['debtor_ledger', 'creditor_ledger', 'rental_customer'].includes(tab) && (
+            {filterCompanyId === 'all' && ['debtor_ledger', 'creditor_ledger', 'rental_customer', 'reorder'].includes(tab) && (
               <span className="text-xs text-warning">Select a company for party lists</span>
             )}
           </>
@@ -1313,6 +1339,16 @@ export default function ReportsPage() {
               </>
             )}
         </Card>
+      )}
+
+      {tab === 'reorder' && (
+        <ReorderReportPanel
+          query={reorderQ}
+          needsCompany={reorderNeedsCompany}
+          onChangeFilters={() => setShowCustomDates(true)}
+          canCreatePo={can('po.create')}
+          companyId={filterCompanyId}
+        />
       )}
 
       {isAccountingTab && (
