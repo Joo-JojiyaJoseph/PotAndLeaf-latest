@@ -14,7 +14,7 @@ class ReportExportService
      * @param  array<int, string>  $headers  column keys in order
      * @param  array<string, string>  $labels  key => display label
      */
-    public function pdf(string $title, array|Collection $rows, array $headers, array $labels, array $meta = [])
+    public function pdf(string $title, array|Collection $rows, array $headers, array $labels, array $meta = [], $company = null, ?string $generatedBy = null)
     {
         $rows = collect($rows)->map(fn ($r) => (array) $r)->values()->all();
 
@@ -24,6 +24,8 @@ class ReportExportService
             'labels'  => $labels,
             'rows'    => $rows,
             'meta'    => $meta,
+            'company' => $company,
+            'generated_by' => $generatedBy,
             'generated_at' => now()->toDateTimeString(),
         ])->setPaper('a4', 'landscape');
     }

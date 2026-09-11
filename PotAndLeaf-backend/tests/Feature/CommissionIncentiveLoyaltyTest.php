@@ -276,3 +276,49 @@ it('stores and renders EOD whatsapp template', function () {
     );
     expect($msg)->toContain('Alice')->toContain('₹20.00');
 });
+
+it('returns whatsapp as loyalty contact when phone is empty', function () {
+    $this->createCustomer(['name' => 'WhatsApp Only', 'phone' => null, 'whatsapp' => '9876543210']);
+
+    $this->getJson('/api/loyalty', $this->apiHeaders())
+        ->assertOk()
+        ->assertJsonFragment([
+            'name' => 'WhatsApp Only',
+            'whatsapp' => '9876543210',
+            'contact_phone' => '9876543210',
+        ]);
+});
+
+it('lists loyalty rules when a super-admin filters all companies', function () {
+    $admin = \App\Models\User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
+
+    $this->getJson('/api/loyalty/rules?company_id=all', [
+        'Authorization' => 'Bearer '.$admin->createToken('test')->plainTextToken,
+        'X-Company-Id' => (string) $this->company->id,
+        'Accept' => 'application/json',
+    ])->assertOk();
+});
+
+it('earns loyalty spend-rule points on invoice total including gst', function () {
+    \App\Models\LoyaltyRule::create([
+        'company_id' => $this->company->id,
+        'name' => 'GST earn',
+        'rule_type' => 'spend',
+        'earn_rupees' => 100,
+        'earn_points' => 1,
+        'is_active' => true,
+    ]);
+    $customer = $this->createCustomer(['loyalty_points' => 0]);
+    $product = $this->createProduct(['current_stock' => 10, 'retail_price' => 1000, 'gst_rate' => 18]);
+    $sale = app(CreateSale::class)->handle($this->company->id, [
+        'customer_id' => $customer->id,
+        'sale_date' => now()->toDateString(),
+        'payment_mode' => 'cash',
+        'is_interstate' => false,
+        'items' => [['product_id' => $product->id, 'qty' => 1, 'rate' => 1000, 'gst_rate' => 18]],
+    ], $this->user->id);
+    app(ConfirmSale::class)->handle($sale, $this->user->id);
+
+    expect((float) $sale->fresh()->grand_total)->toBe(1180.0);
+    expect((int) $customer->fresh()->loyalty_points)->toBe(11);
+});

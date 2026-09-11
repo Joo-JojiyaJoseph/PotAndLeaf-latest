@@ -517,6 +517,130 @@ class ReportController extends Controller
         return $this->ok($this->reports->ageingPayables($this->reportCompanyId($request)));
     }
 
+    public function exportCashBook(Request $request)
+    {
+        $this->allowAccounting($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+        $data = $this->reports->cashBook($companyId, $from, $to, 1, 5000);
+        $company = $companyId ? Company::find($companyId) : $this->company($request);
+
+        $rows = collect([[
+            'date' => $from, 'reference' => '', 'description' => 'Opening balance', 'party' => '',
+            'debit' => '', 'credit' => '', 'balance' => $data['opening_balance'],
+        ]])->concat(collect($data['rows'])->map(fn ($r) => [
+            'date' => $r['date'], 'reference' => $r['reference'], 'description' => $r['description'],
+            'party' => $r['party'] ?? '', 'debit' => $r['debit'] ?? ($r['type'] === 'in' ? $r['amount'] : ''),
+            'credit' => $r['credit'] ?? ($r['type'] === 'out' ? $r['amount'] : ''), 'balance' => $r['balance'],
+        ]))->concat([[
+            'date' => $to, 'reference' => '', 'description' => 'Closing balance', 'party' => '',
+            'debit' => '', 'credit' => '', 'balance' => $data['closing_balance'],
+        ]]);
+
+        return $this->export->pdf('Cash Book', $rows, ['date', 'reference', 'description', 'party', 'debit', 'credit', 'balance'], [
+            'date' => 'Date', 'reference' => 'Txn No.', 'description' => 'Description', 'party' => 'Party',
+            'debit' => 'Debit', 'credit' => 'Credit', 'balance' => 'Balance',
+        ], [
+            'From' => $from, 'To' => $to,
+            'Opening' => $data['opening_balance'], 'Closing' => $data['closing_balance'],
+        ], $company, $request->user()?->name)->download("cash-book-{$from}-{$to}.pdf");
+    }
+
+    public function exportBankBook(Request $request)
+    {
+        $this->allowAccounting($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+        $data = $this->reports->bankBook($companyId, $from, $to, 1, 5000);
+        $company = $companyId ? Company::find($companyId) : $this->company($request);
+
+        $rows = collect([[
+            'date' => $from, 'reference' => '', 'description' => 'Opening balance', 'party' => '',
+            'debit' => '', 'credit' => '', 'balance' => $data['opening_balance'],
+        ]])->concat(collect($data['rows'])->map(fn ($r) => [
+            'date' => $r['date'], 'reference' => $r['reference'], 'description' => $r['description'],
+            'party' => $r['party'] ?? '', 'debit' => $r['debit'] ?? ($r['type'] === 'in' ? $r['amount'] : ''),
+            'credit' => $r['credit'] ?? ($r['type'] === 'out' ? $r['amount'] : ''), 'balance' => $r['balance'],
+        ]))->concat([[
+            'date' => $to, 'reference' => '', 'description' => 'Closing balance', 'party' => '',
+            'debit' => '', 'credit' => '', 'balance' => $data['closing_balance'],
+        ]]);
+
+        return $this->export->pdf('Bank Book', $rows, ['date', 'reference', 'description', 'party', 'debit', 'credit', 'balance'], [
+            'date' => 'Date', 'reference' => 'Txn No.', 'description' => 'Description', 'party' => 'Party',
+            'debit' => 'Debit', 'credit' => 'Credit', 'balance' => 'Balance',
+        ], [
+            'From' => $from, 'To' => $to,
+            'Opening' => $data['opening_balance'], 'Closing' => $data['closing_balance'],
+        ], $company, $request->user()?->name)->download("bank-book-{$from}-{$to}.pdf");
+    }
+
+    public function exportDebtorLedger(Request $request)
+    {
+        $this->allowAccounting($request);
+        $companyId = $this->reportCompanyId($request);
+        $request->validate(['customer_id' => ['required', 'uuid']]);
+        $from = $request->query('from') ?: now()->subDays(89)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+        $data = $this->reports->debtorLedger($companyId, $request->query('customer_id'), $from, $to);
+        $company = $companyId ? Company::find($companyId) : $this->company($request);
+        $name = $data['customer']['name'] ?? 'Customer';
+
+        $rows = collect([[
+            'date' => $from, 'reference' => '', 'invoice' => '', 'description' => 'Opening balance',
+            'debit' => '', 'credit' => '', 'balance' => $data['opening_balance'],
+        ]])->concat(collect($data['rows'])->map(fn ($r) => [
+            'date' => $r['date'], 'reference' => $r['reference'], 'invoice' => $r['invoice'] ?? '',
+            'description' => $r['description'], 'debit' => $r['debit'] ?? ($r['type'] === 'debit' ? $r['amount'] : ''),
+            'credit' => $r['credit'] ?? ($r['type'] === 'credit' ? $r['amount'] : ''), 'balance' => $r['balance'],
+        ]))->concat([[
+            'date' => $to, 'reference' => '', 'invoice' => '', 'description' => 'Outstanding balance',
+            'debit' => '', 'credit' => '', 'balance' => $data['closing_balance'],
+        ]]);
+
+        return $this->export->pdf("Debtor Ledger — {$name}", $rows, ['date', 'reference', 'invoice', 'description', 'debit', 'credit', 'balance'], [
+            'date' => 'Date', 'reference' => 'Reference', 'invoice' => 'Invoice', 'description' => 'Description',
+            'debit' => 'Debit', 'credit' => 'Credit', 'balance' => 'Balance',
+        ], [
+            'From' => $from, 'To' => $to, 'Customer' => $name,
+            'Opening' => $data['opening_balance'], 'Closing' => $data['closing_balance'],
+        ], $company, $request->user()?->name)->download("debtor-ledger-{$from}-{$to}.pdf");
+    }
+
+    public function exportCreditorLedger(Request $request)
+    {
+        $this->allowAccounting($request);
+        $companyId = $this->reportCompanyId($request);
+        $request->validate(['supplier_id' => ['required', 'uuid']]);
+        $from = $request->query('from') ?: now()->subDays(89)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+        $data = $this->reports->creditorLedger($companyId, $request->query('supplier_id'), $from, $to);
+        $company = $companyId ? Company::find($companyId) : $this->company($request);
+        $name = $data['supplier']['name'] ?? 'Supplier';
+
+        $rows = collect([[
+            'date' => $from, 'reference' => '', 'invoice' => '', 'description' => 'Opening balance',
+            'debit' => '', 'credit' => '', 'balance' => $data['opening_balance'],
+        ]])->concat(collect($data['rows'])->map(fn ($r) => [
+            'date' => $r['date'], 'reference' => $r['reference'], 'invoice' => $r['invoice'] ?? '',
+            'description' => $r['description'], 'debit' => $r['debit'] ?? ($r['type'] === 'debit' ? $r['amount'] : ''),
+            'credit' => $r['credit'] ?? ($r['type'] === 'credit' ? $r['amount'] : ''), 'balance' => $r['balance'],
+        ]))->concat([[
+            'date' => $to, 'reference' => '', 'invoice' => '', 'description' => 'Outstanding payable',
+            'debit' => '', 'credit' => '', 'balance' => $data['closing_balance'],
+        ]]);
+
+        return $this->export->pdf("Creditor Ledger — {$name}", $rows, ['date', 'reference', 'invoice', 'description', 'debit', 'credit', 'balance'], [
+            'date' => 'Date', 'reference' => 'Reference', 'invoice' => 'Purchase Invoice', 'description' => 'Description',
+            'debit' => 'Debit', 'credit' => 'Credit', 'balance' => 'Balance',
+        ], [
+            'From' => $from, 'To' => $to, 'Supplier' => $name,
+            'Opening' => $data['opening_balance'], 'Closing' => $data['closing_balance'],
+        ], $company, $request->user()?->name)->download("creditor-ledger-{$from}-{$to}.pdf");
+    }
+
     public function salesComparisonMonth(Request $request): JsonResponse
     {
         $this->allow($request, 'reports.view');

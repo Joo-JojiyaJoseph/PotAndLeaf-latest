@@ -96,7 +96,10 @@ class LoyaltyService
 
         if ($entries->isEmpty()) {
             // Legacy sales without ledger — approximate reverse of earn only
-            $approx = $this->pointsEarned($customer->company_id, (float) $sale->grand_total);
+            $approx = $this->pointsEarned(
+                $customer->company_id,
+                max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount),
+            );
             if ($approx > 0) {
                 $customer->loyalty_points = max(0, (int) $customer->loyalty_points - $approx);
                 $customer->save();

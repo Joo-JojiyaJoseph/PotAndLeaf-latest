@@ -109,7 +109,7 @@ it('builds cash book with opening balance and movements', function () {
         'supplier_code' => 'SUP-001',
         'name' => 'Grower',
         'status' => 'active',
-        'outstanding' => 0,
+        'outstanding' => 200,
         'opening_balance' => 0,
     ]);
 

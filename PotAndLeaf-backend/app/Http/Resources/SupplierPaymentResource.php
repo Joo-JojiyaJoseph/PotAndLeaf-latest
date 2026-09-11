@@ -23,6 +23,13 @@ class SupplierPaymentResource extends JsonResource
             'mode'          => $this->mode,
             'reference'     => $this->reference,
             'notes'         => $this->notes,
+            'is_advance'    => (bool) $this->is_advance,
+            'applied_from_advance' => (bool) $this->applied_from_advance,
+            'allocations'   => $this->whenLoaded('allocations', fn () => $this->allocations->map(fn ($a) => [
+                'purchase_id' => $a->purchase_id,
+                'purchase_no' => $a->purchase?->purchase_no,
+                'amount'      => (float) $a->amount,
+            ])->values()),
         ];
     }
 }

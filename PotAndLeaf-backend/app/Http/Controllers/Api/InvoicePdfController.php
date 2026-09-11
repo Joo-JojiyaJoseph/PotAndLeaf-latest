@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Purchase;
+use App\Models\PurchaseOrder;
 use App\Models\RentalInvoice;
 use App\Models\Sale;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -46,6 +47,25 @@ class InvoicePdfController extends Controller
             ->setPaper('a4');
 
         return $pdf->download("grn-{$purchase->purchase_no}.pdf");
+    }
+
+    public function purchaseOrder(Request $request, PurchaseOrder $purchaseOrder): Response
+    {
+        $company = $request->attributes->get('company');
+        abort_unless($request->user()->hasPermission('po.view', $company->id), 403);
+        $this->assertRecordCompany($request, (string) $purchaseOrder->company_id);
+
+        $purchaseOrder->load([
+            'items.product:id,sku,name',
+            'supplier',
+            'company:id,name,legal_name,gst_number,address,phone,email,state,state_code,logo',
+            'createdBy:id,name',
+        ]);
+
+        $pdf = Pdf::loadView('pdf.purchase-order', ['po' => $purchaseOrder])
+            ->setPaper('a4');
+
+        return $pdf->download("po-{$purchaseOrder->po_no}.pdf");
     }
 
     public function rental(Request $request, RentalInvoice $rentalInvoice): Response

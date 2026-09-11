@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Payment\ApplySupplierAdvanceRequest;
 use App\Http\Requests\Payment\StoreSupplierPaymentRequest;
 use App\Http\Resources\SupplierPaymentResource;
 use App\Models\Supplier;
@@ -31,12 +32,20 @@ class SupplierPaymentController extends Controller
     /** Suppliers (with outstanding) for the record-payment form. */
     public function formData(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'payments.create');
+        $companyId = $this->listCompanyId($request);
 
-        $suppliers = Supplier::forCompany($company->id)->orderBy('name')
-            ->get(['id', 'name', 'outstanding'])
-            ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name, 'outstanding' => (float) $s->outstanding]);
+        $suppliers = Supplier::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->orderBy('name')
+            ->get(['id', 'name', 'outstanding', 'advance_balance', 'company_id'])
+            ->map(fn ($s) => [
+                'id' => $s->id,
+                'name' => $s->name,
+                'outstanding' => (float) $s->outstanding,
+                'advance_balance' => (float) $s->advance_balance,
+                'company_id' => $s->company_id,
+            ]);
 
         return $this->ok(['suppliers' => $suppliers]);
     }
@@ -51,10 +60,16 @@ class SupplierPaymentController extends Controller
 
     public function store(StoreSupplierPaymentRequest $request): JsonResponse
     {
-        $company = $this->company($request);
-        $payment = $this->payments->record($company->id, $request->validated(), $request->user()->id);
+        $payment = $this->payments->record($request->writeCompanyId(), $request->validated(), $request->user()->id);
 
         return $this->created(new SupplierPaymentResource($payment), 'Payment recorded.');
+    }
+
+    public function applyAdvance(ApplySupplierAdvanceRequest $request): JsonResponse
+    {
+        $payment = $this->payments->applyAdvance($request->writeCompanyId(), $request->validated(), $request->user()->id);
+
+        return $this->created(new SupplierPaymentResource($payment), 'Supplier advance applied.');
     }
 
     public function destroy(Request $request, SupplierPayment $supplierPayment): JsonResponse

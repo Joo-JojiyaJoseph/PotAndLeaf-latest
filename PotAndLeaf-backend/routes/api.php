@@ -113,6 +113,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('customer-receipts/receivables', [CustomerReceiptController::class, 'receivables']);
         Route::get('customer-receipts', [CustomerReceiptController::class, 'index']);
         Route::post('customer-receipts', [CustomerReceiptController::class, 'store']);
+        Route::post('customer-receipts/apply-advance', [CustomerReceiptController::class, 'applyAdvance']);
         Route::delete('customer-receipts/{customerReceipt}', [CustomerReceiptController::class, 'destroy']);
 
         // Module 08 — Supplier payments
@@ -120,6 +121,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('supplier-payments/payables', [SupplierPaymentController::class, 'payables']);
         Route::get('supplier-payments', [SupplierPaymentController::class, 'index']);
         Route::post('supplier-payments', [SupplierPaymentController::class, 'store']);
+        Route::post('supplier-payments/apply-advance', [SupplierPaymentController::class, 'applyAdvance']);
         Route::delete('supplier-payments/{supplierPayment}', [SupplierPaymentController::class, 'destroy']);
 
         // Module 03 — Sales / POS
@@ -221,9 +223,11 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('purchase-orders/form-data', [PurchaseOrderController::class, 'formData']);
         Route::get('purchase-orders/suggestions', [PurchaseOrderController::class, 'suggestions']);
         Route::get('purchase-orders/reorder-report', [PurchaseOrderController::class, 'reorderReport']);
+        Route::get('purchase-orders/reorder-report/export', [PurchaseOrderController::class, 'exportReorder']);
         Route::post('purchase-orders/batch-from-reorder', [PurchaseOrderController::class, 'batchFromReorder']);
         Route::get('purchase-orders', [PurchaseOrderController::class, 'index']);
         Route::post('purchase-orders', [PurchaseOrderController::class, 'store']);
+        Route::get('purchase-orders/{purchaseOrder}/pdf', [InvoicePdfController::class, 'purchaseOrder']);
         Route::get('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show']);
         Route::post('purchase-orders/{purchaseOrder}/send', [PurchaseOrderController::class, 'send']);
         Route::post('purchase-orders/{purchaseOrder}/convert', [PurchaseOrderController::class, 'convert']);
@@ -259,9 +263,13 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('reports/transfers/summary', [ReportController::class, 'transferSummary']);
         Route::get('reports/transfers/in-transit', [ReportController::class, 'transferInTransit']);
         Route::get('reports/accounting/cash-book', [ReportController::class, 'cashBook']);
+        Route::get('reports/accounting/cash-book/export', [ReportController::class, 'exportCashBook']);
         Route::get('reports/accounting/bank-book', [ReportController::class, 'bankBook']);
+        Route::get('reports/accounting/bank-book/export', [ReportController::class, 'exportBankBook']);
         Route::get('reports/accounting/debtor-ledger', [ReportController::class, 'debtorLedger']);
+        Route::get('reports/accounting/debtor-ledger/export', [ReportController::class, 'exportDebtorLedger']);
         Route::get('reports/accounting/creditor-ledger', [ReportController::class, 'creditorLedger']);
+        Route::get('reports/accounting/creditor-ledger/export', [ReportController::class, 'exportCreditorLedger']);
         Route::get('reports/accounting/ageing-receivables', [ReportController::class, 'ageingReceivables']);
         Route::get('reports/accounting/ageing-payables', [ReportController::class, 'ageingPayables']);
         Route::get('reports/sales/comparison-month', [ReportController::class, 'salesComparisonMonth']);

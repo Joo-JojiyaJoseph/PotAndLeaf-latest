@@ -38,9 +38,12 @@ class LoyaltyController extends Controller
 
         $customersPayload = $customers->through(fn ($c) => [
             'id'             => $c->id,
+            'company_id'     => $c->company_id,
             'customer_code'  => $c->customer_code,
             'name'           => $c->name,
             'phone'          => $c->phone,
+            'whatsapp'       => $c->whatsapp,
+            'contact_phone'  => $c->phone ?: $c->whatsapp,
             'loyalty_points' => (int) $c->loyalty_points,
         ]);
 
@@ -97,7 +100,9 @@ class LoyaltyController extends Controller
             'reason'      => ['required', 'string', 'max:500'],
         ]);
 
-        $customer = Customer::forCompany($company->id)->findOrFail($data['customer_id']);
+        $customer = $request->user()->is_super_admin
+            ? Customer::query()->findOrFail($data['customer_id'])
+            : Customer::forCompany($company->id)->findOrFail($data['customer_id']);
         $this->loyalty->adjust($customer, (int) $data['points'], $data['reason'], $request->user()->id);
 
         return $this->ok([

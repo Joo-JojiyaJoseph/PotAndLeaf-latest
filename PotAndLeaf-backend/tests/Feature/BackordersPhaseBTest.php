@@ -198,3 +198,22 @@ it('allows manager role to list backorders in a second company', function () {
 
     $this->getJson('/api/backorders', $headers)->assertOk();
 });
+
+it('applies product gst when fulfilling a backorder', function () {
+    $product = phaseBProduct($this, ['current_stock' => 20, 'gst_rate' => 18]);
+    $customer = $this->createCustomer();
+    $order = app(BackorderService::class)->create($this->company->id, [
+        'customer_id' => $customer->id,
+        'order_date' => now()->toDateString(),
+        'items' => [['product_id' => $product->id, 'ordered_qty' => 8, 'rate' => 100]],
+    ]);
+    $line = $order->items->first();
+
+    $res = $this->postJson("/api/backorders/{$order->id}/fulfill", [
+        'items' => [['id' => $line->id, 'qty' => 4]],
+    ], $this->apiHeaders())->assertOk();
+
+    $sale = \App\Models\Sale::with('items')->findOrFail($res->json('data.sale_id'));
+    expect((float) $sale->items->first()->gst_rate)->toBe(18.0);
+    expect((float) $sale->grand_total)->toBe(472.0);
+});

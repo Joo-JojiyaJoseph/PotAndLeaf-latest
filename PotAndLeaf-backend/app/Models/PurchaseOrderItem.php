@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PurchaseOrderItem extends Model
 {
@@ -14,5 +15,15 @@ class PurchaseOrderItem extends Model
     protected function casts(): array
     {
         return ['qty' => 'decimal:3', 'rate' => 'decimal:2', 'gst_rate' => 'decimal:2', 'taxable_value' => 'decimal:2', 'line_total' => 'decimal:2'];
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
+    public function purchaseOrder(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseOrder::class);
     }
 }

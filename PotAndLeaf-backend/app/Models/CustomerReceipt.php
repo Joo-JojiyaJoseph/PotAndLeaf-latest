@@ -16,13 +16,16 @@ class CustomerReceipt extends Model
     protected $fillable = [
         'company_id', 'customer_id', 'sale_id', 'advance_order_id', 'receipt_no',
         'receipt_date', 'amount', 'mode', 'reference', 'notes',
+        'is_advance', 'applied_from_advance',
     ];
 
     protected function casts(): array
     {
         return [
-            'receipt_date' => 'date',
-            'amount'       => 'decimal:2',
+            'receipt_date'          => 'date',
+            'amount'                => 'decimal:2',
+            'is_advance'            => 'boolean',
+            'applied_from_advance'  => 'boolean',
         ];
     }
 
@@ -34,6 +37,11 @@ class CustomerReceipt extends Model
     public function sale(): BelongsTo
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    public function allocations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CustomerReceiptAllocation::class);
     }
 
     public function scopeForCompany($query, int|string $companyId)

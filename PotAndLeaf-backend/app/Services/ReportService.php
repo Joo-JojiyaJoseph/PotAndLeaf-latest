@@ -213,7 +213,7 @@ class ReportService
         ];
     }
 
-    private function sales(int|string $companyId, string $from, string $to, ?string $locationId = null): array
+    private function sales(int|string|null $companyId, string $from, string $to, ?string $locationId = null): array
     {
         $base = Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')->whereBetween('sale_date', [$from, $to])
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId));
@@ -234,14 +234,14 @@ class ReportService
         ];
     }
 
-    private function purchases(int|string $companyId, string $from, string $to): array
+    private function purchases(int|string|null $companyId, string $from, string $to): array
     {
         $base = Purchase::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')->whereBetween('purchase_date', [$from, $to]);
 
         return ['total' => round((float) (clone $base)->sum('grand_total'), 2), 'count' => (clone $base)->count()];
     }
 
-    private function inventorySnapshot(int|string $companyId): array
+    private function inventorySnapshot(int|string|null $companyId): array
     {
         $valuation = $this->inventory->valuation($companyId);
         $lowStock = Product::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
@@ -255,7 +255,7 @@ class ReportService
         ];
     }
 
-    private function topProducts(int|string $companyId, string $from, string $to, ?string $locationId = null): array
+    private function topProducts(int|string|null $companyId, string $from, string $to, ?string $locationId = null): array
     {
         return SaleItem::query()
             ->whereHas('sale', fn ($q) => $q->when($companyId !== null, fn ($sq) => $sq->forCompany($companyId))->where('status', 'confirmed')
@@ -267,7 +267,7 @@ class ReportService
             ->all();
     }
 
-    private function topCustomers(int|string $companyId, string $from, string $to, ?string $locationId = null): array
+    private function topCustomers(int|string|null $companyId, string $from, string $to, ?string $locationId = null): array
     {
         return Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')->whereBetween('sale_date', [$from, $to])
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
@@ -277,7 +277,7 @@ class ReportService
             ->all();
     }
 
-    private function production(int|string $companyId, string $from, string $to): array
+    private function production(int|string|null $companyId, string $from, string $to): array
     {
         $base = ProductionOrder::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
@@ -892,25 +892,33 @@ class ReportService
                     'date'        => $s->sale_date->toDateString(),
                     'type'        => 'debit',
                     'reference'   => $s->sale_no,
+                    'invoice'     => $s->sale_no,
                     'description' => 'Credit sale',
                     'amount'      => round(max(0, (float) $s->grand_total - (float) $s->loyalty_discount), 2),
+                    'debit'       => round(max(0, (float) $s->grand_total - (float) $s->loyalty_discount), 2),
+                    'credit'      => 0,
                 ]);
             });
 
         CustomerReceipt::forCompany($companyId)
             ->where('customer_id', $customerId)
             ->whereNull('advance_order_id')
+            ->where('is_advance', false)
             ->whereDate('receipt_date', '>=', $from)
             ->whereDate('receipt_date', '<=', $to)
             ->orderBy('receipt_date')
-            ->get(['receipt_no', 'receipt_date', 'amount'])
+            ->with('sale:id,sale_no')
+            ->get(['id', 'receipt_no', 'receipt_date', 'amount', 'sale_id', 'applied_from_advance', 'notes'])
             ->each(function (CustomerReceipt $r) use ($rows) {
                 $rows->push([
                     'date'        => $r->receipt_date->toDateString(),
                     'type'        => 'credit',
                     'reference'   => $r->receipt_no,
-                    'description' => 'Receipt',
+                    'invoice'     => $r->sale?->sale_no,
+                    'description' => $r->applied_from_advance ? 'Advance applied' : 'Receipt',
                     'amount'      => (float) $r->amount,
+                    'debit'       => 0,
+                    'credit'      => (float) $r->amount,
                 ]);
             });
 
@@ -955,24 +963,32 @@ class ReportService
                     'date'        => $p->purchase_date->toDateString(),
                     'type'        => 'credit',
                     'reference'   => $p->purchase_no,
+                    'invoice'     => $p->purchase_no,
                     'description' => 'Purchase',
                     'amount'      => (float) $p->grand_total,
+                    'debit'       => 0,
+                    'credit'      => (float) $p->grand_total,
                 ]);
             });
 
         SupplierPayment::forCompany($companyId)
             ->where('supplier_id', $supplierId)
+            ->where('is_advance', false)
             ->whereDate('payment_date', '>=', $from)
             ->whereDate('payment_date', '<=', $to)
             ->orderBy('payment_date')
-            ->get(['payment_no', 'payment_date', 'amount'])
+            ->with('purchase:id,purchase_no')
+            ->get(['id', 'payment_no', 'payment_date', 'amount', 'applied_from_advance', 'purchase_id'])
             ->each(function (SupplierPayment $p) use ($rows) {
                 $rows->push([
                     'date'        => $p->payment_date->toDateString(),
                     'type'        => 'debit',
                     'reference'   => $p->payment_no,
-                    'description' => 'Payment',
+                    'invoice'     => $p->purchase?->purchase_no,
+                    'description' => $p->applied_from_advance ? 'Advance applied' : 'Payment',
                     'amount'      => (float) $p->amount,
+                    'debit'       => (float) $p->amount,
+                    'credit'      => 0,
                 ]);
             });
 
@@ -989,6 +1005,7 @@ class ReportService
             'opening_balance'     => round($opening, 2),
             'closing_balance'     => round($balance, 2),
             'current_outstanding' => round((float) $supplier->outstanding, 2),
+            'advance_balance'     => round((float) $supplier->advance_balance, 2),
             'rows'                => $entries->all(),
         ];
     }
@@ -1017,7 +1034,7 @@ class ReportService
     ): array {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
-        $perPage = min(max($perPage, 1), 100);
+        $perPage = min(max($perPage, 1), 5000);
         $page = max($page, 1);
 
         $opening = $this->settings->getFloat($companyId, $openingSettingKey);
@@ -1027,6 +1044,7 @@ class ReportService
 
         CustomerReceipt::forCompany($companyId)
             ->whereIn('mode', $modes)
+            ->where('applied_from_advance', false)
             ->whereDate('receipt_date', '>=', $from)
             ->whereDate('receipt_date', '<=', $to)
             ->with('customer:id,name')
@@ -1036,12 +1054,16 @@ class ReportService
                 'type' => 'in',
                 'reference' => $r->receipt_no,
                 'party' => $r->customer?->name,
-                'description' => $r->advance_order_id ? 'Advance receipt' : 'Customer receipt',
+                'description' => ($r->is_advance || $r->advance_order_id) ? 'Customer advance' : 'Customer receipt',
+                'mode' => $r->mode,
                 'amount' => (float) $r->amount,
+                'debit' => (float) $r->amount,
+                'credit' => 0,
             ]));
 
         SupplierPayment::forCompany($companyId)
             ->whereIn('mode', $modes)
+            ->where('applied_from_advance', false)
             ->whereDate('payment_date', '>=', $from)
             ->whereDate('payment_date', '<=', $to)
             ->with('supplier:id,name')
@@ -1051,8 +1073,11 @@ class ReportService
                 'type' => 'out',
                 'reference' => $p->payment_no,
                 'party' => $p->supplier?->name,
-                'description' => 'Supplier payment',
+                'description' => $p->is_advance ? 'Supplier advance' : 'Supplier payment',
+                'mode' => $p->mode,
                 'amount' => (float) $p->amount,
+                'debit' => 0,
+                'credit' => (float) $p->amount,
             ]));
 
         CommissionPayout::forCompany($companyId)
@@ -1068,7 +1093,10 @@ class ReportService
                 'reference' => $p->period,
                 'party' => $p->user?->name,
                 'description' => 'Commission payout',
+                'mode' => $p->mode,
                 'amount' => (float) $p->amount,
+                'debit' => 0,
+                'credit' => (float) $p->amount,
             ]));
 
         $balance = $opening;
@@ -1102,8 +1130,10 @@ class ReportService
     private function moneyNetBefore(int|string $companyId, array $modes, string $beforeDate): float
     {
         $in = (float) CustomerReceipt::forCompany($companyId)->whereIn('mode', $modes)
+            ->where('applied_from_advance', false)
             ->whereDate('receipt_date', '<', $beforeDate)->sum('amount');
         $outPay = (float) SupplierPayment::forCompany($companyId)->whereIn('mode', $modes)
+            ->where('applied_from_advance', false)
             ->whereDate('payment_date', '<', $beforeDate)->sum('amount');
         $outComm = (float) CommissionPayout::forCompany($companyId)->where('status', 'paid')->whereIn('mode', $modes)
             ->whereDate('payment_date', '<', $beforeDate)->sum('amount');
@@ -1127,6 +1157,7 @@ class ReportService
         $receipts = (float) CustomerReceipt::forCompany($companyId)
             ->where('customer_id', $customerId)
             ->whereNull('advance_order_id')
+            ->where('is_advance', false)
             ->whereDate('receipt_date', '<=', $asOf)
             ->sum('amount');
 
@@ -1146,6 +1177,7 @@ class ReportService
 
         $payments = (float) SupplierPayment::forCompany($companyId)
             ->where('supplier_id', $supplierId)
+            ->where('is_advance', false)
             ->whereDate('payment_date', '<=', $asOf)
             ->sum('amount');
 

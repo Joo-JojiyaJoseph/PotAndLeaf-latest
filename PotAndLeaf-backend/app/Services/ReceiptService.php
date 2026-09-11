@@ -4,9 +4,11 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\CustomerReceipt;
+use App\Models\CustomerReceiptAllocation;
 use App\Models\Sale;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ReceiptService
 {
@@ -16,7 +18,7 @@ class ReceiptService
 
         return CustomerReceipt::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
-            ->with(['customer:id,name', 'sale:id,sale_no'])
+            ->with(['customer:id,name', 'sale:id,sale_no', 'allocations.sale:id,sale_no'])
             ->when(filled($filters['customer_id'] ?? null), fn ($q) => $q->where('customer_id', $filters['customer_id']))
             ->orderByDesc('receipt_date')
             ->orderByDesc('created_at')
@@ -27,29 +29,63 @@ class ReceiptService
     public function record(int|string $companyId, array $data, ?int $userId = null): CustomerReceipt
     {
         return DB::transaction(function () use ($companyId, $data) {
+            $isAdvance = (bool) ($data['is_advance'] ?? false);
+            $allocations = array_values(array_filter(
+                $data['allocations'] ?? [],
+                fn ($row) => (float) ($row['amount'] ?? 0) > 0 && filled($row['sale_id'] ?? null),
+            ));
+
+            if ($isAdvance && ($allocations !== [] || filled($data['sale_id'] ?? null))) {
+                throw ValidationException::withMessages([
+                    'is_advance' => 'An advance cannot be allocated to an invoice in the same step. Record the advance, then apply it.',
+                ]);
+            }
+
             $receipt = CustomerReceipt::create([
                 'company_id'   => $companyId,
                 'customer_id'  => $data['customer_id'],
-                'sale_id'      => $data['sale_id'] ?? null,
+                'sale_id'      => $allocations === [] ? ($data['sale_id'] ?? null) : null,
                 'receipt_no'   => $this->nextReceiptNo($companyId),
                 'receipt_date' => $data['receipt_date'],
                 'amount'       => $data['amount'],
                 'mode'         => $data['mode'] ?? 'cash',
                 'reference'    => $data['reference'] ?? null,
                 'notes'        => $data['notes'] ?? null,
+                'is_advance'   => $isAdvance,
             ]);
 
             $customer = Customer::forCompany($companyId)->lockForUpdate()->find($data['customer_id']);
             if ($customer) {
-                $customer->outstanding = (float) $customer->outstanding - (float) $data['amount'];
+                if ($isAdvance) {
+                    $customer->advance_balance = (float) $customer->advance_balance + (float) $data['amount'];
+                } else {
+                    $allocated = 0.0;
+                    foreach ($allocations as $row) {
+                        $this->assertSaleForCustomer($companyId, $row['sale_id'], $data['customer_id']);
+                        $receipt->allocations()->create([
+                            'sale_id' => $row['sale_id'],
+                            'amount'  => $row['amount'],
+                        ]);
+                        $this->syncSalePaid($row['sale_id']);
+                        $allocated += (float) $row['amount'];
+                    }
+
+                    $remainder = round((float) $data['amount'] - $allocated, 2);
+                    if ($remainder > 0.005 && $allocations !== []) {
+                        $customer->advance_balance = (float) $customer->advance_balance + $remainder;
+                    }
+
+                    $againstOutstanding = $allocations !== [] ? $allocated : (float) $data['amount'];
+                    $customer->outstanding = (float) $customer->outstanding - $againstOutstanding;
+                }
                 $customer->save();
             }
 
-            if (! empty($data['sale_id'])) {
+            if (! $isAdvance && $allocations === [] && ! empty($data['sale_id'])) {
                 $this->syncSalePaid($data['sale_id']);
             }
 
-            return $receipt->load(['customer:id,name', 'sale:id,sale_no']);
+            return $receipt->load(['customer:id,name', 'sale:id,sale_no', 'allocations']);
         });
     }
 
@@ -68,6 +104,7 @@ class ReceiptService
                 'reference'        => $data['reference'] ?? null,
                 'notes'            => $data['notes'] ?? 'Advance on booking',
                 'created_by'       => $userId,
+                'is_advance'       => true,
             ]);
 
             $customer = Customer::forCompany($companyId)->lockForUpdate()->find($data['customer_id']);
@@ -133,17 +170,100 @@ class ReceiptService
         CustomerReceipt::query()->where('sale_id', $sale->id)->get()->each->delete();
     }
 
+    /**
+     * Apply existing customer advance to a confirmed invoice.
+     * Does not create a cash/bank movement — cash already landed when the advance was received.
+     */
+    public function applyAdvance(int|string $companyId, array $data, ?int $userId = null): CustomerReceipt
+    {
+        return DB::transaction(function () use ($companyId, $data) {
+            $amount = (float) $data['amount'];
+            $customer = Customer::forCompany($companyId)->lockForUpdate()->find($data['customer_id']);
+            if (! $customer) {
+                throw ValidationException::withMessages(['customer_id' => 'Customer not found.']);
+            }
+
+            $advance = (float) $customer->advance_balance;
+            if ($amount > $advance + 1e-6) {
+                throw ValidationException::withMessages([
+                    'amount' => "Amount cannot exceed available advance ({$advance}).",
+                ]);
+            }
+
+            $sale = Sale::forCompany($companyId)->lockForUpdate()->find($data['sale_id']);
+            if (! $sale || $sale->status !== 'confirmed') {
+                throw ValidationException::withMessages(['sale_id' => 'Advance can only be applied to a confirmed invoice.']);
+            }
+            if ((string) $sale->customer_id !== (string) $customer->id) {
+                throw ValidationException::withMessages(['sale_id' => 'Invoice does not belong to the selected customer.']);
+            }
+
+            $invoice = round(max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount), 2);
+            $already = (float) CustomerReceipt::query()->where('sale_id', $sale->id)->sum('amount')
+                + (float) CustomerReceiptAllocation::query()->where('sale_id', $sale->id)->sum('amount');
+            if ($already <= 0.005) {
+                $already = (float) $sale->amount_paid;
+            }
+            $balance = round($invoice - $already, 2);
+            if ($amount > $balance + 1e-6) {
+                throw ValidationException::withMessages([
+                    'amount' => "Amount cannot exceed the remaining invoice balance ({$balance}).",
+                ]);
+            }
+
+            $receipt = CustomerReceipt::create([
+                'company_id'           => $companyId,
+                'customer_id'          => $customer->id,
+                'sale_id'              => $sale->id,
+                'receipt_no'           => $this->nextReceiptNo($companyId),
+                'receipt_date'         => now()->toDateString(),
+                'amount'               => $amount,
+                'mode'                 => 'cash',
+                'notes'                => 'Advance applied to '.$sale->sale_no,
+                'applied_from_advance' => true,
+            ]);
+
+            $customer->advance_balance = $advance - $amount;
+            $customer->outstanding = (float) $customer->outstanding - $amount;
+            $customer->save();
+
+            $this->syncSalePaid($sale->id);
+
+            return $receipt->load(['customer:id,name', 'sale:id,sale_no']);
+        });
+    }
+
     public function delete(CustomerReceipt $receipt): void
     {
         DB::transaction(function () use ($receipt) {
             $customer = Customer::forCompany($receipt->company_id)->lockForUpdate()->find($receipt->customer_id);
+            $saleIds = $receipt->allocations()->pluck('sale_id')->all();
+            if ($receipt->sale_id) {
+                $saleIds[] = $receipt->sale_id;
+            }
+
             if ($customer) {
-                $customer->outstanding = (float) $customer->outstanding + (float) $receipt->amount;
+                if ($receipt->applied_from_advance) {
+                    $customer->advance_balance = (float) $customer->advance_balance + (float) $receipt->amount;
+                    $customer->outstanding = (float) $customer->outstanding + (float) $receipt->amount;
+                } elseif ($receipt->is_advance || $receipt->advance_order_id) {
+                    $customer->advance_balance = max(0, (float) $customer->advance_balance - (float) $receipt->amount);
+                } else {
+                    $allocated = (float) $receipt->allocations()->sum('amount');
+                    $againstOutstanding = $allocated > 0.005 ? $allocated : (float) $receipt->amount;
+                    $remainder = round((float) $receipt->amount - $againstOutstanding, 2);
+                    $customer->outstanding = (float) $customer->outstanding + $againstOutstanding;
+                    if ($remainder > 0.005) {
+                        $customer->advance_balance = max(0, (float) $customer->advance_balance - $remainder);
+                    }
+                }
                 $customer->save();
             }
-            $saleId = $receipt->sale_id;
+
+            $receipt->allocations()->delete();
             $receipt->delete();
-            if ($saleId) {
+
+            foreach (array_unique($saleIds) as $saleId) {
                 $this->syncSalePaid($saleId);
             }
         });
@@ -157,13 +277,14 @@ class ReceiptService
             ->where('status', 'confirmed')
             ->whereNotNull('customer_id')
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
-            ->with('customer:id,name,credit_days')
+            ->with('customer:id,name,credit_days,advance_balance')
             ->withSum('customerReceipts as received_sum', 'amount')
+            ->withSum('receiptAllocations as allocated_sum', 'amount')
             ->orderByDesc('sale_date')
             ->get()
             ->map(function (Sale $s) {
                 $invoice = round(max(0, (float) $s->grand_total - (float) $s->loyalty_discount), 2);
-                $received = (float) ($s->received_sum ?? 0);
+                $received = (float) ($s->received_sum ?? 0) + (float) ($s->allocated_sum ?? 0);
                 // Legacy sales recorded tender only on amount_paid (no receipt row).
                 if ($received <= 0.005) {
                     $received = (float) $s->amount_paid;
@@ -172,11 +293,13 @@ class ReceiptService
                 $due = $s->sale_date?->copy()->addDays((int) ($s->customer->credit_days ?? 0));
 
                 return [
-                    'id'            => $s->id,
-                    'sale_no'       => $s->sale_no,
-                    'customer_id'   => $s->customer_id,
-                    'customer_name' => $s->customer?->name,
-                    'invoice_total' => $invoice,
+                    'id'               => $s->id,
+                    'sale_no'          => $s->sale_no,
+                    'company_id'       => $s->company_id,
+                    'customer_id'      => $s->customer_id,
+                    'customer_name'    => $s->customer?->name,
+                    'advance_balance'  => round((float) ($s->customer?->advance_balance ?? 0), 2),
+                    'invoice_total'    => $invoice,
                     'credit_amount' => $invoice,
                     'received'      => round($received, 2),
                     'balance'       => $balance,
@@ -206,8 +329,19 @@ class ReceiptService
         $paid = (float) CustomerReceipt::query()
             ->where('sale_id', $saleId)
             ->sum('amount');
+        $paid += (float) CustomerReceiptAllocation::query()
+            ->where('sale_id', $saleId)
+            ->sum('amount');
 
         $sale->amount_paid = round($paid, 2);
         $sale->save();
+    }
+
+    private function assertSaleForCustomer(int|string $companyId, string $saleId, string $customerId): void
+    {
+        $sale = Sale::forCompany($companyId)->find($saleId);
+        if (! $sale || (string) $sale->customer_id !== (string) $customerId) {
+            throw ValidationException::withMessages(['allocations' => 'Allocation invoice does not belong to the customer.']);
+        }
     }
 }

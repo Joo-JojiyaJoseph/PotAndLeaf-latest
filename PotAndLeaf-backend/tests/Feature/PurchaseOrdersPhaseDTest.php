@@ -98,12 +98,47 @@ it('rejects batch when no lines have quantity', function () {
     ], $this->apiHeaders())->assertStatus(422);
 });
 
-it('includes shortfall in flat suggestions', function () {
+it('includes last purchase price, category, unit and required qty on reorder lines', function () {
     $s1 = phaseDSupplier($this, 'Green Valley');
-    phaseDProduct($this, $s1, ['current_stock' => 8, 'reorder_level' => 20]);
+    $product = phaseDProduct($this, $s1, ['sku' => 'LAST-1', 'current_stock' => 4, 'reorder_level' => 10, 'cost_price' => 50]);
 
     $res = $this->getJson('/api/purchase-orders/suggestions', $this->apiHeaders())->assertOk();
+    $row = collect($res->json('data.suggestions'))->firstWhere('sku', 'LAST-1');
 
-    expect((float) $res->json('data.suggestions.0.shortfall'))->toBe(12.0);
-    expect((float) $res->json('data.suggestions.0.suggested_qty'))->toBe(32.0);
+    expect($row['required_qty'])->toEqual(6)
+        ->and($row['shortfall'])->toEqual(6)
+        ->and($row['suppliers'])->toHaveCount(1)
+        ->and($row['preferred_supplier'])->toBe('Green Valley')
+        ->and((float) $row['rate'])->toBe(100.0);
+});
+
+it('exports reorder report pdf', function () {
+    $s1 = phaseDSupplier($this, 'Green Valley');
+    phaseDProduct($this, $s1, ['sku' => 'PDF-1']);
+
+    $this->getJson('/api/purchase-orders/reorder-report/export?layout=supplier', $this->apiHeaders())
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+
+    $this->getJson('/api/purchase-orders/reorder-report/export?layout=flat', $this->apiHeaders())
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
+});
+
+it('downloads a purchase order pdf', function () {
+    $s1 = phaseDSupplier($this, 'Green Valley');
+    $p1 = phaseDProduct($this, $s1);
+
+    $created = $this->postJson('/api/purchase-orders/batch-from-reorder', [
+        'po_date' => now()->toDateString(),
+        'orders' => [[
+            'supplier_id' => $s1->id,
+            'items' => [['product_id' => $p1->id, 'qty' => 5, 'rate' => 100, 'gst_rate' => 5]],
+        ]],
+    ], $this->apiHeaders())->assertCreated();
+
+    $id = $created->json('data.0.id');
+    $this->getJson("/api/purchase-orders/{$id}/pdf", $this->apiHeaders())
+        ->assertOk()
+        ->assertHeader('content-type', 'application/pdf');
 });

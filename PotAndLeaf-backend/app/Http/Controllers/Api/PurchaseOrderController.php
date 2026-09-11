@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\PurchaseOrder\BatchPurchaseOrderRequest;
 use App\Http\Requests\PurchaseOrder\StorePurchaseOrderRequest;
 use App\Http\Resources\PurchaseOrderResource;
+use App\Models\Company;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
@@ -13,8 +14,10 @@ use App\Services\PurchaseOrderService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class PurchaseOrderController extends Controller
 {
@@ -53,10 +56,34 @@ class PurchaseOrderController extends Controller
 
     public function reorderReport(Request $request): JsonResponse
     {
-        $company = $this->company($request);
         $this->allow($request, 'po.view');
+        $companyId = $this->listCompanyId($request) ?? $this->company($request)->id;
 
-        return $this->ok($this->orders->reorderReport($company->id));
+        return $this->ok($this->orders->reorderReport($companyId));
+    }
+
+    public function exportReorder(Request $request): Response
+    {
+        $this->allow($request, 'po.view');
+        $headerCompany = $this->company($request);
+        $companyId = $this->listCompanyId($request) ?? $headerCompany->id;
+        $company = (string) $companyId === (string) $headerCompany->id
+            ? $headerCompany
+            : (Company::find($companyId) ?? $headerCompany);
+        $layout = $request->query('layout') === 'flat' ? 'flat' : 'supplier';
+        $report = $this->orders->reorderReport($company->id);
+
+        $pdf = Pdf::loadView('pdf.reorder-report', [
+            'company'      => $company,
+            'report'       => $report,
+            'layout'       => $layout,
+            'generated_at' => now()->toDateTimeString(),
+            'generated_by' => $request->user()?->name,
+        ])->setPaper('a4', $layout === 'flat' ? 'landscape' : 'portrait');
+
+        $filename = $layout === 'supplier' ? 'reorder-report-supplier.pdf' : 'reorder-report.pdf';
+
+        return $pdf->download($filename);
     }
 
     public function batchFromReorder(BatchPurchaseOrderRequest $request): JsonResponse
@@ -83,7 +110,11 @@ class PurchaseOrderController extends Controller
         $this->allow($request, 'po.view');
         $this->assertRecordCompany($request, $purchaseOrder);
 
-        return $this->ok(new PurchaseOrderResource($purchaseOrder->load(['items', 'supplier:id,name'])));
+        return $this->ok(new PurchaseOrderResource($purchaseOrder->load([
+            'items.product:id,sku,name',
+            'supplier',
+            'createdBy:id,name',
+        ])));
     }
 
     public function send(Request $request, PurchaseOrder $purchaseOrder): JsonResponse

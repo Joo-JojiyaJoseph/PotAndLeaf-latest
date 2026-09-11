@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Receipt\ApplyCustomerAdvanceRequest;
 use App\Http\Requests\Receipt\StoreCustomerReceiptRequest;
 use App\Http\Resources\CustomerReceiptResource;
 use App\Models\Customer;
@@ -30,12 +31,20 @@ class CustomerReceiptController extends Controller
 
     public function formData(Request $request): JsonResponse
     {
-        $company = $this->listCompany($request);
         $this->allow($request, 'receipts.create');
+        $companyId = $this->listCompanyId($request);
 
-        $customers = Customer::forCompany($company->id)->orderBy('name')
-            ->get(['id', 'name', 'outstanding'])
-            ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'outstanding' => (float) $c->outstanding]);
+        $customers = Customer::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->orderBy('name')
+            ->get(['id', 'name', 'outstanding', 'advance_balance', 'company_id'])
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'outstanding' => (float) $c->outstanding,
+                'advance_balance' => (float) $c->advance_balance,
+                'company_id' => $c->company_id,
+            ]);
 
         return $this->ok(['customers' => $customers]);
     }
@@ -49,10 +58,16 @@ class CustomerReceiptController extends Controller
 
     public function store(StoreCustomerReceiptRequest $request): JsonResponse
     {
-        $company = $this->company($request);
-        $receipt = $this->receipts->record($company->id, $request->validated(), $request->user()->id);
+        $receipt = $this->receipts->record($request->writeCompanyId(), $request->validated(), $request->user()->id);
 
         return $this->created(new CustomerReceiptResource($receipt), 'Receipt recorded.');
+    }
+
+    public function applyAdvance(ApplyCustomerAdvanceRequest $request): JsonResponse
+    {
+        $receipt = $this->receipts->applyAdvance($request->writeCompanyId(), $request->validated(), $request->user()->id);
+
+        return $this->created(new CustomerReceiptResource($receipt), 'Customer advance applied.');
     }
 
     public function destroy(Request $request, CustomerReceipt $customerReceipt): JsonResponse

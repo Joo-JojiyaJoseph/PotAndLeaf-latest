@@ -87,6 +87,11 @@ class Sale extends Model
         return $this->hasMany(CustomerReceipt::class);
     }
 
+    public function receiptAllocations(): HasMany
+    {
+        return $this->hasMany(CustomerReceiptAllocation::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

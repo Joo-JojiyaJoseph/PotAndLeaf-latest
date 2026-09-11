@@ -37,6 +37,7 @@ class Supplier extends Model
         'credit_limit',
         'opening_balance',
         'outstanding',
+        'advance_balance',
         'notes',
         'status', 'photo', 'bank_account_name', 'address',];
 
@@ -54,6 +55,7 @@ class Supplier extends Model
             'credit_limit' => 'decimal:2',
             'opening_balance' => 'decimal:2',
             'outstanding' => 'decimal:2',
+            'advance_balance' => 'decimal:2',
         ];
     }
 

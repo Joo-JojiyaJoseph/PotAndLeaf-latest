@@ -23,6 +23,13 @@ class CustomerReceiptResource extends JsonResource
             'mode'          => $this->mode,
             'reference'     => $this->reference,
             'notes'         => $this->notes,
+            'is_advance'    => (bool) $this->is_advance,
+            'applied_from_advance' => (bool) $this->applied_from_advance,
+            'allocations'   => $this->whenLoaded('allocations', fn () => $this->allocations->map(fn ($a) => [
+                'sale_id' => $a->sale_id,
+                'sale_no' => $a->sale?->sale_no,
+                'amount'  => (float) $a->amount,
+            ])->values()),
         ];
     }
 }

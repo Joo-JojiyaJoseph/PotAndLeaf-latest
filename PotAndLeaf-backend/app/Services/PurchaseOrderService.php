@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Actions\Purchases\CreatePurchase;
 use App\Models\Product;
+use App\Models\PurchaseItem;
 use App\Models\PurchaseOrder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -16,32 +17,91 @@ class PurchaseOrderService
     /** Products at or below reorder level, with a suggested top-up qty and preferred supplier. */
     public function reorderSuggestions(int|string $companyId): array
     {
-        return Product::forCompany($companyId)
+        $products = Product::forCompany($companyId)
             ->whereColumn('current_stock', '<=', 'reorder_level')
             ->where('reorder_level', '>', 0)
-            ->with(['suppliers' => fn ($q) => $q->orderByDesc('product_supplier.is_primary')])
+            ->with([
+                'category:id,name',
+                'unit:id,name,short_name',
+                'suppliers' => fn ($q) => $q->orderByDesc('product_supplier.is_primary'),
+            ])
             ->orderBy('name')
-            ->get()
-            ->map(function (Product $p) {
-                $target = (float) $p->reorder_level * 2;
-                $suggested = max(0.0, round($target - (float) $p->current_stock, 3));
-                $primary = $p->suppliers->first();
+            ->get();
 
-                return [
-                    'product_id'    => $p->id,
-                    'name'          => $p->name,
-                    'sku'           => $p->sku,
-                    'current_stock' => (float) $p->current_stock,
-                    'reorder_level' => (float) $p->reorder_level,
-                    'shortfall'     => max(0.0, round((float) $p->reorder_level - (float) $p->current_stock, 3)),
-                    'suggested_qty' => $suggested > 0 ? $suggested : (float) $p->reorder_level,
-                    'rate'          => (float) $p->cost_price,
-                    'gst_rate'      => (float) $p->gst_rate,
-                    'supplier_id'   => $primary?->id,
-                    'supplier_name' => $primary?->name,
-                ];
-            })
+        $lastRates = $this->lastPurchaseRates($companyId, $products->pluck('id')->all());
+
+        return $products->map(function (Product $p) use ($lastRates) {
+            $target = (float) $p->reorder_level * 2;
+            $suggested = max(0.0, round($target - (float) $p->current_stock, 3));
+            $shortfall = max(0.0, round((float) $p->reorder_level - (float) $p->current_stock, 3));
+            $primary = $p->suppliers->first();
+            $lastPrice = isset($lastRates[$p->id]) ? (float) $lastRates[$p->id] : null;
+            $supplierPrice = $primary?->pivot?->supplier_price !== null
+                ? (float) $primary->pivot->supplier_price
+                : null;
+            $rate = $this->preferredRate($supplierPrice, $lastPrice, (float) $p->cost_price);
+
+            $suppliers = $p->suppliers->map(fn ($s) => [
+                'id'             => $s->id,
+                'name'           => $s->name,
+                'is_primary'     => (bool) $s->pivot->is_primary,
+                'supplier_price' => $s->pivot->supplier_price !== null ? (float) $s->pivot->supplier_price : null,
+            ])->values()->all();
+
+            return [
+                'product_id'          => $p->id,
+                'name'                => $p->name,
+                'sku'                 => $p->sku,
+                'category'            => $p->category?->name,
+                'unit'                => $p->unit?->short_name ?: $p->unit?->name,
+                'current_stock'       => (float) $p->current_stock,
+                'reorder_level'       => (float) $p->reorder_level,
+                'required_qty'        => $shortfall,
+                'shortfall'           => $shortfall,
+                'suggested_qty'       => $suggested > 0 ? $suggested : (float) $p->reorder_level,
+                'last_purchase_price' => $lastPrice,
+                'supplier_price'      => $supplierPrice,
+                'rate'                => $rate,
+                'gst_rate'            => (float) $p->gst_rate,
+                'supplier_id'         => $primary?->id,
+                'supplier_name'       => $primary?->name,
+                'preferred_supplier'  => $primary?->name,
+                'suppliers'           => $suppliers,
+            ];
+        })->all();
+    }
+
+    /** Latest confirmed purchase rate per product. */
+    private function lastPurchaseRates(int|string $companyId, array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        return PurchaseItem::query()
+            ->select('purchase_items.product_id', 'purchase_items.rate')
+            ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
+            ->where('purchases.company_id', $companyId)
+            ->where('purchases.status', 'confirmed')
+            ->whereNull('purchases.deleted_at')
+            ->whereIn('purchase_items.product_id', $productIds)
+            ->orderByDesc('purchases.purchase_date')
+            ->orderByDesc('purchase_items.id')
+            ->get()
+            ->unique('product_id')
+            ->pluck('rate', 'product_id')
             ->all();
+    }
+
+    private function preferredRate(?float $supplierPrice, ?float $lastPrice, float $costPrice): float
+    {
+        foreach ([$supplierPrice, $lastPrice, $costPrice] as $value) {
+            if ($value !== null && $value > 0) {
+                return round((float) $value, 2);
+            }
+        }
+
+        return 0.0;
     }
 
     /** Reorder report grouped by preferred supplier for batch PO generation. */
@@ -136,7 +196,10 @@ class PurchaseOrderService
 
     public function find(int|string $companyId, string $id): ?PurchaseOrder
     {
-        return PurchaseOrder::forCompany($companyId)->with(['items', 'supplier:id,name'])->whereKey($id)->first();
+        return PurchaseOrder::forCompany($companyId)
+            ->with(['items.product:id,sku,name', 'supplier', 'company', 'createdBy:id,name'])
+            ->whereKey($id)
+            ->first();
     }
 
     public function create(int|string $companyId, array $data, ?int $userId = null): PurchaseOrder

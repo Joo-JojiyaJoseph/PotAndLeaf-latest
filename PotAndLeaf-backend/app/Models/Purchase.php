@@ -50,6 +50,11 @@ class Purchase extends Model
         return $this->hasMany(SupplierPayment::class);
     }
 
+    public function paymentAllocations(): HasMany
+    {
+        return $this->hasMany(SupplierPaymentAllocation::class);
+    }
+
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

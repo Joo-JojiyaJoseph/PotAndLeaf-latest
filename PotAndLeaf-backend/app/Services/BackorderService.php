@@ -194,7 +194,7 @@ class BackorderService
                     'product_id' => $item->product_id,
                     'qty'        => $qty,
                     'rate'       => (float) $item->rate,
-                    'gst_rate'   => 0,
+                    'gst_rate'   => (float) ($product->gst_rate ?? 0),
                 ];
                 $item->update(['fulfilled_qty' => (float) $item->fulfilled_qty + $qty]);
             }

@@ -36,7 +36,7 @@ class LoyaltyEngine
             ->get(['id', 'category_id'])
             ->keyBy('id');
 
-        $billBase = max(0, (float) $sale->subtotal - (float) $sale->loyalty_discount);
+        $billBase = max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount);
 
         foreach ($rules as $rule) {
             if (! $this->customerMatches($customer, $rule)) {
@@ -79,9 +79,13 @@ class LoyaltyEngine
         return ['points' => $total, 'rules' => $applied];
     }
 
-    public function rulesForCompany(int|string $companyId)
+    public function rulesForCompany(int|string|null $companyId)
     {
-        return LoyaltyRule::forCompany($companyId)->orderByDesc('priority')->orderBy('name')->get();
+        return LoyaltyRule::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->orderByDesc('priority')
+            ->orderBy('name')
+            ->get();
     }
 
     private function customerMatches(Customer $customer, LoyaltyRule $rule): bool
