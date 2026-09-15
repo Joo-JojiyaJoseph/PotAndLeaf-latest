@@ -4,14 +4,16 @@ import { PlusIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outli
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
+import { FormCompanyField, useFormCompany, withCompany } from '../../components/FormCompanyField';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 
 const empty = { name: '', code: '', type: 'godown', is_default: false, is_active: true };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 
 export default function LocationsList() {
-  const { activeCompany, can } = useAuth();
+  const { activeCompany, can, isSuperAdmin } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
+  const { formCompanyId, setFormCompanyId } = useFormCompany();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
@@ -24,7 +26,14 @@ export default function LocationsList() {
     enabled: Boolean(activeCompany),
   });
   const saveM = useMutation({
-    mutationFn: (payload) => (payload.id ? api.put(`/locations/${payload.id}`, payload) : api.post('/locations', payload)),
+    mutationFn: (payload) => {
+      const cid = payload.id ? (payload.company_id || formCompanyId) : formCompanyId;
+      const body = { ...payload };
+      delete body.company_id;
+      return payload.id
+        ? api.put(`/locations/${payload.id}`, body, withCompany(cid))
+        : api.post('/locations', body, withCompany(cid));
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['locations'] }); setEditing(null); },
     onError: (err) => setErrors(err.response?.data?.errors ?? {}),
   });
@@ -33,8 +42,8 @@ export default function LocationsList() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['locations'] }); setDeleting(null); },
   });
 
-  const openNew = () => { setForm(empty); setErrors({}); setEditing({}); };
-  const openEdit = (l) => { setForm({ ...empty, ...l }); setErrors({}); setEditing(l); };
+  const openNew = () => { setForm(empty); setErrors({}); setFormCompanyId(filterCompanyId !== 'all' ? String(filterCompanyId) : formCompanyId); setEditing({}); };
+  const openEdit = (l) => { setForm({ ...empty, ...l }); setFormCompanyId(l.company_id ? String(l.company_id) : formCompanyId); setErrors({}); setEditing(l); };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const err = (k) => errors[k]?.[0];
   const rows = data?.data ?? [];
@@ -92,10 +101,11 @@ export default function LocationsList() {
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing?.id ? `Edit ${editing.name}` : 'New location'}
         footer={<>
           <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>Cancel</Button>
-          <Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate({ ...form, id: editing?.id })}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}</Button>
+          <Button size="sm" disabled={saveM.isPending || (isSuperAdmin && !formCompanyId)} onClick={() => saveM.mutate({ ...form, id: editing?.id, company_id: formCompanyId })}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}</Button>
         </>}
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
           <Field label="Name" required error={err('name')}><Input value={form.name} onChange={set('name')} /></Field>
           <Field label="Code" required error={err('code')}><Input value={form.code} onChange={set('code')} placeholder="GDN" /></Field>
           <Field label="Type" error={err('type')}>

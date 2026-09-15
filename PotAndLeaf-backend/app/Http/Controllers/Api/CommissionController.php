@@ -13,7 +13,10 @@ use App\Models\CommissionRule;
 use App\Models\CommissionTier;
 use App\Models\CommissionTransaction;
 use App\Models\CommissionPayout;
+use App\Models\Location;
 use App\Models\ManagerCommissionRule;
+use App\Models\Product;
+use App\Models\ProductCategory;
 use App\Models\SeasonalCareRule;
 use App\Models\User;
 use App\Models\WhatsAppMessageLog;
@@ -48,7 +51,20 @@ class CommissionController extends Controller
             ->get(['users.id', 'users.name'])
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
 
-        return $this->ok(['staff' => $staff]);
+        $locations = Location::forCompany($company->id)->orderBy('name')->get(['id', 'name']);
+        $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')->limit(400)->get(['id', 'name']);
+        $categories = ProductCategory::query()
+            ->where('company_id', $company->id)
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return $this->ok([
+            'staff' => $staff,
+            'locations' => $locations,
+            'products' => $products,
+            'categories' => $categories,
+        ]);
     }
 
     public function rules(Request $request): JsonResponse
@@ -180,6 +196,30 @@ class CommissionController extends Controller
             'tiers.*.category_id'=> ['nullable', 'uuid'],
         ]);
 
+        foreach ($data['tiers'] as $i => $tier) {
+            if (isset($tier['max_amount']) && $tier['max_amount'] !== null && (float) $tier['max_amount'] <= (float) $tier['min_amount']) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    "tiers.$i.max_amount" => 'Each tier maximum must be greater than its minimum.',
+                ]);
+            }
+        }
+
+        $grouped = collect($data['tiers'])->groupBy(fn ($t) => ($t['product_id'] ?? '').'|'.($t['category_id'] ?? ''));
+        foreach ($grouped as $group) {
+            $rows = $group->values();
+            for ($i = 0; $i < $rows->count(); $i++) {
+                for ($j = $i + 1; $j < $rows->count(); $j++) {
+                    $aEnd = $rows[$i]['max_amount'] ?? INF;
+                    $bEnd = $rows[$j]['max_amount'] ?? INF;
+                    if ((float) $rows[$i]['min_amount'] < (float) $bEnd && (float) $rows[$j]['min_amount'] < (float) $aEnd) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'tiers' => 'Commission tiers cannot overlap. Adjacent bands may meet (for example 0–50000 then 50000+).',
+                        ]);
+                    }
+                }
+            }
+        }
+
         CommissionTier::where('commission_rule_id', $commissionRule->id)->delete();
         foreach ($data['tiers'] as $i => $tier) {
             CommissionTier::create([
@@ -224,7 +264,12 @@ class CommissionController extends Controller
     {
         $this->allow($request, 'commission.view');
 
-        return $this->ok(CommissionPromotion::forCompany($this->listCompanyId($request))->orderByDesc('start_date')->get());
+        return $this->ok(
+            CommissionPromotion::forCompany($this->listCompanyId($request))
+                ->with(['product:id,name', 'category:id,name'])
+                ->orderByDesc('start_date')
+                ->get()
+        );
     }
 
     public function storePromotion(Request $request): JsonResponse
@@ -241,6 +286,8 @@ class CommissionController extends Controller
             'bonus_per_unit' => ['nullable', 'numeric', 'min:0'],
             'bonus_fixed' => ['nullable', 'numeric', 'min:0'],
             'bonus_percent' => ['nullable', 'numeric', 'min:0'],
+            'eligible_user_ids' => ['nullable', 'array'],
+            'eligible_user_ids.*' => ['integer'],
             'is_active' => ['boolean'],
         ]);
 
@@ -267,6 +314,7 @@ class CommissionController extends Controller
             'days_after_purchase' => ['required', 'integer', 'min:1'],
             'season_months' => ['nullable', 'array'],
             'message_template' => ['required', 'string', 'max:2000'],
+            'max_sends_per_customer' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['boolean'],
         ]);
 
@@ -326,7 +374,7 @@ class CommissionController extends Controller
         $company = $this->company($request);
         $data = $request->validate([
             'user_id'        => ['required', 'integer'],
-            'location_id'    => ['nullable', 'integer'],
+            'location_id'    => ['nullable', 'uuid'],
             'percent'        => ['required', 'numeric', 'min:0', 'max:100'],
             'effective_from' => ['nullable', 'date'],
             'effective_to'   => ['nullable', 'date'],

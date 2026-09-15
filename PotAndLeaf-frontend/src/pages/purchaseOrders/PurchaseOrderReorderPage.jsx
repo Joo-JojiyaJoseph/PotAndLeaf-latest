@@ -189,8 +189,8 @@ export default function PurchaseOrderReorderPage() {
         'application/pdf',
         targetCompanyId,
       );
-    } catch {
-      setErrors({ _: ['Could not export PDF.'] });
+    } catch (e) {
+      setErrors({ _: [e?.message || 'Could not export PDF.'] });
     } finally {
       setExporting('');
     }

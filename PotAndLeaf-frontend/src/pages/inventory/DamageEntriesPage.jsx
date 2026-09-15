@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
@@ -16,6 +17,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 function DamageFormModal({ open, onClose }) {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany();
   const [form, setForm] = useState({
     product_id: '', product_batch_id: '', barcode: '', batch_no: '', qty: '', reason: '', notes: '', photo: null, entry_date: today(),
   });
@@ -25,9 +27,9 @@ function DamageFormModal({ open, onClose }) {
   const [errors, setErrors] = useState({});
 
   const { data: formData } = useQuery({
-    queryKey: ['damage-form-data'],
-    queryFn: () => api.get('/damage-entries/form-data').then((r) => r.data.data),
-    enabled: open,
+    queryKey: ['damage-form-data', targetCompanyId],
+    queryFn: () => api.get('/damage-entries/form-data', companyRequest()).then((r) => r.data.data),
+    enabled: open && Boolean(targetCompanyId),
   });
 
   async function resolveBarcode(code) {
@@ -36,7 +38,7 @@ function DamageFormModal({ open, onClose }) {
     setScanning(true);
     setScanError('');
     try {
-      const b = (await api.get('/batches/scan', { params: { barcode: trimmed } })).data.data;
+      const b = (await api.get('/batches/scan', { params: { barcode: trimmed }, ...companyRequest() })).data.data;
       setForm((f) => ({
         ...f,
         product_id: b.product.id,
@@ -86,7 +88,7 @@ function DamageFormModal({ open, onClose }) {
       notes: form.notes || null,
       photo: form.photo || null,
       entry_date: form.entry_date,
-    }),
+    }, companyRequest()),
     onSuccess: () => {
       toast.success('Damage entry recorded — stock deducted.');
       queryClient.invalidateQueries({ queryKey: ['damage-entries'] });
@@ -132,6 +134,7 @@ function DamageFormModal({ open, onClose }) {
       )}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={(id) => { setFormCompanyId(id); setForm((f) => ({ ...f, product_id: '', product_batch_id: '', barcode: '', batch_no: '' })); }} className="sm:col-span-2" />
         <div className="sm:col-span-2">
           <Field label="Scan batch or product barcode">
             <Input

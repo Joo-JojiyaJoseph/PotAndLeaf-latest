@@ -51,8 +51,8 @@ export default function BackupDashboardPage() {
     try {
       await downloadWithParams(`/backups/${encodeURIComponent(filename)}/download`, undefined, filename, 'application/x-sqlite3');
       toast.success('Download started.');
-    } catch {
-      toast.error('Download failed.');
+    } catch (e) {
+      toast.error(e?.message || 'Download failed.');
     }
   }
 

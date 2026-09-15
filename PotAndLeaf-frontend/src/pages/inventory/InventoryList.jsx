@@ -63,7 +63,8 @@ function LevelsTab({ onViewLedger, companyParams }) {
         {isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
           : rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No products match.</div>
           : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead><tr className="border-b border-line text-left text-faint">
                 <th className="microlabel px-4 py-2.5 font-semibold">SKU</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
@@ -97,6 +98,7 @@ function LevelsTab({ onViewLedger, companyParams }) {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
       </Card>
     </div>

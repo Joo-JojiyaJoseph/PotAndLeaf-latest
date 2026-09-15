@@ -1,9 +1,15 @@
 import { Card, Spinner, StatCard } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 
-function BookTable({ data, loading }) {
+function BookTable({ data, loading, failed }) {
   if (loading) return <div className="flex justify-center py-16"><Spinner className="size-6" /></div>;
-  if (!data) return <Card className="px-4 py-16 text-center text-sm text-muted">Could not load register.</Card>;
+  if (failed || !data) {
+    return (
+      <Card className="px-4 py-16 text-center text-sm text-muted">
+        Could not load register. Try another company filter or refresh.
+      </Card>
+    );
+  }
   return (
     <>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -133,8 +139,8 @@ function AgeingPanel({ data, loading, title }) {
 }
 
 export default function AccountingReportPanels({ tab, cashQ, bankQ, debtorQ, creditorQ, ageingRecQ, ageingPayQ }) {
-  if (tab === 'cash_book') return <BookTable data={cashQ.data} loading={cashQ.isLoading} />;
-  if (tab === 'bank_book') return <BookTable data={bankQ.data} loading={bankQ.isLoading} />;
+  if (tab === 'cash_book') return <BookTable data={cashQ.data} loading={cashQ.isLoading} failed={cashQ.isError} />;
+  if (tab === 'bank_book') return <BookTable data={bankQ.data} loading={bankQ.isLoading} failed={bankQ.isError} />;
   if (tab === 'debtor_ledger') return <LedgerTable data={debtorQ.data} loading={debtorQ.isLoading} partyLabel="customer" />;
   if (tab === 'creditor_ledger') return <LedgerTable data={creditorQ.data} loading={creditorQ.isLoading} partyLabel="supplier" />;
   if (tab === 'ageing_receivables') return <AgeingPanel data={ageingRecQ.data} loading={ageingRecQ.isLoading} title="Receivables ageing" />;

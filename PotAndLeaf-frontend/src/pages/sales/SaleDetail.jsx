@@ -97,8 +97,8 @@ export default function SaleDetail() {
     try {
       await downloadPdf(`/sales/${id}/invoice.pdf`, `invoice-${data?.sale_no ?? id}.pdf`, recordCompanyId);
       toast.success('Invoice PDF downloaded.');
-    } catch {
-      toast.error('Could not download PDF.');
+    } catch (e) {
+      toast.error(e?.message || 'Could not download PDF.');
     }
   }
 

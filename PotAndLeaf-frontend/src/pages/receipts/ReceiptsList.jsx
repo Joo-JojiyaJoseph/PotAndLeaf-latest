@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 
 const TABS = [{ value: 'receivables', label: 'Receivables' }, { value: 'history', label: 'Receipt history' }];
 const statusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -34,19 +35,20 @@ function withPrefillParty(list, prefill, idKey, nameKey) {
 
 function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyParams }) {
   const queryClient = useQueryClient();
+  const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(filterCompanyId);
   const [form, setForm] = useState({ customer_id: '', sale_id: '', amount: '', mode: 'cash', receipt_date: today(), reference: '', notes: '', is_advance: false });
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
 
   const { data: formData } = useQuery({
-    queryKey: ['receipt-form-data', filterCompanyId],
-    queryFn: () => api.get('/customer-receipts/form-data', { params: companyParams }).then((r) => r.data.data),
-    enabled: open,
+    queryKey: ['receipt-form-data', targetCompanyId],
+    queryFn: () => api.get('/customer-receipts/form-data', { params: {}, ...companyRequest() }).then((r) => r.data.data),
+    enabled: open && Boolean(targetCompanyId),
   });
   const { data: receivables } = useQuery({
-    queryKey: ['receivables', 'modal', filterCompanyId, form.customer_id],
-    queryFn: () => api.get('/customer-receipts/receivables', { params: { ...companyParams, customer_id: form.customer_id } }).then((r) => r.data.data.receivables),
-    enabled: open && Boolean(form.customer_id),
+    queryKey: ['receivables', 'modal', targetCompanyId, form.customer_id],
+    queryFn: () => api.get('/customer-receipts/receivables', { params: { customer_id: form.customer_id }, ...companyRequest() }).then((r) => r.data.data.receivables),
+    enabled: open && Boolean(form.customer_id) && Boolean(targetCompanyId),
   });
 
   if (open && prefill && applied !== prefill.key) {
@@ -62,7 +64,7 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
         amount: Number(form.amount) || 0, mode: form.mode, receipt_date: form.receipt_date,
         reference: form.reference || null, notes: form.notes || null,
         is_advance: form.is_advance,
-      }, withCompany(writeCompanyId(prefill, party, filterCompanyId)));
+      }, withCompany(writeCompanyId(prefill, party, targetCompanyId || filterCompanyId)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-receipts'] });
@@ -96,6 +98,7 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={(id) => { setFormCompanyId(id); setForm((f) => ({ ...f, customer_id: '', sale_id: '' })); }} className="sm:col-span-2" />
         <Field label="Customer" required error={err('customer_id')}>
           <Select value={form.customer_id} onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value, sale_id: '' }))} className={selectCls}>
             <option value="">Select customer…</option>
@@ -129,25 +132,27 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
 
 function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyParams }) {
   const queryClient = useQueryClient();
+  const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(prefill?.company_id || filterCompanyId);
   const [form, setForm] = useState({ customer_id: '', sale_id: '', amount: '' });
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
 
   const { data: formData } = useQuery({
-    queryKey: ['receipt-form-data', filterCompanyId],
-    queryFn: () => api.get('/customer-receipts/form-data', { params: companyParams }).then((r) => r.data.data),
-    enabled: open,
+    queryKey: ['receipt-form-data', targetCompanyId],
+    queryFn: () => api.get('/customer-receipts/form-data', { params: {}, ...companyRequest() }).then((r) => r.data.data),
+    enabled: open && Boolean(targetCompanyId),
   });
   const { data: receivables } = useQuery({
-    queryKey: ['receivables', 'advance', filterCompanyId, form.customer_id],
-    queryFn: () => api.get('/customer-receipts/receivables', { params: { ...companyParams, customer_id: form.customer_id } }).then((r) => r.data.data.receivables),
-    enabled: open && Boolean(form.customer_id),
+    queryKey: ['receivables', 'advance', targetCompanyId, form.customer_id],
+    queryFn: () => api.get('/customer-receipts/receivables', { params: { customer_id: form.customer_id }, ...companyRequest() }).then((r) => r.data.data.receivables),
+    enabled: open && Boolean(form.customer_id) && Boolean(targetCompanyId),
   });
 
   if (open && prefill && applied !== prefill.key) {
     const available = Number(prefill.advance_balance ?? 0);
     const due = Number(prefill.balance ?? 0);
     const applyAmt = available > 0 && due > 0 ? Math.min(available, due) : (available || due);
+    if (prefill.company_id) setFormCompanyId(String(prefill.company_id));
     setForm({
       customer_id: String(prefill.customer_id || ''),
       sale_id: prefill.sale_id ?? '',
@@ -163,7 +168,7 @@ function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyPar
         customer_id: form.customer_id,
         sale_id: form.sale_id,
         amount: Number(form.amount) || 0,
-      }, withCompany(writeCompanyId(prefill, party, filterCompanyId)));
+      }, withCompany(writeCompanyId(prefill, party, targetCompanyId || filterCompanyId)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-receipts'] });
@@ -197,6 +202,7 @@ function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyPar
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={(id) => { setFormCompanyId(id); setForm((f) => ({ ...f, customer_id: '', sale_id: '' })); }} className="sm:col-span-2" />
         <Field label="Customer" required error={err('customer_id')}>
           <Select value={form.customer_id} onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value, sale_id: '' }))} className={selectCls}>
             <option value="">Select customer…</option>

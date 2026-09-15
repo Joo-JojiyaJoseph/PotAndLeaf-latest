@@ -6,15 +6,16 @@ import SearchSelect from './SearchSelect';
 const variants = {
   primary: 'bg-leaf text-white shadow-soft hover:bg-leaf-hover',
   outline: 'bg-surface text-ink border border-line-strong hover:bg-sidebar',
+  secondary: 'bg-surface text-ink border border-line-strong hover:bg-sidebar',
   ghost: 'text-muted border border-line hover:bg-sidebar hover:text-ink',
   soft: 'bg-leaf-soft text-leaf-hover hover:brightness-[0.97]',
   danger: 'bg-danger text-white hover:brightness-95',
 };
 
 const sizes = {
-  sm: 'h-8 px-3 text-[12px]',
-  md: 'h-10 px-4 text-[13px]',
-  icon: 'h-9 w-9',
+  sm: 'min-h-10 px-3 text-[12px] sm:h-8 sm:min-h-8',
+  md: 'min-h-11 h-10 px-4 text-[13px]',
+  icon: 'h-11 w-11 sm:h-9 sm:w-9',
 };
 
 export function Button({ variant = 'primary', size = 'md', className, children, ...props }) {

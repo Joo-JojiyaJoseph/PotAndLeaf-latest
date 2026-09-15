@@ -34,6 +34,11 @@ class CommissionPromotion extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(ProductCategory::class, 'category_id');
+    }
+
     public function scopeForCompany($query, int|string $companyId)
     {
         return $query->where('company_id', $companyId);

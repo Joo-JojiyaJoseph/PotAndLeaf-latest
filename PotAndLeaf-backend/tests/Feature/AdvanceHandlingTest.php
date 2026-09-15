@@ -187,6 +187,28 @@ it('loads the dashboard when a super-admin filters all companies', function () {
         ->assertJsonStructure(['data' => ['sales' => ['total', 'count'], 'purchases', 'inventory']]);
 });
 
+it('loads cash and bank books when a super-admin filters all companies', function () {
+    $admin = \App\Models\User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
+    $headers = [
+        'Authorization' => 'Bearer '.$admin->createToken('test')->plainTextToken,
+        'X-Company-Id' => (string) $this->company->id,
+        'Accept' => 'application/json',
+    ];
+    $query = http_build_query([
+        'from' => now()->subDays(29)->toDateString(),
+        'to' => now()->toDateString(),
+        'company_id' => 'all',
+    ]);
+
+    $this->getJson('/api/reports/accounting/cash-book?'.$query, $headers)
+        ->assertOk()
+        ->assertJsonStructure(['data' => ['opening_balance', 'total_in', 'total_out', 'closing_balance', 'rows']]);
+
+    $this->getJson('/api/reports/accounting/bank-book?'.$query, $headers)
+        ->assertOk()
+        ->assertJsonStructure(['data' => ['opening_balance', 'total_in', 'total_out', 'closing_balance', 'rows']]);
+});
+
 it('records a receipt against another company when the header company differs', function () {
     $other = \App\Models\Company::create([
         'name' => 'Other Branch',
@@ -225,15 +247,39 @@ it('records a receipt against another company when the header company differs', 
 it('exports cash book and debtor ledger pdfs', function () {
     confirmCreditSale($this, 400);
 
-    $this->getJson('/api/reports/accounting/cash-book/export?from='.now()->toDateString().'&to='.now()->toDateString(), $this->apiHeaders())
-        ->assertOk()
-        ->assertHeader('content-type', 'application/pdf');
+    $cash = $this->getJson('/api/reports/accounting/cash-book/export?from='.now()->toDateString().'&to='.now()->toDateString(), $this->apiHeaders());
+    $cash->assertOk()->assertHeader('content-type', 'application/pdf');
+    expect(substr($cash->getContent(), 0, 4))->toBe('%PDF');
 
-    $this->getJson('/api/reports/accounting/debtor-ledger/export?'.http_build_query([
+    $ledger = $this->getJson('/api/reports/accounting/debtor-ledger/export?'.http_build_query([
         'customer_id' => $this->customer->id,
         'from' => now()->toDateString(),
         'to' => now()->toDateString(),
-    ]), $this->apiHeaders())
-        ->assertOk()
-        ->assertHeader('content-type', 'application/pdf');
+    ]), $this->apiHeaders());
+    $ledger->assertOk()->assertHeader('content-type', 'application/pdf');
+    expect(substr($ledger->getContent(), 0, 4))->toBe('%PDF');
+});
+
+it('exports cash and bank book pdfs when a super-admin filters all companies', function () {
+    $admin = \App\Models\User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
+    $headers = [
+        'Authorization' => 'Bearer '.$admin->createToken('test')->plainTextToken,
+        'X-Company-Id' => (string) $this->company->id,
+        'Accept' => 'application/json',
+    ];
+    $query = http_build_query([
+        'from' => now()->subDays(29)->toDateString(),
+        'to' => now()->toDateString(),
+        'company_id' => 'all',
+    ]);
+
+    $cash = $this->get('/api/reports/accounting/cash-book/export?'.$query, $headers);
+    $cash->assertOk();
+    expect($cash->headers->get('content-type'))->toContain('application/pdf')
+        ->and(substr($cash->getContent(), 0, 4))->toBe('%PDF');
+
+    $bank = $this->get('/api/reports/accounting/bank-book/export?'.$query, $headers);
+    $bank->assertOk();
+    expect($bank->headers->get('content-type'))->toContain('application/pdf')
+        ->and(substr($bank->getContent(), 0, 4))->toBe('%PDF');
 });

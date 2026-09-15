@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
-import { executePaymentSubmit } from '../../lib/paymentValidation';
+import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 
 const TABS = [{ value: 'payables', label: 'Payables' }, { value: 'history', label: 'Payment history' }];
 const payStatusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -35,19 +35,20 @@ function withPrefillParty(list, prefill, idKey, nameKey) {
 
 function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyParams }) {
   const queryClient = useQueryClient();
+  const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(filterCompanyId);
   const [form, setForm] = useState({ supplier_id: '', purchase_id: '', amount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false });
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
 
   const { data: formData } = useQuery({
-    queryKey: ['payment-form-data', filterCompanyId],
-    queryFn: () => api.get('/supplier-payments/form-data', { params: companyParams }).then((r) => r.data.data),
-    enabled: open,
+    queryKey: ['payment-form-data', targetCompanyId],
+    queryFn: () => api.get('/supplier-payments/form-data', { params: {}, ...companyRequest() }).then((r) => r.data.data),
+    enabled: open && Boolean(targetCompanyId),
   });
   const { data: payables } = useQuery({
-    queryKey: ['payables', 'modal', filterCompanyId, form.supplier_id],
-    queryFn: () => api.get('/supplier-payments/payables', { params: { ...companyParams, supplier_id: form.supplier_id } }).then((r) => r.data.data.payables),
-    enabled: open && Boolean(form.supplier_id),
+    queryKey: ['payables', 'modal', targetCompanyId, form.supplier_id],
+    queryFn: () => api.get('/supplier-payments/payables', { params: { supplier_id: form.supplier_id }, ...companyRequest() }).then((r) => r.data.data.payables),
+    enabled: open && Boolean(form.supplier_id) && Boolean(targetCompanyId),
   });
 
   if (open && prefill && applied !== prefill.key) {
@@ -65,7 +66,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
         mode: form.mode, payment_date: form.payment_date,
         reference: form.reference || null, notes: form.notes || null,
         is_advance: form.is_advance,
-      }, withCompany(writeCompanyId(prefill, party, filterCompanyId)));
+      }, withCompany(writeCompanyId(prefill, party, targetCompanyId || filterCompanyId)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supplier-payments'] });
@@ -113,6 +114,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={(id) => { setFormCompanyId(id); setForm((f) => ({ ...f, supplier_id: '', purchase_id: '' })); }} className="sm:col-span-2" />
         <Field label="Supplier" required error={err('supplier_id')}>
           <Select value={form.supplier_id} onChange={(e) => setForm((f) => ({ ...f, supplier_id: e.target.value, purchase_id: '' }))} className={selectCls}>
             <option value="">Select supplier…</option>
@@ -146,25 +148,27 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
 
 function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyParams }) {
   const queryClient = useQueryClient();
+  const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(prefill?.company_id || filterCompanyId);
   const [form, setForm] = useState({ supplier_id: '', purchase_id: '', amount: '' });
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
 
   const { data: formData } = useQuery({
-    queryKey: ['payment-form-data', filterCompanyId],
-    queryFn: () => api.get('/supplier-payments/form-data', { params: companyParams }).then((r) => r.data.data),
-    enabled: open,
+    queryKey: ['payment-form-data', targetCompanyId],
+    queryFn: () => api.get('/supplier-payments/form-data', { params: {}, ...companyRequest() }).then((r) => r.data.data),
+    enabled: open && Boolean(targetCompanyId),
   });
   const { data: payables } = useQuery({
-    queryKey: ['payables', 'advance', filterCompanyId, form.supplier_id],
-    queryFn: () => api.get('/supplier-payments/payables', { params: { ...companyParams, supplier_id: form.supplier_id } }).then((r) => r.data.data.payables),
-    enabled: open && Boolean(form.supplier_id),
+    queryKey: ['payables', 'advance', targetCompanyId, form.supplier_id],
+    queryFn: () => api.get('/supplier-payments/payables', { params: { supplier_id: form.supplier_id }, ...companyRequest() }).then((r) => r.data.data.payables),
+    enabled: open && Boolean(form.supplier_id) && Boolean(targetCompanyId),
   });
 
   if (open && prefill && applied !== prefill.key) {
     const available = Number(prefill.advance_balance ?? 0);
     const due = Number(prefill.balance ?? 0);
     const applyAmt = available > 0 && due > 0 ? Math.min(available, due) : (available || due);
+    if (prefill.company_id) setFormCompanyId(String(prefill.company_id));
     setForm({
       supplier_id: String(prefill.supplier_id || ''),
       purchase_id: prefill.purchase_id ?? '',
@@ -180,7 +184,7 @@ function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyPar
         supplier_id: form.supplier_id,
         purchase_id: form.purchase_id,
         amount: Number(form.amount) || 0,
-      }, withCompany(writeCompanyId(prefill, party, filterCompanyId)));
+      }, withCompany(writeCompanyId(prefill, party, targetCompanyId || filterCompanyId)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supplier-payments'] });
@@ -215,6 +219,7 @@ function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyPar
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={(id) => { setFormCompanyId(id); setForm((f) => ({ ...f, supplier_id: '', purchase_id: '' })); }} className="sm:col-span-2" />
         <Field label="Supplier" required error={err('supplier_id')}>
           <Select value={form.supplier_id} onChange={(e) => setForm((f) => ({ ...f, supplier_id: e.target.value, purchase_id: '' }))} className={selectCls}>
             <option value="">Select supplier…</option>

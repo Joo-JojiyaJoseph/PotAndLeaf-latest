@@ -1,5 +1,4 @@
-import {
-  ChartBarIcon,
+import { ChartBarIcon,
   ArrowTrendingUpIcon,
   TrophyIcon,
   DocumentTextIcon,
@@ -21,6 +20,8 @@ import {
   BookOpenIcon,
   CalendarDaysIcon,
   ChartPieIcon,
+  SparklesIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
 
 /** Report catalog — icon, label, permission flags. */
@@ -30,6 +31,8 @@ export const REPORT_TABS = [
   { value: 'leaderboard', label: 'Leaderboard', shortLabel: 'Leaderboard', icon: TrophyIcon },
   { value: 'gst_reconciliation', label: 'GST Reconciliation', shortLabel: 'GST', icon: DocumentTextIcon, accounting: true },
   { value: 'commission_report', label: 'Commission Report', shortLabel: 'Commission', icon: BanknotesIcon, commission: true },
+  { value: 'loyalty_report', label: 'Loyalty Points', shortLabel: 'Loyalty', icon: SparklesIcon, loyalty: true },
+  { value: 'whatsapp_report', label: 'WhatsApp Messages', shortLabel: 'WhatsApp', icon: ChatBubbleLeftRightIcon, whatsapp: true },
   { value: 'margin', label: 'Profit & Margin', shortLabel: 'Margin', icon: ScaleIcon, ho: true },
   { value: 'profit', label: 'Approx. Profit', shortLabel: 'Profit', icon: CalculatorIcon, ho: true },
   { value: 'price_levels', label: 'Sales by Price Tier', shortLabel: 'Price Tier', icon: TagIcon },
@@ -53,13 +56,15 @@ export const REPORT_TABS = [
   { value: 'reorder', label: 'Reorder Report', shortLabel: 'Reorder', icon: ClipboardDocumentListIcon, po: true },
 ];
 
-export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo }) {
+export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport }) {
   return tabs.filter((t) => {
     if (t.rental) return canRentalReports;
     if (t.production) return canProductionReports;
     if (t.transfer) return canTransferReports;
     if (t.accounting) return canAccounting;
     if (t.commission) return canCommissionReport;
+    if (t.loyalty) return canLoyaltyReport;
+    if (t.whatsapp) return canWhatsappReport;
     if (t.inventory) return canInventory;
     if (t.po) return canPo;
     if (t.ho) return canHo;

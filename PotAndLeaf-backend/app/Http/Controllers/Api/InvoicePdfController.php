@@ -17,7 +17,7 @@ class InvoicePdfController extends Controller
     {
         $company = $request->attributes->get('company');
         abort_unless($request->user()->hasPermission('sales.view', $company->id), 403);
-        abort_unless((string) $sale->company_id === (string) $company->id, 404);
+        $this->assertRecordCompany($request, (string) $sale->company_id);
 
         $sale->load([
             'items',
@@ -72,7 +72,7 @@ class InvoicePdfController extends Controller
     {
         $company = $request->attributes->get('company');
         abort_unless($request->user()->hasPermission('rental.view', $company->id), 403);
-        abort_unless((string) $rentalInvoice->company_id === (string) $company->id, 404);
+        $this->assertRecordCompany($request, (string) $rentalInvoice->company_id);
 
         $rentalInvoice->load([
             'rental.items',

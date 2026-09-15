@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
+import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', qty: '', rate: '', gst_rate: '' });
@@ -14,16 +14,16 @@ const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 t
 
 export default function AdvanceOrderForm() {
   const navigate = useNavigate();
-  const { activeCompany } = useAuth();
+  const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany();
   const [header, setHeader] = useState({ customer_id: '', order_date: today(), expected_date: '', advance_amount: '', advance_mode: 'cash', notes: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['advance-form-data', activeCompany?.id],
-    queryFn: () => api.get('/advance-orders/form-data').then((r) => r.data.data),
-    enabled: Boolean(activeCompany),
+    queryKey: ['advance-form-data', targetCompanyId],
+    queryFn: () => api.get('/advance-orders/form-data', companyRequest()).then((r) => r.data.data),
+    enabled: Boolean(targetCompanyId),
   });
   const customers = data?.customers ?? [];
   const products = data?.products ?? [];
@@ -50,7 +50,7 @@ export default function AdvanceOrderForm() {
         advance_mode: header.advance_mode,
         notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, qty: Number(l.qty) || 0, rate: Number(l.rate) || 0, gst_rate: Number(l.gst_rate) || 0 })),
-      });
+      }, companyRequest());
       navigate(`/advance-orders/${res.data.data.id}`);
     } catch (e) {
       setErrors(e.response?.data?.errors ?? { _: [e.response?.data?.message ?? 'Could not save booking.'] });
@@ -69,6 +69,7 @@ export default function AdvanceOrderForm() {
       {errors._ && <div className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{errors._[0]}</div>}
 
       <Card className="p-5">
+        <FormCompanyField value={formCompanyId} onChange={(id) => { setFormCompanyId(id); setHeader((h) => ({ ...h, customer_id: '' })); setLines([emptyLine()]); }} className="mb-4" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div className="sm:col-span-2">
             <Field label="Customer" required error={err('customer_id')}>

@@ -128,8 +128,8 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
       delete exportParams.per_page;
       await downloadWithParams('/inventory/ledger/export', exportParams, `stock-ledger-${applied.from || 'all'}.csv`, 'text/csv');
       toast.success('Ledger exported.');
-    } catch {
-      toast.error('Export failed.');
+    } catch (e) {
+      toast.error(e?.message || 'Export failed.');
     }
   }
 

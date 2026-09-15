@@ -58,6 +58,7 @@ class SupervisorCommissionService
             $rule = CommissionRule::forCompany($companyId)
                 ->where('user_id', $order->supervisor_id)
                 ->where('is_active', true)
+                ->where('is_supervisor', true)
                 ->first();
 
             $product = Product::find($productId);

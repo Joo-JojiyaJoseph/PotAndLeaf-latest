@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon, TrashIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
-import api from '../../lib/api';
+import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
+import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import { formatCurrency, formatDate } from '../../lib/format';
 
 const TABS = [
   { value: 'payouts', label: 'Payouts' },
   { value: 'rules', label: 'Rules' },
+  { value: 'managers', label: 'Managers' },
   { value: 'promotions', label: 'Promotions' },
   { value: 'seasonal', label: 'Seasonal care' },
   { value: 'templates', label: 'WhatsApp' },
@@ -22,6 +24,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 function RuleModal({ open, onClose, staff, editing }) {
   const queryClient = useQueryClient();
+  const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const [form, setForm] = useState({
     user_id: '', rate_type: 'percent', base_percent: '', per_unit_amount: '',
     monthly_target: '', target_bonus: '', is_active: true, is_supervisor: false, notes: '',
@@ -55,7 +58,7 @@ function RuleModal({ open, onClose, staff, editing }) {
       is_active: form.is_active,
       is_supervisor: form.is_supervisor,
       notes: form.notes || null,
-    }),
+    }, companyRequest()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-rules'] }); handleClose(); },
     onError: (err) => setErrors(err.response?.data?.errors ?? {}),
   });
@@ -78,6 +81,7 @@ function RuleModal({ open, onClose, staff, editing }) {
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
         <Field label="Staff member" required error={err('user_id')}>
           <Select value={form.user_id} onChange={set('user_id')} className={selectCls} disabled={Boolean(editing)}>
             <option value="">Select…</option>
@@ -175,15 +179,27 @@ function DailyTargetModal({ open, onClose, rule }) {
   );
 }
 
-function PromotionModal({ open, onClose }) {
+function PromotionModal({ open, onClose, products, categories }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ name: '', start_date: today(), end_date: today(), min_qty: '1', bonus_per_unit: '0', bonus_fixed: '0', bonus_percent: '0' });
+  const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
+  const [form, setForm] = useState({
+    name: '', product_id: '', category_id: '', start_date: today(), end_date: today(),
+    min_qty: '1', bonus_per_unit: '0', bonus_fixed: '0', bonus_percent: '0',
+  });
 
   const saveM = useMutation({
     mutationFn: () => api.post('/commission/promotions', {
-      ...form, min_qty: Number(form.min_qty), bonus_per_unit: Number(form.bonus_per_unit),
-      bonus_fixed: Number(form.bonus_fixed), bonus_percent: Number(form.bonus_percent), is_active: true,
-    }),
+      name: form.name,
+      product_id: form.product_id || null,
+      category_id: form.category_id || null,
+      start_date: form.start_date,
+      end_date: form.end_date,
+      min_qty: Number(form.min_qty),
+      bonus_per_unit: Number(form.bonus_per_unit),
+      bonus_fixed: Number(form.bonus_fixed),
+      bonus_percent: Number(form.bonus_percent),
+      is_active: true,
+    }, companyRequest()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-promotions'] }); onClose(); },
   });
 
@@ -191,9 +207,22 @@ function PromotionModal({ open, onClose }) {
 
   return (
     <Modal open={open} onClose={onClose} title="New product promotion"
-      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save</Button></>}>
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending || !form.name} onClick={() => saveM.mutate()}>Save</Button></>}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
         <Field label="Name" className="sm:col-span-2"><Input value={form.name} onChange={set('name')} /></Field>
+        <Field label="Product">
+          <Select value={form.product_id} onChange={set('product_id')} className={selectCls}>
+            <option value="">Any product</option>
+            {(products ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Category">
+          <Select value={form.category_id} onChange={set('category_id')} className={selectCls}>
+            <option value="">Any category</option>
+            {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+        </Field>
         <Field label="Start"><Input type="date" value={form.start_date} onChange={set('start_date')} /></Field>
         <Field label="End"><Input type="date" value={form.end_date} onChange={set('end_date')} /></Field>
         <Field label="Min qty"><Input type="number" value={form.min_qty} onChange={set('min_qty')} /></Field>
@@ -205,12 +234,24 @@ function PromotionModal({ open, onClose }) {
   );
 }
 
-function SeasonalModal({ open, onClose }) {
+function SeasonalModal({ open, onClose, products, categories }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ name: '', days_after_purchase: '15', message_template: 'Hi {customer_name}, care tips for your {product_name} from {company_name}.' });
+  const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
+  const [form, setForm] = useState({
+    name: '', product_id: '', category_id: '', days_after_purchase: '15', max_sends_per_customer: '1',
+    message_template: 'Hi {customer_name}, care tips for your {product_name} from {company_name}.',
+  });
 
   const saveM = useMutation({
-    mutationFn: () => api.post('/commission/seasonal-care-rules', { ...form, days_after_purchase: Number(form.days_after_purchase), is_active: true }),
+    mutationFn: () => api.post('/commission/seasonal-care-rules', {
+      name: form.name,
+      product_id: form.product_id || null,
+      category_id: form.category_id || null,
+      days_after_purchase: Number(form.days_after_purchase),
+      max_sends_per_customer: Number(form.max_sends_per_customer) || 0,
+      message_template: form.message_template,
+      is_active: true,
+    }, companyRequest()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['seasonal-care'] }); onClose(); },
   });
 
@@ -218,11 +259,25 @@ function SeasonalModal({ open, onClose }) {
 
   return (
     <Modal open={open} onClose={onClose} title="Seasonal care rule"
-      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save</Button></>}>
-      <div className="space-y-3">
-        <Field label="Name"><Input value={form.name} onChange={set('name')} /></Field>
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending || !form.name} onClick={() => saveM.mutate()}>Save</Button></>}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
+        <Field label="Name" className="sm:col-span-2"><Input value={form.name} onChange={set('name')} /></Field>
+        <Field label="Product">
+          <Select value={form.product_id} onChange={set('product_id')} className={selectCls}>
+            <option value="">Any purchased product</option>
+            {(products ?? []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Category">
+          <Select value={form.category_id} onChange={set('category_id')} className={selectCls}>
+            <option value="">Any category</option>
+            {(categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+        </Field>
         <Field label="Days after purchase"><Input type="number" value={form.days_after_purchase} onChange={set('days_after_purchase')} /></Field>
-        <Field label="Message template"><textarea className={selectCls + ' min-h-24 py-2'} value={form.message_template} onChange={set('message_template')} /></Field>
+        <Field label="Max sends per customer"><Input type="number" value={form.max_sends_per_customer} onChange={set('max_sends_per_customer')} /></Field>
+        <Field label="Message template" className="sm:col-span-2"><textarea className={selectCls + ' min-h-24 py-2'} value={form.message_template} onChange={set('message_template')} /></Field>
       </div>
     </Modal>
   );
@@ -230,10 +285,11 @@ function SeasonalModal({ open, onClose }) {
 
 function TemplateModal({ open, onClose }) {
   const queryClient = useQueryClient();
+  const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const [form, setForm] = useState({ slug: 'eod_commission', name: 'EOD Commission Summary', body: '*EOD Summary* {employee_name}\nDate: {date}\nSales: {sales_total}\nTotal: {total_incentive}' });
 
   const saveM = useMutation({
-    mutationFn: () => api.post('/commission/whatsapp-templates', { ...form, is_active: true }),
+    mutationFn: () => api.post('/commission/whatsapp-templates', { ...form, is_active: true }, companyRequest()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wa-templates'] }); onClose(); },
   });
 
@@ -243,6 +299,7 @@ function TemplateModal({ open, onClose }) {
     <Modal open={open} onClose={onClose} title="WhatsApp template"
       footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save</Button></>}>
       <div className="space-y-3">
+        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} />
         <Field label="Slug"><Input value={form.slug} onChange={set('slug')} /></Field>
         <Field label="Name"><Input value={form.name} onChange={set('name')} /></Field>
         <Field label="Body"><textarea className={selectCls + ' min-h-32 py-2'} value={form.body} onChange={set('body')} /></Field>
@@ -251,8 +308,51 @@ function TemplateModal({ open, onClose }) {
   );
 }
 
+function ManagerModal({ open, onClose, staff, locations }) {
+  const queryClient = useQueryClient();
+  const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
+  const [form, setForm] = useState({ user_id: '', location_id: '', percent: '2', effective_from: '', effective_to: '' });
+  const saveM = useMutation({
+    mutationFn: () => api.post('/commission/manager-rules', {
+      user_id: Number(form.user_id),
+      location_id: form.location_id || null,
+      percent: Number(form.percent),
+      effective_from: form.effective_from || null,
+      effective_to: form.effective_to || null,
+      is_active: true,
+    }, companyRequest()),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-manager-rules'] }); onClose(); },
+  });
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  return (
+    <Modal open={open} onClose={onClose} title="Manager branch commission"
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending || !form.user_id} onClick={() => saveM.mutate()}>Save</Button></>}>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
+        <Field label="Manager" className="sm:col-span-2">
+          <Select value={form.user_id} onChange={set('user_id')} className={selectCls}>
+            <option value="">Select</option>
+            {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Branch">
+          <Select value={form.location_id} onChange={set('location_id')} className={selectCls}>
+            <option value="">All branches</option>
+            {(locations ?? []).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </Select>
+        </Field>
+        <Field label="Percent of net sales"><Input type="number" step="0.001" value={form.percent} onChange={set('percent')} /></Field>
+        <Field label="From"><Input type="date" value={form.effective_from} onChange={set('effective_from')} /></Field>
+        <Field label="To"><Input type="date" value={form.effective_to} onChange={set('effective_to')} /></Field>
+      </div>
+    </Modal>
+  );
+}
+
 function PayoutModal({ open, onClose, staff }) {
   const queryClient = useQueryClient();
+  const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const [userId, setUserId] = useState('');
   const [period, setPeriod] = useState(thisMonth());
   const [amount, setAmount] = useState('');
@@ -264,7 +364,7 @@ function PayoutModal({ open, onClose, staff }) {
 
   const computeQ = useQuery({
     queryKey: ['commission-compute', userId, period],
-    queryFn: () => api.get('/commission/compute', { params: { user_id: userId, period } }).then((r) => r.data.data),
+    queryFn: () => api.get('/commission/compute', { params: { user_id: userId, period }, ...companyRequest() }).then((r) => r.data.data),
     enabled: open && Boolean(userId) && /^\d{4}-\d{2}$/.test(period),
   });
   const computed = computeQ.data;
@@ -275,7 +375,7 @@ function PayoutModal({ open, onClose, staff }) {
       sales_total: computed?.sales_total ?? 0,
       amount: amount === '' ? (computed?.commission ?? 0) : Number(amount),
       mode, payment_date: paymentDate, reference: reference || null, status,
-    }),
+    }, companyRequest()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-payouts'] }); handleClose(); },
     onError: (err) => setErrors(err.response?.data?.errors ?? {}),
   });
@@ -291,6 +391,7 @@ function PayoutModal({ open, onClose, staff }) {
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
         <Field label="Staff member" required error={err('user_id')}>
           <Select value={userId} onChange={(e) => setUserId(e.target.value)} className={selectCls}>
             <option value="">Select…</option>
@@ -349,6 +450,7 @@ export default function CommissionList() {
   const [tierRule, setTierRule] = useState(null);
   const [targetRule, setTargetRule] = useState(null);
   const [promoModal, setPromoModal] = useState(false);
+  const [managerModal, setManagerModal] = useState(false);
   const [seasonalModal, setSeasonalModal] = useState(false);
   const [templateModal, setTemplateModal] = useState(false);
 
@@ -377,6 +479,11 @@ export default function CommissionList() {
     queryFn: () => api.get('/commission/transactions', { params: companyParams }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'ledger',
   });
+  const managerQ = useQuery({
+    queryKey: ['commission-manager-rules', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/commission/manager-rules', { params: companyParams }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'managers',
+  });
   const promosQ = useQuery({
     queryKey: ['commission-promotions', activeCompany?.id, filterCompanyId],
     queryFn: () => api.get('/commission/promotions', { params: companyParams }).then((r) => r.data.data),
@@ -398,7 +505,7 @@ export default function CommissionList() {
     enabled: Boolean(activeCompany) && tab === 'templates',
   });
   const sendEodM = useMutation({
-    mutationFn: () => api.post('/commission/send-eod', { date: eodDate, force: true }),
+    mutationFn: () => api.post('/commission/send-eod', { date: eodDate, force: true }, withCompany(filterCompanyId !== 'all' ? filterCompanyId : undefined)),
   });
   const delM = useMutation({
     mutationFn: (id) => api.delete(`/commission/payouts/${id}`),
@@ -406,14 +513,18 @@ export default function CommissionList() {
   });
 
   const staff = formData?.staff ?? [];
+  const locations = formData?.locations ?? [];
+  const products = formData?.products ?? [];
+  const categories = formData?.categories ?? [];
   const rules = rulesQ.data?.data ?? [];
   const payouts = payoutsQ.data?.data ?? [];
   const supervisorEntries = supervisorQ.data?.data ?? [];
   const ledgerRows = ledgerQ.data?.data ?? [];
   const promotions = promosQ.data ?? [];
+  const managerRules = managerQ.data ?? [];
   const seasonalRules = seasonalQ.data ?? [];
   const templates = templatesQ.data ?? [];
-  const waLogs = waLogsQ.data?.data ?? [];
+  const waLogs = Array.isArray(waLogsQ.data) ? waLogsQ.data : (waLogsQ.data?.data ?? []);
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -425,6 +536,7 @@ export default function CommissionList() {
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
           {tab === 'rules' && can('commission.manage') && <Button size="sm" onClick={() => { setEditingRule(null); setRuleModal(true); }}><PlusIcon className="size-4" /> Set rule</Button>}
+          {tab === 'managers' && can('commission.manage') && <Button size="sm" onClick={() => setManagerModal(true)}><PlusIcon className="size-4" /> Manager rule</Button>}
           {tab === 'promotions' && can('commission.manage') && <Button size="sm" onClick={() => setPromoModal(true)}><PlusIcon className="size-4" /> Add promotion</Button>}
           {tab === 'seasonal' && can('commission.manage') && <Button size="sm" onClick={() => setSeasonalModal(true)}><PlusIcon className="size-4" /> Add rule</Button>}
           {tab === 'templates' && can('whatsapp.templates') && <Button size="sm" onClick={() => setTemplateModal(true)}><PlusIcon className="size-4" /> Add template</Button>}
@@ -440,10 +552,10 @@ export default function CommissionList() {
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-line">
+      <div className="flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map((t) => (
           <button key={t.value} onClick={() => setTab(t.value)}
-            className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (tab === t.value ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
+            className={'min-h-11 shrink-0 border-b-2 px-3 py-2 text-sm transition-colors ' + (tab === t.value ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
             {t.label}
           </button>
         ))}
@@ -529,23 +641,58 @@ export default function CommissionList() {
         </Card>
       )}
 
+      {tab === 'managers' && (
+        <Card className="overflow-hidden">
+          {managerQ.isLoading ? <div className="flex justify-center py-16"><Spinner /></div>
+            : managerRules.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No manager rules. Commission is a percent of branch net sales (sales less returns and loyalty discount).</div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5">Manager</th>
+                    <th className="microlabel px-4 py-2.5">Branch</th>
+                    <th className="microlabel px-4 py-2.5 text-right">Percent</th>
+                    <th className="microlabel px-4 py-2.5">Effective</th>
+                  </tr></thead>
+                  <tbody>{managerRules.map((r) => (
+                    <tr key={r.id} className="border-b border-line/60">
+                      <td className="px-4 py-2.5 font-medium">{r.user?.name ?? r.user_id}</td>
+                      <td className="px-4 py-2.5 text-muted">{r.location?.name ?? 'All branches'}</td>
+                      <td className="tnum px-4 py-2.5 text-right">{r.percent}%</td>
+                      <td className="px-4 py-2.5 text-muted">{r.effective_from ? formatDate(r.effective_from) : '—'} – {r.effective_to ? formatDate(r.effective_to) : '—'}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+        </Card>
+      )}
+
       {tab === 'promotions' && (
         <Card className="overflow-hidden">
           {promosQ.isLoading ? <div className="flex justify-center py-16"><Spinner /></div>
             : promotions.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No promotions configured.</div>
             : (
-              <table className="w-full text-sm">
-                <thead><tr className="border-b border-line text-left text-faint">
-                  <th className="microlabel px-4 py-2.5">Name</th><th className="microlabel px-4 py-2.5">Period</th>
-                  <th className="microlabel px-4 py-2.5 text-right">Per unit</th><th className="microlabel px-4 py-2.5 text-right">Fixed</th>
-                </tr></thead>
-                <tbody>{promotions.map((p) => (
-                  <tr key={p.id} className="border-b border-line/60"><td className="px-4 py-2.5 font-medium">{p.name}</td>
-                    <td className="px-4 py-2.5 text-muted">{formatDate(p.start_date)} – {formatDate(p.end_date)}</td>
-                    <td className="tnum px-4 py-2.5 text-right">{formatCurrency(p.bonus_per_unit)}</td>
-                    <td className="tnum px-4 py-2.5 text-right">{formatCurrency(p.bonus_fixed)}</td></tr>
-                ))}</tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5">Name</th>
+                    <th className="microlabel px-4 py-2.5">Applies to</th>
+                    <th className="microlabel px-4 py-2.5">Period</th>
+                    <th className="microlabel px-4 py-2.5 text-right">Per unit</th>
+                    <th className="microlabel px-4 py-2.5 text-right">%</th>
+                  </tr></thead>
+                  <tbody>{promotions.map((p) => (
+                    <tr key={p.id} className="border-b border-line/60">
+                      <td className="px-4 py-2.5 font-medium">{p.name}</td>
+                      <td className="px-4 py-2.5 text-muted">{p.product?.name || p.category?.name || 'All products'}</td>
+                      <td className="px-4 py-2.5 text-muted whitespace-nowrap">{formatDate(p.start_date)} – {formatDate(p.end_date)}</td>
+                      <td className="tnum px-4 py-2.5 text-right">{formatCurrency(p.bonus_per_unit)}</td>
+                      <td className="tnum px-4 py-2.5 text-right">{p.bonus_percent ? `${p.bonus_percent}%` : '—'}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
             )}
         </Card>
       )}
@@ -555,6 +702,7 @@ export default function CommissionList() {
           {seasonalQ.isLoading ? <div className="flex justify-center py-16"><Spinner /></div>
             : seasonalRules.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No seasonal care rules.</div>
             : (
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead><tr className="border-b border-line text-left text-faint">
                   <th className="microlabel px-4 py-2.5">Name</th><th className="microlabel px-4 py-2.5">Trigger</th><th className="microlabel px-4 py-2.5">Template</th>
@@ -565,6 +713,7 @@ export default function CommissionList() {
                     <td className="px-4 py-2.5 text-xs text-muted truncate max-w-xs">{r.message_template}</td></tr>
                 ))}</tbody>
               </table>
+              </div>
             )}
         </Card>
       )}
@@ -586,6 +735,7 @@ export default function CommissionList() {
             <div className="border-b border-line px-4 py-2 text-sm font-semibold">Recent messages</div>
             {waLogs.length === 0 ? <div className="px-4 py-10 text-center text-sm text-muted">No messages logged yet.</div>
               : (
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-line text-left text-faint">
                     <th className="microlabel px-4 py-2.5">Date</th><th className="microlabel px-4 py-2.5">Type</th>
@@ -600,6 +750,7 @@ export default function CommissionList() {
                     </tr>
                   ))}</tbody>
                 </table>
+                </div>
               )}
           </Card>
         </div>
@@ -674,10 +825,11 @@ export default function CommissionList() {
       <RuleModal open={ruleModal} onClose={() => { setRuleModal(false); setEditingRule(null); }} staff={staff} editing={editingRule} />
       <TierEditorModal open={Boolean(tierRule)} onClose={() => setTierRule(null)} rule={tierRule} />
       <DailyTargetModal open={Boolean(targetRule)} onClose={() => setTargetRule(null)} rule={targetRule} />
-      <PromotionModal open={promoModal} onClose={() => setPromoModal(false)} />
-      <SeasonalModal open={seasonalModal} onClose={() => setSeasonalModal(false)} />
+      <PromotionModal open={promoModal} onClose={() => setPromoModal(false)} products={products} categories={categories} />
+      <SeasonalModal open={seasonalModal} onClose={() => setSeasonalModal(false)} products={products} categories={categories} />
       <TemplateModal open={templateModal} onClose={() => setTemplateModal(false)} />
       <PayoutModal open={payoutModal} onClose={() => setPayoutModal(false)} staff={staff} />
+      <ManagerModal open={managerModal} onClose={() => setManagerModal(false)} staff={staff} locations={locations} />
     </div>
   );
 }

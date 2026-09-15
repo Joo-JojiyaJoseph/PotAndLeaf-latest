@@ -59,10 +59,11 @@ export default function CustomersList() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['customers'] });
   const saveM = useMutation({
     mutationFn: (payload) => {
-      const { id, target_company_id, ...data } = payload;
-      const headerCompany = target_company_id ?? editing?.company_id;
+      const { id, target_company_id, company_id, ...data } = payload;
+      const headerCompany = target_company_id ?? company_id ?? editing?.company_id;
       const cfg = headerCompany ? withCompany(headerCompany) : {};
-      return id ? api.put(`/customers/${id}`, data, cfg) : api.post('/customers', data, cfg);
+      const body = id && isSuperAdmin && company_id ? { ...data, company_id } : data;
+      return id ? api.put(`/customers/${id}`, body, cfg) : api.post('/customers', data, cfg);
     },
     onSuccess: (_r, payload) => { invalidate(); setEditing(null); toast.success(payload.id ? 'Customer updated.' : 'Customer created.'); },
     onError: (err) => { setErrors(err.response?.data?.errors ?? {}); toast.error(err.response?.data?.message ?? 'Could not save customer.'); },
@@ -92,7 +93,13 @@ export default function CustomersList() {
     setFormCompanyId(createCompanyId);
     setPickedCompany(!isSuperAdmin || Boolean(createCompanyId));
   };
-  const openEdit = (c) => { setForm({ ...empty, ...c, photo: c.photo ?? null }); setErrors({}); setEditing(c); setPickedCompany(true); };
+  const openEdit = (c) => {
+    setForm({ ...empty, ...c, photo: c.photo ?? null });
+    setErrors({});
+    setEditing(c);
+    setFormCompanyId(c.company_id ?? companyId ?? '');
+    setPickedCompany(true);
+  };
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const err = (k) => fieldError(errors, k);
   const rows = data?.data ?? [];
@@ -176,6 +183,7 @@ export default function CustomersList() {
               target_company_id: isCreate && isSuperAdmin
                 ? formCompanyId
                 : (editing?.company_id ?? undefined),
+              company_id: !isCreate && isSuperAdmin && formCompanyId ? formCompanyId : undefined,
             };
             if (!payload.id) delete payload.customer_code;
             saveM.mutate(payload, { onSettled: release });
@@ -192,6 +200,15 @@ export default function CustomersList() {
                 </Select>
               </Field>
               <p className="mt-1.5 text-xs text-muted">Choose which company this customer belongs to. Your workspace company stays unchanged.</p>
+            </div>
+          )}
+          {isSuperAdmin && editing?.id && (
+            <div className="rounded-xl bg-leaf-soft/50 p-3">
+              <Field label="Company" required>
+                <Select value={formCompanyId} onChange={(e) => setFormCompanyId(e.target.value)} className={selectCls}>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+              </Field>
             </div>
           )}
           {(editing?.id || !isSuperAdmin || companyReady) && (

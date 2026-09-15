@@ -6,6 +6,7 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
+import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import Pagination from '../../components/Pagination';
 
 const ledgerTone = { earn: 'active', redeem: 'pending', reverse: 'blocked' };
@@ -13,6 +14,7 @@ const ledgerTone = { earn: 'active', redeem: 'pending', reverse: 'blocked' };
 export default function LoyaltyPage() {
   const { activeCompany, can, companies, isSuperAdmin } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
+  const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -38,7 +40,7 @@ export default function LoyaltyPage() {
   const adjustM = useMutation({
     mutationFn: () => {
       const party = (data?.customers?.data ?? []).find((c) => String(c.id) === String(adjustForm.customer_id));
-      return api.post('/loyalty/adjust', { customer_id: adjustForm.customer_id, points: Number(adjustForm.points), reason: adjustForm.reason }, withCompany(party?.company_id));
+      return api.post('/loyalty/adjust', { customer_id: adjustForm.customer_id, points: Number(adjustForm.points), reason: adjustForm.reason }, withCompany(party?.company_id || formCompanyId));
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loyalty'] }); setAdjustOpen(false); setAdjustForm({ customer_id: '', points: '', reason: '' }); },
   });
@@ -48,7 +50,7 @@ export default function LoyaltyPage() {
       name: ruleForm.name, rule_type: ruleForm.rule_type,
       earn_rupees: Number(ruleForm.earn_rupees), earn_points: Number(ruleForm.earn_points),
       customer_tier: ruleForm.customer_tier || null, is_active: true,
-    }),
+    }, companyRequest()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loyalty-rules'] }); setRuleOpen(false); },
   });
 
@@ -191,6 +193,7 @@ export default function LoyaltyPage() {
       <Modal open={adjustOpen} onClose={() => setAdjustOpen(false)} title="Adjust customer points"
         footer={<><Button variant="ghost" size="sm" onClick={() => setAdjustOpen(false)}>Cancel</Button><Button size="sm" disabled={adjustM.isPending} onClick={() => adjustM.mutate()}>Save</Button></>}>
         <div className="space-y-3">
+          <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} />
           <Field label="Customer ID"><Input value={adjustForm.customer_id} onChange={(e) => setAdjustForm((f) => ({ ...f, customer_id: e.target.value }))} placeholder="Paste customer UUID" /></Field>
           <Field label="Points (+/-)"><Input type="number" value={adjustForm.points} onChange={(e) => setAdjustForm((f) => ({ ...f, points: e.target.value }))} /></Field>
           <Field label="Reason"><Input value={adjustForm.reason} onChange={(e) => setAdjustForm((f) => ({ ...f, reason: e.target.value }))} /></Field>
@@ -200,6 +203,7 @@ export default function LoyaltyPage() {
       <Modal open={ruleOpen} onClose={() => setRuleOpen(false)} title="Loyalty earn rule"
         footer={<><Button variant="ghost" size="sm" onClick={() => setRuleOpen(false)}>Cancel</Button><Button size="sm" disabled={ruleM.isPending} onClick={() => ruleM.mutate()}>Save</Button></>}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
           <Field label="Name" className="sm:col-span-2"><Input value={ruleForm.name} onChange={(e) => setRuleForm((f) => ({ ...f, name: e.target.value }))} /></Field>
           <Field label="Type">
             <Select className={selectCls} value={ruleForm.rule_type} onChange={(e) => setRuleForm((f) => ({ ...f, rule_type: e.target.value }))}>

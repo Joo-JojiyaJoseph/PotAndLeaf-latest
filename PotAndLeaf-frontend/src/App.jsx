@@ -76,7 +76,7 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
-          <Route index element={<PermissionRoute permission="reports.view"><Dashboard /></PermissionRoute>} />
+          <Route index element={<PermissionRoute anyOf={['reports.view', 'sales.view', 'commission.view', 'commission.view_own', 'inventory.view']}><Dashboard /></PermissionRoute>} />
           <Route path="suppliers" element={<PermissionRoute permission="suppliers.view"><SuppliersList /></PermissionRoute>} />
           <Route path="suppliers/:id" element={<PermissionRoute permission="suppliers.view"><SupplierDetail /></PermissionRoute>} />
           <Route path="products" element={<PermissionRoute permission="products.view"><ProductsList /></PermissionRoute>} />

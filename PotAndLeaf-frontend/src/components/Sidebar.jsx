@@ -33,7 +33,7 @@ const GROUPS = [
   {
     label: 'Main',
     items: [
-      { key: 'dashboard', label: 'Dashboard', to: '/', icon: HomeIcon, end: true, permission: 'reports.view' },
+      { key: 'dashboard', label: 'Dashboard', to: '/', icon: HomeIcon, end: true, anyOf: ['reports.view', 'sales.view', 'commission.view', 'commission.view_own', 'inventory.view'] },
       { key: 'purchase', label: 'Purchase', to: '/purchases', icon: ShoppingCartIcon, permission: 'purchases.view' },
       { key: 'purchase-orders', label: 'Purchase Orders', to: '/purchase-orders', icon: ClipboardDocumentListIcon, permission: 'po.view' },
       { key: 'inventory', label: 'Inventory', to: '/inventory', icon: CubeIcon, end: true, permission: 'inventory.view' },
@@ -68,7 +68,7 @@ const GROUPS = [
       { key: 'users', label: 'Users', to: '/users', icon: UserGroupIcon, permission: 'users.view' },
       { key: 'masters', label: 'Master data', to: '/masters', icon: TagIcon, anyOf: ['categories.view', 'subcategories.view', 'units.view'] },
       { key: 'products', label: 'Products', to: '/products', icon: TagIcon, permission: 'products.view' },
-      { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
+      { key: 'settings', label: 'Settings', to: '/settings', icon: TagIcon, anyOf: ['settings.view', 'api.view', 'api.manage'] },
     ],
   },
 ];
@@ -91,10 +91,10 @@ function PotLeafMark() {
   );
 }
 
-function Item({ item }) {
+function Item({ item, onNavigate }) {
   const Icon = item.icon;
   const base =
-    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-all';
+    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-all min-h-11';
 
   if (item.soon) {
     return (
@@ -112,10 +112,11 @@ function Item({ item }) {
   }
 
   return (
-    <NavLink
-      to={item.to}
-      end={item.end}
-      className={({ isActive }) =>
+      <NavLink
+        to={item.to}
+        end={item.end}
+        onClick={onNavigate}
+        className={({ isActive }) =>
         classNames(
           base,
           isActive
@@ -166,7 +167,7 @@ export default function Sidebar({ open, onClose }) {
                 </div>
                 <div className="space-y-0.5">
                   {items.map((item) => (
-                    <Item key={item.key} item={item} />
+                    <Item key={item.key} item={item} onNavigate={onClose} />
                   ))}
                 </div>
               </div>

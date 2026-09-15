@@ -34,6 +34,9 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\StockVerificationController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\CompanyApiKeyController;
+use App\Http\Controllers\Api\V1\StorefrontController;
+use App\Http\Middleware\AuthenticateCompanyApiKey;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\ResolveApiCompany;
 use Illuminate\Support\Facades\Route;
@@ -53,6 +56,21 @@ use Illuminate\Support\Facades\Route;
 
 // Public
 Route::post('login', [AuthController::class, 'login']);
+
+Route::prefix('v1')->group(function () {
+    Route::get('openapi.json', [StorefrontController::class, 'openapi']);
+
+    Route::middleware(['throttle:company-api', AuthenticateCompanyApiKey::class])->group(function () {
+        Route::get('company', [StorefrontController::class, 'company']);
+        Route::get('products', [StorefrontController::class, 'products']);
+        Route::get('products/{id}', [StorefrontController::class, 'product']);
+        Route::get('categories', [StorefrontController::class, 'categories']);
+        Route::get('branches', [StorefrontController::class, 'branches']);
+        Route::get('stock', [StorefrontController::class, 'stock']);
+        Route::post('orders', [StorefrontController::class, 'storeOrder']);
+        Route::get('orders/{id}', [StorefrontController::class, 'order']);
+    });
+});
 
 // Authenticated (any company)
 Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function () {
@@ -83,6 +101,11 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
         Route::get('settings', [SettingsController::class, 'show']);
         Route::put('settings', [SettingsController::class, 'update']);
+
+        Route::get('company-api-keys', [CompanyApiKeyController::class, 'index']);
+        Route::post('company-api-keys', [CompanyApiKeyController::class, 'store']);
+        Route::post('company-api-keys/{companyApiKey}/revoke', [CompanyApiKeyController::class, 'revoke']);
+        Route::post('company-api-keys/{companyApiKey}/regenerate', [CompanyApiKeyController::class, 'regenerate']);
 
         // Module 07 — Commission
         Route::get('commission/form-data', [CommissionController::class, 'formData']);

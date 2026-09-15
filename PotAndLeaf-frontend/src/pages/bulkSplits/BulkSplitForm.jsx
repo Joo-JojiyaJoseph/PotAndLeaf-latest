@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
+import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
@@ -18,7 +18,7 @@ export default function BulkSplitForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
-  const { activeCompany } = useAuth();
+  const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany();
 
   const [sourceId, setSourceId] = useState(location.state?.sourceProductId ?? '');
   const [availableQty, setAvailableQty] = useState(
@@ -35,9 +35,9 @@ export default function BulkSplitForm() {
   const { submit, release, locked } = useSubmitLock(saving);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['bulk-split-form-data', activeCompany?.id],
-    enabled: Boolean(activeCompany),
-    queryFn: () => api.get('/bulk-splits/form-data').then((r) => r.data.data),
+    queryKey: ['bulk-split-form-data', targetCompanyId],
+    enabled: Boolean(targetCompanyId),
+    queryFn: () => api.get('/bulk-splits/form-data', companyRequest()).then((r) => r.data.data),
   });
 
   const products = data?.products ?? [];
@@ -141,7 +141,7 @@ export default function BulkSplitForm() {
     setErrors({});
     setSaving(true);
     try {
-      const res = await api.post('/bulk-splits', buildPayload(false));
+      const res = await api.post('/bulk-splits', buildPayload(false), companyRequest());
       toast.success('Split saved as draft.');
       navigate(`/bulk-splits/${res.data.data.id}`);
     } catch (e) {
@@ -162,7 +162,7 @@ export default function BulkSplitForm() {
     setErrors({});
     setSaving(true);
     try {
-      const res = await api.post('/bulk-splits', buildPayload(true));
+      const res = await api.post('/bulk-splits', buildPayload(true), companyRequest());
       toast.success('Split confirmed — products created and stock updated.');
       navigate(`/bulk-splits/${res.data.data.id}`);
     } catch (e) {
@@ -199,6 +199,7 @@ export default function BulkSplitForm() {
       )}
 
       <Card className="p-5">
+        <FormCompanyField value={formCompanyId} onChange={(id) => { setFormCompanyId(id); setSourceId(''); setLines([]); }} className="mb-4" />
         <h2 className="mb-3 text-sm font-semibold text-ink">Source product</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Bulk product" required error={err('source_product_id')}>

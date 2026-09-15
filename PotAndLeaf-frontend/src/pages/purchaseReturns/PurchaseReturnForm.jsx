@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { computePurchase } from '../../lib/purchaseCalc';
+import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const numInput =
@@ -14,7 +14,8 @@ const numInput =
 
 export default function PurchaseReturnForm() {
   const navigate = useNavigate();
-  const { activeCompany } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(searchParams.get('company_id'));
   const [purchaseId, setPurchaseId] = useState('');
   const [returnDate, setReturnDate] = useState(today());
   const [reason, setReason] = useState('');
@@ -26,16 +27,20 @@ export default function PurchaseReturnForm() {
 
   // Confirmed purchases to return against.
   const { data: purchaseList } = useQuery({
-    queryKey: ['purchases', 'confirmed-picker', activeCompany?.id],
-    queryFn: () => api.get('/purchases', { params: { status: 'confirmed', per_page: 100 } }).then((r) => r.data),
+    queryKey: ['purchases', 'confirmed-picker', targetCompanyId],
+    queryFn: () => api.get('/purchases', { params: { status: 'confirmed', per_page: 100 }, ...companyRequest() }).then((r) => r.data),
+    enabled: Boolean(targetCompanyId),
   });
 
-  // Returnable lines for the chosen purchase.
   const { data: source, isFetching: loadingSource } = useQuery({
-    queryKey: ['return-source', activeCompany?.id, purchaseId],
-    queryFn: () => api.get('/purchase-returns/source', { params: { purchase_id: purchaseId } }).then((r) => r.data.data),
-    enabled: Boolean(purchaseId),
+    queryKey: ['return-source', targetCompanyId, purchaseId],
+    queryFn: () => api.get('/purchase-returns/source', { params: { purchase_id: purchaseId }, ...companyRequest() }).then((r) => r.data.data),
+    enabled: Boolean(purchaseId) && Boolean(targetCompanyId),
   });
+
+  useEffect(() => {
+    setPurchaseId('');
+  }, [targetCompanyId]);
 
   useEffect(() => {
     setQtys({});
@@ -87,7 +92,7 @@ export default function PurchaseReturnForm() {
         reason: reason || null,
         notes: notes || null,
         items,
-      });
+      }, companyRequest());
       navigate('/purchase-returns');
     } catch (err) {
       const bag = err.response?.data?.errors;
@@ -120,6 +125,7 @@ export default function PurchaseReturnForm() {
       )}
 
       <Card className="p-5">
+        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="mb-4" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Original purchase" required>
             <Select

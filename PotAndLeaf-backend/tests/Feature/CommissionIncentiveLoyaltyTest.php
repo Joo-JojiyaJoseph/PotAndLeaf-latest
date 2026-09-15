@@ -209,6 +209,40 @@ it('accrues manager commission on branch net sales', function () {
     $rows = app(CommissionEngine::class)->accrueManagerCommission($this->company->id, $period);
     expect($rows)->toHaveCount(1);
     expect((float) $rows->first()->amount)->toBe(100.0);
+
+    $again = app(CommissionEngine::class)->accrueManagerCommission($this->company->id, $period);
+    expect($again)->toHaveCount(0);
+});
+
+it('subtracts confirmed returns from manager branch net sales', function () {
+    $product = $this->createProduct(['current_stock' => 10, 'retail_price' => 10000, 'gst_rate' => 0]);
+    $customer = $this->createCustomer();
+    $sale = app(CreateSale::class)->handle($this->company->id, [
+        'customer_id' => $customer->id,
+        'sale_date' => now()->toDateString(),
+        'payment_mode' => 'cash',
+        'is_interstate' => false,
+        'items' => [['product_id' => $product->id, 'qty' => 1, 'rate' => 10000, 'gst_rate' => 0]],
+    ], $this->user->id);
+    app(ConfirmSale::class)->handle($sale, $this->user->id);
+
+    \App\Models\SalesReturn::create([
+        'company_id' => $this->company->id,
+        'sale_id' => $sale->id,
+        'customer_id' => $customer->id,
+        'return_no' => 'SR-NET-1',
+        'return_date' => now()->toDateString(),
+        'subtotal' => 2000,
+        'tax_total' => 0,
+        'grand_total' => 2000,
+        'status' => 'confirmed',
+        'confirmed_at' => now(),
+    ]);
+
+    $from = now()->startOfMonth()->toDateString();
+    $to = now()->endOfMonth()->toDateString();
+    $net = app(CommissionEngine::class)->branchNetSales($this->company->id, $from, $to);
+    expect($net)->toBe(8000.0);
 });
 
 it('accrues product promotion bonus on sale confirm', function () {
@@ -322,3 +356,20 @@ it('earns loyalty spend-rule points on invoice total including gst', function ()
     expect((float) $sale->fresh()->grand_total)->toBe(1180.0);
     expect((int) $customer->fresh()->loyalty_points)->toBe(11);
 });
+
+it('rejects overlapping commission tiers', function () {
+    $rule = CommissionRule::create([
+        'company_id' => $this->company->id,
+        'user_id' => $this->user->id,
+        'base_percent' => 0,
+        'is_active' => true,
+    ]);
+
+    $this->postJson("/api/commission/rules/{$rule->id}/tiers", [
+        'tiers' => [
+            ['min_amount' => 0, 'max_amount' => 50000, 'percent' => 1],
+            ['min_amount' => 40000, 'max_amount' => null, 'percent' => 2],
+        ],
+    ], $this->apiHeaders())->assertStatus(422);
+});
+

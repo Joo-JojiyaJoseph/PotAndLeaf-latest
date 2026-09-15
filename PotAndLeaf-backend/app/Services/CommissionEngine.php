@@ -160,17 +160,26 @@ class CommissionEngine
         ];
     }
 
-    /** Branch net sales for manager commission (tax-exclusive, net of loyalty discount). */
-    public function branchNetSales(int|string $companyId, string $from, string $to, ?int $locationId = null): float
+    /** Branch net sales for manager commission — same formula as salesman/daily (subtotal − loyalty, less returns). */
+    public function branchNetSales(int|string $companyId, string $from, string $to, int|string|null $locationId = null): float
     {
-        return round((float) Sale::forCompany($companyId)
+        $sales = (float) Sale::forCompany($companyId)
             ->where('status', 'confirmed')
             ->whereNotIn('bill_kind', ['complimentary', 'proforma'])
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
             ->whereDate('sale_date', '>=', $from)
             ->whereDate('sale_date', '<=', $to)
             ->get()
-            ->sum(fn (Sale $s) => $this->netSalesBase($s)), 2);
+            ->sum(fn (Sale $s) => $this->netSalesBase($s));
+
+        $returns = (float) SalesReturn::forCompany($companyId)
+            ->where('status', 'confirmed')
+            ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
+            ->whereDate('return_date', '>=', $from)
+            ->whereDate('return_date', '<=', $to)
+            ->sum('subtotal');
+
+        return max(0.0, round($sales - $returns, 2));
     }
 
     public function accrueManagerCommission(int|string $companyId, string $period): Collection

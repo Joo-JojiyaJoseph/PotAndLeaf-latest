@@ -71,18 +71,21 @@ export default function ReportsPage() {
   const canTransferReports = isSuperAdmin || can('*') || (can('reports.view') && can('transfers.view'));
   const canAccounting = isSuperAdmin || can('*') || (can('reports.view') && (can('receipts.view') || can('payments.view')));
   const canCommissionReport = isSuperAdmin || can('*') || (can('reports.view') && can('commission.view'));
+  const canLoyaltyReport = isSuperAdmin || can('*') || (can('reports.view') && can('loyalty.view'));
+  const canWhatsappReport = isSuperAdmin || can('*') || (can('reports.view') && (can('commission.view') || can('whatsapp.templates')));
   const canInventory = isSuperAdmin || can('*') || (can('reports.view') && can('inventory.view'));
   const canPo = isSuperAdmin || can('*') || can('po.view');
   const isRentalTab = tab.startsWith('rental_');
   const isProductionTab = tab.startsWith('production_');
   const isTransferTab = tab.startsWith('transfer_');
   const isAccountingTab = ['cash_book', 'bank_book', 'debtor_ledger', 'creditor_ledger', 'ageing_receivables', 'ageing_payables'].includes(tab);
-  const hideDateRange = tab === 'rental_current' || tab === 'transfer_in_transit' || tab === 'ageing_receivables' || tab === 'ageing_payables' || tab === 'sales_analytics' || tab === 'leaderboard' || tab === 'inventory_movement' || tab === 'reorder';
+  const hideDateRange = tab === 'rental_current' || tab === 'transfer_in_transit' || tab === 'ageing_receivables' || tab === 'ageing_payables' || tab === 'sales_analytics' || tab === 'leaderboard' || tab === 'inventory_movement' || tab === 'reorder' || tab === 'loyalty_report' || tab === 'whatsapp_report';
   const [leaderboardPeriod, setLeaderboardPeriod] = useState('month');
+  const [waType, setWaType] = useState('');
 
   const visibleTabs = useMemo(() => filterVisibleTabs(REPORT_TABS, {
-    canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo,
-  }), [canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo]);
+    canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport,
+  }), [canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport]);
 
   const { data: formData } = useQuery({
     queryKey: ['reports-form-data', activeCompany?.id, filterCompanyId],
@@ -280,6 +283,22 @@ export default function ReportsPage() {
     placeholderData: keepPreviousData,
   });
 
+  const loyaltyReportQ = useQuery({
+    queryKey: ['reports-loyalty', activeCompany?.id, filterCompanyId],
+    queryFn: () => api.get('/loyalty', { params: { ...companyParams, per_page: 50 } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'loyalty_report' && canLoyaltyReport,
+    placeholderData: keepPreviousData,
+  });
+
+  const whatsappReportQ = useQuery({
+    queryKey: ['reports-whatsapp', activeCompany?.id, filterCompanyId, waType],
+    queryFn: () => api.get('/commission/whatsapp-logs', {
+      params: { ...companyParams, message_type: waType || undefined },
+    }).then((r) => r.data),
+    enabled: Boolean(activeCompany) && tab === 'whatsapp_report' && canWhatsappReport,
+    placeholderData: keepPreviousData,
+  });
+
   const leaderboardQ = useQuery({
     queryKey: ['reports-leaderboard', activeCompany?.id, filterCompanyId, leaderboardPeriod, locationId],
     queryFn: () => api.get('/reports/leaderboard', {
@@ -371,8 +390,8 @@ export default function ReportsPage() {
     try {
       await downloadWithParams(path, params, filename, mime);
       toast.success('Export downloaded.');
-    } catch {
-      toast.error('Export failed.');
+    } catch (e) {
+      toast.error(e?.message || 'Export failed.');
     }
   }
 
@@ -414,6 +433,14 @@ export default function ReportsPage() {
               <Select value={leaderboardPeriod} onChange={(e) => setLeaderboardPeriod(e.target.value)} className={selectCls}>
                 <option value="month">Monthly</option>
                 <option value="year">Financial year</option>
+              </Select>
+            )}
+            {tab === 'whatsapp_report' && (
+              <Select value={waType} onChange={(e) => setWaType(e.target.value)} className={selectCls}>
+                <option value="">All message types</option>
+                <option value="eod_commission">EOD commission</option>
+                <option value="seasonal_care">Plant care</option>
+                <option value="invoice">Invoice</option>
               </Select>
             )}
             {tab === 'inventory_movement' && (
@@ -1337,6 +1364,105 @@ export default function ReportsPage() {
                   </table>
                 </div>
               </>
+            )}
+        </Card>
+      )}
+
+      {tab === 'loyalty_report' && (
+        <>
+          {loyaltyReportQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : !loyaltyReportQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load loyalty report.</Card>
+            : (
+              <>
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+                  <StatCard label="Customers with points" value={loyaltyReportQ.data.totals?.with_points ?? 0} />
+                  <StatCard label="Points outstanding" value={loyaltyReportQ.data.totals?.total_points ?? 0} />
+                  <StatCard label="Customers listed" value={loyaltyReportQ.data.totals?.customers ?? 0} />
+                </div>
+                <Card className="overflow-hidden">
+                  <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">Customer balances</div>
+                  {(loyaltyReportQ.data.customers?.data?.length ?? 0) === 0 ? (
+                    <div className="px-4 py-12 text-center text-sm text-muted">No loyalty balances yet.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b border-line text-left text-faint">
+                          <th className="microlabel px-4 py-2.5 font-semibold">Customer</th>
+                          <th className="microlabel px-4 py-2.5 font-semibold">Phone</th>
+                          <th className="microlabel px-4 py-2.5 text-right font-semibold">Current points</th>
+                        </tr></thead>
+                        <tbody>
+                          {loyaltyReportQ.data.customers.data.map((c) => (
+                            <tr key={c.id} className="border-b border-line/60 last:border-0">
+                              <td className="px-4 py-2.5 font-medium">{c.name}</td>
+                              <td className="tnum px-4 py-2.5 text-muted">{c.contact_phone || '—'}</td>
+                              <td className="tnum px-4 py-2.5 text-right font-medium">{c.loyalty_points}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+                <Card className="overflow-hidden">
+                  <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">Recent ledger</div>
+                  {(loyaltyReportQ.data.recent_ledger?.length ?? 0) === 0 ? (
+                    <div className="px-4 py-12 text-center text-sm text-muted">No point movements yet.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b border-line text-left text-faint">
+                          <th className="microlabel px-4 py-2.5 font-semibold">When</th>
+                          <th className="microlabel px-4 py-2.5 font-semibold">Customer</th>
+                          <th className="microlabel px-4 py-2.5 font-semibold">Type</th>
+                          <th className="microlabel px-4 py-2.5 text-right font-semibold">Points</th>
+                          <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
+                        </tr></thead>
+                        <tbody>
+                          {loyaltyReportQ.data.recent_ledger.map((e) => (
+                            <tr key={e.id} className="border-b border-line/60 last:border-0">
+                              <td className="px-4 py-2.5 text-muted">{formatDate(e.created_at)}</td>
+                              <td className="px-4 py-2.5 font-medium">{e.customer_name}</td>
+                              <td className="px-4 py-2.5"><Badge tone={e.type === 'earn' ? 'active' : e.type === 'redeem' ? 'warning' : 'blocked'}>{e.type}</Badge></td>
+                              <td className="tnum px-4 py-2.5 text-right">{e.points}</td>
+                              <td className="tnum px-4 py-2.5 text-right">{e.balance_after}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              </>
+            )}
+        </>
+      )}
+
+      {tab === 'whatsapp_report' && (
+        <Card className="overflow-hidden">
+          {whatsappReportQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (whatsappReportQ.data?.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No WhatsApp messages in the log.</div>
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Type</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Phone</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
+                  </tr></thead>
+                  <tbody>
+                    {whatsappReportQ.data.data.map((l) => (
+                      <tr key={l.id} className="border-b border-line/60 last:border-0">
+                        <td className="px-4 py-2.5 text-muted">{formatDate(l.business_date || l.created_at)}</td>
+                        <td className="px-4 py-2.5">{l.message_type}</td>
+                        <td className="tnum px-4 py-2.5">{l.recipient_phone}</td>
+                        <td className="px-4 py-2.5"><Badge tone={l.status === 'sent' ? 'active' : l.status === 'pending' ? 'warning' : 'blocked'}>{l.status}</Badge></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
         </Card>
       )}

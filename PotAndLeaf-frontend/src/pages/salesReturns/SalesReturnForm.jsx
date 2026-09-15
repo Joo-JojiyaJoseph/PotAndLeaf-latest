@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
-import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { computeSale } from '../../lib/saleCalc';
+import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const numInput =
@@ -14,7 +14,8 @@ const numInput =
 
 export default function SalesReturnForm() {
   const navigate = useNavigate();
-  const { activeCompany } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(searchParams.get('company_id'));
   const [saleId, setSaleId] = useState('');
   const [returnDate, setReturnDate] = useState(today());
   const [reason, setReason] = useState('');
@@ -24,17 +25,18 @@ export default function SalesReturnForm() {
   const [saving, setSaving] = useState(false);
 
   const { data: saleList } = useQuery({
-    queryKey: ['sales', 'confirmed-picker', activeCompany?.id],
-    queryFn: () => api.get('/sales', { params: { status: 'confirmed', per_page: 100 } }).then((r) => r.data),
-    enabled: Boolean(activeCompany),
+    queryKey: ['sales', 'confirmed-picker', targetCompanyId],
+    queryFn: () => api.get('/sales', { params: { status: 'confirmed', per_page: 100 }, ...companyRequest() }).then((r) => r.data),
+    enabled: Boolean(targetCompanyId),
   });
 
   const { data: source, isFetching: loadingSource } = useQuery({
-    queryKey: ['sales-return-source', activeCompany?.id, saleId],
-    queryFn: () => api.get('/sales-returns/source', { params: { sale_id: saleId } }).then((r) => r.data.data),
-    enabled: Boolean(saleId),
+    queryKey: ['sales-return-source', targetCompanyId, saleId],
+    queryFn: () => api.get('/sales-returns/source', { params: { sale_id: saleId }, ...companyRequest() }).then((r) => r.data.data),
+    enabled: Boolean(saleId) && Boolean(targetCompanyId),
   });
 
+  useEffect(() => { setSaleId(''); }, [targetCompanyId]);
   useEffect(() => { setQtys({}); setErrors([]); }, [saleId]);
 
   const sourceItems = source?.items ?? [];
@@ -71,7 +73,7 @@ export default function SalesReturnForm() {
         reason: reason || null,
         notes: notes || null,
         items,
-      });
+      }, companyRequest());
       navigate(`/sales-returns/${res.data.data.id}`);
     } catch (err) {
       const bag = err.response?.data?.errors;
@@ -100,6 +102,7 @@ export default function SalesReturnForm() {
       )}
 
       <Card className="p-5">
+        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="mb-4" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field label="Original sale" required>
             <Select

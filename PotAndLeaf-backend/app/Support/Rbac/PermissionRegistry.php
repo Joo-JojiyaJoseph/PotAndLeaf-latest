@@ -117,6 +117,10 @@ class PermissionRegistry
             'WhatsApp' => [
                 'whatsapp.templates' => 'Manage WhatsApp message templates',
             ],
+            'Company API' => [
+                'api.view'   => 'View company API keys',
+                'api.manage' => 'Create, regenerate and revoke company API keys',
+            ],
             'Customer Receipts' => [
                 'receipts.view'   => 'View customer receipts',
                 'receipts.create' => 'Record customer receipts',

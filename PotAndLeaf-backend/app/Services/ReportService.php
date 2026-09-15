@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CommissionPayout;
+use App\Models\CompanySetting;
 use App\Models\Customer;
 use App\Models\CustomerReceipt;
 use App\Models\Location;
@@ -857,23 +858,26 @@ class ReportService
     private const BANK_MODES = ['bank', 'upi', 'cheque', 'card'];
 
     /** Cash register with running balance. */
-    public function cashBook(int|string $companyId, string $from, string $to, int $page = 1, int $perPage = 50): array
+    public function cashBook(int|string|null $companyId, string $from, string $to, int $page = 1, int $perPage = 50): array
     {
         return $this->moneyBook($companyId, $from, $to, self::CASH_MODES, 'cash_opening_balance', $page, $perPage);
     }
 
     /** Bank register (card/UPI/cheque/bank transfers). */
-    public function bankBook(int|string $companyId, string $from, string $to, int $page = 1, int $perPage = 50): array
+    public function bankBook(int|string|null $companyId, string $from, string $to, int $page = 1, int $perPage = 50): array
     {
         return $this->moneyBook($companyId, $from, $to, self::BANK_MODES, 'bank_opening_balance', $page, $perPage);
     }
 
     /** Customer statement — debits (credit sales) and credits (receipts). */
-    public function debtorLedger(int|string $companyId, string $customerId, string $from, string $to): array
+    public function debtorLedger(int|string|null $companyId, string $customerId, string $from, string $to): array
     {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
-        $customer = Customer::forCompany($companyId)->findOrFail($customerId);
+        $customer = $companyId !== null
+            ? Customer::forCompany($companyId)->findOrFail($customerId)
+            : Customer::query()->findOrFail($customerId);
+        $companyId = $customer->company_id;
 
         $opening = $this->debtorBalanceAsOf($companyId, $customerId, Carbon::parse($from)->subDay()->toDateString());
 
@@ -941,11 +945,14 @@ class ReportService
     }
 
     /** Supplier statement — credits (purchases) and debits (payments). */
-    public function creditorLedger(int|string $companyId, string $supplierId, string $from, string $to): array
+    public function creditorLedger(int|string|null $companyId, string $supplierId, string $from, string $to): array
     {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
-        $supplier = Supplier::forCompany($companyId)->findOrFail($supplierId);
+        $supplier = $companyId !== null
+            ? Supplier::forCompany($companyId)->findOrFail($supplierId)
+            : Supplier::query()->findOrFail($supplierId);
+        $companyId = $supplier->company_id;
 
         $opening = $this->creditorBalanceAsOf($companyId, $supplierId, Carbon::parse($from)->subDay()->toDateString());
 
@@ -1024,7 +1031,7 @@ class ReportService
 
     /** @param list<string> $modes */
     private function moneyBook(
-        int|string $companyId,
+        int|string|null $companyId,
         string $from,
         string $to,
         array $modes,
@@ -1037,12 +1044,12 @@ class ReportService
         $perPage = min(max($perPage, 1), 5000);
         $page = max($page, 1);
 
-        $opening = $this->settings->getFloat($companyId, $openingSettingKey);
+        $opening = $this->openingSettingTotal($companyId, $openingSettingKey);
         $opening += $this->moneyNetBefore($companyId, $modes, $from);
 
         $rows = collect();
 
-        CustomerReceipt::forCompany($companyId)
+        CustomerReceipt::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->whereIn('mode', $modes)
             ->where('applied_from_advance', false)
             ->whereDate('receipt_date', '>=', $from)
@@ -1061,7 +1068,7 @@ class ReportService
                 'credit' => 0,
             ]));
 
-        SupplierPayment::forCompany($companyId)
+        SupplierPayment::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->whereIn('mode', $modes)
             ->where('applied_from_advance', false)
             ->whereDate('payment_date', '>=', $from)
@@ -1080,7 +1087,7 @@ class ReportService
                 'credit' => (float) $p->amount,
             ]));
 
-        CommissionPayout::forCompany($companyId)
+        CommissionPayout::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('status', 'paid')
             ->whereIn('mode', $modes)
             ->whereDate('payment_date', '>=', $from)
@@ -1127,18 +1134,27 @@ class ReportService
         ];
     }
 
-    private function moneyNetBefore(int|string $companyId, array $modes, string $beforeDate): float
+    private function moneyNetBefore(int|string|null $companyId, array $modes, string $beforeDate): float
     {
-        $in = (float) CustomerReceipt::forCompany($companyId)->whereIn('mode', $modes)
+        $in = (float) CustomerReceipt::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->whereIn('mode', $modes)
             ->where('applied_from_advance', false)
             ->whereDate('receipt_date', '<', $beforeDate)->sum('amount');
-        $outPay = (float) SupplierPayment::forCompany($companyId)->whereIn('mode', $modes)
+        $outPay = (float) SupplierPayment::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->whereIn('mode', $modes)
             ->where('applied_from_advance', false)
             ->whereDate('payment_date', '<', $beforeDate)->sum('amount');
-        $outComm = (float) CommissionPayout::forCompany($companyId)->where('status', 'paid')->whereIn('mode', $modes)
+        $outComm = (float) CommissionPayout::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'paid')->whereIn('mode', $modes)
             ->whereDate('payment_date', '<', $beforeDate)->sum('amount');
 
         return $in - $outPay - $outComm;
+    }
+
+    private function openingSettingTotal(int|string|null $companyId, string $key): float
+    {
+        if ($companyId !== null) {
+            return $this->settings->getFloat($companyId, $key);
+        }
+
+        return (float) CompanySetting::query()->where('key', $key)->sum('value');
     }
 
     private function debtorBalanceAsOf(int|string $companyId, string $customerId, string $asOf): float

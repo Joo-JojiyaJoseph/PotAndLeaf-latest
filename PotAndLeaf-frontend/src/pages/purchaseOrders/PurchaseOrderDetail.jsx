@@ -8,6 +8,7 @@ import { Badge, Button } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadPdf } from '../../lib/pdfDownload';
+import { useToast } from '../../lib/toast';
 
 const tone = { draft: 'inactive', sent: 'submitted', received: 'active', cancelled: 'blocked' };
 
@@ -18,6 +19,7 @@ export default function PurchaseOrderDetail() {
   const { companyId } = useAuth();
   const queryClient = useQueryClient();
   const headerCompanyId = searchParams.get('company_id') || companyId;
+  const toast = useToast();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['purchase-order', headerCompanyId, id],
@@ -59,7 +61,14 @@ export default function PurchaseOrderDetail() {
           {po.can?.send && <Button variant="outline" size="sm" onClick={() => sendM.mutate()} disabled={sendM.isPending}><PaperAirplaneIcon className="size-4" /> Mark sent</Button>}
           {po.can?.convert && <Button size="sm" onClick={() => convertM.mutate()} disabled={convertM.isPending}><ArrowRightCircleIcon className="size-4" /> Convert to GRN</Button>}
           {po.purchase_id && <Button variant="outline" size="sm" onClick={() => navigate(recordDetailPath('/purchases', { id: po.purchase_id, company_id: recordCompanyId }, recordCtx))}>View GRN</Button>}
-          <Button variant="outline" size="sm" onClick={() => downloadPdf(`/purchase-orders/${id}/pdf`, `po-${po.po_no}.pdf`, recordCompanyId)}>
+          <Button variant="outline" size="sm" onClick={async () => {
+            try {
+              await downloadPdf(`/purchase-orders/${id}/pdf`, `po-${po.po_no}.pdf`, recordCompanyId);
+              toast.success('PO PDF downloaded.');
+            } catch (e) {
+              toast.error(e?.message || 'Could not download PDF.');
+            }
+          }}>
             <ArrowDownTrayIcon className="size-4" /> Export PDF
           </Button>
         </>}

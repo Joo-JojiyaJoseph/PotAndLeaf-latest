@@ -67,8 +67,8 @@ export default function PurchaseDetail() {
     try {
       await downloadPdf(`/purchases/${id}/invoice.pdf`, `grn-${data?.purchase_no ?? id}.pdf`, purchaseCompanyId);
       toast.success('GRN PDF downloaded.');
-    } catch {
-      toast.error('Could not download PDF.');
+    } catch (e) {
+      toast.error(e?.message || 'Could not download PDF.');
     }
   }
 

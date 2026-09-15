@@ -24,7 +24,16 @@ export default defineConfig(({ mode }) => {
         port: 5173,
       },
       proxy: {
-        '/api': { target, changeOrigin: true },
+        '/api': {
+          target,
+          changeOrigin: true,
+          configure: (proxy) => {
+            // Avoid double-decoding gzip so PDF/binary downloads stay intact.
+            proxy.on('proxyReq', (proxyReq) => {
+              proxyReq.setHeader('Accept-Encoding', 'identity');
+            });
+          },
+        },
         '/storage': { target, changeOrigin: true },
       },
     },

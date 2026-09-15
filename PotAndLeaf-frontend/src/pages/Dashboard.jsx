@@ -14,14 +14,13 @@ const iso = (d) => d.toISOString().slice(0, 10);
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
 
 const QUICK = [
-  // { label: 'New sale', desc: 'Ring up a bill at POS', to: '/sales/new', icon: BanknotesIcon },
+  { label: 'New sale', desc: 'Ring up a bill', to: '/sales/new', icon: BanknotesIcon },
   { label: 'New purchase', desc: 'Record a GRN', to: '/purchases/new', icon: ShoppingCartIcon },
   { label: 'Add product', desc: 'Create a catalogue item', to: '/products/new', icon: PlusCircleIcon },
-  // { label: 'Reports', desc: 'Sales, stock & dues', to: '/reports', icon: ChartBarIcon },
-  // { label: 'Barcode labels', desc: 'Print a label sheet', to: '/products/labels', icon: QrCodeIcon },
-  { label: 'Masters', desc: 'Categories, subcategories, units', to: '/masters', icon: TagIcon },
-  { label: 'Companies', desc: 'Manage your companies', to: '/companies', icon: BuildingOffice2Icon },
-  { label: 'Suppliers', desc: 'Manage your suppliers', to: '/suppliers', icon: TruckIcon },
+  { label: 'Reports', desc: 'Sales, stock and dues', to: '/reports', icon: ChartBarIcon },
+  { label: 'Masters', desc: 'Categories, units', to: '/masters', icon: TagIcon },
+  { label: 'Companies', desc: 'Manage companies', to: '/companies', icon: BuildingOffice2Icon },
+  { label: 'Suppliers', desc: 'Manage suppliers', to: '/suppliers', icon: TruckIcon },
 ];
 
 function StatTile({ label, value, sub, gradient }) {
@@ -35,14 +34,19 @@ function StatTile({ label, value, sub, gradient }) {
 }
 
 export default function Dashboard() {
-  const { activeCompany, isSuperAdmin, can } = useAuth();
+  const { activeCompany, isSuperAdmin, can, user } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const range = { from: daysAgo(29), to: iso(new Date()) };
+  const canReports = isSuperAdmin || can('reports.view') || can('*');
+  const canSales = isSuperAdmin || can('sales.view') || can('*');
+  const canIncentive = isSuperAdmin || can('commission.view') || can('commission.view_own') || can('*');
 
   const quickLinks = QUICK.filter((q) => {
     if (q.to === '/companies') return isSuperAdmin;
     if (q.to === '/products/new') return can('products.create');
     if (q.to === '/purchases/new') return can('purchases.create');
+    if (q.to === '/sales/new') return can('sales.create');
+    if (q.to === '/reports') return canReports;
     if (q.to === '/masters') return can('categories.view') || can('subcategories.view') || can('units.view');
     if (q.to === '/suppliers') return can('suppliers.view');
     return true;
@@ -56,18 +60,26 @@ export default function Dashboard() {
   const repQ = useQuery({
     queryKey: ['dashboard-reports', activeCompany?.id, filterCompanyId],
     queryFn: () => api.get('/reports/dashboard', { params: { ...companyParams, ...range } }).then((r) => r.data.data),
-    enabled: Boolean(activeCompany), retry: false,
+    enabled: Boolean(activeCompany) && canReports,
+    retry: false,
   });
   const salesQ = useQuery({
     queryKey: ['dashboard-sales', activeCompany?.id, filterCompanyId],
     queryFn: () => api.get('/sales', { params: { ...companyParams, per_page: 6 } }).then((r) => r.data.data),
-    enabled: Boolean(activeCompany), retry: false,
+    enabled: Boolean(activeCompany) && canSales,
+    retry: false,
+  });
+  const incentiveQ = useQuery({
+    queryKey: ['dashboard-incentive', activeCompany?.id, user?.id],
+    queryFn: () => api.get('/commission/daily-summary', { params: { user_id: user.id, date: iso(new Date()) } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany && user?.id) && canIncentive && filterCompanyId !== 'all',
+    retry: false,
   });
 
   const rep = repQ.data;
   const cards = dashQ.data?.cards ?? [];
   const lowStock = cards.find((c) => c.key === 'low_stock')?.value ?? 0;
-  const recent = salesQ.data ?? [];
+  const recent = Array.isArray(salesQ.data) ? salesQ.data : (salesQ.data?.data ?? []);
 
   return (
     <div className="p-4 sm:p-6">
@@ -85,33 +97,47 @@ export default function Dashboard() {
         <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-12">
           
           <div className="space-y-5 lg:col-span-8">
-{/*            
-            <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-              <StatTile
-                label="Sales" value={rep ? formatCurrency(rep.sales.total) : '—'}
-                sub={rep ? `${rep.sales.count} invoices` : 'needs report access'}
-              />
-              <StatTile
-                label="Receivables" value={rep ? formatCurrency(rep.receivables) : '—'}
-                sub="owed by customers" gradient="bg-gradient-to-br from-leaf-soft to-surface"
-              />
-              <StatTile
-                label="Payables" value={rep ? formatCurrency(rep.payables) : '—'}
-                sub="owed to suppliers" gradient="bg-gradient-to-br from-terracotta-soft to-surface"
-              />
-              <StatTile
-                label="Stock value" value={rep ? formatCurrency(rep.inventory.stock_value) : '—'}
-                sub={`${cards.find((c) => c.key === 'products')?.value ?? 0} products`}
-              />
-            </div>
+            {canReports && (
+              <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+                <StatTile
+                  label="Sales (30 days)" value={rep ? formatCurrency(rep.sales.total) : '—'}
+                  sub={rep ? `${rep.sales.count} invoices` : 'Loading…'}
+                />
+                <StatTile
+                  label="Receivables" value={rep ? formatCurrency(rep.receivables) : '—'}
+                  sub="owed by customers"
+                />
+                <StatTile
+                  label="Payables" value={rep ? formatCurrency(rep.payables) : '—'}
+                  sub="owed to suppliers"
+                />
+                <StatTile
+                  label="Stock value" value={rep ? formatCurrency(rep.inventory?.stock_value) : '—'}
+                  sub={`${cards.find((c) => c.key === 'products')?.value ?? 0} products`}
+                />
+              </div>
+            )}
 
-            {lowStock > 0 && (
-              <Link to="/inventory" className="flex items-center gap-3 rounded-2xl bg-amber-soft px-4 py-3 text-sm text-amber shadow-soft transition-transform hover:scale-[1.01]">
+            {canIncentive && incentiveQ.data && (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <StatTile label="Today's sales" value={formatCurrency(incentiveQ.data.sales_total)} />
+                <StatTile label="Commission" value={formatCurrency(incentiveQ.data.sales_commission)} />
+                <StatTile label="Bonuses" value={formatCurrency((incentiveQ.data.daily_target_bonus || 0) + (incentiveQ.data.promotion_bonus || 0))} />
+                <StatTile
+                  label="Total incentive"
+                  value={formatCurrency(incentiveQ.data.total_incentive)}
+                  sub={incentiveQ.data.daily_target ? `Target ${formatCurrency(incentiveQ.data.daily_target)}` : null}
+                />
+              </div>
+            )}
+
+            {lowStock > 0 && can('inventory.view') && (
+              <Link to="/inventory" className="flex items-center gap-3 rounded-2xl bg-amber-soft px-4 py-3 text-sm text-amber">
                 <ArrowTrendingUpIcon className="size-5 shrink-0" />
-                <span><b>{lowStock}</b> product{lowStock === 1 ? '' : 's'} at or below reorder level — review inventory.</span>
+                <span><b>{lowStock}</b> product{lowStock === 1 ? '' : 's'} at or below reorder level.</span>
                 <ArrowRightIcon className="ml-auto size-4" />
               </Link>
-            )} */}
+            )}
 
             {/* Quick actions */}
             <div>
@@ -139,7 +165,8 @@ export default function Dashboard() {
 
           {/* Right rail — recent activity */}
           <div className="lg:col-span-4">
-            {/* <Card className="overflow-hidden rounded-3xl">
+            {canSales && (
+            <Card className="overflow-hidden rounded-3xl">
               <div className="flex items-center justify-between border-b border-line px-4 py-3">
                 <h2 className="text-sm font-semibold text-ink">Recent sales</h2>
                 <Link to="/sales" className="inline-flex items-center gap-1 text-xs font-medium text-leaf hover:text-leaf-hover">View all <ArrowRightIcon className="size-3.5" /></Link>
@@ -147,7 +174,7 @@ export default function Dashboard() {
               {salesQ.isLoading ? (
                 <div className="flex justify-center py-12"><Spinner className="size-5" /></div>
               ) : recent.length === 0 ? (
-                <div className="px-4 py-12 text-center text-sm text-muted">No sales yet. New bills will appear here.</div>
+                <div className="px-4 py-12 text-center text-sm text-muted">No sales yet.</div>
               ) : (
                 <ul className="divide-y divide-line/70">
                   {recent.map((s) => (
@@ -166,7 +193,8 @@ export default function Dashboard() {
                   ))}
                 </ul>
               )}
-            </Card> */}
+            </Card>
+            )}
 
             <Card className="mt-5 rounded-3xl p-5">
               <div className="flex items-center gap-3">

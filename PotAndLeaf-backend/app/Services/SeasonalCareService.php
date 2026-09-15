@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Sale;
 use App\Models\SeasonalCareRule;
@@ -29,6 +30,7 @@ class SeasonalCareService
         $sent = 0;
         $skipped = 0;
 
+        $companyName = Company::query()->find($companyId)?->name ?? '';
         $rules = SeasonalCareRule::forCompany($companyId)->where('is_active', true)->get();
 
         foreach ($rules as $rule) {
@@ -72,6 +74,17 @@ class SeasonalCareService
                     continue;
                 }
 
+                $maxSends = (int) ($rule->max_sends_per_customer ?? 0);
+                if ($maxSends > 0) {
+                    $already = SeasonalCareSend::where('seasonal_care_rule_id', $rule->id)
+                        ->where('customer_id', $sale->customer_id)
+                        ->count();
+                    if ($already >= $maxSends) {
+                        $skipped++;
+                        continue;
+                    }
+                }
+
                 $customer = $sale->customer;
                 $phone = $customer?->whatsapp ?: $customer?->phone;
                 if (! $phone) {
@@ -82,7 +95,7 @@ class SeasonalCareService
                 $productName = $matchingItems->first()->product_name ?? $matchingItems->first()->product?->name ?? 'your plant';
                 $message = str_replace(
                     ['{customer_name}', '{product_name}', '{company_name}'],
-                    [$customer->name, $productName, ''],
+                    [$customer->name, $productName, $companyName],
                     $rule->message_template,
                 );
 
