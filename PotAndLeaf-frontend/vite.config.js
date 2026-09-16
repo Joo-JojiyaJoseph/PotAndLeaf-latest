@@ -16,6 +16,11 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'node',
     },
+    build: {
+      target: 'es2020',
+      cssCodeSplit: true,
+      modulePreload: true,
+    },
     server: {
       port: 5173,
       strictPort: true,

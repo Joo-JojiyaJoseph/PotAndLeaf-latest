@@ -3,13 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { EnvelopeIcon, LockClosedIcon, EyeIcon, EyeSlashIcon, ArrowRightIcon, MapPinIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../lib/toast';
-import { Spinner } from '../components/ui';
-
-// Lush greenhouse photo — free to use under the Unsplash License (no attribution
-// required). A leaf-green base sits behind it so the panel stays on-brand if the
-// image is slow or blocked.
-const HERO_IMAGE =
-  'https://images.unsplash.com/photo-1684479924024-3b243f3155e8?q=80&w=1600&auto=format&fit=crop';
+import { Spinner } from '../components/Spinner';
 
 function PotLeafMark({ className = 'size-9' }) {
   return (
@@ -51,12 +45,22 @@ function HeroImage() {
   return (
     <>
       <div className="absolute inset-0 bg-leaf" aria-hidden />
-      <img
-        src={HERO_IMAGE}
-        alt=""
-        className="absolute inset-0 size-full object-cover"
-        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-      />
+      <picture>
+        <source media="(min-width: 1024px)" type="image/webp" srcSet="/images/login-hero-1280.webp" />
+        <source media="(min-width: 1024px)" type="image/jpeg" srcSet="/images/login-hero-1280.jpg" />
+        <source type="image/webp" srcSet="/images/login-hero-800.webp" />
+        <img
+          src="/images/login-hero-800.jpg"
+          alt=""
+          width={800}
+          height={320}
+          className="absolute inset-0 size-full object-cover"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
+      </picture>
       <div className="absolute inset-0 bg-gradient-to-br from-leaf-hover/85 via-leaf/45 to-[#232c0d]/90 mix-blend-multiply" aria-hidden />
       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-black/30" aria-hidden />
     </>

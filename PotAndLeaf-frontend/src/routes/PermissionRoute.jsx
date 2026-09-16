@@ -1,6 +1,4 @@
-import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Card } from '../components/ui';
 
 /**
  * Route guard — hides pages the user cannot access (direct URL protection).
@@ -14,7 +12,7 @@ export default function PermissionRoute({ permission, anyOf, superAdmin, childre
   if (superAdmin && !isSuperAdmin) {
     return (
       <div className="p-6">
-        <Card className="p-10 text-center text-sm text-muted">This area is restricted to HO super admins.</Card>
+        <div className="rounded-xl bg-surface p-10 text-center text-sm text-muted shadow-card">This area is restricted to HO super admins.</div>
       </div>
     );
   }
@@ -25,9 +23,9 @@ export default function PermissionRoute({ permission, anyOf, superAdmin, childre
   if (!allowed) {
     return (
       <div className="p-6">
-        <Card className="p-10 text-center text-sm text-muted">
+        <div className="rounded-xl bg-surface p-10 text-center text-sm text-muted shadow-card">
           You do not have permission to access this page.
-        </Card>
+        </div>
       </div>
     );
   }

@@ -1,0 +1,1 @@
+function a({filterCompanyId:t,companyId:n}={}){return t&&t!=="all"?String(t):n?String(n):""}function u(t,{filterCompanyId:n,companyId:i}={}){return t?.company_id?t.company_id:n&&n!=="all"?n:i}function e(t,n,i){const r=u(n,i);return r?`${t}/${n.id}?company_id=${r}`:`${t}/${n.id}`}export{u as a,a as d,e as r};

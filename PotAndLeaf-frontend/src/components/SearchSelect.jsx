@@ -54,7 +54,15 @@ export default function SearchSelect({
     place();
     setQuery('');
     const id = requestAnimationFrame(() => (showSearch ? searchRef.current?.focus() : triggerRef.current?.focus()));
-    const onScroll = () => place();
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        place();
+        ticking = false;
+      });
+    };
     const onDown = (e) => {
       if (triggerRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
       setOpen(false);

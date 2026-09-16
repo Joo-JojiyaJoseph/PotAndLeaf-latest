@@ -2,6 +2,7 @@ import { Children, isValidElement, useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { classNames } from '../lib/format';
 import SearchSelect from './SearchSelect';
+export { Spinner } from './Spinner';
 
 const variants = {
   primary: 'bg-leaf text-white shadow-soft hover:bg-leaf-hover',
@@ -190,18 +191,6 @@ export function Field({ label, required, error, children }) {
       {children}
       {error && <span className="block text-xs text-danger">{error}</span>}
     </label>
-  );
-}
-
-export function Spinner({ className }) {
-  return (
-    <span
-      className={classNames(
-        'inline-block size-4 animate-spin rounded-full border-2 border-line border-t-leaf',
-        className,
-      )}
-      aria-label="Loading"
-    />
   );
 }
 

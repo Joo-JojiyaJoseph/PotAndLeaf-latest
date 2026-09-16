@@ -1,0 +1,1 @@
+function s(e,n){const r=e?.[n];if(!(r==null||r===""))return Array.isArray(r)?r[0]:String(r)}function a(e,n="Something went wrong."){const r=e?.response?.data,t=Object.values(r?.errors??{}).flat()[0];return t?String(t):typeof r?.message=="string"&&r.message?r.message:n}export{a,s as f};
