@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, PlusIcon, TrashIcon, BuildingOffice2Icon, UserIcon, CreditCardIcon, DocumentTextIcon, CurrencyRupeeIcon, QrCodeIcon, CubeIcon, TagIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
+import { Button, Card, Field, Input, Textarea, Spinner, Select, PageHeader } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { computeSale, tierPrice } from '../../lib/saleCalc';
 import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
@@ -21,8 +21,35 @@ const PRICE_LEVELS = [
   { value: 'wholesale', label: 'Wholesale' },
   { value: 'dealer', label: 'Dealer' },
 ];
-const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
-const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
+const numInput = 'h-9 w-full rounded-[12px] glass-control px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
+const selectCls = 'h-10 w-full rounded-[12px] text-sm';
+
+function LeafGlyph({ className = 'size-5' }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M12 3c5.2 1.8 8.5 6 8.5 10.4-4.4 1.2-7.5-1-8.5-4-1 3-4.1 5.2-8.5 4C3.5 9 6.8 4.8 12 3z" />
+      <path d="M12 9.5v11" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function QtyControl({ value, onChange }) {
+  return (
+    <div className="flex h-9 min-w-[72px] items-center rounded-[12px] glass-control">
+      <input
+        type="number"
+        step="0.001"
+        className="h-9 w-10 flex-1 bg-transparent px-1 text-center text-sm tabular-nums focus:outline-none"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <div className="flex flex-col pr-1">
+        <button type="button" className="leading-none text-[9px] text-muted hover:text-ink" aria-label="Increase qty" onClick={() => onChange(String((Number(value) || 0) + 1))}>▴</button>
+        <button type="button" className="leading-none text-[9px] text-muted hover:text-ink" aria-label="Decrease qty" onClick={() => onChange(String(Math.max(0, (Number(value) || 0) - 1)))}>▾</button>
+      </div>
+    </div>
+  );
+}
 
 export default function SaleForm() {
   const navigate = useNavigate();
@@ -135,22 +162,21 @@ export default function SaleForm() {
   if (isLoading) return <div className="flex h-full items-center justify-center"><Spinner className="size-6" /></div>;
 
   return (
-    <div className="space-y-5 p-4 sm:p-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">New sale</h1>
-          <p className="text-sm text-muted">POS billing with GST; confirm to post stock and update the customer.</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/sales')}><ArrowLeftIcon className="size-4" /> Back</Button>
-      </div>
+    <div className="space-y-4 p-4 sm:p-6">
+      <PageHeader
+        icon={LeafGlyph}
+        title="New Sale"
+        subtitle="POS billing with GST; confirm to post stock and update the customer."
+        actions={<Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/sales')}><ArrowLeftIcon className="size-4" /> Back</Button>}
+      />
 
-      {errors._ && <div className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">{errors._[0]}</div>}
+      {errors._ && <div className="rounded-2xl bg-danger-soft px-4 py-3 text-sm text-danger">{errors._[0]}</div>}
 
-      <Card className="p-5">
+      <Card className="p-5 sm:p-6">
         {isSuperAdmin && (
-          <div className="mb-4 rounded-xl bg-leaf-soft/50 p-3">
+          <div className="mb-5">
             <Field label="Billing for company">
-              <Select value={companyId ?? ''} onChange={(e) => selectCompany(e.target.value)} className={selectCls}>
+              <Select icon={BuildingOffice2Icon} value={companyId ?? ''} onChange={(e) => selectCompany(e.target.value)} className={selectCls}>
                 {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
             </Field>
@@ -158,7 +184,7 @@ export default function SaleForm() {
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Customer" error={err('customer_id')}>
-            <Select value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
+            <Select icon={UserIcon} value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
               <option value="">Walk-in</option>
               {customers.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.type}</option>)}
             </Select>
@@ -167,21 +193,21 @@ export default function SaleForm() {
             <Input type="date" value={header.sale_date} onChange={(e) => setHeader((h) => ({ ...h, sale_date: e.target.value }))} />
           </Field>
           <Field label="Payment mode" error={err('payment_mode')}>
-            <Select value={header.payment_mode} onChange={(e) => setHeader((h) => ({ ...h, payment_mode: e.target.value }))} className={selectCls}>
+            <Select icon={CreditCardIcon} value={header.payment_mode} onChange={(e) => setHeader((h) => ({ ...h, payment_mode: e.target.value }))} className={selectCls}>
               <option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="credit">Credit</option>
             </Select>
           </Field>
           <Field label="Bill type" error={err('bill_kind')}>
-            <Select value={header.bill_kind} onChange={(e) => setHeader((h) => ({ ...h, bill_kind: e.target.value }))} className={selectCls}>
+            <Select icon={DocumentTextIcon} value={header.bill_kind} onChange={(e) => setHeader((h) => ({ ...h, bill_kind: e.target.value }))} className={selectCls}>
               {BILL_KINDS.map((bk) => <option key={bk.value} value={bk.value}>{bk.label}</option>)}
             </Select>
           </Field>
           <Field label="Amount paid (blank = full)" error={err('amount_paid')}>
-            <Input type="number" step="0.01" value={header.amount_paid} onChange={(e) => setHeader((h) => ({ ...h, amount_paid: e.target.value }))} placeholder={formatCurrency(dueTotal)} />
+            <Input icon={CurrencyRupeeIcon} type="number" step="0.01" value={header.amount_paid} onChange={(e) => setHeader((h) => ({ ...h, amount_paid: e.target.value }))} placeholder={formatCurrency(dueTotal)} />
           </Field>
         </div>
         {header.customer_id && (
-          <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl bg-leaf-soft/40 p-3 sm:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl bg-leaf-soft/50 p-3 sm:grid-cols-3">
             <div>
               <p className="text-xs text-muted">Loyalty balance</p>
               <p className="tnum text-base font-semibold">{balance} pts</p>
@@ -202,37 +228,39 @@ export default function SaleForm() {
             </div>
           </div>
         )}
-        <label className="mt-3 flex items-center gap-2 text-sm text-muted">
+        <label className="mt-4 flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" checked={header.is_interstate} onChange={(e) => setHeader((h) => ({ ...h, is_interstate: e.target.checked }))} className="size-4 rounded border-line text-leaf focus:ring-leaf/40" />
           Inter-state supply (charge IGST instead of CGST + SGST)
         </label>
       </Card>
 
-      <Card className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-line bg-[#FAFBFA] px-3 py-2.5">
-          <span className="microlabel font-semibold text-ink">Scan barcode</span>
+      <Card className="overflow-hidden p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink">
+            <QrCodeIcon className="size-4 text-muted" /> Scan barcode
+          </span>
           <input
             value={scanValue}
             onChange={(e) => { setScanValue(e.target.value); setScanError(''); }}
             onKeyDown={handleScan}
             autoFocus
             placeholder="Scan or type a batch barcode, then Enter"
-            className="h-9 flex-1 min-w-[220px] rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25"
+            className="h-10 min-w-[220px] flex-1 rounded-full glass-control px-4 text-sm placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-leaf/25"
           />
           {scanError && <span className="text-xs text-danger">{scanError}</span>}
         </div>
-        <div className="overflow-x-auto">
+        <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead>
-              <tr className="border-b border-line text-left text-faint">
-                <th className="microlabel px-3 py-2 font-semibold">Product</th>
-                <th className="microlabel px-3 py-2 font-semibold">Price tier</th>
-                <th className="microlabel px-3 py-2 text-right font-semibold">Qty</th>
-                <th className="microlabel px-3 py-2 text-right font-semibold">Rate</th>
-                <th className="microlabel px-3 py-2 text-right font-semibold">Disc.</th>
-                <th className="microlabel px-3 py-2 text-right font-semibold">GST %</th>
-                <th className="microlabel px-3 py-2 text-right font-semibold">Total</th>
-                <th className="px-3 py-2" />
+              <tr className="text-left text-faint">
+                <th className="microlabel px-1 pb-2 font-semibold">Product</th>
+                <th className="microlabel px-1 pb-2 font-semibold">Price tier</th>
+                <th className="microlabel px-1 pb-2 font-semibold">Qty</th>
+                <th className="microlabel px-1 pb-2 font-semibold">Rate</th>
+                <th className="microlabel px-1 pb-2 font-semibold">Disc.</th>
+                <th className="microlabel px-1 pb-2 font-semibold">GST %</th>
+                <th className="microlabel px-1 pb-2 text-right font-semibold">Total</th>
+                <th className="px-1 pb-2" />
               </tr>
             </thead>
             <tbody>
@@ -240,27 +268,27 @@ export default function SaleForm() {
                 const p = productsById[line.product_id];
                 const lt = computed.lines[i]?.line_total ?? 0;
                 return (
-                  <tr key={i} className="border-b border-line/60 last:border-0">
-                    <td className="px-3 py-2">
-                      <Select value={line.product_id} onChange={(e) => pickProduct(i, e.target.value)} className={selectCls + ' min-w-[180px]'}>
+                  <tr key={i}>
+                    <td className="px-1 py-1.5">
+                      <Select icon={CubeIcon} value={line.product_id} onChange={(e) => pickProduct(i, e.target.value)} className={selectCls + ' min-w-[180px]'}>
                         <option value="">Select…</option>
                         {products.map((pr) => <option key={pr.id} value={pr.id}>{pr.name} · stock {pr.current_stock}</option>)}
                       </Select>
                       {p && Number(line.qty) > p.current_stock && <span className="mt-1 block text-xs text-danger">Only {p.current_stock} in stock</span>}
                       {line.barcode && <span className="mt-1 block text-[11px] text-muted">Batch {line.batch_no} · {line.barcode}</span>}
                     </td>
-                    <td className="px-3 py-2">
-                      <Select value={line.price_level || 'retail'} onChange={(e) => applyPriceLevel(i, e.target.value)} className={selectCls + ' min-w-[110px]'}>
+                    <td className="px-1 py-1.5">
+                      <Select icon={TagIcon} value={line.price_level || 'retail'} onChange={(e) => applyPriceLevel(i, e.target.value)} className={selectCls + ' min-w-[110px]'}>
                         {PRICE_LEVELS.map((pl) => <option key={pl.value} value={pl.value}>{pl.label}</option>)}
                       </Select>
                     </td>
-                    <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.discount} onChange={(e) => setLine(i, { discount: e.target.value })} /></td>
-                    <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.gst_rate} onChange={(e) => setLine(i, { gst_rate: e.target.value })} /></td>
-                    <td className="tnum px-3 py-2 text-right font-medium">{formatCurrency(lt)}</td>
-                    <td className="px-3 py-2">
-                      <button onClick={() => setLines((pv) => (pv.length === 1 ? pv : pv.filter((_, idx) => idx !== i)))} className="rounded-md p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Remove"><TrashIcon className="size-4" /></button>
+                    <td className="px-1 py-1.5"><QtyControl value={line.qty} onChange={(qty) => setLine(i, { qty })} /></td>
+                    <td className="px-1 py-1.5"><Input prefix="₹" type="number" step="0.01" className="h-9 text-right tabular-nums" value={line.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></td>
+                    <td className="px-1 py-1.5"><Input suffix="%" type="number" step="0.01" className="h-9 text-right tabular-nums" value={line.discount} onChange={(e) => setLine(i, { discount: e.target.value })} /></td>
+                    <td className="px-1 py-1.5"><input type="number" step="0.01" className={numInput} value={line.gst_rate} onChange={(e) => setLine(i, { gst_rate: e.target.value })} /></td>
+                    <td className="tnum px-1 py-1.5 text-right font-medium">{formatCurrency(lt)}</td>
+                    <td className="px-1 py-1.5">
+                      <button onClick={() => setLines((pv) => (pv.length === 1 ? pv : pv.filter((_, idx) => idx !== i)))} className="rounded-xl p-1.5 text-muted hover:bg-white/70 hover:text-danger" aria-label="Remove"><TrashIcon className="size-4" /></button>
                     </td>
                   </tr>
                 );
@@ -268,8 +296,8 @@ export default function SaleForm() {
             </tbody>
           </table>
         </div>
-        <div className="border-t border-line px-3 py-2">
-          <Button variant="ghost" size="sm" onClick={() => setLines((p) => [...p, emptyLine()])}><PlusIcon className="size-4" /> Add line</Button>
+        <div className="mt-3">
+          <Button variant="outline" size="sm" className="rounded-full" onClick={() => setLines((p) => [...p, emptyLine()])}><PlusIcon className="size-4" /> Add line</Button>
           {err('items') && <span className="ml-2 text-xs text-danger">{err('items')}</span>}
         </div>
       </Card>
@@ -279,10 +307,12 @@ export default function SaleForm() {
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="p-5 lg:col-span-2">
-          <Field label="Notes"><Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Optional" /></Field>
+        <Card className="p-5 sm:p-6 lg:col-span-2">
+          <Field label={<span className="inline-flex items-center gap-1.5"><DocumentTextIcon className="size-4" /> Notes</span>}>
+            <Textarea rows={5} value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Optional" />
+          </Field>
         </Card>
-        <Card className="p-5">
+        <Card className="glass-card-strong p-5 sm:p-6">
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between"><dt className="text-muted">Subtotal</dt><dd className="tnum">{formatCurrency(t.subtotal)}</dd></div>
             {header.is_interstate ? (
@@ -294,13 +324,19 @@ export default function SaleForm() {
               </>
             )}
             <div className="flex justify-between text-muted"><dt>Round off</dt><dd className="tnum">{formatCurrency(t.round_off)}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted">Total</dt><dd className="tnum">{formatCurrency(t.grand_total)}</dd></div>
+            <div className="flex justify-between font-medium"><dt>Total</dt><dd className="tnum">{formatCurrency(t.grand_total)}</dd></div>
             {loyaltyDiscount > 0 && (
               <div className="flex justify-between text-leaf"><dt>Loyalty discount</dt><dd className="tnum">−{formatCurrency(loyaltyDiscount)}</dd></div>
             )}
-            <div className="mt-2 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Amount due</dt><dd className="tnum">{formatCurrency(dueTotal)}</dd></div>
+            <div className="mt-1 flex items-center justify-between border-t border-white/60 pt-3 text-[15px] font-semibold">
+              <dt className="inline-flex items-center gap-2 text-leaf-hover">
+                <span className="flex size-6 items-center justify-center rounded-full bg-leaf text-white"><BanknotesIcon className="size-3.5" /></span>
+                Amount due
+              </dt>
+              <dd className="tnum text-leaf-hover">{formatCurrency(dueTotal)}</dd>
+            </div>
           </dl>
-          <Button className="mt-4 w-full" onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
+          <Button className="mt-5 w-full rounded-full" onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
         </Card>
       </div>
     </div>

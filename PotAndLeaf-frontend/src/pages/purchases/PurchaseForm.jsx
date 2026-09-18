@@ -232,7 +232,7 @@ export default function PurchaseForm() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">{isEdit ? 'Edit purchase' : 'New purchase'}</h1>
+          <h1 className="page-title">{isEdit ? 'Edit purchase' : 'New purchase'}</h1>
           <p className="text-sm text-muted">Enter lines with GST; confirm later to post stock.</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate('/purchases')}>

@@ -106,7 +106,7 @@ export default function PurchaseOrderForm() {
     return (
       <div className="space-y-5 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h1 className="text-lg font-semibold">New purchase order</h1><p className="text-sm text-muted">Choose which company this purchase order belongs to.</p></div>
+          <div><h1 className="page-title">New purchase order</h1><p className="text-sm text-muted">Choose which company this purchase order belongs to.</p></div>
           <Button variant="outline" size="sm" onClick={() => navigate('/purchase-orders')}><ArrowLeftIcon className="size-4" /> Back</Button>
         </div>
         <Card className="p-5">
@@ -126,7 +126,7 @@ export default function PurchaseOrderForm() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-lg font-semibold">New purchase order</h1><p className="text-sm text-muted">Order stock from a supplier.</p></div>
+        <div><h1 className="page-title">New purchase order</h1><p className="text-sm text-muted">Order stock from a supplier.</p></div>
         <Button variant="outline" size="sm" onClick={() => navigate('/purchase-orders')}><ArrowLeftIcon className="size-4" /> Back</Button>
       </div>
 

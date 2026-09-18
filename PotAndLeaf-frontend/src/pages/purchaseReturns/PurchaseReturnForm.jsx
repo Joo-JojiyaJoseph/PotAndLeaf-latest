@@ -106,7 +106,7 @@ export default function PurchaseReturnForm() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">New purchase return</h1>
+          <h1 className="page-title">New purchase return</h1>
           <p className="text-sm text-muted">Return goods against a confirmed purchase; confirm later to reverse stock.</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate('/purchase-returns')}>

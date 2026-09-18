@@ -43,7 +43,7 @@ class LocationStockService
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
             ->where('qty', '<>', 0)
-            ->with(['product:id,sku,name', 'location:id,name,type'])
+            ->with(['product:id,sku,name,reorder_level,cost_price', 'location:id,name,type'])
             ->get()
             ->map(fn ($r) => [
                 'location_id'   => $r->location_id,
@@ -52,6 +52,9 @@ class LocationStockService
                 'sku'           => $r->product?->sku,
                 'product_name'  => $r->product?->name,
                 'qty'           => (float) $r->qty,
+                'reorder_level' => (float) ($r->product?->reorder_level ?? 0),
+                'cost_price'    => (float) ($r->product?->cost_price ?? 0),
+                'stock_value'   => round((float) $r->qty * (float) ($r->product?->cost_price ?? 0), 2),
             ]);
     }
 }

@@ -39,7 +39,7 @@ export default function BackordersList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Backorders</h1>
+          <h1 className="page-title">Backorders</h1>
           <p className="text-sm text-muted">Track shortages when stock is unavailable. Fulfill partially as stock arrives{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

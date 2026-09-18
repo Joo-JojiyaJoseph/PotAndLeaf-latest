@@ -456,6 +456,78 @@ class ReportService
         ];
     }
 
+    /**
+     * Rentals grouped by the staff member who created them (created_by).
+     * Staff type is the user's company role — no invented staff types.
+     */
+    public function rentalByStaff(
+        int|string|null $companyId,
+        string $from,
+        string $to,
+        ?string $locationId = null,
+    ): array {
+        $from = Carbon::parse($from)->toDateString();
+        $to = Carbon::parse($to)->toDateString();
+
+        $rentals = Rental::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->whereDate('start_date', '>=', $from)
+            ->whereDate('start_date', '<=', $to)
+            ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
+            ->with(['createdBy:id,name', 'customer:id,name', 'location:id,name'])
+            ->orderByDesc('start_date')
+            ->get();
+
+        $userIds = $rentals->pluck('created_by')->filter()->map(fn ($id) => (int) $id)->unique()->all();
+        $roleLabels = [];
+        if ($userIds !== []) {
+            $roleLabels = DB::table('role_user')
+                ->join('roles', 'roles.id', '=', 'role_user.role_id')
+                ->whereIn('role_user.user_id', $userIds)
+                ->when($companyId !== null, fn ($q) => $q->where('role_user.company_id', $companyId))
+                ->whereNull('roles.deleted_at')
+                ->get(['role_user.user_id', 'roles.name'])
+                ->groupBy('user_id')
+                ->map(fn ($g) => $g->pluck('name')->unique()->implode(', '))
+                ->all();
+        }
+
+        $rows = $rentals->map(fn (Rental $r) => [
+            'id'            => $r->id,
+            'rental_no'     => $r->rental_no,
+            'start_date'    => optional($r->start_date)->toDateString(),
+            'staff_id'      => $r->created_by,
+            'staff_name'    => $r->createdBy?->name ?? 'Unassigned',
+            'staff_type'    => $roleLabels[(int) $r->created_by] ?? '—',
+            'customer_name' => $r->customer?->name,
+            'location_name' => $r->location?->name,
+            'amount'        => round((float) $r->rental_charge, 2),
+            'status'        => $r->status,
+            'balance_due'   => round((float) $r->balance_due, 2),
+        ])->values()->all();
+
+        $byStaff = collect($rows)->groupBy('staff_id')->map(function ($group) {
+            $first = $group->first();
+
+            return [
+                'staff_id'    => $first['staff_id'],
+                'staff_name'  => $first['staff_name'],
+                'staff_type'  => $first['staff_type'],
+                'count'       => $group->count(),
+                'amount'      => round((float) $group->sum('amount'), 2),
+            ];
+        })->values()->all();
+
+        return [
+            'from'     => $from,
+            'to'       => $to,
+            'total'    => round((float) collect($rows)->sum('amount'), 2),
+            'count'    => count($rows),
+            'by_staff' => $byStaff,
+            'rows'     => $rows,
+        ];
+    }
+
     /** Live snapshot of items still out on rent (no date filter). */
     public function rentalCurrent(
         int|string $companyId,
@@ -629,28 +701,43 @@ class ReportService
         $totalCost = round((float) (clone $base)->sum('total_input_cost'), 2);
 
         $paginator = (clone $base)
-            ->with(['outputProduct:id,name', 'supervisor:id,name', 'location:id,name'])
+            ->with(['outputProduct:id,name,retail_price', 'supervisor:id,name', 'location:id,name'])
             ->orderByDesc('order_date')
             ->paginate(min(max($perPage, 1), 100), ['*'], 'page', max($page, 1));
 
-        $paginator->getCollection()->transform(fn (ProductionOrder $o) => [
-            'id'               => $o->id,
-            'order_no'         => $o->order_no,
-            'order_date'       => optional($o->order_date)->toDateString(),
-            'output_product'   => $o->outputProduct?->name,
-            'output_quantity'  => round((float) $o->output_quantity, 3),
-            'total_input_cost' => round((float) $o->total_input_cost, 2),
-            'output_unit_cost' => round((float) $o->output_unit_cost, 4),
-            'supervisor'       => $o->supervisor?->name,
-            'location'         => $o->location?->name,
-        ]);
+        $paginator->getCollection()->transform(function (ProductionOrder $o) {
+            $qty = round((float) $o->output_quantity, 3);
+            $cost = round((float) $o->total_input_cost, 2);
+            $selling = round($qty * (float) ($o->outputProduct?->retail_price ?? 0), 2);
+
+            return [
+                'id'               => $o->id,
+                'order_no'         => $o->order_no,
+                'order_date'       => optional($o->order_date)->toDateString(),
+                'output_product'   => $o->outputProduct?->name,
+                'output_quantity'  => $qty,
+                'total_input_cost' => $cost,
+                'output_unit_cost' => round((float) $o->output_unit_cost, 4),
+                'selling_value'    => $selling,
+                'approx_profit'    => round($selling - $cost, 2),
+                'supervisor'       => $o->supervisor?->name,
+                'location'         => $o->location?->name,
+            ];
+        });
+
+        $sellingTotal = round((float) (clone $base)
+            ->join('products', 'products.id', '=', 'production_orders.output_product_id')
+            ->sum(DB::raw('production_orders.output_quantity * COALESCE(products.retail_price, 0)')), 2);
 
         return [
             'summary' => [
-                'completed'    => $completed,
-                'output_qty'   => $outputQty,
-                'total_cost'   => $totalCost,
-                'avg_unit_cost'=> $outputQty > 0 ? round($totalCost / $outputQty, 4) : 0,
+                'completed'     => $completed,
+                'output_qty'    => $outputQty,
+                'total_cost'    => $totalCost,
+                'selling_value' => $sellingTotal,
+                'approx_profit' => round($sellingTotal - $totalCost, 2),
+                'avg_unit_cost' => $outputQty > 0 ? round($totalCost / $outputQty, 4) : 0,
+                'profit_note'   => 'Approximate: list retail_price × output qty minus recorded input cost. Not realised sales profit.',
             ],
             'orders'  => $paginator,
         ];

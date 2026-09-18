@@ -17,6 +17,7 @@ export default function SearchSelect({
   className = '',
   size = 'md',
   searchable,
+  icon: Icon,
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -41,10 +42,11 @@ export default function SearchSelect({
     const menuH = 280;
     const openUp = spaceBelow < 180 && r.top > spaceBelow;
     const maxHeight = Math.max(140, openUp ? Math.min(menuH, r.top - 12) : Math.min(menuH, spaceBelow - 12));
+    const width = Math.min(Math.max(r.width, 200), window.innerWidth - 16);
     setPos({
       top: openUp ? Math.max(8, r.top - maxHeight - 6) : r.bottom + 6,
-      left: Math.min(r.left, window.innerWidth - Math.max(r.width, 220) - 8),
-      width: Math.max(r.width, 220),
+      left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
+      width,
       maxHeight,
     });
   }
@@ -100,14 +102,15 @@ export default function SearchSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         className={classNames(
-          'flex w-full items-center gap-2 border bg-surface text-left transition-colors',
-          compact ? 'h-9 rounded-[10px] px-2 text-sm' : 'h-10 rounded-xl px-3 text-sm',
+          'flex w-full items-center gap-2 glass-control text-left transition-colors',
+          compact ? 'h-9 rounded-[10px] px-2 text-sm' : 'h-10 rounded-[12px] px-3 text-sm',
           'focus:outline-none focus:ring-2 focus:ring-leaf/25',
-          open ? 'border-leaf ring-2 ring-leaf/20' : 'border-line hover:border-leaf/40',
-          disabled && 'pointer-events-none bg-paper text-muted opacity-70',
+          open ? 'border-leaf ring-2 ring-leaf/20' : 'hover:border-leaf/40',
+          disabled && 'pointer-events-none opacity-70',
           className,
         )}
       >
+        {Icon ? <Icon className="size-4 shrink-0 text-muted" strokeWidth={1.6} /> : null}
         <span className={classNames('min-w-0 flex-1 truncate', selected ? 'text-ink' : 'text-muted')}>
           {selected ? (
             <>
@@ -116,7 +119,7 @@ export default function SearchSelect({
             </>
           ) : placeholder}
         </span>
-        <ChevronDownIcon className={classNames('size-4 shrink-0 text-leaf transition-transform', open && 'rotate-180')} />
+        <ChevronDownIcon className={classNames('size-4 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && createPortal(
@@ -124,7 +127,7 @@ export default function SearchSelect({
           ref={menuRef}
           role="listbox"
           style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxHeight }}
-          className="dialog-in fixed z-[80] flex flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-pop"
+          className="dialog-in glass-menu fixed z-[80] flex flex-col overflow-hidden rounded-2xl"
         >
           {showSearch && (
             <div className="shrink-0 border-b border-line p-2">
@@ -135,7 +138,7 @@ export default function SearchSelect({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search…"
-                  className="h-9 w-full rounded-lg border border-line bg-paper pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25"
+                  className="h-9 w-full rounded-xl glass-control pl-8 pr-3 text-sm placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-leaf/25"
                 />
               </div>
             </div>

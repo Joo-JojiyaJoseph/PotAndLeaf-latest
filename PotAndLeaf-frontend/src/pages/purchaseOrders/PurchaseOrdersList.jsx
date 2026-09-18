@@ -37,7 +37,7 @@ export default function PurchaseOrdersList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Purchase orders</h1>
+          <h1 className="page-title">Purchase orders</h1>
           <p className="text-sm text-muted">Raise orders to suppliers, then convert them to GRNs on receipt{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

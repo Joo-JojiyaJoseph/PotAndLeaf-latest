@@ -48,6 +48,7 @@ const GROUPS = [
       { key: 'eod_management_enabled', label: 'Send HO management EOD summary', type: 'toggle' },
       { key: 'eod_management_whatsapp_phones', label: 'EOD WhatsApp phones (comma-separated)', type: 'text' },
       { key: 'eod_management_email_recipients', label: 'EOD email recipients (comma-separated)', type: 'text' },
+      { key: 'eod_management_send_time', label: 'EOD send time (HH:MM, 24h)', type: 'text' },
     ],
   },
   {
@@ -219,7 +220,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div>
-        <h1 className="text-lg font-semibold">Settings</h1>
+        <h1 className="page-title">Settings</h1>
         <p className="text-sm text-muted">Additional settings for {activeCompany?.name}.</p>
       </div>
 

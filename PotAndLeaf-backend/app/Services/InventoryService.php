@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Product;
 use App\Models\StockLedgerEntry;
+use Illuminate\Support\Carbon;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
 use App\Models\User;
@@ -21,6 +22,7 @@ class InventoryService
 {
     public function __construct(
         private readonly BackorderService $backorders,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -260,19 +262,32 @@ class InventoryService
     }
 
     /**
-     * Fast / slow / dead classification by outbound movement over a window.
-     * dead = no outbound in the window; fast = outbound at or above the average
-     * of the movers; slow = some movement below that average.
+     * Fast / slow / dead classification by outbound movement.
+     * Fast/slow use outbound qty in the selected window versus the average of movers.
+     * Dead uses company setting dead_stock_days (no outbound in that many days).
      */
     public function movement(int|string|null $companyId, int $days = 30): array
     {
+        $days = max(1, min($days, 365));
+        $deadDays = $companyId !== null
+            ? max(1, $this->settings->getInt($companyId, 'dead_stock_days') ?: 180)
+            : 180;
         $since = now()->subDays($days);
+        $deadSince = now()->subDays($deadDays);
 
         $out = StockLedgerEntry::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('direction', 'out')
             ->where('occurred_at', '>=', $since)
             ->selectRaw('product_id, SUM(qty) as out_qty, MAX(occurred_at) as last_out')
+            ->groupBy('product_id')
+            ->get()
+            ->keyBy('product_id');
+
+        $lastOut = StockLedgerEntry::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->where('direction', 'out')
+            ->selectRaw('product_id, MAX(occurred_at) as last_out')
             ->groupBy('product_id')
             ->get()
             ->keyBy('product_id');
@@ -284,24 +299,29 @@ class InventoryService
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->orderBy('name')
             ->get(['id', 'sku', 'name', 'current_stock'])
-            ->map(function ($p) use ($out, $avg) {
+            ->map(function ($p) use ($out, $avg, $lastOut, $deadSince) {
                 $outQty = (float) ($out[$p->id]->out_qty ?? 0);
-                $class = $outQty <= 0 ? 'dead' : ($outQty >= $avg ? 'fast' : 'slow');
+                $last = $lastOut[$p->id]->last_out ?? $out[$p->id]->last_out ?? null;
+                $isDead = $last === null || Carbon::parse($last)->lt($deadSince);
+                $class = $isDead ? 'dead' : ($outQty >= $avg && $outQty > 0 ? 'fast' : 'slow');
+
                 return [
                     'id'       => $p->id,
                     'sku'      => $p->sku,
                     'name'     => $p->name,
                     'stock'    => (float) $p->current_stock,
                     'out_qty'  => round($outQty, 3),
-                    'last_out' => $out[$p->id]->last_out ?? null,
+                    'last_out' => $last,
                     'class'    => $class,
                 ];
             });
 
         return [
-            'days'    => $days,
-            'items'   => $rows->values(),
-            'summary' => [
+            'days'            => $days,
+            'dead_stock_days' => $deadDays,
+            'method'          => 'Fast/slow: outbound qty in the selected window vs average of movers. Dead: no outbound movement in dead_stock_days.',
+            'items'           => $rows->values(),
+            'summary'         => [
                 'fast' => $rows->where('class', 'fast')->count(),
                 'slow' => $rows->where('class', 'slow')->count(),
                 'dead' => $rows->where('class', 'dead')->count(),

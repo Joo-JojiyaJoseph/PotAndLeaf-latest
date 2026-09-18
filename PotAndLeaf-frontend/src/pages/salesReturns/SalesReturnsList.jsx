@@ -47,7 +47,7 @@ export default function SalesReturnsList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Sales returns</h1>
+          <h1 className="page-title">Sales returns</h1>
           <p className="text-sm text-muted">Credit notes to customers. Confirming restores stock and reduces receivables{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

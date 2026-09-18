@@ -209,6 +209,18 @@ class ReportController extends Controller
         ));
     }
 
+    public function rentalStaff(Request $request): JsonResponse
+    {
+        $this->allowRentalReports($request);
+        $companyId = $this->reportCompanyId($request);
+        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->reports->rentalByStaff(
+            $companyId, $from, $to, $request->query('location_id'),
+        ));
+    }
+
     public function rentalCurrent(Request $request): JsonResponse
     {
         $this->allowRentalReports($request);
@@ -696,7 +708,7 @@ class ReportController extends Controller
         $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
         $to = $request->query('to') ?: now()->toDateString();
 
-        return $this->ok($this->analytics->gstReconciliation($companyId, $from, $to));
+        return $this->ok($this->analytics->gstReconciliation($companyId, $from, $to, $request->query('location_id')));
     }
 
     public function commissionReport(Request $request): JsonResponse
@@ -723,11 +735,17 @@ class ReportController extends Controller
             $period = 'month';
         }
 
+        $metric = $request->query('metric', 'net_sales');
+        if (! in_array($metric, ['net_sales', 'invoices', 'incentives'], true)) {
+            $metric = 'net_sales';
+        }
+
         return $this->ok($this->analytics->leaderboard(
             $companyId,
             $period,
             $request->query('as_of'),
             $request->query('location_id'),
+            $metric,
         ));
     }
 

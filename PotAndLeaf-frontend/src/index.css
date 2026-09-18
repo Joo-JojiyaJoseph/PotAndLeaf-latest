@@ -3,7 +3,7 @@
 @font-face {
   font-family: 'Inter';
   font-style: normal;
-  font-weight: 400 600;
+  font-weight: 400 700;
   font-display: swap;
   src: url('/fonts/inter-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
@@ -27,35 +27,36 @@
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'Inter', ui-sans-serif, system-ui, sans-serif;
 
-  --color-paper: #EEF3F1;      /* app background            */
-  --color-sidebar: #F5F8F7;    /* sidebar tint              */
-  --color-surface: #FFFFFF;    /* cards / inputs            */
-  --color-ink: #2F3B35;        /* primary text              */
-  --color-muted: #68766E;      /* secondary text            */
-  --color-faint: #98A7A0;      /* micro-labels              */
-  --color-line: #E3EBE7;       /* borders                   */
-  --color-line-strong: #C9D7D1;
+  --color-paper: #EEF5F2;      /* app background            */
+  --color-sidebar: rgba(255,255,255,0.55);
+  --color-surface: rgba(255,255,255,0.78);
+  --color-ink: #24342B;        /* primary text              */
+  --color-muted: #64756D;      /* secondary text            */
+  --color-faint: #8A9A93;      /* micro-labels              */
+  --color-line: rgba(36,52,43,0.10);
+  --color-line-strong: rgba(36,52,43,0.16);
 
   --color-leaf: #8EA53F;       /* accent                    */
-  --color-leaf-hover: #6F8030; /* accent dark               */
+  --color-leaf-hover: #647A24; /* accent dark               */
   --color-leaf-light: #A3BB52; /* accent light              */
-  --color-leaf-soft: #EEF2DF;  /* accent pale               */
+  --color-leaf-soft: #EAF2D3;  /* accent pale               */
 
   --color-terracotta: #C58A5B; /* warm secondary (logo pot) */
   --color-terracotta-soft: #F3E9DF;
 
-  --color-amber: #B4801E;      /* warn text (on pale)       */
-  --color-amber-soft: #FFF7E4;
-  --color-danger: #B54A3A;
-  --color-danger-soft: #F6E5E1;
+  --color-amber: #D89B35;      /* warn text (on pale)       */
+  --color-amber-soft: #FFF6E5;
+  --color-danger: #D95C5C;
+  --color-danger-soft: #FBECEC;
   --color-info: #3E7CB1;
   --color-info-soft: #E4EFF7;
+  --color-success: #2E9B62;
 
-  --radius-xl: 18px;
+  --radius-xl: 20px;
 
-  --shadow-soft: 0 6px 18px rgba(35,45,40,0.06);
-  --shadow-card: 0 8px 25px rgba(35,45,40,0.06);
-  --shadow-pop: 0 12px 34px rgba(35,45,40,0.12);
+  --shadow-soft: 0 6px 18px rgba(45,70,55,0.06);
+  --shadow-card: 0 8px 30px rgba(45,70,55,0.08);
+  --shadow-pop: 0 16px 40px rgba(45,70,55,0.14);
 }
 
 html, body, #root { height: 100%; }
@@ -66,6 +67,137 @@ body {
   font-family: var(--font-sans);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
+}
+
+.app-canvas {
+  position: relative;
+  isolation: isolate;
+  background-color: #eaf4ef;
+}
+.app-canvas-photos {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.app-canvas-garden {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0.92;
+}
+.app-canvas-leaves {
+  position: absolute;
+  top: -6%;
+  right: -3%;
+  height: 88%;
+  width: auto;
+  max-width: 56%;
+  object-fit: contain;
+  object-position: right top;
+  opacity: 0.88;
+  filter: blur(0.6px);
+  mask-image: linear-gradient(90deg, transparent 0%, black 28%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 28%);
+}
+.app-canvas::before {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(90deg, rgba(234, 244, 239, 0.42) 0%, rgba(234, 244, 239, 0.12) 42%, transparent 70%);
+}
+.app-canvas-photos { z-index: 0; }
+/* Keep the main column above the photos. Do not force position on the
+   sidebar — that override kills `fixed` and squeezes the page on mobile. */
+.app-canvas > .app-shell-main {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Never let the desktop rail occupy layout on phones — the drawer is portaled. */
+@media (max-width: 1023px) {
+  .app-sidebar-rail {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-card);
+  border-radius: 22px;
+}
+.glass-card-strong {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(244, 248, 232, 0.88) 100%);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-pop);
+  border-radius: 22px;
+}
+.glass-panel {
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: var(--shadow-soft);
+}
+.glass-control {
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(36, 52, 43, 0.12);
+}
+.btn-primary-grad {
+  background: linear-gradient(90deg, #8EA53F 0%, #647A24 100%);
+  box-shadow: 0 8px 18px rgba(100, 122, 36, 0.28);
+}
+.glass-menu {
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(36, 52, 43, 0.10);
+  box-shadow: var(--shadow-pop);
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--color-ink);
+}
+@media (min-width: 640px) {
+  .page-title { font-size: 1.75rem; }
+}
+
+.app-main table thead tr {
+  background: rgba(255, 255, 255, 0.4);
+}
+.app-main table tbody tr {
+  transition: background-color 0.15s ease;
+}
+.app-main table tbody tr:hover {
+  background: rgba(142, 165, 63, 0.06);
+}
+
+input[type='checkbox'], input[type='radio'] {
+  accent-color: var(--color-leaf);
 }
 /* Tabular figures for codes, amounts and metrics (Inter supports them). */
 .tnum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
@@ -81,13 +213,13 @@ body {
 
 html.dark {
   --color-paper: #1a211e;
-  --color-sidebar: #222b27;
-  --color-surface: #2a332f;
+  --color-sidebar: rgba(34, 43, 39, 0.72);
+  --color-surface: rgba(42, 51, 47, 0.78);
   --color-ink: #e8eee9;
   --color-muted: #9aaba2;
   --color-faint: #6b7a72;
-  --color-line: #3a4540;
-  --color-line-strong: #4a5650;
+  --color-line: rgba(255,255,255,0.08);
+  --color-line-strong: rgba(255,255,255,0.14);
   --color-leaf-soft: #2a3318;
   --color-terracotta-soft: #3a2e24;
   --color-amber-soft: #3a3018;
@@ -96,6 +228,29 @@ html.dark {
   --shadow-soft: 0 6px 18px rgba(0,0,0,0.25);
   --shadow-card: 0 8px 25px rgba(0,0,0,0.3);
   --shadow-pop: 0 12px 34px rgba(0,0,0,0.4);
+}
+html.dark .glass-card,
+html.dark .glass-card-strong,
+html.dark .glass-panel {
+  background: rgba(42, 51, 47, 0.72);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+html.dark .glass-control,
+html.dark .glass-menu {
+  background: rgba(42, 51, 47, 0.92);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+html.dark .app-canvas {
+  background-color: #1a211e;
+}
+html.dark .app-canvas-garden { opacity: 0.28; filter: brightness(0.45) saturate(0.7); }
+html.dark .app-canvas-leaves { opacity: 0.22; filter: brightness(0.4) blur(1px); }
+html.dark .app-canvas::before {
+  background: linear-gradient(90deg, rgba(26, 33, 30, 0.72) 0%, rgba(26, 33, 30, 0.4) 100%);
+}
+html.dark .app-canvas::after { opacity: 0.08; }
+html.dark .btn-primary-grad {
+  background: linear-gradient(90deg, #8EA53F 0%, #4e6418 100%);
 }
 
 html, body, #root { transition: background-color 0.2s ease, color 0.2s ease; }
@@ -123,8 +278,19 @@ select option:hover {
 *::-webkit-scrollbar-track { background: transparent; }
 
 /* Tables: keep momentum scrolling on touch and avoid squashed columns. */
-.overflow-x-auto { -webkit-overflow-scrolling: touch; }
-.overflow-x-auto > table { min-width: 640px; }
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  max-width: 100%;
+}
+.overflow-x-auto > table,
+.table-scroll > table {
+  min-width: 40rem;
+}
+
+@media (max-width: 639px) {
+  .app-main { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
 
 /* Larger, comfortable tap targets on coarse pointers. */
 @media (pointer: coarse) {

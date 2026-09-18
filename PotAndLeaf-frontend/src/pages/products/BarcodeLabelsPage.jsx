@@ -47,7 +47,7 @@ export default function BarcodeLabelsPage() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Barcode labels</h1>
+          <h1 className="page-title">Barcode labels</h1>
           <p className="text-sm text-muted">Set how many labels to print per product, then print the sheet.</p>
         </div>
         <div className="flex items-center gap-2">

@@ -192,7 +192,7 @@ export default function SuppliersList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Suppliers</h1>
+          <h1 className="page-title">Suppliers</h1>
           <p className="text-sm text-muted">Vendor master — GST, terms and outstanding balances{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

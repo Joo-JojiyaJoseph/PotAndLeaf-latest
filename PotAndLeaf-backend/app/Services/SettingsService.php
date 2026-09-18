@@ -31,6 +31,7 @@ class SettingsService
         'eod_management_enabled'       => '0',     // HO management EOD summary
         'eod_management_whatsapp_phones' => '',    // comma-separated HO/manager phones
         'eod_management_email_recipients' => '',   // comma-separated HO/manager emails
+        'eod_management_send_time'     => '20:30', // company-local send time (HH:MM)
     ];
 
     /** @return array<string, string> */

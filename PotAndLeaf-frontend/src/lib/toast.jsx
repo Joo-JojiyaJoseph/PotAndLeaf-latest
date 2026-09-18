@@ -38,7 +38,7 @@ export function ToastProvider({ children }) {
           const s = toneStyles[t.tone] ?? toneStyles.info;
           const Icon = s.icon;
           return (
-            <div key={t.id} className="toast-in pointer-events-auto flex items-start gap-3 overflow-hidden rounded-2xl bg-surface/95 p-3 pr-2 shadow-pop ring-1 ring-line backdrop-blur">
+            <div key={t.id} className="toast-in pointer-events-auto flex items-start gap-3 overflow-hidden rounded-2xl glass-menu p-3 pr-2">
               <span className={'mt-0.5 h-full w-1 shrink-0 self-stretch rounded-full ' + s.bar} />
               <Icon className={'mt-0.5 size-5 shrink-0 ' + s.text} />
               <p className="flex-1 py-0.5 text-sm text-ink">{t.message}</p>

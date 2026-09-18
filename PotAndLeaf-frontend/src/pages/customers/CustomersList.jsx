@@ -108,7 +108,7 @@ export default function CustomersList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Customers</h1>
+          <h1 className="page-title">Customers</h1>
           <p className="text-sm text-muted">Customer master — types, GST, credit terms and balances{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

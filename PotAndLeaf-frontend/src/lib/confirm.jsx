@@ -30,7 +30,7 @@ export function ConfirmProvider({ children }) {
       {state && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={() => close(false)} />
-          <div className="dialog-in relative w-full max-w-sm rounded-3xl bg-surface p-6 shadow-pop">
+          <div className="dialog-in glass-card relative w-full max-w-sm p-6">
             <div className="flex items-start gap-3">
               <span className={'flex size-10 shrink-0 items-center justify-center rounded-2xl ' + (state.tone === 'danger' ? 'bg-danger-soft text-danger' : 'bg-leaf-soft text-leaf')}>
                 <ExclamationTriangleIcon className="size-5" />

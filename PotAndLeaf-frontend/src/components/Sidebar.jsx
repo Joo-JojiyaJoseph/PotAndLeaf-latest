@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { NavLink } from 'react-router-dom';
 import {
   ArrowsRightLeftIcon,
@@ -25,6 +27,8 @@ import {
   ClipboardDocumentListIcon,
   ClockIcon,
   QrCodeIcon,
+  ChevronRightIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { classNames } from '../lib/format';
@@ -55,6 +59,7 @@ const GROUPS = [
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon, permission: 'customers.view' },
       { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
       { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
+      { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
     ],
   },
   {
@@ -84,9 +89,8 @@ function itemVisible(item, { isSuperAdmin, showHo, can }) {
 function PotLeafMark() {
   return (
     <svg viewBox="0 0 32 32" className="size-7" aria-hidden>
-      <path d="M16 4c5 2 8 6 8 10-4 1-7-1-8-4-1 3-4 5-8 4 0-4 3-8 8-10z" fill="var(--color-leaf)" />
-      <path d="M9 19h14l-1.6 7.2a2 2 0 0 1-2 1.6h-6.8a2 2 0 0 1-2-1.6L9 19z" fill="var(--color-terracotta)" />
-      <rect x="8" y="17.4" width="16" height="2.2" rx="1.1" fill="var(--color-terracotta)" />
+      <path d="M16 5c6 2.2 10 7 10 12.2-5.2 1.4-8.8-1.1-10-4.6-1.2 3.5-4.8 6-10 4.6C6 12 10 7.2 16 5z" fill="var(--color-leaf)" />
+      <path d="M16 13v14" stroke="var(--color-leaf-hover)" strokeWidth="1.8" strokeLinecap="round" fill="none" />
     </svg>
   );
 }
@@ -94,14 +98,14 @@ function PotLeafMark() {
 function Item({ item, onNavigate }) {
   const Icon = item.icon;
   const base =
-    'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-all min-h-11';
+    'flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-[13px] transition-all duration-150 min-h-11';
 
   if (item.soon) {
     return (
       <NavLink
         to={`/soon/${item.key}`}
         className={({ isActive }) =>
-          classNames(base, isActive ? 'bg-surface text-ink shadow-soft' : 'text-muted hover:bg-surface hover:text-ink')
+          classNames(base, isActive ? 'bg-leaf font-medium text-white shadow-soft' : 'text-ink/75 hover:bg-white/70 hover:text-ink')
         }
       >
         <Icon className="size-[18px]" />
@@ -120,61 +124,120 @@ function Item({ item, onNavigate }) {
         classNames(
           base,
           isActive
-            ? 'bg-leaf font-medium text-white shadow-soft'
-            : 'text-muted hover:bg-surface hover:text-ink',
+            ? 'bg-leaf font-medium text-white shadow-[0_8px_18px_rgba(100,122,36,0.28)]'
+            : 'text-ink/75 hover:bg-white/70 hover:text-ink',
         )
       }
     >
-      <Icon className="size-[18px]" />
-      {item.label}
+      {({ isActive }) => (
+        <>
+          <Icon className="size-[18px]" strokeWidth={1.6} />
+          <span className="flex-1">{item.label}</span>
+          {isActive ? <ChevronRightIcon className="size-4 shrink-0 opacity-90" /> : null}
+        </>
+      )}
     </NavLink>
   );
 }
 
-export default function Sidebar({ open, onClose }) {
+function SidebarBody({ onClose, showClose }) {
   const { isSuperAdmin, can } = useAuth();
   const showHo = isSuperAdmin || can('activity.view') || can('backup.view') || can('*');
   const ctx = { isSuperAdmin, showHo, can };
 
   return (
     <>
-      {open && (
-        <div className="fixed inset-0 z-30 bg-ink/30 lg:hidden" onClick={onClose} aria-hidden />
-      )}
-      <aside
-        className={classNames(
-          'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-line bg-sidebar transition-transform lg:static lg:z-auto lg:translate-x-0',
-          open ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
-        <div className="flex items-center gap-2.5 px-4 py-4">
+      <div className="flex items-center gap-2.5 px-4 py-4 sm:py-5">
+        <span className="flex size-10 items-center justify-center rounded-2xl bg-white/70 shadow-soft">
           <PotLeafMark />
-          <div className="leading-tight">
-            <div className="text-sm font-semibold">Pot &amp; Leaf</div>
-            <div className="font-mono text-[10px] text-muted">Cheerakuzhy Nurseries</div>
-          </div>
+        </span>
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="text-sm font-semibold tracking-tight">Pot &amp; Leaf</div>
+          <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted">Cheerakuzhy Nurseries</div>
         </div>
+        {showClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full glass-control text-ink"
+            aria-label="Close menu"
+          >
+            <XMarkIcon className="size-5" />
+          </button>
+        ) : null}
+      </div>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-6">
-          {GROUPS.map((group) => {
-            const items = group.items.filter((item) => itemVisible(item, ctx));
-            if (items.length === 0) return null;
+      <nav className="flex-1 space-y-5 overflow-y-auto px-3 pb-6">
+        {GROUPS.map((group) => {
+          const items = group.items.filter((item) => itemVisible(item, ctx));
+          if (items.length === 0) return null;
 
-            return (
-              <div key={group.label}>
-                <div className="mb-1.5 px-3 font-mono text-[10px] uppercase tracking-wider text-muted/70">
-                  {group.label}
-                </div>
-                <div className="space-y-0.5">
-                  {items.map((item) => (
-                    <Item key={item.key} item={item} onNavigate={onClose} />
-                  ))}
-                </div>
+          return (
+            <div key={group.label}>
+              <div className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                {group.label}
               </div>
-            );
-          })}
-        </nav>
+              <div className="space-y-0.5">
+                {items.map((item) => (
+                  <Item key={item.key} item={item} onNavigate={onClose} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </nav>
+    </>
+  );
+}
+
+export default function Sidebar({ open, onClose }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => {
+      if (mq.matches) onClose();
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [onClose]);
+
+  return (
+    <>
+      <aside className="app-sidebar-rail glass-panel hidden w-60 shrink-0 flex-col lg:flex lg:relative lg:z-[2] lg:self-stretch lg:rounded-[28px]">
+        <SidebarBody onClose={onClose} showClose={false} />
       </aside>
+      {createPortal(
+        <div className="lg:hidden">
+          <div
+            className={classNames(
+              'fixed inset-0 z-[60] bg-ink/40 transition-opacity duration-200',
+              open ? 'opacity-100' : 'pointer-events-none opacity-0',
+            )}
+            onClick={onClose}
+            aria-hidden
+          />
+          <aside
+            className={classNames(
+              'glass-panel fixed inset-y-0 left-0 z-[70] flex h-dvh w-[min(18rem,calc(100vw-3.5rem))] flex-col rounded-none shadow-pop',
+              'transition-transform duration-200 ease-out',
+              open ? 'translate-x-0' : 'pointer-events-none -translate-x-full',
+            )}
+            aria-hidden={!open}
+            inert={!open || undefined}
+          >
+            <SidebarBody onClose={onClose} showClose />
+          </aside>
+        </div>,
+        document.body,
+      )}
     </>
   );
 }

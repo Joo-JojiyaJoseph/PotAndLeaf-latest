@@ -4,7 +4,7 @@ import { Field, Select } from './ui';
 import { defaultCreateCompanyId } from '../lib/recordCompany';
 import { withCompany } from '../lib/api';
 
-const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
+const selectCls = 'h-10 w-full rounded-[12px] text-sm';
 
 /**
  * Super-admin only company picker for create/edit forms.

@@ -184,7 +184,7 @@ export default function BulkSplitForm() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Bulk product split</h1>
+          <h1 className="page-title">Bulk product split</h1>
           <p className="text-sm text-muted">
             Divide bulk stock into separate products — each split gets its own SKU, barcode, and inventory.
           </p>

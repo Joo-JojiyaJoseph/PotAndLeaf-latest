@@ -275,6 +275,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('reports/rental/delivery/export', [ReportController::class, 'exportRentalDelivery']);
         Route::get('reports/rental/income', [ReportController::class, 'rentalIncome']);
         Route::get('reports/rental/income/export', [ReportController::class, 'exportRentalIncome']);
+        Route::get('reports/rental/staff', [ReportController::class, 'rentalStaff']);
         Route::get('reports/rental/current', [ReportController::class, 'rentalCurrent']);
         Route::get('reports/rental/current/export', [ReportController::class, 'exportRentalCurrent']);
         Route::get('reports/rental/customer/{customer}', [ReportController::class, 'rentalCustomer']);

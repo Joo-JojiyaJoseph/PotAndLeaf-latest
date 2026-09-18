@@ -289,7 +289,7 @@ export default function ProductionForm() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">{isEdit ? `Edit production ${existingQ.data?.order_no || ''}` : 'Add new production'}</h1>
+          <h1 className="page-title">{isEdit ? `Edit production ${existingQ.data?.order_no || ''}` : 'Add new production'}</h1>
           <p className="text-sm text-muted">Choose the product, add materials, check stock and cost, then complete from this page.</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate('/production')}><ArrowLeftIcon className="size-4" /> Back</Button>

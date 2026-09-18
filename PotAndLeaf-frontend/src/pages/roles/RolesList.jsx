@@ -68,7 +68,7 @@ export default function RolesList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Roles &amp; permissions</h1>
+          <h1 className="page-title">Roles &amp; permissions</h1>
           <p className="text-sm text-muted">
             Shared across all companies. Branch admins assign these roles when managing users; only the super admin can change role definitions here.
           </p>

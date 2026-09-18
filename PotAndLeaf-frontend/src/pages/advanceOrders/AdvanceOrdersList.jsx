@@ -34,7 +34,7 @@ export default function AdvanceOrdersList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Advance orders</h1>
+          <h1 className="page-title">Advance orders</h1>
           <p className="text-sm text-muted">Customer pre-bookings against future stock. Fulfil to raise a sale{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

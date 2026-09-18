@@ -91,7 +91,7 @@ export default function BackorderForm() {
     return (
       <div className="space-y-5 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h1 className="text-lg font-semibold">New backorder</h1><p className="text-sm text-muted">Choose which company this backorder belongs to.</p></div>
+          <div><h1 className="page-title">New backorder</h1><p className="text-sm text-muted">Choose which company this backorder belongs to.</p></div>
           <Button variant="outline" size="sm" onClick={() => navigate('/backorders')}><ArrowLeftIcon className="size-4" /> Back</Button>
         </div>
         <Card className="p-5">
@@ -111,7 +111,7 @@ export default function BackorderForm() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-lg font-semibold">New backorder</h1><p className="text-sm text-muted">Record shortage qty when stock is not available to fulfill now.</p></div>
+        <div><h1 className="page-title">New backorder</h1><p className="text-sm text-muted">Record shortage qty when stock is not available to fulfill now.</p></div>
         <Button variant="outline" size="sm" onClick={() => navigate('/backorders')}><ArrowLeftIcon className="size-4" /> Back</Button>
       </div>
 

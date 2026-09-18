@@ -1,10 +1,10 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, keepPreviousData } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useCompanyFilter } from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
-import { Card, StatCard, Spinner, Badge, Select } from '../../components/ui';
+import { Card, StatCard, Spinner, Badge, Select, Button, Input } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
 import AccountingReportPanels from './AccountingReportPanels';
@@ -16,7 +16,7 @@ import { REPORT_TABS, filterVisibleTabs, tabMeta } from './reportConfig';
 
 const iso = (d) => d.toISOString().slice(0, 10);
 const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
-const selectCls = 'h-9 rounded-lg border border-line bg-surface px-2 text-sm';
+const selectCls = 'h-10 w-full min-w-0 rounded-lg border border-line bg-surface px-2 text-sm sm:h-9 sm:w-auto';
 const statusTone = { active: 'active', returned: 'inactive', overdue: 'blocked', expected: 'warning', cancelled: 'blocked', draft: 'inactive', requested: 'warning', in_transit: 'info', received: 'active', rejected: 'blocked' };
 
 function TrendChart({ data }) {
@@ -75,17 +75,21 @@ export default function ReportsPage() {
   const canWhatsappReport = isSuperAdmin || can('*') || (can('reports.view') && (can('commission.view') || can('whatsapp.templates')));
   const canInventory = isSuperAdmin || can('*') || (can('reports.view') && can('inventory.view'));
   const canPo = isSuperAdmin || can('*') || can('po.view');
+  const canEod = isSuperAdmin || can('*') || can('settings.update') || can('commission.manage');
   const isRentalTab = tab.startsWith('rental_');
   const isProductionTab = tab.startsWith('production_');
   const isTransferTab = tab.startsWith('transfer_');
   const isAccountingTab = ['cash_book', 'bank_book', 'debtor_ledger', 'creditor_ledger', 'ageing_receivables', 'ageing_payables'].includes(tab);
-  const hideDateRange = tab === 'rental_current' || tab === 'transfer_in_transit' || tab === 'ageing_receivables' || tab === 'ageing_payables' || tab === 'sales_analytics' || tab === 'leaderboard' || tab === 'inventory_movement' || tab === 'reorder' || tab === 'loyalty_report' || tab === 'whatsapp_report';
+  const hideDateRange = tab === 'rental_current' || tab === 'transfer_in_transit' || tab === 'ageing_receivables' || tab === 'ageing_payables' || tab === 'sales_analytics' || tab === 'leaderboard' || tab === 'inventory_movement' || tab === 'inventory_location' || tab === 'reorder' || tab === 'loyalty_report' || tab === 'whatsapp_report' || tab === 'eod_management';
   const [leaderboardPeriod, setLeaderboardPeriod] = useState('month');
+  const [leaderboardMetric, setLeaderboardMetric] = useState('net_sales');
   const [waType, setWaType] = useState('');
+  const [eodDate, setEodDate] = useState(iso(new Date()));
+  const [locationSearch, setLocationSearch] = useState('');
 
   const visibleTabs = useMemo(() => filterVisibleTabs(REPORT_TABS, {
-    canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport,
-  }), [canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport]);
+    canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport, canEod,
+  }), [canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport, canEod]);
 
   const { data: formData } = useQuery({
     queryKey: ['reports-form-data', activeCompany?.id, filterCompanyId],
@@ -140,6 +144,13 @@ export default function ReportsPage() {
     queryKey: ['reports-rental-income', activeCompany?.id, range.from, range.to, locationId, period],
     queryFn: () => api.get('/reports/rental/income', { params: { ...range, location_id: locationParam, period } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'rental_income' && canRentalReports,
+    placeholderData: keepPreviousData,
+  });
+
+  const rentalStaffQ = useQuery({
+    queryKey: ['reports-rental-staff', activeCompany?.id, filterCompanyId, range.from, range.to, locationId],
+    queryFn: () => api.get('/reports/rental/staff', { params: { ...range, ...companyParams, location_id: locationParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'rental_staff' && canRentalReports,
     placeholderData: keepPreviousData,
   });
 
@@ -270,8 +281,8 @@ export default function ReportsPage() {
   });
 
   const gstQ = useQuery({
-    queryKey: ['reports-gst', activeCompany?.id, filterCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/gst-reconciliation', { params: { ...range, ...companyParams } }).then((r) => r.data.data),
+    queryKey: ['reports-gst', activeCompany?.id, filterCompanyId, range.from, range.to, locationId],
+    queryFn: () => api.get('/reports/gst-reconciliation', { params: { ...range, ...companyParams, location_id: locationParam } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'gst_reconciliation' && canAccounting,
     placeholderData: keepPreviousData,
   });
@@ -300,9 +311,9 @@ export default function ReportsPage() {
   });
 
   const leaderboardQ = useQuery({
-    queryKey: ['reports-leaderboard', activeCompany?.id, filterCompanyId, leaderboardPeriod, locationId],
+    queryKey: ['reports-leaderboard', activeCompany?.id, filterCompanyId, leaderboardPeriod, locationId, leaderboardMetric],
     queryFn: () => api.get('/reports/leaderboard', {
-      params: { ...companyParams, period: leaderboardPeriod, location_id: locationParam },
+      params: { ...companyParams, period: leaderboardPeriod, location_id: locationParam, metric: leaderboardMetric },
     }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'leaderboard',
     placeholderData: keepPreviousData,
@@ -313,6 +324,29 @@ export default function ReportsPage() {
     queryFn: () => api.get('/inventory/movement', { params: { ...companyParams, days: movementDays } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'inventory_movement' && canInventory,
     placeholderData: keepPreviousData,
+  });
+
+  const locationInvQ = useQuery({
+    queryKey: ['reports-inventory-location', activeCompany?.id, filterCompanyId, locationId],
+    queryFn: () => api.get('/inventory/by-location', { params: { ...companyParams, location_id: locationParam } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'inventory_location' && canInventory,
+    placeholderData: keepPreviousData,
+  });
+
+  const eodQ = useQuery({
+    queryKey: ['reports-eod', activeCompany?.id, eodDate],
+    queryFn: () => api.get('/reports/eod-management/preview', { params: { date: eodDate } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'eod_management' && canEod,
+    placeholderData: keepPreviousData,
+  });
+
+  const eodSendM = useMutation({
+    mutationFn: () => api.post('/reports/eod-management/send', { date: eodDate, force: true }),
+    onSuccess: (res) => {
+      const d = res.data?.data ?? {};
+      toast.success(`EOD processed: WhatsApp ${d.whatsapp_sent ?? 0}, email ${d.email_sent ?? 0}, skipped ${d.skipped ?? 0}.`);
+    },
+    onError: (e) => toast.error(e?.response?.data?.message || e?.message || 'EOD send failed.'),
   });
 
   const reorderNeedsCompany = filterCompanyId === 'all';
@@ -328,6 +362,13 @@ export default function ReportsPage() {
     if (movementClass === 'all') return items;
     return items.filter((i) => i.class === movementClass);
   }, [movementQ.data, movementClass]);
+
+  const locationInvRows = useMemo(() => {
+    const items = locationInvQ.data?.balances ?? [];
+    const q = locationSearch.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((i) => `${i.product_name || ''} ${i.sku || ''} ${i.location_name || ''}`.toLowerCase().includes(q));
+  }, [locationInvQ.data, locationSearch]);
 
   const exportOptions = useMemo(() => {
     const base = { ...range, ...companyParams };
@@ -412,7 +453,7 @@ export default function ReportsPage() {
   const subtitle = `Business summary and insights for ${isSuperAdmin ? viewingCompany : activeCompany?.name}${user?.name ? ` · ${user.name}` : ''}`;
 
   return (
-    <div className="space-y-4 p-4 sm:p-6">
+    <div className="space-y-3 p-3 sm:space-y-4 sm:p-4 lg:p-6">
       <ReportsToolbar
         subtitle={subtitle}
         isSuperAdmin={isSuperAdmin}
@@ -426,14 +467,28 @@ export default function ReportsPage() {
         onToggleCustomDates={setShowCustomDates}
         exportOptions={exportOptions}
         onExport={(opt) => exportFile(opt.path, opt.params, opt.file, opt.mime)}
+        showBusinessPeriods={isProductionTab || tab === 'profit'}
         extraFilters={(
           <>
-            {branchFilter(tab === 'sales_analytics' || tab === 'leaderboard' || isRentalTab)}
+            {branchFilter(tab === 'sales_analytics' || tab === 'leaderboard' || isRentalTab || tab === 'gst_reconciliation' || tab === 'inventory_location')}
             {tab === 'leaderboard' && (
-              <Select value={leaderboardPeriod} onChange={(e) => setLeaderboardPeriod(e.target.value)} className={selectCls}>
-                <option value="month">Monthly</option>
-                <option value="year">Financial year</option>
-              </Select>
+              <>
+                <Select value={leaderboardPeriod} onChange={(e) => setLeaderboardPeriod(e.target.value)} className={selectCls}>
+                  <option value="month">Monthly</option>
+                  <option value="year">Financial year</option>
+                </Select>
+                <Select value={leaderboardMetric} onChange={(e) => setLeaderboardMetric(e.target.value)} className={selectCls}>
+                  <option value="net_sales">Rank by net sales</option>
+                  <option value="invoices">Rank by invoices</option>
+                  <option value="incentives">Rank by incentives</option>
+                </Select>
+              </>
+            )}
+            {tab === 'eod_management' && (
+              <input type="date" value={eodDate} onChange={(e) => setEodDate(e.target.value)} className="h-10 w-full rounded-lg border border-line bg-surface px-2 text-sm sm:h-9 sm:w-auto" />
+            )}
+            {tab === 'inventory_location' && (
+              <Input value={locationSearch} onChange={(e) => setLocationSearch(e.target.value)} placeholder="Search product / location" className="h-10 w-full sm:h-9 sm:w-52" />
             )}
             {tab === 'whatsapp_report' && (
               <Select value={waType} onChange={(e) => setWaType(e.target.value)} className={selectCls}>
@@ -503,7 +558,7 @@ export default function ReportsPage() {
             : dashQ.isError || !dashQ.data ? <ReportEmptyState title="Couldn't load dashboard" description="Check your connection or try another company filter." onChangeFilters={() => setShowCustomDates(true)} />
             : (
               <>
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
                   <StatCard label="Sales" value={formatCurrency(dashQ.data.sales.total)} sub={`${dashQ.data.sales.count} invoices`} />
                   <StatCard label="Purchases" value={formatCurrency(dashQ.data.purchases.total)} sub={`${dashQ.data.purchases.count} GRNs`} />
                   <StatCard label="Receivables" value={formatCurrency(dashQ.data.receivables)} sub="owed by customers" />
@@ -638,7 +693,7 @@ export default function ReportsPage() {
             : !profitQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Couldn't load profit report.</Card>
             : (
               <>
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
                   <StatCard label="Sales" value={formatCurrency(profitQ.data.aggregate.sales)} />
                   <StatCard label="COGS" value={formatCurrency(profitQ.data.aggregate.cogs)} />
                   <StatCard label="Expenses" value={formatCurrency(profitQ.data.aggregate.expenses)} sub={`${profitQ.data.aggregate.days} days`} />
@@ -766,7 +821,7 @@ export default function ReportsPage() {
             : !rentalIncomeQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Couldn't load rental income.</Card>
             : (
               <>
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                   <StatCard label="Invoiced total" value={formatCurrency(rentalIncomeQ.data.total)} sub={`${rentalIncomeQ.data.count} invoices`} />
                 </div>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -838,6 +893,51 @@ export default function ReportsPage() {
                                 <td className="px-4 py-2.5 text-muted">{formatDate(r.period_from)} – {formatDate(r.period_to)}</td>
                                 <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.amount)}</td>
                                 <td className="px-4 py-2.5"><Badge tone={r.status === 'paid' ? 'active' : 'warning'}>{r.status}</Badge></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                </Card>
+              </>
+            )}
+        </>
+      )}
+
+      {tab === 'rental_staff' && (
+        <>
+          {rentalStaffQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : (
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+                  <StatCard label="Rentals" value={rentalStaffQ.data?.count ?? 0} />
+                  <StatCard label="Rental amount" value={formatCurrency(rentalStaffQ.data?.total)} />
+                </div>
+                <Card className="mt-4 overflow-hidden">
+                  {(rentalStaffQ.data?.rows?.length ?? 0) === 0 ? <ReportEmptyState title="No rentals" description="No rental transactions in this range." />
+                    : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b border-line text-left text-faint">
+                            <th className="microlabel px-4 py-2.5 font-semibold">Rental</th>
+                            <th className="microlabel px-4 py-2.5 font-semibold">Staff</th>
+                            <th className="microlabel px-4 py-2.5 font-semibold">Staff type</th>
+                            <th className="microlabel px-4 py-2.5 font-semibold">Customer</th>
+                            <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
+                            <th className="microlabel px-4 py-2.5 text-right font-semibold">Amount</th>
+                            <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
+                          </tr></thead>
+                          <tbody>
+                            {rentalStaffQ.data.rows.map((r) => (
+                              <tr key={r.id} className="border-b border-line/60 last:border-0">
+                                <td className="px-4 py-2.5 font-medium">{r.rental_no}</td>
+                                <td className="px-4 py-2.5">{r.staff_name}</td>
+                                <td className="px-4 py-2.5 text-muted">{r.staff_type}</td>
+                                <td className="px-4 py-2.5 text-muted">{r.customer_name || '—'}</td>
+                                <td className="px-4 py-2.5 text-muted">{r.start_date ? formatDate(r.start_date) : '—'}</td>
+                                <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.amount)}</td>
+                                <td className="px-4 py-2.5"><Badge tone={statusTone[r.status] ?? 'default'}>{r.status}</Badge></td>
                               </tr>
                             ))}
                           </tbody>
@@ -934,12 +1034,17 @@ export default function ReportsPage() {
           : !productionSummaryQ.data?.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load production summary.</Card>
           : (
             <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <StatCard label="Completed runs" value={productionSummaryQ.data.data.summary?.completed ?? 0} />
                 <StatCard label="Output qty" value={productionSummaryQ.data.data.summary?.output_qty ?? 0} />
                 <StatCard label="Total cost" value={formatCurrency(productionSummaryQ.data.data.summary?.total_cost ?? 0)} />
+                <StatCard label="Selling value" value={formatCurrency(productionSummaryQ.data.data.summary?.selling_value ?? 0)} />
+                <StatCard label="Approx. profit" value={formatCurrency(productionSummaryQ.data.data.summary?.approx_profit ?? 0)} />
                 <StatCard label="Avg unit cost" value={formatCurrency(productionSummaryQ.data.data.summary?.avg_unit_cost ?? 0)} />
               </div>
+              {productionSummaryQ.data.data.summary?.profit_note && (
+                <p className="mt-2 text-xs text-muted">{productionSummaryQ.data.data.summary.profit_note}</p>
+              )}
               <Card className="mt-4 overflow-hidden">
                 {(productionSummaryQ.data.data.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No completed production in this range.</div>
                 : (
@@ -951,6 +1056,8 @@ export default function ReportsPage() {
                       <th className="microlabel px-4 py-2.5 font-semibold">Supervisor</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Qty</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Cost</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Selling value</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Approx. profit</th>
                     </tr></thead>
                     <tbody>
                       {productionSummaryQ.data.data.data.map((r) => (
@@ -960,6 +1067,8 @@ export default function ReportsPage() {
                           <td className="px-4 py-2.5 text-muted">{r.supervisor || '—'}</td>
                           <td className="tnum px-4 py-2.5 text-right">{r.output_quantity}</td>
                           <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.total_input_cost)}</td>
+                          <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(r.selling_value)}</td>
+                          <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.approx_profit)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1074,7 +1183,7 @@ export default function ReportsPage() {
           : !transferSummaryQ.data?.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load transfer summary.</Card>
           : (
             <>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <StatCard label="Total" value={transferSummaryQ.data.data.summary?.total ?? 0} />
                 <StatCard label="Received" value={transferSummaryQ.data.data.summary?.received ?? 0} />
                 <StatCard label="In transit" value={transferSummaryQ.data.data.summary?.in_transit ?? 0} />
@@ -1151,11 +1260,12 @@ export default function ReportsPage() {
           {movementQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
             : (
               <>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
                   <StatCard label="Fast moving" value={movementQ.data?.summary?.fast ?? 0} tone="active" />
                   <StatCard label="Slow moving" value={movementQ.data?.summary?.slow ?? 0} tone="warning" />
                   <StatCard label="Dead stock" value={movementQ.data?.summary?.dead ?? 0} tone="blocked" />
                 </div>
+                <p className="text-xs text-muted">{movementQ.data?.method} Dead threshold: {movementQ.data?.dead_stock_days ?? '—'} days.</p>
                 <Card className="mt-4 overflow-hidden">
                   {movementRows.length === 0 ? (
                     <ReportEmptyState title="No items found" description={`No ${movementClass === 'all' ? '' : movementClass + ' '}stock in the last ${movementDays} days.`} />
@@ -1189,6 +1299,37 @@ export default function ReportsPage() {
         </>
       )}
 
+      {tab === 'inventory_location' && (
+        <Card className="overflow-hidden">
+          {locationInvQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : locationInvRows.length === 0 ? <ReportEmptyState title="No location stock" description="No non-zero location balances for this filter." />
+            : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5 font-semibold">Location</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Available</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Reorder</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Stock value</th>
+                  </tr></thead>
+                  <tbody>
+                    {locationInvRows.slice(0, 200).map((r) => (
+                      <tr key={`${r.location_id}-${r.product_id}`} className="border-b border-line/60 last:border-0">
+                        <td className="px-4 py-2.5">{r.location_name || '—'}</td>
+                        <td className="px-4 py-2.5"><div className="font-medium">{r.product_name}</div><div className="text-xs text-muted">{r.sku}</div></td>
+                        <td className="tnum px-4 py-2.5 text-right">{r.qty}</td>
+                        <td className="tnum px-4 py-2.5 text-right text-muted">{r.reorder_level}</td>
+                        <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.stock_value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </Card>
+      )}
+
       {tab === 'sales_analytics' && (
         <>
           {(salesMonthQ.isLoading || salesYoyQ.isLoading) ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
@@ -1199,13 +1340,16 @@ export default function ReportsPage() {
                     <h2 className="mb-3 text-sm font-semibold">Current month vs last month</h2>
                     {salesMonthQ.data && (
                       <>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
                           <StatCard label="Current net" value={formatCurrency(salesMonthQ.data.current?.net_sales)} sub={`${salesMonthQ.data.current?.invoice_count ?? 0} invoices`} />
                           <StatCard label="Previous net" value={formatCurrency(salesMonthQ.data.previous?.net_sales)} sub={`${salesMonthQ.data.previous?.invoice_count ?? 0} invoices`} />
+                          <StatCard label="Current gross" value={formatCurrency(salesMonthQ.data.current?.gross_sales)} />
+                          <StatCard label="Returns" value={formatCurrency(salesMonthQ.data.current?.returns)} />
                         </div>
                         <p className="mt-3 text-sm">
                           Growth: <span className="font-medium">{formatCurrency(salesMonthQ.data.difference?.net_sales)}</span>
                           {' '}({salesMonthQ.data.difference?.growth_pct ?? 0}%)
+                          {' · '}Invoices {salesMonthQ.data.difference?.invoices >= 0 ? '+' : ''}{salesMonthQ.data.difference?.invoices ?? 0}
                         </p>
                       </>
                     )}
@@ -1214,25 +1358,77 @@ export default function ReportsPage() {
                     <h2 className="mb-3 text-sm font-semibold">Year-on-year ({salesYoyQ.data?.current_label})</h2>
                     {salesYoyQ.data && (
                       <>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <StatCard label={salesYoyQ.data.current_label} value={formatCurrency(salesYoyQ.data.current?.net_sales)} />
-                          <StatCard label={salesYoyQ.data.previous_label} value={formatCurrency(salesYoyQ.data.previous?.net_sales)} />
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
+                          <StatCard label={salesYoyQ.data.current_label} value={formatCurrency(salesYoyQ.data.current?.net_sales)} sub={`${salesYoyQ.data.current?.invoice_count ?? 0} invoices`} />
+                          <StatCard label={salesYoyQ.data.previous_label} value={formatCurrency(salesYoyQ.data.previous?.net_sales)} sub={`${salesYoyQ.data.previous?.invoice_count ?? 0} invoices`} />
                         </div>
-                        <p className="mt-3 text-sm">YoY growth: {salesYoyQ.data.difference?.growth_pct ?? 0}%</p>
+                        <p className="mt-3 text-sm">
+                          YoY growth: {formatCurrency(salesYoyQ.data.difference?.net_sales)} ({salesYoyQ.data.difference?.growth_pct ?? 0}%)
+                        </p>
                       </>
                     )}
                   </Card>
                 </div>
+                {(salesMonthQ.data?.by_day?.length ?? 0) > 0 && (
+                  <Card className="mt-4 overflow-hidden">
+                    <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">Daily comparison (same day of month)</div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b border-line text-left text-faint">
+                          <th className="microlabel px-4 py-2 font-semibold">Day</th>
+                          <th className="microlabel px-4 py-2 text-right font-semibold">This month net</th>
+                          <th className="microlabel px-4 py-2 text-right font-semibold">Last month net</th>
+                          <th className="microlabel px-4 py-2 text-right font-semibold">Invoices (this / last)</th>
+                        </tr></thead>
+                        <tbody>
+                          {salesMonthQ.data.by_day.filter((d) => d.current_date || d.previous_date).map((d) => (
+                            <tr key={d.day} className="border-b border-line/60 last:border-0">
+                              <td className="px-4 py-2 font-medium">{d.day}</td>
+                              <td className="tnum px-4 py-2 text-right">{d.current_date ? formatCurrency(d.current_net) : '—'}</td>
+                              <td className="tnum px-4 py-2 text-right text-muted">{d.previous_date ? formatCurrency(d.previous_net) : '—'}</td>
+                              <td className="tnum px-4 py-2 text-right text-muted">{d.current_invoices} / {d.previous_invoices}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                )}
                 <Card className="mt-4 p-5">
                   <h2 className="mb-3 text-sm font-semibold">Year-to-date ({salesYtdQ.data?.as_of})</h2>
                   {salesYtdQ.data && (
                     <>
-                      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
                         <StatCard label="YTD net" value={formatCurrency(salesYtdQ.data.current?.net_sales)} />
                         <StatCard label="Prior YTD" value={formatCurrency(salesYtdQ.data.previous?.net_sales)} />
                         <StatCard label="Returns" value={formatCurrency(salesYtdQ.data.current?.returns)} />
                         <StatCard label="GST" value={formatCurrency(salesYtdQ.data.current?.tax)} />
                       </div>
+                      {(salesYtdQ.data.monthly_breakdown?.length ?? 0) > 0 && (
+                        <div className="mt-4 overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead><tr className="border-b border-line text-left text-faint">
+                              <th className="microlabel py-2 font-semibold">Month</th>
+                              <th className="microlabel py-2 text-right font-semibold">Net</th>
+                              <th className="microlabel py-2 text-right font-semibold">Invoices</th>
+                              <th className="microlabel py-2 text-right font-semibold">Cumulative net</th>
+                            </tr></thead>
+                            <tbody>
+                              {salesYtdQ.data.monthly_breakdown.map((m, idx) => {
+                                const cum = salesYtdQ.data.monthly_breakdown.slice(0, idx + 1).reduce((s, x) => s + (x.net_sales || 0), 0);
+                                return (
+                                  <tr key={m.month} className="border-b border-line/60 last:border-0">
+                                    <td className="py-2 font-medium">{m.label}</td>
+                                    <td className="tnum py-2 text-right">{formatCurrency(m.net_sales)}</td>
+                                    <td className="tnum py-2 text-right">{m.invoice_count}</td>
+                                    <td className="tnum py-2 text-right">{formatCurrency(cum)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </>
                   )}
                 </Card>
@@ -1240,28 +1436,33 @@ export default function ReportsPage() {
                   <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">12-month trend</div>
                   {(salesTrendQ.data?.months?.length ?? 0) === 0 ? <div className="px-4 py-12 text-center text-sm text-muted">No data.</div>
                     : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead><tr className="border-b border-line text-left text-faint">
-                            <th className="microlabel px-4 py-2 font-semibold">Month</th>
-                            <th className="microlabel px-4 py-2 text-right font-semibold">Net sales</th>
-                            <th className="microlabel px-4 py-2 text-right font-semibold">Returns</th>
-                            <th className="microlabel px-4 py-2 text-right font-semibold">Invoices</th>
-                            <th className="microlabel px-4 py-2 text-right font-semibold">MoM %</th>
-                          </tr></thead>
-                          <tbody>
-                            {salesTrendQ.data.months.map((m) => (
-                              <tr key={m.month} className="border-b border-line/60 last:border-0">
-                                <td className="px-4 py-2 font-medium">{m.label}</td>
-                                <td className="tnum px-4 py-2 text-right">{formatCurrency(m.net_sales)}</td>
-                                <td className="tnum px-4 py-2 text-right text-muted">{formatCurrency(m.returns)}</td>
-                                <td className="tnum px-4 py-2 text-right">{m.invoice_count}</td>
-                                <td className="tnum px-4 py-2 text-right">{m.growth_pct != null ? `${m.growth_pct}%` : '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <>
+                        <div className="px-4 pt-4">
+                          <TrendChart data={(salesTrendQ.data.months || []).map((m) => ({ date: m.label, total: m.net_sales }))} />
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead><tr className="border-b border-line text-left text-faint">
+                              <th className="microlabel px-4 py-2 font-semibold">Month</th>
+                              <th className="microlabel px-4 py-2 text-right font-semibold">Net sales</th>
+                              <th className="microlabel px-4 py-2 text-right font-semibold">Returns</th>
+                              <th className="microlabel px-4 py-2 text-right font-semibold">Invoices</th>
+                              <th className="microlabel px-4 py-2 text-right font-semibold">MoM %</th>
+                            </tr></thead>
+                            <tbody>
+                              {salesTrendQ.data.months.map((m) => (
+                                <tr key={m.month} className="border-b border-line/60 last:border-0">
+                                  <td className="px-4 py-2 font-medium">{m.label}</td>
+                                  <td className="tnum px-4 py-2 text-right">{formatCurrency(m.net_sales)}</td>
+                                  <td className="tnum px-4 py-2 text-right text-muted">{formatCurrency(m.returns)}</td>
+                                  <td className="tnum px-4 py-2 text-right">{m.invoice_count}</td>
+                                  <td className="tnum px-4 py-2 text-right">{m.growth_pct != null ? `${m.growth_pct}%` : '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
                     )}
                 </Card>
               </>
@@ -1275,12 +1476,13 @@ export default function ReportsPage() {
             : (leaderboardQ.data?.rankings?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No sales in this period.</div>
             : (
               <>
-                <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">{leaderboardQ.data.label} — ranked by net sales</div>
+                <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">{leaderboardQ.data.label} — ranked by {leaderboardQ.data.metric === 'invoices' ? 'invoice count' : leaderboardQ.data.metric === 'incentives' ? 'incentives' : 'net sales'}</div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-line text-left text-faint">
                       <th className="microlabel px-4 py-2.5 font-semibold">Rank</th>
                       <th className="microlabel px-4 py-2.5 font-semibold">Employee</th>
+                      <th className="microlabel px-4 py-2.5 font-semibold">Staff type</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Net sales</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Invoices</th>
                       {canCommissionReport && <th className="microlabel px-4 py-2.5 text-right font-semibold">Incentives</th>}
@@ -1290,6 +1492,7 @@ export default function ReportsPage() {
                         <tr key={r.user_id} className="border-b border-line/60 last:border-0">
                           <td className="px-4 py-2.5 font-medium">#{r.rank}</td>
                           <td className="px-4 py-2.5">{r.user_name}</td>
+                          <td className="px-4 py-2.5 text-muted">{r.staff_type || '—'}</td>
                           <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.net_sales)}</td>
                           <td className="tnum px-4 py-2.5 text-right text-muted">{r.invoices}</td>
                           {canCommissionReport && <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.incentives)}</td>}
@@ -1309,7 +1512,7 @@ export default function ReportsPage() {
             : !gstQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load GST reconciliation.</Card>
             : (
               <>
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
                   <StatCard label="Output GST" value={formatCurrency(gstQ.data.output?.tax_total)} sub={`${gstQ.data.output?.invoice_count ?? 0} invoices`} />
                   <StatCard label="Input GST" value={formatCurrency(gstQ.data.input?.tax_total)} sub={`${gstQ.data.input?.bill_count ?? 0} purchases`} />
                   <StatCard label="Return GST" value={formatCurrency(gstQ.data.sales_returns?.tax)} />
@@ -1343,16 +1546,18 @@ export default function ReportsPage() {
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-line text-left text-faint">
                       <th className="microlabel px-4 py-2.5 font-semibold">Employee</th>
+                      <th className="microlabel px-4 py-2.5 font-semibold">Staff type</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Net sales</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Tier</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Daily target</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Promo</th>
-                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Total</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Total accrued</th>
                     </tr></thead>
                     <tbody>
                       {commissionReportQ.data.staff.map((s) => (
                         <tr key={s.user_id} className="border-b border-line/60 last:border-0">
                           <td className="px-4 py-2.5 font-medium">{s.user_name}</td>
+                          <td className="px-4 py-2.5 text-muted">{s.staff_type || '—'}</td>
                           <td className="tnum px-4 py-2.5 text-right">{formatCurrency(s.sales_net)}</td>
                           <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(s.salesman_tier)}</td>
                           <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(s.daily_target)}</td>
@@ -1374,7 +1579,7 @@ export default function ReportsPage() {
             : !loyaltyReportQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load loyalty report.</Card>
             : (
               <>
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                   <StatCard label="Customers with points" value={loyaltyReportQ.data.totals?.with_points ?? 0} />
                   <StatCard label="Points outstanding" value={loyaltyReportQ.data.totals?.total_points ?? 0} />
                   <StatCard label="Customers listed" value={loyaltyReportQ.data.totals?.customers ?? 0} />
@@ -1475,6 +1680,58 @@ export default function ReportsPage() {
           canCreatePo={can('po.create')}
           companyId={filterCompanyId}
         />
+      )}
+
+      {tab === 'eod_management' && (
+        <>
+          {eodQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : !eodQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load EOD preview.</Card>
+            : (
+              <>
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                  <p className="text-sm text-muted">Preview for {formatDate(eodQ.data.date)}. Recipients and send time are configured in Settings. WhatsApp sends only when provider credentials are configured.</p>
+                  <Button size="sm" className="w-full sm:w-auto" disabled={eodSendM.isPending} onClick={() => eodSendM.mutate()}>
+                    {eodSendM.isPending ? 'Sending…' : 'Send now'}
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+                  <StatCard label="Net sales" value={formatCurrency(eodQ.data.sales?.net)} sub={`${eodQ.data.sales?.invoices ?? 0} invoices`} />
+                  <StatCard label="Returns" value={formatCurrency(eodQ.data.sales?.returns)} />
+                  <StatCard label="Production runs" value={eodQ.data.production?.completed ?? 0} />
+                  <StatCard label="Reorder items" value={eodQ.data.inventory?.reorder_count ?? 0} />
+                </div>
+                <Card className="p-5">
+                  <h2 className="mb-2 text-sm font-semibold">Financial</h2>
+                  <p className="text-sm text-muted">
+                    Cash {formatCurrency(eodQ.data.financial?.cash_collection)} · Bank {formatCurrency(eodQ.data.financial?.bank_collection)} · Receivables {formatCurrency(eodQ.data.financial?.receivables)}
+                  </p>
+                </Card>
+                {(eodQ.data.top_performers?.length ?? 0) > 0 && (
+                  <Card className="overflow-hidden">
+                    <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">Top performers (month)</div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead><tr className="border-b border-line text-left text-faint">
+                          <th className="microlabel px-4 py-2.5 font-semibold">Rank</th>
+                          <th className="microlabel px-4 py-2.5 font-semibold">Staff</th>
+                          <th className="microlabel px-4 py-2.5 text-right font-semibold">Net sales</th>
+                        </tr></thead>
+                        <tbody>
+                          {eodQ.data.top_performers.map((r) => (
+                            <tr key={r.user_id} className="border-b border-line/60 last:border-0">
+                              <td className="px-4 py-2.5">#{r.rank}</td>
+                              <td className="px-4 py-2.5">{r.user_name}</td>
+                              <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.net_sales)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                )}
+              </>
+            )}
+        </>
       )}
 
       {isAccountingTab && (

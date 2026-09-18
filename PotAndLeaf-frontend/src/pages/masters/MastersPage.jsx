@@ -191,7 +191,7 @@ export default function MastersPage() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Master data</h1>
+          <h1 className="page-title">Master data</h1>
           <p className="text-sm text-muted">Each company manages its own categories, subcategories and units{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

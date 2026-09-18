@@ -11,14 +11,14 @@ export function DetailHeader({ title, subtitle, backTo, actions }) {
       <div className="flex items-center gap-3">
         <button
           onClick={() => (backTo ? navigate(backTo) : navigate(-1))}
-          className="rounded-xl border border-line-strong bg-surface p-2 text-muted hover:bg-sidebar hover:text-ink"
+          className="rounded-xl glass-control p-2 text-muted hover:bg-white/80 hover:text-ink"
           aria-label="Back"
         >
           <ArrowLeftIcon className="size-4" />
         </button>
         <div>
-          <h1 className="text-lg font-semibold">{title}</h1>
-          {subtitle && <p className="text-sm text-muted">{subtitle}</p>}
+          <h1 className="page-title">{title}</h1>
+          {subtitle && <p className="mt-1 text-[13px] text-muted sm:text-sm">{subtitle}</p>}
         </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -31,7 +31,7 @@ export function Section({ title, actions, children, className }) {
   return (
     <Card className={classNames('overflow-hidden', className)}>
       {title && (
-        <div className="flex items-center justify-between border-b border-line bg-sidebar px-5 py-3">
+        <div className="flex items-center justify-between border-b border-line/70 bg-white/25 px-5 py-3">
           <span className="microlabel font-semibold text-ink">{title}</span>
           {actions}
         </div>

@@ -62,7 +62,7 @@ export default function AdvanceOrderForm() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-lg font-semibold">New advance order</h1><p className="text-sm text-muted">Reserve products for a customer against future stock.</p></div>
+        <div><h1 className="page-title">New advance order</h1><p className="text-sm text-muted">Reserve products for a customer against future stock.</p></div>
         <Button variant="outline" size="sm" onClick={() => navigate('/advance-orders')}><ArrowLeftIcon className="size-4" /> Back</Button>
       </div>
 

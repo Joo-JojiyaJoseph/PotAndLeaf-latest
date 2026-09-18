@@ -3,11 +3,12 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRightIcon, ArrowTrendingUpIcon, BanknotesIcon, CubeIcon,
   ShoppingCartIcon, PlusCircleIcon, ChartBarIcon, QrCodeIcon, TagIcon, BuildingOffice2Icon, TruckIcon, UsersIcon,
+  HomeIcon,
 } from '@heroicons/react/24/outline';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import useCompanyFilter from '../hooks/useCompanyFilter';
-import { Card, Spinner } from '../components/ui';
+import { Card, Spinner, StatCard, PageHeader } from '../components/ui';
 import { formatCurrency, formatDate } from '../lib/format';
 
 const iso = (d) => d.toISOString().slice(0, 10);
@@ -22,16 +23,6 @@ const QUICK = [
   { label: 'Companies', desc: 'Manage companies', to: '/companies', icon: BuildingOffice2Icon },
   { label: 'Suppliers', desc: 'Manage suppliers', to: '/suppliers', icon: TruckIcon },
 ];
-
-function StatTile({ label, value, sub, gradient }) {
-  return (
-    <div className={'relative overflow-hidden rounded-3xl p-5 shadow-card ' + (gradient ?? 'bg-surface')}>
-      <div className="microlabel text-faint">{label}</div>
-      <div className="tnum mt-2 text-[28px] font-semibold leading-none text-ink">{value}</div>
-      {sub && <div className="mt-2 text-xs text-muted">{sub}</div>}
-    </div>
-  );
-}
 
 export default function Dashboard() {
   const { activeCompany, isSuperAdmin, can, user } = useAuth();
@@ -83,13 +74,13 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">Overview</h1>
-          <p className="text-sm text-muted">Dashboard{companyHint}</p>
-        </div>
-        <Filter />
-      </div>
+      <PageHeader
+        icon={HomeIcon}
+        title="Overview"
+        subtitle={`Dashboard${companyHint}`}
+        actions={<Filter />}
+        className="mb-4"
+      />
 
       {dashQ.isLoading ? (
         <div className="flex justify-center py-20"><Spinner className="size-6" /></div>
@@ -99,34 +90,41 @@ export default function Dashboard() {
           <div className="space-y-5 lg:col-span-8">
             {canReports && (
               <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-                <StatTile
+                <StatCard
                   label="Sales (30 days)" value={rep ? formatCurrency(rep.sales.total) : '—'}
                   sub={rep ? `${rep.sales.count} invoices` : 'Loading…'}
+                  tone="good"
+                  icon={BanknotesIcon}
                 />
-                <StatTile
+                <StatCard
                   label="Receivables" value={rep ? formatCurrency(rep.receivables) : '—'}
                   sub="owed by customers"
+                  icon={ArrowTrendingUpIcon}
                 />
-                <StatTile
+                <StatCard
                   label="Payables" value={rep ? formatCurrency(rep.payables) : '—'}
                   sub="owed to suppliers"
+                  tone="warn"
+                  icon={ShoppingCartIcon}
                 />
-                <StatTile
+                <StatCard
                   label="Stock value" value={rep ? formatCurrency(rep.inventory?.stock_value) : '—'}
                   sub={`${cards.find((c) => c.key === 'products')?.value ?? 0} products`}
+                  icon={CubeIcon}
                 />
               </div>
             )}
 
             {canIncentive && incentiveQ.data && (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <StatTile label="Today's sales" value={formatCurrency(incentiveQ.data.sales_total)} />
-                <StatTile label="Commission" value={formatCurrency(incentiveQ.data.sales_commission)} />
-                <StatTile label="Bonuses" value={formatCurrency((incentiveQ.data.daily_target_bonus || 0) + (incentiveQ.data.promotion_bonus || 0))} />
-                <StatTile
+                <StatCard label="Today's sales" value={formatCurrency(incentiveQ.data.sales_total)} />
+                <StatCard label="Commission" value={formatCurrency(incentiveQ.data.sales_commission)} tone="good" />
+                <StatCard label="Bonuses" value={formatCurrency((incentiveQ.data.daily_target_bonus || 0) + (incentiveQ.data.promotion_bonus || 0))} />
+                <StatCard
                   label="Total incentive"
                   value={formatCurrency(incentiveQ.data.total_incentive)}
                   sub={incentiveQ.data.daily_target ? `Target ${formatCurrency(incentiveQ.data.daily_target)}` : null}
+                  tone="good"
                 />
               </div>
             )}
@@ -147,7 +145,7 @@ export default function Dashboard() {
                   const Icon = q.icon;
                   return (
                     <Link key={q.to} to={q.to}
-                      className="group flex items-center gap-4 rounded-2xl bg-surface p-4 shadow-card transition-all hover:-translate-y-0.5 hover:shadow-pop">
+                      className="group flex items-center gap-4 glass-card p-4 transition-all duration-150 hover:-translate-y-0.5">
                       <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-leaf-soft text-leaf">
                         <Icon className="size-5" />
                       </span>
@@ -166,7 +164,7 @@ export default function Dashboard() {
           {/* Right rail — recent activity */}
           <div className="lg:col-span-4">
             {canSales && (
-            <Card className="overflow-hidden rounded-3xl">
+            <Card className="overflow-hidden">
               <div className="flex items-center justify-between border-b border-line px-4 py-3">
                 <h2 className="text-sm font-semibold text-ink">Recent sales</h2>
                 <Link to="/sales" className="inline-flex items-center gap-1 text-xs font-medium text-leaf hover:text-leaf-hover">View all <ArrowRightIcon className="size-3.5" /></Link>
@@ -179,7 +177,7 @@ export default function Dashboard() {
                 <ul className="divide-y divide-line/70">
                   {recent.map((s) => (
                     <li key={s.id}>
-                      <Link to={`/sales/${s.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-sidebar/60">
+                      <Link to={`/sales/${s.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-leaf-soft/40">
                         <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-leaf-soft text-[11px] font-semibold text-leaf">
                           {(s.customer_name ?? 'W').slice(0, 2).toUpperCase()}
                         </span>
@@ -196,7 +194,7 @@ export default function Dashboard() {
             </Card>
             )}
 
-            <Card className="mt-5 rounded-3xl p-5">
+            <Card className="mt-5 p-5">
               <div className="flex items-center gap-3">
                 <span className="flex size-10 items-center justify-center rounded-2xl bg-leaf text-white"><CubeIcon className="size-5" /></span>
                 <div>
@@ -204,7 +202,7 @@ export default function Dashboard() {
                   <div className="text-xs text-muted">{cards.find((c) => c.key === 'suppliers')?.value ?? 0} suppliers · {cards.find((c) => c.key === 'members')?.value ?? 0} users</div>
                 </div>
               </div>
-              <Link to="/products" className="mt-4 flex items-center justify-center gap-1.5 rounded-xl border border-line py-2 text-sm font-medium text-ink transition-colors hover:bg-sidebar">
+              <Link to="/products" className="mt-4 flex items-center justify-center gap-1.5 rounded-xl glass-control py-2 text-sm font-medium text-ink transition-colors hover:bg-white/90">
                 Manage catalogue <ArrowRightIcon className="size-4" />
               </Link>
             </Card>

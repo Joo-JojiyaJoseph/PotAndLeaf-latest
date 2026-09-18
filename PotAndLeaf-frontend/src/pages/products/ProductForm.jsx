@@ -189,7 +189,7 @@ export default function ProductForm() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">{isEdit ? 'Edit product' : 'New product'}</h1>
+          <h1 className="page-title">{isEdit ? 'Edit product' : 'New product'}</h1>
           <p className="text-sm text-muted">Product master with pricing, tax, reorder level and barcode.</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate('/products')}>

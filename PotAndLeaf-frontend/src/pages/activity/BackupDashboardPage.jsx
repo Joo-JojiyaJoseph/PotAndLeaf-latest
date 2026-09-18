@@ -77,7 +77,7 @@ export default function BackupDashboardPage() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Backup Monitoring</h1>
+          <h1 className="page-title">Backup Monitoring</h1>
           <p className="text-sm text-muted">Automatic nightly SQLite exports plus on-demand backups. Restore takes a safety copy first.</p>
         </div>
         {(isSuperAdmin || can('backup.run') || can('*')) && (

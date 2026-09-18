@@ -530,7 +530,7 @@ export default function CommissionList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Commission</h1>
+          <h1 className="page-title">Commission</h1>
           <p className="text-sm text-muted">Sales commission plus supervisor accruals on produced stock (sale or transfer, once){companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

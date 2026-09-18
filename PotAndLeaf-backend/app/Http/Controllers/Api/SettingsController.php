@@ -54,6 +54,7 @@ class SettingsController extends Controller
             'eod_management_enabled'       => ['sometimes', 'in:0,1,true,false'],
             'eod_management_whatsapp_phones' => ['sometimes', 'string', 'max:2000'],
             'eod_management_email_recipients' => ['sometimes', 'string', 'max:2000'],
+            'eod_management_send_time'       => ['sometimes', 'date_format:H:i'],
             'daily_expense'              => ['sometimes', 'numeric', 'min:0'],
         ]);
 

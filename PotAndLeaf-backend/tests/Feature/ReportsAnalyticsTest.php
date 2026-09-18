@@ -16,6 +16,7 @@ beforeEach(function () {
     $this->createCompanyWithUser([
         'reports.view', 'receipts.view', 'payments.view', 'commission.view',
         'sales.view', 'sales.create', 'sales.confirm',
+        'inventory.view', 'rental.view',
     ]);
 });
 
@@ -125,4 +126,64 @@ it('computes financial year start from settings', function () {
     $fyStart = app(SalesAnalyticsService::class)->financialYearStart($this->company->id, now()->setMonth(8)->setDay(15));
 
     expect($fyStart->format('Y-m-d'))->toBe(now()->year.'-04-01');
+});
+
+it('includes same-day comparison rows for month vs last month', function () {
+    confirmSale($this, 8000);
+
+    $this->getJson('/api/reports/sales/comparison-month', $this->apiHeaders())
+        ->assertOk()
+        ->assertJsonStructure(['data' => ['by_day', 'current', 'previous', 'difference']]);
+});
+
+it('exposes staff type and metric on the leaderboard', function () {
+    confirmSale($this, 12000);
+
+    $this->getJson('/api/reports/leaderboard?period=month&metric=invoices', $this->apiHeaders())
+        ->assertOk()
+        ->assertJsonPath('data.metric', 'invoices')
+        ->assertJsonPath('data.rankings.0.user_id', $this->user->id)
+        ->assertJsonStructure(['data' => ['rankings' => [['staff_type', 'net_sales', 'invoices']]]]);
+});
+
+it('returns location inventory balances with stock value fields', function () {
+    $this->getJson('/api/inventory/by-location', $this->apiHeaders())
+        ->assertOk()
+        ->assertJsonStructure(['data' => ['balances']]);
+});
+
+it('classifies movement using configured dead stock days', function () {
+    $this->getJson('/api/inventory/movement?days=30', $this->apiHeaders())
+        ->assertOk()
+        ->assertJsonPath('data.dead_stock_days', 180)
+        ->assertJsonStructure(['data' => ['items', 'summary', 'method']]);
+});
+
+it('returns rental staff report for existing created_by users', function () {
+    $this->getJson('/api/reports/rental/staff?'.http_build_query([
+        'from' => now()->startOfMonth()->toDateString(),
+        'to' => now()->toDateString(),
+    ]), $this->apiHeaders())
+        ->assertOk()
+        ->assertJsonStructure(['data' => ['rows', 'by_staff', 'total']]);
+});
+
+it('skips scheduled EOD send before the configured send time', function () {
+    $this->travelTo(now()->setTime(8, 0));
+    CompanySetting::query()->updateOrCreate(
+        ['company_id' => $this->company->id, 'key' => 'eod_management_enabled'],
+        ['value' => '1'],
+    );
+    CompanySetting::query()->updateOrCreate(
+        ['company_id' => $this->company->id, 'key' => 'eod_management_send_time'],
+        ['value' => '20:30'],
+    );
+    CompanySetting::query()->updateOrCreate(
+        ['company_id' => $this->company->id, 'key' => 'eod_management_email_recipients'],
+        ['value' => 'ho@example.com'],
+    );
+
+    $this->artisan('eod:send-management-summary')->assertSuccessful();
+
+    expect(\App\Models\EodManagementLog::query()->count())->toBe(0);
 });

@@ -47,7 +47,7 @@ export default function PurchaseReturnsList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Purchase returns</h1>
+          <h1 className="page-title">Purchase returns</h1>
           <p className="text-sm text-muted">Debit notes to suppliers. Confirming reverses stock out of inventory{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

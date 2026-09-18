@@ -207,7 +207,7 @@ export default function PurchaseOrderReorderPage() {
       <div className="space-y-5 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-lg font-semibold">Reorder report</h1>
+            <h1 className="page-title">Reorder report</h1>
             <p className="text-sm text-muted">Choose which company to load low-stock products for.</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => navigate('/purchase-orders')}>
@@ -234,7 +234,7 @@ export default function PurchaseOrderReorderPage() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Reorder report</h1>
+          <h1 className="page-title">Reorder report</h1>
           <p className="text-sm text-muted">Products at or below reorder level, grouped supplier-wise. One draft PO is created per supplier.</p>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -97,7 +97,7 @@ export default function StockVerificationForm() {
       <div className="space-y-5 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-lg font-semibold">New stock count</h1>
+            <h1 className="page-title">New stock count</h1>
             <p className="text-sm text-muted">Choose which company this physical count belongs to.</p>
           </div>
           <Button variant="outline" size="sm" onClick={() => navigate('/stock-verifications')}>
@@ -129,7 +129,7 @@ export default function StockVerificationForm() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">New stock count</h1>
+          <h1 className="page-title">New stock count</h1>
           <p className="text-sm text-muted">Enter counted quantities; submit for HO approval to adjust stock.</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate('/stock-verifications')}>

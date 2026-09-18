@@ -67,7 +67,7 @@ export default function LoyaltyPage() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Loyalty points</h1>
+          <h1 className="page-title">Loyalty points</h1>
           <p className="text-sm text-muted">Customer balances, earn/redeem rules and recent activity{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

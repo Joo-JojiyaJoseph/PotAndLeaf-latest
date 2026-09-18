@@ -35,7 +35,7 @@ export default function ActivityMonitoringPage() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Activity Monitoring</h1>
+          <h1 className="page-title">Activity Monitoring</h1>
           <p className="text-sm text-muted">Company activity for {data?.company?.name ?? activeCompany?.name}.</p>
         </div>
         {/* {isSuperAdmin && companies.length > 0 && (

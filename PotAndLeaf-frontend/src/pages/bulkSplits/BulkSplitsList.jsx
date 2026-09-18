@@ -53,7 +53,7 @@ export default function BulkSplitsList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Bulk splitting</h1>
+          <h1 className="page-title">Bulk splitting</h1>
           <p className="text-sm text-muted">Convert bulk stock into sellable units. Confirming posts the stock movements{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

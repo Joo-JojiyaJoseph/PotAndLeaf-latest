@@ -231,7 +231,7 @@ export default function DamageEntriesPage() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Damage Entry</h1>
+          <h1 className="page-title">Damage Entry</h1>
           <p className="text-sm text-muted">
             Write off damaged stock{companyHint} — posts a Damage movement to the ledger.
           </p>

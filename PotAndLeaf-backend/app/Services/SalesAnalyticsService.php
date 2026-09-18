@@ -102,6 +102,7 @@ class SalesAnalyticsService
         return $this->comparisonPayload('month', $current, $previous, [
             'current_period'  => ['from' => $curFrom, 'to' => $curTo],
             'previous_period' => ['from' => $prevFrom, 'to' => $prevTo],
+            'by_day'          => $this->dailyComparison($companyId, $curFrom, $curTo, $prevFrom, $prevTo, $locationId),
         ]);
     }
 
@@ -185,7 +186,7 @@ class SalesAnalyticsService
     }
 
     /** Output vs input GST summary with drill-down lines. */
-    public function gstReconciliation(int|string $companyId, string $from, string $to): array
+    public function gstReconciliation(int|string $companyId, string $from, string $to, ?string $locationId = null): array
     {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
@@ -196,6 +197,7 @@ class SalesAnalyticsService
             ->whereNotIn('bill_kind', ['proforma', 'complimentary'])
             ->whereDate('sale_date', '>=', $from)
             ->whereDate('sale_date', '<=', $to)
+            ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
             ->get(['id', 'sale_no', 'sale_date', 'subtotal', 'tax_total', 'is_interstate']);
 
         $outputTax = round((float) $sales->sum('tax_total'), 2);
@@ -211,6 +213,7 @@ class SalesAnalyticsService
             ->where('status', 'confirmed')
             ->whereDate('return_date', '>=', $from)
             ->whereDate('return_date', '<=', $to)
+            ->when($locationId, fn ($q) => $q->whereHas('sale', fn ($sq) => $sq->where('location_id', $locationId)))
             ->sum('tax_total'), 2);
 
         $purchases = Purchase::query()
@@ -218,6 +221,7 @@ class SalesAnalyticsService
             ->where('status', 'confirmed')
             ->whereDate('purchase_date', '>=', $from)
             ->whereDate('purchase_date', '<=', $to)
+            ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
             ->get(['id', 'purchase_no', 'purchase_date', 'subtotal', 'tax_total']);
 
         $inputTax = round((float) $purchases->sum('tax_total'), 2);
@@ -233,6 +237,7 @@ class SalesAnalyticsService
         return [
             'from' => $from,
             'to'   => $to,
+            'location_id' => $locationId,
             'output' => [
                 'taxable'    => $outputTaxable,
                 'tax_total'  => $outputTax,
@@ -284,6 +289,7 @@ class SalesAnalyticsService
             return [
                 'user_id'           => (int) $uid,
                 'user_name'         => $user?->name,
+                'staff_type'        => $this->roleLabelsForUsers($companyId, [(int) $uid])[(int) $uid] ?? '—',
                 'sales_net'         => round($salesForUser, 2),
                 'salesman_tier'     => round((float) $rows->where('commission_type', 'salesman_tier')->where('status', 'accrued')->sum('amount'), 2),
                 'daily_target'      => round((float) $rows->where('commission_type', 'daily_target')->where('status', 'accrued')->sum('amount'), 2),
@@ -319,8 +325,8 @@ class SalesAnalyticsService
         ];
     }
 
-    /** Monthly or yearly staff leaderboard ranked by net sales. */
-    public function leaderboard(int|string $companyId, string $period = 'month', ?string $asOf = null, ?string $locationId = null): array
+    /** Monthly or yearly staff leaderboard. Default rank metric is net sales (existing). */
+    public function leaderboard(int|string $companyId, string $period = 'month', ?string $asOf = null, ?string $locationId = null, string $metric = 'net_sales'): array
     {
         $asOf = Carbon::parse($asOf ?? now());
 
@@ -348,10 +354,13 @@ class SalesAnalyticsService
             ->get();
 
         $users = User::whereIn('id', $rows->pluck('user_id'))->get(['id', 'name'])->keyBy('id');
+        $roleLabels = $this->roleLabelsForUsers($companyId, $rows->pluck('user_id')->map(fn ($id) => (int) $id)->all());
+        $metric = in_array($metric, ['net_sales', 'invoices', 'incentives'], true) ? $metric : 'net_sales';
 
-        $ranked = $rows->values()->map(function ($r, $idx) use ($users, $companyId, $from, $to) {
+        $ranked = $rows->values()->map(function ($r) use ($users, $companyId, $from, $to, $roleLabels) {
             $net = round((float) $r->net_sales, 2);
-            $commission = round((float) CommissionTransaction::forCompany($companyId)
+            $commission = round((float) CommissionTransaction::query()
+                ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
                 ->where('user_id', $r->user_id)
                 ->whereDate('transaction_date', '>=', $from)
                 ->whereDate('transaction_date', '<=', $to)
@@ -359,25 +368,30 @@ class SalesAnalyticsService
                 ->sum('amount'), 2);
 
             return [
-                'rank'        => $idx + 1,
                 'user_id'     => (int) $r->user_id,
                 'user_name'   => $users[$r->user_id]->name ?? 'Staff #'.$r->user_id,
+                'staff_type'  => $roleLabels[(int) $r->user_id] ?? '—',
                 'net_sales'   => $net,
                 'invoices'    => (int) $r->invoices,
                 'incentives'  => $commission,
-                'score'       => $net,
             ];
         });
 
-        // Tie-break: higher net sales first (already sorted); equal scores share rank visually
+        $ranked = $ranked->sortByDesc(function ($row) use ($metric) {
+            return $row[$metric] ?? $row['net_sales'];
+        })->values();
+
         $prev = null;
         $rank = 0;
-        $display = $ranked->map(function ($row) use (&$prev, &$rank) {
-            if ($prev === null || abs($row['score'] - $prev) > 0.01) {
+        $display = $ranked->map(function ($row) use (&$prev, &$rank, $metric) {
+            $score = (float) ($row[$metric] ?? $row['net_sales']);
+            if ($prev === null || abs($score - $prev) > 0.01) {
                 $rank++;
             }
             $row['rank'] = $rank;
-            $prev = $row['score'];
+            $row['score'] = $score;
+            $row['metric'] = $metric;
+            $prev = $score;
 
             return $row;
         });
@@ -388,8 +402,97 @@ class SalesAnalyticsService
             'from'        => $from,
             'to'          => $to,
             'location_id' => $locationId,
+            'metric'      => $metric,
             'rankings'    => $display->values()->all(),
         ];
+    }
+
+    /** Day-of-month alignment of current vs previous period (gross, invoices, net). */
+    private function dailyComparison(
+        int|string $companyId,
+        string $curFrom,
+        string $curTo,
+        string $prevFrom,
+        string $prevTo,
+        ?string $locationId,
+    ): array {
+        $current = $this->dailySalesByDate($companyId, $curFrom, $curTo, $locationId);
+        $previous = $this->dailySalesByDate($companyId, $prevFrom, $prevTo, $locationId);
+        $maxDay = max(
+            Carbon::parse($curTo)->day,
+            Carbon::parse($prevTo)->day,
+        );
+
+        $rows = [];
+        $curStart = Carbon::parse($curFrom)->startOfMonth();
+        $prevStart = Carbon::parse($prevFrom)->startOfMonth();
+        $curEnd = Carbon::parse($curTo);
+        $prevEnd = Carbon::parse($prevTo);
+        for ($day = 1; $day <= $maxDay; $day++) {
+            $curDate = $curStart->copy()->addDays($day - 1);
+            $prevDate = $prevStart->copy()->addDays($day - 1);
+            $curKey = ($curDate->month === $curStart->month && $curDate->lte($curEnd)) ? $curDate->toDateString() : null;
+            $prevKey = ($prevDate->month === $prevStart->month && $prevDate->lte($prevEnd)) ? $prevDate->toDateString() : null;
+            $cur = $curKey ? ($current[$curKey] ?? ['net_sales' => 0, 'invoice_count' => 0, 'gross_sales' => 0]) : ['net_sales' => 0, 'invoice_count' => 0, 'gross_sales' => 0];
+            $prev = $prevKey ? ($previous[$prevKey] ?? ['net_sales' => 0, 'invoice_count' => 0, 'gross_sales' => 0]) : ['net_sales' => 0, 'invoice_count' => 0, 'gross_sales' => 0];
+            $rows[] = [
+                'day'               => $day,
+                'current_date'      => $curKey,
+                'previous_date'     => $prevKey,
+                'current_net'       => $cur['net_sales'],
+                'previous_net'      => $prev['net_sales'],
+                'current_invoices'  => $cur['invoice_count'],
+                'previous_invoices' => $prev['invoice_count'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** @return array<string, array{net_sales: float, invoice_count: int, gross_sales: float}> */
+    private function dailySalesByDate(int|string $companyId, string $from, string $to, ?string $locationId): array
+    {
+        $rows = Sale::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->where('status', 'confirmed')
+            ->whereNotIn('bill_kind', ['proforma'])
+            ->whereDate('sale_date', '>=', $from)
+            ->whereDate('sale_date', '<=', $to)
+            ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
+            ->selectRaw("DATE(sale_date) as d, SUM(grand_total) as gross, COUNT(*) as invoices, SUM(CASE WHEN bill_kind = 'complimentary' THEN 0 ELSE subtotal - loyalty_discount END) as net")
+            ->groupByRaw('DATE(sale_date)')
+            ->get();
+
+        $out = [];
+        foreach ($rows as $r) {
+            $out[(string) $r->d] = [
+                'gross_sales'   => round((float) $r->gross, 2),
+                'net_sales'     => round((float) $r->net, 2),
+                'invoice_count' => (int) $r->invoices,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Company-scoped role names — the application's staff types. */
+    private function roleLabelsForUsers(int|string|null $companyId, array $userIds): array
+    {
+        $userIds = array_values(array_unique(array_filter($userIds)));
+        if ($userIds === []) {
+            return [];
+        }
+
+        $rows = \Illuminate\Support\Facades\DB::table('role_user')
+            ->join('roles', 'roles.id', '=', 'role_user.role_id')
+            ->whereIn('role_user.user_id', $userIds)
+            ->when($companyId !== null, fn ($q) => $q->where('role_user.company_id', $companyId))
+            ->whereNull('roles.deleted_at')
+            ->get(['role_user.user_id', 'roles.name']);
+
+        return $rows->groupBy('user_id')->map(
+            fn ($group) => $group->pluck('name')->unique()->filter()->implode(', ') ?: '—'
+        )->all();
     }
 
     private function comparisonPayload(string $type, array $current, array $previous, array $meta = []): array

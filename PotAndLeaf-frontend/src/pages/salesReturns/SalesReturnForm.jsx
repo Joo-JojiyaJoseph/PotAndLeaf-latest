@@ -87,7 +87,7 @@ export default function SalesReturnForm() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">New sales return</h1>
+          <h1 className="page-title">New sales return</h1>
           <p className="text-sm text-muted">Return goods against a confirmed sale; confirm later to restore stock.</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate('/sales-returns')}>

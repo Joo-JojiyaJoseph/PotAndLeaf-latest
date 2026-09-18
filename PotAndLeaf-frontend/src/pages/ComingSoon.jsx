@@ -27,7 +27,7 @@ export default function ComingSoon() {
         <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-leaf-soft text-leaf">
           <WrenchScrewdriverIcon className="size-6" />
         </div>
-        <h1 className="mt-4 text-lg font-semibold">{label}</h1>
+        <h1 className="page-title mt-4">{label}</h1>
         <p className="mt-1 text-sm text-muted">
           This module is on the build roadmap. The foundation — auth, company
           scoping, and the API — is already in place, so it plugs straight into

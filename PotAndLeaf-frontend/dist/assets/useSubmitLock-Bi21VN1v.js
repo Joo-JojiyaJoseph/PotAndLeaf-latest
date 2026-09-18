@@ -1,1 +1,0 @@
-import{r as e}from"./index-B-U8vl83.js";function f(t=!1){const r=e.useRef(!1),[c,s]=e.useState(!1),u=e.useCallback(o=>{r.current||t||(r.current=!0,s(!0),o())},[t]),a=e.useCallback(()=>{r.current=!1,s(!1)},[]);return{submit:u,release:a,locked:c||t}}export{f as u};

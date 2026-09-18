@@ -5,7 +5,7 @@ import { ExclamationTriangleIcon, MagnifyingGlassIcon, PrinterIcon, QrCodeIcon }
 import { useToast } from '../../lib/toast';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Badge, Button, Card, Spinner } from '../../components/ui';
+import { Badge, Button, Card, Spinner, PageHeader } from '../../components/ui';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 import { printBarcodeSheet } from '../../lib/barcodeSheet';
 
@@ -69,17 +69,16 @@ export default function BatchesPage() {
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-ink">Batches &amp; barcodes</h1>
-          <p className="text-sm text-muted">Every batch in stock and its scannable barcode.</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        icon={QrCodeIcon}
+        title="Batches & barcodes"
+        subtitle="Every batch in stock and its scannable barcode."
+        actions={
           <Button variant="outline" size="sm" onClick={printAll} disabled={batches.length === 0}>
             <PrinterIcon className="size-4" /> Print all
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {isError && (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-danger/30 bg-danger-soft p-4">

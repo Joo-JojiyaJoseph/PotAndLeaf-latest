@@ -81,7 +81,7 @@ export default function ReorderReportPanel({ query, needsCompany, onChangeFilter
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Products low" value={summary.product_count ?? 0} sub="at or below reorder" />
         <StatCard label="Suppliers" value={summary.supplier_count ?? 0} sub="with suggested lines" />
         <StatCard label="No supplier" value={summary.unassigned_count ?? unassigned.length} sub="will not generate a PO" />

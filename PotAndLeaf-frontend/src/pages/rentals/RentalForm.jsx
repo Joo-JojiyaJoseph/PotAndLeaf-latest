@@ -88,7 +88,7 @@ export default function RentalForm() {
     return (
       <div className="space-y-5 p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h1 className="text-lg font-semibold">New rental</h1><p className="text-sm text-muted">Choose which company this rental belongs to.</p></div>
+          <div><h1 className="page-title">New rental</h1><p className="text-sm text-muted">Choose which company this rental belongs to.</p></div>
           <Button variant="outline" size="sm" onClick={() => navigate('/rentals')}><ArrowLeftIcon className="size-4" /> Back</Button>
         </div>
         <Card className="p-5">
@@ -108,7 +108,7 @@ export default function RentalForm() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="text-lg font-semibold">New rental</h1><p className="text-sm text-muted">Daily-rate plants, security deposit, and cycle billing. Damage and loss are assessed on settle.</p></div>
+        <div><h1 className="page-title">New rental</h1><p className="text-sm text-muted">Daily-rate plants, security deposit, and cycle billing. Damage and loss are assessed on settle.</p></div>
         <Button variant="outline" size="sm" onClick={() => navigate('/rentals')}><ArrowLeftIcon className="size-4" /> Back</Button>
       </div>
 

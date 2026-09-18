@@ -22,6 +22,8 @@ import { ChartBarIcon,
   ChartPieIcon,
   SparklesIcon,
   ChatBubbleLeftRightIcon,
+  MapPinIcon,
+  EnvelopeIcon,
 } from '@heroicons/react/24/outline';
 
 /** Report catalog — icon, label, permission flags. */
@@ -37,8 +39,10 @@ export const REPORT_TABS = [
   { value: 'profit', label: 'Approx. Profit', shortLabel: 'Profit', icon: CalculatorIcon, ho: true },
   { value: 'price_levels', label: 'Sales by Price Tier', shortLabel: 'Price Tier', icon: TagIcon },
   { value: 'inventory_movement', label: 'Stock Movement', shortLabel: 'Stock Move', icon: ChartPieIcon, inventory: true },
+  { value: 'inventory_location', label: 'Location Inventory', shortLabel: 'By Location', icon: MapPinIcon, inventory: true },
   { value: 'rental_delivery', label: 'Rental Delivery', shortLabel: 'Rental Del.', icon: TruckIcon, rental: true },
   { value: 'rental_income', label: 'Rental Income', shortLabel: 'Rental Inc.', icon: CurrencyRupeeIcon, rental: true },
+  { value: 'rental_staff', label: 'Rental by Staff', shortLabel: 'Rental Staff', icon: UserIcon, rental: true },
   { value: 'rental_current', label: 'Currently Rented', shortLabel: 'Rented Now', icon: ClipboardDocumentListIcon, rental: true },
   { value: 'rental_customer', label: 'Customer Rentals', shortLabel: 'Cust. Rental', icon: UserGroupIcon, rental: true },
   { value: 'production_summary', label: 'Production Summary', shortLabel: 'Production', icon: CubeIcon, production: true },
@@ -54,9 +58,10 @@ export const REPORT_TABS = [
   { value: 'ageing_receivables', label: 'Ageing (AR)', shortLabel: 'Ageing AR', icon: CalendarDaysIcon, accounting: true },
   { value: 'ageing_payables', label: 'Ageing (AP)', shortLabel: 'Ageing AP', icon: CalendarDaysIcon, accounting: true },
   { value: 'reorder', label: 'Reorder Report', shortLabel: 'Reorder', icon: ClipboardDocumentListIcon, po: true },
+  { value: 'eod_management', label: 'EOD Summary', shortLabel: 'EOD', icon: EnvelopeIcon, eod: true },
 ];
 
-export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport }) {
+export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport, canEod }) {
   return tabs.filter((t) => {
     if (t.rental) return canRentalReports;
     if (t.production) return canProductionReports;
@@ -68,6 +73,7 @@ export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProduction
     if (t.inventory) return canInventory;
     if (t.po) return canPo;
     if (t.ho) return canHo;
+    if (t.eod) return canEod;
     return true;
   });
 }

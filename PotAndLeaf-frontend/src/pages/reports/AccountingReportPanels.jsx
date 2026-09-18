@@ -12,7 +12,7 @@ function BookTable({ data, loading, failed }) {
   }
   return (
     <>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Opening" value={formatCurrency(data.opening_balance)} />
         <StatCard label="Total in" value={formatCurrency(data.total_in)} />
         <StatCard label="Total out" value={formatCurrency(data.total_out)} />
@@ -59,7 +59,7 @@ function LedgerTable({ data, loading, partyLabel }) {
   if (!data) return <Card className="px-4 py-16 text-center text-sm text-muted">Select a {partyLabel} to view the ledger.</Card>;
   return (
     <>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Opening" value={formatCurrency(data.opening_balance)} />
         <StatCard label="Closing" value={formatCurrency(data.closing_balance)} />
         <StatCard label="Current outstanding" value={formatCurrency(data.current_outstanding)} />
@@ -104,9 +104,9 @@ function AgeingPanel({ data, loading, title }) {
   if (!data) return <Card className="px-4 py-16 text-center text-sm text-muted">Could not load ageing.</Card>;
   return (
     <>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 md:grid-cols-3 lg:grid-cols-6">
         {(data.buckets ?? []).map((b) => (
-          <StatCard key={b.key} label={b.label} value={formatCurrency(b.total)} hint={`${b.count} invoices`} />
+          <StatCard key={b.key} label={b.label} value={formatCurrency(b.total)} sub={`${b.count} invoices`} />
         ))}
       </div>
       <Card className="mt-4 overflow-hidden">

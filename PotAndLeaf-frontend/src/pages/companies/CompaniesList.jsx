@@ -160,7 +160,7 @@ export default function CompaniesList() {
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Companies</h1>
+          <h1 className="page-title">Companies</h1>
           <p className="text-sm text-muted">HO super-admin control over every company in the group.</p>
         </div>
         <Button size="sm" onClick={openNew}><PlusIcon className="size-4" /> Add company</Button>

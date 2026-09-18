@@ -61,9 +61,9 @@ export function CompanySelectMenu({
         aria-haspopup="listbox"
         aria-expanded={open}
         className={classNames(
-          'inline-flex h-10 w-full min-w-[220px] max-w-xs items-center gap-2 rounded-xl border bg-surface px-3 text-left shadow-soft transition-all',
+          'inline-flex h-10 w-full min-w-0 max-w-full items-center gap-2 rounded-xl glass-control px-3 text-left shadow-soft transition-all sm:min-w-[200px] sm:max-w-xs',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf/30',
-          open ? 'border-leaf/40 ring-2 ring-leaf/15' : 'border-line hover:border-leaf/30 hover:bg-paper',
+          open ? 'border-leaf/40 ring-2 ring-leaf/15' : 'hover:border-leaf/30 hover:bg-white/90',
           disabled && 'pointer-events-none opacity-60',
         )}
       >
@@ -84,7 +84,7 @@ export function CompanySelectMenu({
           role="listbox"
           aria-label={label}
           className={classNames(
-            'dialog-in absolute z-50 mt-1.5 max-h-72 min-w-full overflow-y-auto rounded-xl border border-line bg-surface py-1.5 shadow-pop',
+            'dialog-in glass-menu absolute z-20 mt-1.5 max-h-72 min-w-full overflow-y-auto rounded-2xl py-1.5',
             align === 'right' ? 'right-0' : 'left-0',
             menuClassName,
           )}
@@ -165,7 +165,7 @@ export function CompanySelectMenuBlock({
 
   if (options.length <= 1) {
     return (
-      <div className={classNames('mx-3 mb-4 rounded-2xl border border-line/80 bg-surface p-3 shadow-soft', className)}>
+      <div className={classNames('mx-3 mb-4 rounded-2xl glass-control p-3', className)}>
         <div className="flex items-center gap-2">
           <span className="flex size-7 items-center justify-center rounded-lg bg-leaf-soft text-leaf">
             <BuildingOffice2Icon className="size-4" />
@@ -181,7 +181,7 @@ export function CompanySelectMenuBlock({
   }
 
   return (
-    <div className={classNames('mx-3 mb-4 rounded-2xl border border-line/80 bg-surface p-3 shadow-soft', className)}>
+    <div className={classNames('mx-3 mb-4 rounded-2xl glass-control p-3', className)}>
       <div className="mb-2 flex items-center gap-2">
         <span className="flex size-7 items-center justify-center rounded-lg bg-leaf-soft text-leaf">
           <BuildingOffice2Icon className="size-4" />
@@ -196,8 +196,8 @@ export function CompanySelectMenuBlock({
           aria-haspopup="listbox"
           aria-expanded={open}
           className={classNames(
-            'flex h-10 w-full items-center gap-2 rounded-xl border bg-paper px-3 text-left transition-all',
-            open ? 'border-leaf/40 ring-2 ring-leaf/15' : 'border-line hover:border-leaf/30',
+            'flex h-10 w-full items-center gap-2 rounded-xl glass-control px-3 text-left transition-all',
+            open ? 'border-leaf/40 ring-2 ring-leaf/15' : 'hover:border-leaf/30',
           )}
         >
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{selected?.label ?? 'Select company'}</span>
@@ -207,7 +207,7 @@ export function CompanySelectMenuBlock({
         {open && (
           <div
             role="listbox"
-            className="dialog-in absolute inset-x-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-line bg-surface py-1.5 shadow-pop"
+            className="dialog-in glass-menu absolute inset-x-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-2xl py-1.5"
           >
             {options.map((opt) => {
               const active = String(opt.value) === String(value);
