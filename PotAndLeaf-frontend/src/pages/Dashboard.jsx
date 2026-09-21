@@ -18,7 +18,7 @@ const QUICK = [
   { label: 'New sale', desc: 'Ring up a bill', to: '/sales/new', icon: BanknotesIcon },
   { label: 'New purchase', desc: 'Record a GRN', to: '/purchases/new', icon: ShoppingCartIcon },
   { label: 'Add product', desc: 'Create a catalogue item', to: '/products/new', icon: PlusCircleIcon },
-  { label: 'Reports', desc: 'Sales, stock and dues', to: '/reports', icon: ChartBarIcon },
+  // { label: 'Reports', desc: 'Sales, stock and dues', to: '/reports', icon: ChartBarIcon },
   { label: 'Masters', desc: 'Categories, units', to: '/masters', icon: TagIcon },
   { label: 'Companies', desc: 'Manage companies', to: '/companies', icon: BuildingOffice2Icon },
   { label: 'Suppliers', desc: 'Manage suppliers', to: '/suppliers', icon: TruckIcon },
