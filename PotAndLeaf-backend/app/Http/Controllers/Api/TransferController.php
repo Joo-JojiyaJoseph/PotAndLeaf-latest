@@ -35,40 +35,48 @@ class TransferController extends Controller
         $company = $this->company($request);
         $this->allow($request, 'transfers.create');
 
-        $user = $request->user();
-        if ($user->is_super_admin) {
-            $companies = Company::active()->where('id', '!=', $company->id)->orderBy('name')
-                ->get(['id', 'name', 'code'])
-                ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code]);
-        } else {
-            $companies = $user->companies()->where('companies.id', '!=', $company->id)->where('is_active', true)
-                ->orderBy('companies.name')
-                ->get(['companies.id', 'companies.name', 'companies.code'])
-                ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code]);
-        }
+        $source = $this->resolveSourceCompany($request, $company);
 
-        $products = Product::forCompany($company->id)->orderBy('name')->get(['id', 'sku', 'name', 'current_stock'])
+        $destinations = Company::active()->where('id', '!=', $source->id)->orderBy('name')
+            ->get(['id', 'name', 'code'])
+            ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code]);
+
+        $sourceCompanies = Company::active()->orderBy('name')
+            ->get(['id', 'name', 'code'])
+            ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code]);
+
+        $products = Product::forCompany($source->id)->orderBy('name')->get(['id', 'sku', 'name', 'current_stock'])
             ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'current_stock' => (float) $p->current_stock]);
 
-        $locations = Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
+        $locations = Location::forCompany($source->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'type', 'is_default'])
             ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'type' => $l->type, 'is_default' => (bool) $l->is_default]);
 
-        return $this->ok(['companies' => $companies, 'products' => $products, 'locations' => $locations, 'from_company' => ['id' => $company->id, 'name' => $company->name]]);
+        return $this->ok([
+            'companies' => $destinations,
+            'source_companies' => $sourceCompanies,
+            'products' => $products,
+            'locations' => $locations,
+            'from_company' => ['id' => $source->id, 'name' => $source->name, 'code' => $source->code],
+        ]);
     }
 
     public function store(StoreTransferRequest $request): JsonResponse
     {
         $company = $this->company($request);
         $user = $request->user();
+        $data = $request->validated();
+        $sourceId = $data['from_company_id'] ?? $company->id;
+        unset($data['confirm'], $data['from_company_id']);
+
+        $pullingFromOther = (string) $sourceId !== (string) $company->id;
         // Super-admins always create a request unless they explicitly confirm.
-        // Other users who can approve still get a ready-to-dispatch draft.
+        // Pulling stock from another shop is always a request until HO/source approves.
         $autoApprove = $user->is_super_admin
             ? $request->boolean('confirm')
-            : $user->hasPermission('transfers.approve', $company->id);
-        $data = $request->validated();
-        unset($data['confirm']);
-        $transfer = $this->transfers->create($company->id, $data, $user->id, $autoApprove);
+            : (! $pullingFromOther && $user->hasPermission('transfers.approve', $company->id));
+
+        $transfer = $this->transfers->create($sourceId, $data, $user->id, $autoApprove);
 
         return $this->created(
             new StockTransferResource($transfer),
@@ -145,6 +153,20 @@ class TransferController extends Controller
     private function company(Request $request)
     {
         return $request->attributes->get('company');
+    }
+
+    /** Any active company may be the stock source; membership is not required to see it. */
+    private function resolveSourceCompany(Request $request, Company $current): Company
+    {
+        $sourceId = $request->query('source_company_id');
+        if (! filled($sourceId) || (string) $sourceId === (string) $current->id) {
+            return $current;
+        }
+
+        $source = Company::active()->whereKey($sourceId)->first();
+        abort_unless($source, 422, 'Source company not found.');
+
+        return $source;
     }
 
     private function allow(Request $request, string $permission): void

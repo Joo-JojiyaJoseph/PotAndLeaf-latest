@@ -204,6 +204,12 @@ class ProductController extends Controller
     {
         $this->allow($request, 'products.view');
         $companyId = $this->company($request)->id;
+        $sourceId = $request->query('source_company_id');
+        if (filled($sourceId) && (string) $sourceId !== (string) $companyId) {
+            abort_unless($request->user()->hasPermission('transfers.create', $companyId), 403);
+            abort_unless(\App\Models\Company::active()->whereKey($sourceId)->exists(), 422, 'Source company not found.');
+            $companyId = $sourceId;
+        }
         $barcode = trim((string) $request->query('barcode'));
 
         abort_if($barcode === '', 422, 'Provide a barcode.');

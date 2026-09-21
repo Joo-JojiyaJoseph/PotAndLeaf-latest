@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '../../lib/format';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
+import { executePaymentSubmit } from '../../lib/paymentValidation';
 
 const TABS = [{ value: 'payables', label: 'Payables' }, { value: 'history', label: 'Payment history' }];
 const payStatusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -69,7 +70,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
         mode: form.mode, payment_date: form.payment_date,
         reference: form.reference || null, notes: form.notes || null,
         is_advance: form.is_advance,
-      }, withCompany(writeCompanyId(prefill, party, targetCompanyId || filterCompanyId)));
+      }, withCompany(targetCompanyId || writeCompanyId(prefill, party, filterCompanyId)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supplier-payments'] });
@@ -101,24 +102,33 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
     return list;
   })();
 
-  function handleSubmit() {
-    executePaymentSubmit({
-      supplierId: form.supplier_id,
-      amount: form.amount,
-      supplierOutstanding: supplier?.outstanding,
-      purchaseId: form.is_advance ? null : (form.purchase_id || null),
-      payables: grns,
-      isAdvance: form.is_advance,
-      mutate: () => saveM.mutate(),
-      setErrors,
-    });
+  function handleSubmit(e) {
+    e?.preventDefault?.();
+    try {
+      const ok = executePaymentSubmit({
+        supplierId: form.supplier_id,
+        amount: form.amount,
+        supplierOutstanding: supplier?.outstanding ?? prefill?.outstanding,
+        purchaseId: form.is_advance ? null : (form.purchase_id || null),
+        payables: grns,
+        isAdvance: form.is_advance,
+        mutate: () => saveM.mutate(),
+        setErrors,
+      });
+      if (!ok) {
+        toast.error('Please fix the highlighted fields.');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Could not record payment.');
+      saveM.mutate();
+    }
   }
 
   return (
     <Modal open={open} onClose={handleClose} title="Record supplier payment"
       footer={<>
-        <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-        <Button size="sm" disabled={saveM.isPending || !form.supplier_id} onClick={handleSubmit}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Record payment'}</Button>
+        <Button variant="ghost" size="sm" type="button" onClick={handleClose}>Cancel</Button>
+        <Button size="sm" type="button" disabled={saveM.isPending || !form.supplier_id} onClick={handleSubmit}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Record payment'}</Button>
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -192,7 +202,7 @@ function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyPar
         supplier_id: form.supplier_id,
         purchase_id: form.purchase_id,
         amount: Number(form.amount) || 0,
-      }, withCompany(writeCompanyId(prefill, party, targetCompanyId || filterCompanyId)));
+      }, withCompany(targetCompanyId || writeCompanyId(prefill, party, filterCompanyId)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supplier-payments'] });

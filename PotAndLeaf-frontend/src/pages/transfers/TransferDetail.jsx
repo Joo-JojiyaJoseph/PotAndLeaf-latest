@@ -34,6 +34,15 @@ export default function TransferDetail() {
     enabled: Boolean(headerCompanyId && id),
   });
 
+  const { data: formMeta } = useQuery({
+    queryKey: ['transfer-form-data', headerCompanyId, data?.company_id],
+    queryFn: () => api.get('/transfers/form-data', {
+      params: { source_company_id: data?.company_id },
+      ...withCompany(headerCompanyId),
+    }).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && data?.company_id && redirecting),
+  });
+
   const sourceCompanyId = data?.company_id ?? headerCompanyId;
   const destCompanyId = data?.is_intra_company
     ? sourceCompanyId
@@ -239,7 +248,7 @@ export default function TransferDetail() {
         <Select value={redirectTo} onChange={(e) => setRedirectTo(e.target.value)}
           className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25">
           <option value="">Select destination shop…</option>
-          {(companies ?? [])
+          {(formMeta?.source_companies ?? companies ?? [])
             .filter((c) => String(c.id) !== String(t.from_company_id) && String(c.id) !== String(t.to_company_id))
             .map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>

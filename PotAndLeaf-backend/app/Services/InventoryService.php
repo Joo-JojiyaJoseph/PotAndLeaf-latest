@@ -83,13 +83,17 @@ class InventoryService
             throw ValidationException::withMessages(['sku' => 'Provide sku or product_id.']);
         }
 
-        $anchor = Product::forCompany($currentCompanyId)
-            ->when(filled($productId), fn ($q) => $q->whereKey($productId))
-            ->when(filled($sku), fn ($q) => $q->where('sku', $sku))
-            ->first();
+        $anchor = null;
+        if (filled($productId)) {
+            $anchor = Product::forCompany($currentCompanyId)->whereKey($productId)->first()
+                ?? Product::query()->whereKey($productId)->first();
+        } elseif (filled($sku)) {
+            $anchor = Product::forCompany($currentCompanyId)->where('sku', $sku)->first()
+                ?? Product::query()->where('sku', $sku)->first();
+        }
 
         if (! $anchor) {
-            throw ValidationException::withMessages(['sku' => 'Product not found in the current company.']);
+            throw ValidationException::withMessages(['sku' => 'Product not found.']);
         }
 
         $sku = $anchor->sku;
@@ -134,11 +138,7 @@ class InventoryService
     /** @return list<int|string> */
     private function accessibleCompanyIds(User $user, int|string $currentCompanyId): array
     {
-        if ($user->is_super_admin) {
-            return \App\Models\Company::active()->pluck('id')->all();
-        }
-
-        $ids = $user->companies()->where('is_active', true)->pluck('companies.id')->all();
+        $ids = \App\Models\Company::active()->pluck('id')->all();
 
         return $ids !== [] ? $ids : [$currentCompanyId];
     }

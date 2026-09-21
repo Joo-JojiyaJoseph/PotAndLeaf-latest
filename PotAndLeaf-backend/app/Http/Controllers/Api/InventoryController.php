@@ -41,7 +41,13 @@ class InventoryController extends Controller
     public function crossBranchStock(Request $request): JsonResponse
     {
         $company = $request->attributes->get('company');
-        abort_unless($request->user()->hasPermission('inventory.view', $company->id), 403);
+        $user = $request->user();
+        abort_unless(
+            $user->hasPermission('inventory.view', $company->id)
+            || $user->hasPermission('transfers.view', $company->id)
+            || $user->hasPermission('transfers.create', $company->id),
+            403
+        );
 
         $data = $this->inventory->crossBranchStock(
             $request->user(),

@@ -309,3 +309,45 @@ it('adds transferred quantity onto existing destination stock', function () {
     expect((float) $destProduct->fresh()->current_stock)->toBe(12.0);
     expect((float) $sourceProduct->fresh()->current_stock)->toBe(15.0);
 });
+
+it('lists every other active company as a transfer destination for a shop user', function () {
+    $other = Company::create(['name' => 'Cheerakuzhy Outlet', 'code' => 'OUT'.Str::upper(Str::random(3)), 'is_active' => true]);
+    Company::create(['name' => 'Inactive Shop', 'code' => 'INA'.Str::upper(Str::random(3)), 'is_active' => false]);
+
+    $this->getJson('/api/transfers/form-data', $this->apiHeaders())
+        ->assertOk()
+        ->assertJsonCount(1, 'data.companies')
+        ->assertJsonPath('data.companies.0.id', $other->id)
+        ->assertJsonPath('data.from_company.id', $this->company->id);
+
+    $sourceIds = collect($this->getJson('/api/transfers/form-data', $this->apiHeaders())->json('data.source_companies'))->pluck('id')->all();
+    expect($sourceIds)->toContain($this->company->id)->toContain($other->id);
+});
+
+it('loads stock from a selected source company the user does not belong to', function () {
+    $other = Company::create(['name' => 'Agro Supplies', 'code' => 'AG'.Str::upper(Str::random(3)), 'is_active' => true]);
+    $product = $this->createProduct(['company_id' => $other->id, 'name' => 'Neem cake', 'current_stock' => 310]);
+
+    $res = $this->getJson('/api/transfers/form-data?source_company_id='.$other->id, $this->apiHeaders())
+        ->assertOk()
+        ->assertJsonPath('data.from_company.id', $other->id);
+
+    expect(collect($res->json('data.products'))->firstWhere('id', $product->id)['current_stock'])->toBe(310);
+    expect(collect($res->json('data.companies'))->pluck('id'))->toContain($this->company->id)->not->toContain($other->id);
+});
+
+it('lets a shop user request stock from another company', function () {
+    $other = Company::create(['name' => 'Source Branch', 'code' => 'SRC'.Str::upper(Str::random(3)), 'is_active' => true]);
+    $product = $this->createProduct(['company_id' => $other->id, 'current_stock' => 50]);
+
+    $this->postJson('/api/transfers', [
+        'from_company_id' => $other->id,
+        'to_company_id'   => $this->company->id,
+        'transfer_date'   => now()->toDateString(),
+        'items'           => [['product_id' => $product->id, 'qty' => 10]],
+    ], $this->apiHeaders())
+        ->assertCreated()
+        ->assertJsonPath('data.from_company_id', $other->id)
+        ->assertJsonPath('data.to_company_id', $this->company->id)
+        ->assertJsonPath('data.status', 'requested');
+});

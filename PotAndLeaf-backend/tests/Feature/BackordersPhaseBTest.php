@@ -118,6 +118,28 @@ it('returns cross-branch stock by sku', function () {
         ->assertJsonCount(2, 'data.branches');
 });
 
+it('shows stock at companies the shop user is not assigned to', function () {
+    $this->seedPermissions();
+    $other = Company::create(['name' => 'Unassigned Branch', 'code' => 'UBR', 'is_active' => true]);
+    phaseBProduct($this, ['current_stock' => 4]);
+    Product::create([
+        'company_id' => $other->id,
+        'sku' => 'PALM-BO-01',
+        'name' => 'Areca Palm',
+        'gst_rate' => 0,
+        'mrp' => 500,
+        'cost_price' => 200,
+        'retail_price' => 400,
+        'current_stock' => 18,
+        'opening_stock' => 18,
+        'status' => 'active',
+    ]);
+
+    $this->getJson('/api/inventory/stock/cross-branch?sku=PALM-BO-01', $this->apiHeaders())
+        ->assertOk()
+        ->assertJsonCount(2, 'data.branches');
+});
+
 it('includes in-transit qty in cross-branch stock', function () {
     $product = phaseBProduct($this);
     StockTransfer::create([

@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../lib/confirm';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import SearchSelect from '../../components/SearchSelect';
+import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', product_batch_id: '', barcode: '', batch_no: '', qty: '' });
@@ -17,8 +18,9 @@ export default function TransferForm() {
   const navigate = useNavigate();
   const { activeCompany, isSuperAdmin, companies: authCompanies } = useAuth();
   const confirmDialog = useConfirm();
+  const workspaceCompanyId = activeCompany?.id ? String(activeCompany.id) : '';
   const [transferType, setTransferType] = useState('inter_company');
-  const [fromCompanyId, setFromCompanyId] = useState(() => activeCompany?.id ? String(activeCompany.id) : '');
+  const [fromCompanyId, setFromCompanyId] = useState(() => workspaceCompanyId);
   const [header, setHeader] = useState({ to_company_id: '', from_location_id: '', to_location_id: '', transfer_date: today(), notes: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [scanValue, setScanValue] = useState('');
@@ -30,7 +32,7 @@ export default function TransferForm() {
     const code = scanValue.trim();
     if (!code) return;
     try {
-      const b = (await api.get('/batches/scan', { params: { barcode: code }, ...withCompany(fromCompanyId) })).data.data;
+      const b = (await api.get('/batches/scan', { params: { barcode: code, source_company_id: fromCompanyId }, ...withCompany(workspaceCompanyId) })).data.data;
       setLines((prev) => {
         const idx = prev.findIndex((l) => l.product_batch_id === b.batch_id);
         if (idx >= 0) return prev.map((l, i) => (i === idx ? { ...l, qty: String((Number(l.qty) || 0) + 1) } : l));
@@ -48,27 +50,32 @@ export default function TransferForm() {
   const [saving, setSaving] = useState(false);
   const isIntra = transferType === 'intra_company';
 
-  const sourceCompanyId = fromCompanyId || (activeCompany?.id ? String(activeCompany.id) : '');
-  const companyCfg = sourceCompanyId ? withCompany(sourceCompanyId) : {};
+  const sourceCompanyId = fromCompanyId || workspaceCompanyId;
+  const companyCfg = workspaceCompanyId ? withCompany(workspaceCompanyId) : {};
+  const pullingFromOther = Boolean(workspaceCompanyId && sourceCompanyId && String(sourceCompanyId) !== String(workspaceCompanyId));
 
   useEffect(() => {
     if (!fromCompanyId && activeCompany?.id) setFromCompanyId(String(activeCompany.id));
   }, [activeCompany?.id, fromCompanyId]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transfer-form-data', sourceCompanyId],
-    queryFn: () => api.get('/transfers/form-data', companyCfg).then((r) => r.data.data),
-    enabled: Boolean(sourceCompanyId),
+    queryKey: ['transfer-form-data', workspaceCompanyId, sourceCompanyId],
+    queryFn: () => api.get('/transfers/form-data', { params: { source_company_id: sourceCompanyId }, ...companyCfg }).then((r) => r.data.data),
+    enabled: Boolean(workspaceCompanyId && sourceCompanyId),
   });
 
   const companies = data?.companies ?? [];
+  const sourceCompanies = data?.source_companies ?? authCompanies ?? [];
   const products = data?.products ?? [];
   const locations = data?.locations ?? [];
-  const fromCompany = data?.from_company ?? authCompanies.find((c) => String(c.id) === String(sourceCompanyId)) ?? activeCompany;
-  const productOptions = products.map((p) => ({ value: p.id, label: p.name, sublabel: p.sku || undefined }));
+  const fromCompany = data?.from_company ?? sourceCompanies.find((c) => String(c.id) === String(sourceCompanyId)) ?? activeCompany;
+  const productOptions = products.map((p) => ({
+    value: p.id,
+    label: p.name,
+    sublabel: [p.sku, `${Number(p.current_stock) || 0} in stock`].filter(Boolean).join(' · ') || undefined,
+  }));
   const toCompanyOptions = companies.map((c) => ({ value: String(c.id), label: c.name, sublabel: c.code || undefined }));
-  const fromCompanyOptions = (isSuperAdmin ? authCompanies : authCompanies.filter((c) => String(c.id) === String(sourceCompanyId)))
-    .map((c) => ({ value: String(c.id), label: c.name, sublabel: c.code || undefined }));
+  const fromCompanyOptions = sourceCompanies.map((c) => ({ value: String(c.id), label: c.name, sublabel: c.code || undefined }));
 
   const { data: locationBalances } = useQuery({
     queryKey: ['location-stock', sourceCompanyId, header.from_location_id],
@@ -94,11 +101,17 @@ export default function TransferForm() {
   }
 
   useEffect(() => {
-    if (!isIntra && companies.length === 1 && !header.to_company_id) {
+    if (isIntra) return;
+    if (companies.length === 1 && !header.to_company_id) {
       setHeader((h) => ({ ...h, to_company_id: String(companies[0].id) }));
+      return;
+    }
+    if (pullingFromOther && workspaceCompanyId && !header.to_company_id
+      && companies.some((c) => String(c.id) === String(workspaceCompanyId))) {
+      setHeader((h) => ({ ...h, to_company_id: String(workspaceCompanyId) }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companies, isIntra]);
+  }, [companies, isIntra, pullingFromOther, workspaceCompanyId]);
 
   useEffect(() => {
     if (isIntra && locations.length >= 2 && !header.from_location_id && !header.to_location_id) {
@@ -120,7 +133,7 @@ export default function TransferForm() {
 
   async function save({ confirm = false } = {}) {
     setErrors({});
-    if (isSuperAdmin && !sourceCompanyId) {
+    if (!sourceCompanyId) {
       setErrors({ from_company_id: ['Select a from company.'] });
       return;
     }
@@ -167,6 +180,7 @@ export default function TransferForm() {
         payload.to_location_id = header.to_location_id;
       } else {
         payload.to_company_id = Number(header.to_company_id);
+        payload.from_company_id = Number(sourceCompanyId);
       }
       const res = await api.post('/transfers', payload, companyCfg);
       const created = res.data.data;
@@ -184,7 +198,11 @@ export default function TransferForm() {
         <div>
           <h1 className="page-title">New transfer</h1>
           <p className="text-sm text-muted">
-            {isIntra ? `Move stock between locations at ${fromCompany?.name}.` : `Move stock from ${fromCompany?.name} to another company.`}
+            {isIntra
+              ? `Move stock between locations at ${fromCompany?.name}.`
+              : pullingFromOther
+                ? `Request stock from ${fromCompany?.name} into ${activeCompany?.name ?? 'your company'}.`
+                : `Move stock from ${fromCompany?.name} to another company.`}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate('/transfers')}><ArrowLeftIcon className="size-4" /> Back</Button>
@@ -198,21 +216,17 @@ export default function TransferForm() {
           {/* <button type="button" onClick={() => { setTransferType('intra_company'); setHeader((h) => ({ ...h, to_company_id: '' })); }} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Godown → shop</button> */}
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field label="From company" required={isSuperAdmin} error={err('from_company_id')}>
-            {isSuperAdmin ? (
-              <SearchSelect
-                value={fromCompanyId}
-                onChange={changeFromCompany}
-                options={fromCompanyOptions}
-                placeholder="Select source company…"
-                emptyLabel="No companies"
-              />
-            ) : (
-              <Input value={fromCompany?.name ?? ''} readOnly className="bg-paper" />
-            )}
-            {isSuperAdmin && (
-              <p className="mt-1.5 text-xs text-muted">Applies only to this transfer. Your workspace company stays unchanged.</p>
-            )}
+          <Field label="From company" required error={err('from_company_id')}>
+            <SearchSelect
+              value={fromCompanyId}
+              onChange={changeFromCompany}
+              options={fromCompanyOptions}
+              placeholder="Select source company…"
+              emptyLabel="No companies"
+            />
+            <p className="mt-1.5 text-xs text-muted">
+              Product stock below is from this company. {pullingFromOther ? 'The destination shop will receive a transfer request.' : 'Your workspace company stays unchanged.'}
+            </p>
           </Field>
           {isIntra ? (
             <>
@@ -308,6 +322,10 @@ export default function TransferForm() {
         </div>
       </Card>
 
+      {lines.some((l) => l.product_id) && (
+        <CrossBranchStockPanel productId={lines.find((l) => l.product_id)?.product_id} />
+      )}
+
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
         {isSuperAdmin ? (
@@ -320,10 +338,10 @@ export default function TransferForm() {
             </Button>
           </>
         ) : (
-          <Button onClick={() => save()} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
+          <Button onClick={() => save()} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>{saving ? <Spinner className="border-white/40 border-t-white" /> : (pullingFromOther ? 'Request stock' : 'Save draft')}</Button>
         )}
       </div>
-      {!isIntra && !companies.length && <p className="text-sm text-muted">No other companies available to transfer to. Add another company or switch context.</p>}
+      {!isIntra && !companies.length && <p className="text-sm text-muted">No other companies are set up yet. Add another company to transfer stock between shops.</p>}
       {isIntra && locations.length < 2 && <p className="text-sm text-muted">Add at least two locations (e.g. godown and shop) before moving stock internally.</p>}
     </div>
   );

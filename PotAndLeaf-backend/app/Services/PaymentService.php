@@ -10,6 +10,7 @@ use App\Models\SupplierPaymentAllocation;
 use App\Services\AccountingEngine;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class PaymentService
@@ -32,7 +33,7 @@ class PaymentService
 
     public function record(int|string $companyId, array $data, ?int $userId = null): SupplierPayment
     {
-        return DB::transaction(function () use ($companyId, $data, $userId) {
+        $payment = DB::transaction(function () use ($companyId, $data, $userId) {
             $amount = (float) $data['amount'];
             $isAdvance = (bool) ($data['is_advance'] ?? false);
             $allocations = array_values(array_filter(
@@ -101,11 +102,19 @@ class PaymentService
 
             $this->activity->log($companyId, $userId, 'create', 'payment', 'supplier_payment', $payment->id, "Payment {$payment->payment_no} recorded");
 
-            $payment = $payment->load(['supplier:id,name', 'purchase:id,purchase_no', 'allocations']);
-            app(AccountingEngine::class)->postPayment($payment);
-
-            return $payment;
+            return $payment->load(['supplier:id,name', 'purchase:id,purchase_no', 'allocations']);
         });
+
+        try {
+            app(AccountingEngine::class)->postPayment($payment);
+        } catch (\Throwable $e) {
+            Log::warning('Payment recorded but ledger post failed', [
+                'payment_id' => $payment->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $payment;
     }
 
     /**

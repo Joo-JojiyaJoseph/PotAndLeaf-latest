@@ -67,7 +67,7 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
         amount: Number(form.amount) || 0, mode: form.mode, receipt_date: form.receipt_date,
         reference: form.reference || null, notes: form.notes || null,
         is_advance: form.is_advance,
-      }, withCompany(writeCompanyId(prefill, party, targetCompanyId || filterCompanyId)));
+      }, withCompany(targetCompanyId || writeCompanyId(prefill, party, filterCompanyId)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-receipts'] });
@@ -176,7 +176,7 @@ function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyPar
         customer_id: form.customer_id,
         sale_id: form.sale_id,
         amount: Number(form.amount) || 0,
-      }, withCompany(writeCompanyId(prefill, party, targetCompanyId || filterCompanyId)));
+      }, withCompany(targetCompanyId || writeCompanyId(prefill, party, filterCompanyId)));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-receipts'] });

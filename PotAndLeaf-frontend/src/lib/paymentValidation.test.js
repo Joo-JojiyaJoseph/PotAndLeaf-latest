@@ -18,6 +18,11 @@ describe('validatePaymentAmount', () => {
     expect(result.valid).toBe(true);
   });
 
+  it('skips the outstanding cap when the balance is unknown', () => {
+    const result = validatePaymentAmount({ amount: 310, supplierOutstanding: undefined });
+    expect(result.valid).toBe(true);
+  });
+
   it('rejects a payment above supplier outstanding', () => {
     const result = validatePaymentAmount({ amount: 1500, supplierOutstanding: 1000 });
     expect(result.valid).toBe(false);

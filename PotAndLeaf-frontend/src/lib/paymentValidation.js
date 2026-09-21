@@ -24,14 +24,16 @@ export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance 
     return { valid: true, errors: {} };
   }
 
-  const outstanding = Number(supplierOutstanding ?? 0);
-  if (num > outstanding + EPS) {
-    return {
-      valid: false,
-      errors: {
-        amount: `Amount cannot exceed the supplier outstanding balance of ${formatCurrency(outstanding)}.`,
-      },
-    };
+  if (supplierOutstanding != null && supplierOutstanding !== '') {
+    const outstanding = Number(supplierOutstanding);
+    if (!Number.isNaN(outstanding) && num > outstanding + EPS) {
+      return {
+        valid: false,
+        errors: {
+          amount: `Amount cannot exceed the supplier outstanding balance of ${formatCurrency(outstanding)}.`,
+        },
+      };
+    }
   }
 
   if (grnBalance != null && grnBalance !== '') {

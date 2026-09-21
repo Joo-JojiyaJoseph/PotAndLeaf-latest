@@ -9,6 +9,7 @@ use App\Models\Sale;
 use App\Services\AccountingEngine;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class ReceiptService
@@ -29,7 +30,7 @@ class ReceiptService
 
     public function record(int|string $companyId, array $data, ?int $userId = null): CustomerReceipt
     {
-        return DB::transaction(function () use ($companyId, $data) {
+        $receipt = DB::transaction(function () use ($companyId, $data) {
             $isAdvance = (bool) ($data['is_advance'] ?? false);
             $allocations = array_values(array_filter(
                 $data['allocations'] ?? [],
@@ -86,17 +87,25 @@ class ReceiptService
                 $this->syncSalePaid($data['sale_id']);
             }
 
-            $receipt = $receipt->load(['customer:id,name', 'sale:id,sale_no', 'allocations']);
-            app(AccountingEngine::class)->postReceipt($receipt);
-
-            return $receipt;
+            return $receipt->load(['customer:id,name', 'sale:id,sale_no', 'allocations']);
         });
+
+        try {
+            app(AccountingEngine::class)->postReceipt($receipt);
+        } catch (\Throwable $e) {
+            Log::warning('Receipt recorded but ledger post failed', [
+                'receipt_id' => $receipt->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $receipt;
     }
 
     /** Advance collected on booking — increases advance_balance, not AR. */
     public function recordAdvance(int|string $companyId, array $data, ?string $advanceOrderId = null, ?int $userId = null): CustomerReceipt
     {
-        return DB::transaction(function () use ($companyId, $data, $advanceOrderId, $userId) {
+        $receipt = DB::transaction(function () use ($companyId, $data, $advanceOrderId, $userId) {
             $receipt = CustomerReceipt::create([
                 'company_id'       => $companyId,
                 'customer_id'      => $data['customer_id'],
@@ -117,11 +126,19 @@ class ReceiptService
                 $customer->save();
             }
 
-            $receipt = $receipt->load(['customer:id,name']);
-            app(AccountingEngine::class)->postReceipt($receipt);
-
-            return $receipt;
+            return $receipt->load(['customer:id,name']);
         });
+
+        try {
+            app(AccountingEngine::class)->postReceipt($receipt);
+        } catch (\Throwable $e) {
+            Log::warning('Advance receipt recorded but ledger post failed', [
+                'receipt_id' => $receipt->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $receipt;
     }
 
     public function voidAdvanceOrder(string $advanceOrderId): void
@@ -170,7 +187,14 @@ class ReceiptService
             'notes'        => "Receipt for sale {$sale->sale_no}",
             'created_by'   => $userId,
         ]);
-        app(AccountingEngine::class)->postReceipt($receipt);
+        try {
+            app(AccountingEngine::class)->postReceipt($receipt);
+        } catch (\Throwable $e) {
+            Log::warning('POS receipt recorded but ledger post failed', [
+                'receipt_id' => $receipt->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         return $receipt;
     }

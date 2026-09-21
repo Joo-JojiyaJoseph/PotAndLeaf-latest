@@ -9,6 +9,7 @@ use App\Models\CustomerReceipt;
 use App\Models\LedgerAccount;
 use App\Models\SupplierPayment;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
@@ -259,33 +260,43 @@ class AccountingEngine
         string $creditKey,
         ?string $narration = null,
     ): ?AccountingTransaction {
-        if (! $this->ready()) {
+        try {
+            if (! $this->ready()) {
+                return null;
+            }
+
+            $existing = AccountingTransaction::query()
+                ->where('source_type', $sourceType)
+                ->where('source_id', $sourceId)
+                ->where('status', 'posted')
+                ->first();
+            if ($existing) {
+                return $existing->load('entries.account');
+            }
+
+            $debit = $this->coa->systemAccount($companyId, $debitKey);
+            $credit = $this->coa->systemAccount($companyId, $creditKey);
+
+            return $this->post($companyId, [
+                'voucher_type' => $voucherType,
+                'voucher_date' => $voucherDate,
+                'narration'    => $narration,
+                'source_type'  => $sourceType,
+                'source_id'    => $sourceId,
+                'entries'      => [
+                    ['ledger_account_id' => $debit->id,  'debit' => $amount, 'credit' => 0],
+                    ['ledger_account_id' => $credit->id, 'debit' => 0,       'credit' => $amount],
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Accounting auto-post skipped', [
+                'source_type' => $sourceType,
+                'source_id'   => $sourceId,
+                'error'       => $e->getMessage(),
+            ]);
+
             return null;
         }
-
-        $existing = AccountingTransaction::query()
-            ->where('source_type', $sourceType)
-            ->where('source_id', $sourceId)
-            ->where('status', 'posted')
-            ->first();
-        if ($existing) {
-            return $existing->load('entries.account');
-        }
-
-        $debit = $this->coa->systemAccount($companyId, $debitKey);
-        $credit = $this->coa->systemAccount($companyId, $creditKey);
-
-        return $this->post($companyId, [
-            'voucher_type' => $voucherType,
-            'voucher_date' => $voucherDate,
-            'narration'    => $narration,
-            'source_type'  => $sourceType,
-            'source_id'    => $sourceId,
-            'entries'      => [
-                ['ledger_account_id' => $debit->id,  'debit' => $amount, 'credit' => 0],
-                ['ledger_account_id' => $credit->id, 'debit' => 0,       'credit' => $amount],
-            ],
-        ]);
     }
 
     /**
