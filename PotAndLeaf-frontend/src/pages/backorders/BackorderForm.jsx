@@ -6,6 +6,9 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
+import { useToast } from '../../lib/toast';
+import { parseShortageResponse, shortageNavigatePath } from '../../lib/shortageResult';
+import { apiMessage, fieldError } from '../../lib/formErrors';
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', ordered_qty: '', rate: '' });
@@ -15,7 +18,8 @@ const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 t
 export default function BackorderForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { activeCompany, isSuperAdmin, companies, companyId } = useAuth();
+  const { activeCompany, isSuperAdmin, companies, companyId, can } = useAuth();
+  const toast = useToast();
   const presetCompanyId = searchParams.get('company_id') ?? '';
   const [formCompanyId, setFormCompanyId] = useState(() => (presetCompanyId && presetCompanyId !== 'all' ? String(presetCompanyId) : ''));
   const [header, setHeader] = useState({ customer_id: '', order_date: today(), expected_date: '', notes: '' });
@@ -42,13 +46,19 @@ export default function BackorderForm() {
   const products = data?.products ?? [];
   const productMap = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
 
-  const err = (k) => errors[k]?.[0];
+  const err = (k) => fieldError(errors, k) ?? errors[k]?.[0];
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
   function onPickProduct(i, productId) {
     const p = productMap[productId];
     setLine(i, { product_id: productId, rate: p ? String(p.retail_price) : '' });
     setStockProductId(productId);
+  }
+
+  function onUseBranchQty(qty) {
+    const idx = lines.findIndex((l) => l.product_id === stockProductId);
+    if (idx < 0) return;
+    setLine(idx, { ordered_qty: String(qty) });
   }
 
   function onCompanyChange(id) {
@@ -62,8 +72,26 @@ export default function BackorderForm() {
   async function save() {
     if (!companyReady || !targetCompanyId) {
       setErrors({ company_id: ['Select a company first.'] });
+      toast.error('Select a company first.');
       return;
     }
+    const items = lines.filter((l) => l.product_id);
+    const nextErrors = {};
+    if (!header.customer_id) nextErrors.customer_id = ['Select a customer.'];
+    if (!header.order_date) nextErrors.order_date = ['Select an order date.'];
+    if (items.length === 0) nextErrors.items = ['Add at least one product.'];
+    items.forEach((l, i) => {
+      const q = Number(l.ordered_qty);
+      if (!Number.isFinite(q) || q <= 0) {
+        nextErrors[`items.${i}.ordered_qty`] = ['Enter how many units you need.'];
+      }
+    });
+    if (Object.keys(nextErrors).length) {
+      setErrors(nextErrors);
+      toast.error(Object.values(nextErrors)[0][0]);
+      return;
+    }
+
     setErrors({});
     setSaving(true);
     try {
@@ -72,16 +100,19 @@ export default function BackorderForm() {
         order_date: header.order_date,
         expected_date: header.expected_date || null,
         notes: header.notes || null,
-        items: lines.filter((l) => l.product_id).map((l) => ({
+        items: items.map((l) => ({
           product_id: l.product_id,
-          ordered_qty: Number(l.ordered_qty) || 0,
+          ordered_qty: Number(l.ordered_qty),
           rate: Number(l.rate) || 0,
         })),
       }, companyCfg);
-      const cid = res.data.data.company_id ?? targetCompanyId;
-      navigate(cid ? `/backorders/${res.data.data.id}?company_id=${cid}` : `/backorders/${res.data.data.id}`);
+      const parsed = parseShortageResponse(res);
+      if (parsed.message) toast.success(parsed.message, { duration: 5000 });
+      navigate(shortageNavigatePath(parsed, parsed.backorder?.company_id ?? targetCompanyId, can('transfers.view')));
     } catch (e) {
-      setErrors(e.response?.data?.errors ?? { _: [e.response?.data?.message ?? 'Could not save backorder.'] });
+      const mapped = e.response?.data?.errors ?? {};
+      setErrors(Object.keys(mapped).length ? mapped : { _: [apiMessage(e, 'Could not request stock.')] });
+      toast.error(apiMessage(e, 'Could not request stock.'));
     } finally {
       setSaving(false);
     }
@@ -111,7 +142,7 @@ export default function BackorderForm() {
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h1 className="page-title">New backorder</h1><p className="text-sm text-muted">Record shortage qty when stock is not available to fulfill now.</p></div>
+        <div><h1 className="page-title">New backorder</h1><p className="text-sm text-muted">Request qty that is not in this company. If another branch has stock, a transfer request is created instead.</p></div>
         <Button variant="outline" size="sm" onClick={() => navigate('/backorders')}><ArrowLeftIcon className="size-4" /> Back</Button>
       </div>
 
@@ -148,7 +179,7 @@ export default function BackorderForm() {
             <thead><tr className="border-b border-line text-left text-faint">
               <th className="microlabel px-3 py-2 font-semibold">Product</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Local stock</th>
-              <th className="microlabel px-3 py-2 text-right font-semibold">Backorder qty</th>
+              <th className="microlabel px-3 py-2 text-right font-semibold">Qty needed</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Rate ref.</th>
               <th className="px-3 py-2" />
             </tr></thead>
@@ -164,7 +195,20 @@ export default function BackorderForm() {
                       </Select>
                     </td>
                     <td className="tnum px-3 py-2 text-right text-muted">{p ? p.current_stock : '—'}</td>
-                    <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.ordered_qty} onChange={(e) => setLine(i, { ordered_qty: e.target.value })} /></td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number"
+                        min="0.001"
+                        step="0.001"
+                        className={numInput + (err(`items.${i}.ordered_qty`) ? ' border-danger' : '')}
+                        value={line.ordered_qty}
+                        placeholder="Qty needed"
+                        onChange={(e) => setLine(i, { ordered_qty: e.target.value })}
+                      />
+                      {err(`items.${i}.ordered_qty`) && (
+                        <p className="mt-1 text-xs text-danger">{err(`items.${i}.ordered_qty`)}</p>
+                      )}
+                    </td>
                     <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></td>
                     <td className="px-3 py-2">
                       <button onClick={() => setLines((pv) => (pv.length === 1 ? pv : pv.filter((_, idx) => idx !== i)))} className="rounded-md p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>
@@ -177,14 +221,17 @@ export default function BackorderForm() {
         </div>
         <div className="border-t border-line px-3 py-2">
           <Button variant="ghost" size="sm" onClick={() => setLines((p) => [...p, emptyLine()])}><PlusIcon className="size-4" /> Add line</Button>
+          {err('items') && <span className="ml-2 text-xs text-danger">{err('items')}</span>}
         </div>
       </Card>
 
-      {stockProductId && <CrossBranchStockPanel productId={stockProductId} />}
+      {stockProductId && (
+        <CrossBranchStockPanel productId={stockProductId} onUseQty={onUseBranchQty} />
+      )}
 
       <Card className="p-5">
         <Field label="Notes"><Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Optional" /></Field>
-        <Button className="mt-4" onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save backorder'}</Button>
+        <Button className="mt-4" onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Request stock'}</Button>
       </Card>
     </div>
   );

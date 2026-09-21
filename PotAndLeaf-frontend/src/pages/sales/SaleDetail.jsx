@@ -10,6 +10,7 @@ import { formatCurrency, formatDate } from '../../lib/format';
 import { printInvoice } from '../../lib/invoicePrint';
 import { downloadPdf } from '../../lib/pdfDownload';
 import { useToast } from '../../lib/toast';
+import { parseShortageResponse, shortageNavigatePath } from '../../lib/shortageResult';
 
 const statusTone = { draft: 'inactive', proforma: 'info', confirmed: 'active', cancelled: 'blocked' };
 const billKindLabel = { tax_invoice: 'Tax invoice', proforma: 'Proforma', complimentary: 'Complimentary' };
@@ -18,7 +19,7 @@ export default function SaleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { companyId } = useAuth();
+  const { companyId, can } = useAuth();
   const queryClient = useQueryClient();
   const toast = useToast();
   const headerCompanyId = searchParams.get('company_id') || companyId;
@@ -86,9 +87,10 @@ export default function SaleDetail() {
     mutationFn: () => api.post(`/sales/${id}/backorder`, {}, withCompany(recordCompanyId)),
     onSuccess: (res) => {
       invalidate();
-      toast.success(res?.data?.message || 'Backorder created.');
-      const boId = res?.data?.data?.id;
-      if (boId) navigate(`/backorders/${boId}?company_id=${recordCompanyId}`);
+      const parsed = parseShortageResponse(res);
+      toast.success(parsed.message || 'Shortage request saved.');
+      const path = shortageNavigatePath(parsed, recordCompanyId, can('transfers.view'));
+      if (path) navigate(path);
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Could not create backorder.'),
   });
@@ -117,7 +119,7 @@ export default function SaleDetail() {
           <Button variant="outline" size="sm" onClick={downloadInvoicePdf}><PrinterIcon className="size-4" /> PDF</Button>
           {s.status === 'draft' && s.customer_id && (
             <Button variant="outline" size="sm" onClick={() => backorderM.mutate()} disabled={backorderM.isPending}>
-              <ClockIcon className="size-4" /> Backorder shortage
+              <ClockIcon className="size-4" /> Request shortage
             </Button>
           )}
           {s.can?.whatsapp && (

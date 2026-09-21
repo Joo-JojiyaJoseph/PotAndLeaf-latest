@@ -8,6 +8,8 @@ import {
   ClipboardDocumentCheckIcon,
   ScissorsIcon,
   BeakerIcon,
+  BookOpenIcon,
+  BuildingLibraryIcon,
   CalculatorIcon,
   ChartBarIcon,
   CubeIcon,
@@ -60,6 +62,14 @@ const GROUPS = [
       // { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
       // { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
       // { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
+    ],
+  },
+  {
+    label: 'Accounts',
+    items: [
+      { key: 'cash-book', label: 'Cash Book', to: '/accounting/cash-book', icon: BanknotesIcon, permission: 'accounts.view' },
+      { key: 'bank-book', label: 'Bank Book', to: '/accounting/bank-book', icon: BuildingLibraryIcon, permission: 'accounts.view' },
+      { key: 'journal', label: 'Journal', to: '/accounting/journal', icon: BookOpenIcon, permission: 'accounts.view' },
     ],
   },
   {

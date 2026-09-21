@@ -14,14 +14,14 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,          // super-admin login
             AdminRoleSeeder::class,     // Administrator role
             StandardRolesSeeder::class, // Manager, Cashier, etc.
-            // BranchUserSeeder::class,
-            // LookupSeeder::class,
-            // LocationSeeder::class,
+            BranchUserSeeder::class,
+            LookupSeeder::class,
+            LocationSeeder::class,
             SupplierSeeder::class,
-            // ProductSeeder::class,
+            ProductSeeder::class,
             CustomerSeeder::class,
-            // DemoSeeder::class,
-            // SupplementalDataSeeder::class,
+            DemoSeeder::class,
+            SupplementalDataSeeder::class,
         ]);
     }
 }

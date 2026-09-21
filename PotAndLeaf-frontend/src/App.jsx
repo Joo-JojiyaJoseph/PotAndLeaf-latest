@@ -60,6 +60,8 @@ const AdvanceOrderDetail = lazy(() => import('./pages/advanceOrders/AdvanceOrder
 const BackordersList = lazy(() => import('./pages/backorders/BackordersList'));
 const BackorderForm = lazy(() => import('./pages/backorders/BackorderForm'));
 const BackorderDetail = lazy(() => import('./pages/backorders/BackorderDetail'));
+const AccountingBookPage = lazy(() => import('./pages/accounting/AccountingBookPage'));
+const AccountingVoucherForm = lazy(() => import('./pages/accounting/AccountingVoucherForm'));
 const PurchasesList = lazy(() => import('./pages/purchases/PurchasesList'));
 const PurchaseForm = lazy(() => import('./pages/purchases/PurchaseForm'));
 const PurchaseDetail = lazy(() => import('./pages/purchases/PurchaseDetail'));
@@ -155,6 +157,15 @@ export default function App() {
             <Route path="backorders" element={<PermissionRoute permission="backorder.view"><BackordersList /></PermissionRoute>} />
             <Route path="backorders/new" element={<PermissionRoute permission="backorder.create"><BackorderForm /></PermissionRoute>} />
             <Route path="backorders/:id" element={<PermissionRoute permission="backorder.view"><BackorderDetail /></PermissionRoute>} />
+            <Route path="accounting/cash-book" element={<PermissionRoute permission="accounts.view"><AccountingBookPage /></PermissionRoute>} />
+            <Route path="accounting/cash-book/new" element={<PermissionRoute permission="accounts.create"><AccountingVoucherForm /></PermissionRoute>} />
+            <Route path="accounting/cash-book/:id/edit" element={<PermissionRoute permission="accounts.update"><AccountingVoucherForm /></PermissionRoute>} />
+            <Route path="accounting/bank-book" element={<PermissionRoute permission="accounts.view"><AccountingBookPage /></PermissionRoute>} />
+            <Route path="accounting/bank-book/new" element={<PermissionRoute permission="accounts.create"><AccountingVoucherForm /></PermissionRoute>} />
+            <Route path="accounting/bank-book/:id/edit" element={<PermissionRoute permission="accounts.update"><AccountingVoucherForm /></PermissionRoute>} />
+            <Route path="accounting/journal" element={<PermissionRoute permission="accounts.view"><AccountingBookPage /></PermissionRoute>} />
+            <Route path="accounting/journal/new" element={<PermissionRoute permission="accounts.create"><AccountingVoucherForm /></PermissionRoute>} />
+            <Route path="accounting/journal/:id/edit" element={<PermissionRoute permission="accounts.update"><AccountingVoucherForm /></PermissionRoute>} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="soon/:module" element={<ComingSoon />} />
           </Route>

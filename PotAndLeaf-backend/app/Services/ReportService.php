@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Models\AccountingEntry;
 use App\Models\CommissionPayout;
 use App\Models\CompanySetting;
 use App\Models\Customer;
 use App\Models\CustomerReceipt;
+use App\Models\LedgerAccount;
 use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductBatch;
@@ -22,6 +24,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ReportService
 {
@@ -1193,6 +1196,9 @@ class ReportService
                 'credit' => (float) $p->amount,
             ]));
 
+        $accountKey = $openingSettingKey === 'cash_opening_balance' ? 'cash' : 'bank';
+        $this->appendManualBookRows($rows, $companyId, $from, $to, $accountKey);
+
         $balance = $opening;
         $sorted = $rows->sortBy(fn ($r) => $r['date'].$r['reference'])->values()->map(function ($row) use (&$balance) {
             $balance += $row['type'] === 'in' ? $row['amount'] : -$row['amount'];
@@ -1232,7 +1238,75 @@ class ReportService
         $outComm = (float) CommissionPayout::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'paid')->whereIn('mode', $modes)
             ->whereDate('payment_date', '<', $beforeDate)->sum('amount');
 
-        return $in - $outPay - $outComm;
+        $accountKey = in_array('cash', $modes, true) && count($modes) === 1 ? 'cash' : 'bank';
+        $manual = $this->manualBookNetBefore($companyId, $accountKey, $beforeDate);
+
+        return $in - $outPay - $outComm + $manual;
+    }
+
+    private function appendManualBookRows($rows, int|string|null $companyId, string $from, string $to, string $accountKey): void
+    {
+        if ($companyId === null || ! Schema::hasTable('accounting_transactions')) {
+            return;
+        }
+
+        $account = LedgerAccount::forCompany($companyId)->where('system_key', $accountKey)->first();
+        if (! $account) {
+            return;
+        }
+
+        AccountingEntry::query()
+            ->where('company_id', $companyId)
+            ->where('ledger_account_id', $account->id)
+            ->whereHas('voucher', function ($q) use ($from, $to) {
+                $q->posted()
+                    ->where(fn ($inner) => $inner->whereNull('source_type')->orWhere('source_type', 'manual'))
+                    ->whereDate('voucher_date', '>=', $from)
+                    ->whereDate('voucher_date', '<=', $to);
+            })
+            ->with('voucher')
+            ->get()
+            ->each(function (AccountingEntry $e) use ($rows) {
+                $debit = (float) $e->debit;
+                $credit = (float) $e->credit;
+                $v = $e->voucher;
+                $rows->push([
+                    'date' => $v->voucher_date->toDateString(),
+                    'type' => $debit > 0 ? 'in' : 'out',
+                    'reference' => $v->voucher_no,
+                    'party' => null,
+                    'description' => $e->narration ?: ($v->narration ?: 'Book entry'),
+                    'mode' => $v->book,
+                    'amount' => $debit > 0 ? $debit : $credit,
+                    'debit' => $debit,
+                    'credit' => $credit,
+                ]);
+            });
+    }
+
+    private function manualBookNetBefore(int|string|null $companyId, string $accountKey, string $beforeDate): float
+    {
+        if ($companyId === null || ! Schema::hasTable('accounting_transactions')) {
+            return 0;
+        }
+
+        $account = LedgerAccount::forCompany($companyId)->where('system_key', $accountKey)->first();
+        if (! $account) {
+            return 0;
+        }
+
+        $row = AccountingEntry::query()
+            ->where('company_id', $companyId)
+            ->where('ledger_account_id', $account->id)
+            ->whereHas('voucher', function ($q) use ($beforeDate) {
+                $q->posted()
+                    ->where(fn ($inner) => $inner->whereNull('source_type')->orWhere('source_type', 'manual'))
+                    ->whereDate('voucher_date', '<', $beforeDate);
+            })
+            ->selectRaw('COALESCE(SUM(debit),0) as d, COALESCE(SUM(credit),0) as c')
+            ->first();
+
+        return round((float) $row->d - (float) $row->c, 2);
     }
 
     private function openingSettingTotal(int|string|null $companyId, string $key): float

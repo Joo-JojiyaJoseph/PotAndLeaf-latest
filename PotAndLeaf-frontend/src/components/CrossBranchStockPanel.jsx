@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import api from '../lib/api';
 import { Card, Spinner } from './ui';
 
 /** Shows stock availability for the same SKU at other branches. */
-export default function CrossBranchStockPanel({ productId, sku }) {
+export default function CrossBranchStockPanel({ productId, sku, onUseQty }) {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['cross-branch-stock', productId, sku],
     queryFn: () => api.get('/inventory/stock/cross-branch', { params: productId ? { product_id: productId } : { sku } }).then((r) => r.data.data),
@@ -28,6 +27,7 @@ export default function CrossBranchStockPanel({ productId, sku }) {
             <th className="microlabel px-2 py-1.5 text-right font-semibold">Backorder res.</th>
             <th className="microlabel px-2 py-1.5 text-right font-semibold">In transit</th>
             <th className="microlabel py-1.5 pl-2 text-right font-semibold">ATP</th>
+            {onUseQty ? <th className="microlabel py-1.5 pl-2" /> : null}
           </tr></thead>
           <tbody>
             {data.branches.map((b) => (
@@ -37,6 +37,19 @@ export default function CrossBranchStockPanel({ productId, sku }) {
                 <td className="tnum px-2 py-1.5 text-right text-muted">{b.backorder_pending}</td>
                 <td className="tnum px-2 py-1.5 text-right text-muted">{b.in_transit_in}</td>
                 <td className="tnum py-1.5 pl-2 text-right font-medium">{b.available_to_promise}</td>
+                {onUseQty ? (
+                  <td className="py-1.5 pl-2 text-right">
+                    {!b.is_current_branch && b.available_to_promise > 0 ? (
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-leaf hover:underline"
+                        onClick={() => onUseQty(b.available_to_promise)}
+                      >
+                        Use {b.available_to_promise}
+                      </button>
+                    ) : null}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
@@ -44,8 +57,7 @@ export default function CrossBranchStockPanel({ productId, sku }) {
       </div>
       {others.length > 0 && (
         <p className="mt-3 text-xs text-muted">
-          Stock available at {others.map((b) => b.company_name).join(', ')} — use{' '}
-          <Link to="/transfers/new" className="text-leaf hover:underline">Transfers</Link> to move stock before fulfilling.
+          Enter the quantity you need, then click Request stock. Stock at {others.map((b) => b.company_name).join(', ')} becomes an inter-company transfer request. A backorder is created only if no branch has qty.
         </p>
       )}
     </Card>

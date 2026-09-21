@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Backorder\FulfillBackorderRequest;
 use App\Http\Requests\Backorder\StoreBackorderRequest;
 use App\Http\Resources\BackorderResource;
+use App\Http\Resources\StockTransferResource;
 use App\Models\Backorder;
 use App\Models\Customer;
 use App\Models\Location;
@@ -60,9 +61,9 @@ class BackorderController extends Controller
     public function store(StoreBackorderRequest $request): JsonResponse
     {
         $company = $this->company($request);
-        $order = $this->backorders->create($company->id, $request->validated(), $request->user()->id);
+        $result = $this->backorders->requestShortage($company->id, $request->validated(), $request->user()->id);
 
-        return $this->created(new BackorderResource($order), 'Backorder created.');
+        return $this->shortageCreated($result);
     }
 
     public function show(Request $request, Backorder $backorder): JsonResponse
@@ -97,9 +98,40 @@ class BackorderController extends Controller
     {
         $this->allow($request, 'backorder.create');
         $this->assertRecordCompany($request, $sale, writable: true);
-        $order = $this->backorders->createFromSale($sale, $request->user()->id);
+        $result = $this->backorders->createFromSale($sale, $request->user()->id);
 
-        return $this->created(new BackorderResource($order), 'Backorder created for shortage lines.');
+        return $this->shortageCreated($result, fromSale: true);
+    }
+
+    /**
+     * @param  array{backorder: ?Backorder, transfers: list<\App\Models\StockTransfer>, resolution: list<array<string,mixed>>}  $result
+     */
+    private function shortageCreated(array $result, bool $fromSale = false): JsonResponse
+    {
+        $backorder = $result['backorder'];
+        $transfers = $result['transfers'];
+
+        if ($backorder && $transfers === []) {
+            $msg = $fromSale ? 'Backorder created for shortage lines.' : 'Backorder created.';
+
+            return $this->created(new BackorderResource($backorder), $msg);
+        }
+
+        $payload = [
+            'backorder'          => $backorder ? (new BackorderResource($backorder))->resolve() : null,
+            'transfer_requests'  => collect($transfers)
+                ->map(fn ($t) => (new StockTransferResource($t))->resolve())
+                ->values()
+                ->all(),
+            'resolution'         => $result['resolution'],
+        ];
+
+        $message = match (true) {
+            $backorder !== null => 'Stock was found at another branch for some items. Transfer request(s) created; remaining qty recorded as a backorder.',
+            default => 'Stock is available at another branch. Inter-company transfer request created instead of a backorder.',
+        };
+
+        return $this->created($payload, $message);
     }
 
     private function company(Request $request)

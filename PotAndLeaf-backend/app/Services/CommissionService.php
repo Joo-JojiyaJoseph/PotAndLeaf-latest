@@ -156,7 +156,7 @@ class CommissionService
 
     public function recordPayout(int|string $companyId, array $data): CommissionPayout
     {
-        return CommissionPayout::updateOrCreate(
+        $payout = CommissionPayout::updateOrCreate(
             ['company_id' => $companyId, 'user_id' => $data['user_id'], 'period' => $data['period']],
             [
                 'sales_total'  => $data['sales_total'] ?? 0,
@@ -168,10 +168,19 @@ class CommissionService
                 'status'       => $data['status'] ?? 'paid',
             ],
         )->load('user:id,name');
+
+        if ($payout->status === 'paid') {
+            app(AccountingEngine::class)->postCommission($payout);
+        } else {
+            app(AccountingEngine::class)->cancelBySource('commission_payout', $payout->id);
+        }
+
+        return $payout;
     }
 
     public function deletePayout(CommissionPayout $payout): void
     {
+        app(AccountingEngine::class)->cancelBySource('commission_payout', $payout->id);
         $payout->delete();
     }
 }

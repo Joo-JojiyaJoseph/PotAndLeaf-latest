@@ -8,6 +8,8 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
+import { useToast } from '../../lib/toast';
+import { apiMessage } from '../../lib/formErrors';
 
 const TABS = [{ value: 'receivables', label: 'Receivables' }, { value: 'history', label: 'Receipt history' }];
 const statusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -25,7 +27,7 @@ function withPrefillParty(list, prefill, idKey, nameKey) {
     rows.unshift({
       id,
       name: prefill[nameKey] || 'Selected',
-      outstanding: 0,
+      outstanding: prefill.outstanding ?? 0,
       advance_balance: prefill.advance_balance ?? 0,
       company_id: prefill.company_id,
     });
@@ -35,6 +37,7 @@ function withPrefillParty(list, prefill, idKey, nameKey) {
 
 function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyParams }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(filterCompanyId);
   const [form, setForm] = useState({ customer_id: '', sale_id: '', amount: '', mode: 'cash', receipt_date: today(), reference: '', notes: '', is_advance: false });
   const [errors, setErrors] = useState({});
@@ -69,9 +72,14 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['customer-receipts'] });
       queryClient.invalidateQueries({ queryKey: ['receivables'] });
+      queryClient.invalidateQueries({ queryKey: ['accounting-book'] });
+      toast.success('Receipt recorded.');
       handleClose();
     },
-    onError: (err) => setErrors(err.response?.data?.errors ?? {}),
+    onError: (err) => {
+      setErrors(err.response?.data?.errors ?? {});
+      toast.error(apiMessage(err, 'Could not record receipt.'));
+    },
   });
 
   function handleClose() {
@@ -268,6 +276,7 @@ export default function ReceiptsList() {
     balance: row.balance,
     company_id: row.company_id,
     advance_balance: row.advance_balance,
+    outstanding: row.outstanding,
   });
   const openRecord = (row) => { setPrefill(row ? rowPrefill(row) : null); setModal(true); };
   const receivables = receivablesQ.data ?? [];

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AccountingController;
 use App\Http\Controllers\Api\ActivityMonitoringController;
 use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\DamageEntryController;
@@ -140,6 +141,16 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::delete('customer-receipts/{customerReceipt}', [CustomerReceiptController::class, 'destroy']);
 
         // Module 08 — Supplier payments
+        // Accounting books — cash, bank, journal
+        Route::get('accounting/form-data', [AccountingController::class, 'formData']);
+        Route::get('accounting/cash-book', [AccountingController::class, 'cashBook']);
+        Route::get('accounting/bank-book', [AccountingController::class, 'bankBook']);
+        Route::get('accounting/journal', [AccountingController::class, 'journal']);
+        Route::get('accounting/vouchers/{accountingTransaction}', [AccountingController::class, 'show']);
+        Route::post('accounting/vouchers', [AccountingController::class, 'store']);
+        Route::put('accounting/vouchers/{accountingTransaction}', [AccountingController::class, 'update']);
+        Route::delete('accounting/vouchers/{accountingTransaction}', [AccountingController::class, 'destroy']);
+
         Route::get('supplier-payments/form-data', [SupplierPaymentController::class, 'formData']);
         Route::get('supplier-payments/payables', [SupplierPaymentController::class, 'payables']);
         Route::get('supplier-payments', [SupplierPaymentController::class, 'index']);

@@ -13,7 +13,10 @@ use Illuminate\Validation\ValidationException;
 
 class BackorderService
 {
-    public function __construct(private readonly CreateSale $createSale) {}
+    public function __construct(
+        private readonly CreateSale $createSale,
+        private readonly ShortageResolutionService $shortage,
+    ) {}
 
     public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
@@ -36,49 +39,103 @@ class BackorderService
             ->first();
     }
 
+    /**
+     * Request unavailable qty: create inter-company transfer requests where
+     * another branch has stock; only leftover qty becomes a backorder.
+     *
+     * @param  array<string,mixed>  $data
+     * @return array{backorder: ?Backorder, transfers: list<\App\Models\StockTransfer>, resolution: list<array<string,mixed>>}
+     */
+    public function requestShortage(int|string $companyId, array $data, ?int $userId = null): array
+    {
+        foreach ($data['items'] as $i => $item) {
+            if ((float) $item['ordered_qty'] <= 0) {
+                throw ValidationException::withMessages(["items.{$i}.ordered_qty" => 'Quantity must be greater than zero.']);
+            }
+        }
+
+        return DB::transaction(function () use ($companyId, $data, $userId) {
+            $resolved = $this->shortage->allocate($companyId, $data['items'], $userId, [
+                'sale_no' => $data['sale_no'] ?? null,
+                'notes'   => $data['notes'] ?? null,
+            ]);
+
+            if ($resolved['transfers'] === [] && $resolved['backorderItems'] === []) {
+                throw ValidationException::withMessages([
+                    'items' => 'Enter a quantity greater than zero for at least one product.',
+                ]);
+            }
+
+            $backorder = null;
+            if ($resolved['backorderItems'] !== []) {
+                $persist = $data;
+                $persist['items'] = $resolved['backorderItems'];
+                $backorder = $this->persist($companyId, $persist);
+            }
+
+            return [
+                'backorder'  => $backorder,
+                'transfers'  => $resolved['transfers'],
+                'resolution' => $resolved['resolution'],
+            ];
+        });
+    }
+
     /** @param array<string,mixed> $data */
     public function create(int|string $companyId, array $data, ?int $userId = null): Backorder
+    {
+        foreach ($data['items'] as $i => $item) {
+            if ((float) $item['ordered_qty'] <= 0) {
+                throw ValidationException::withMessages(["items.{$i}.ordered_qty" => 'Quantity must be greater than zero.']);
+            }
+        }
+
+        return DB::transaction(fn () => $this->persist($companyId, $data));
+    }
+
+    /** @param array<string,mixed> $data */
+    private function persist(int|string $companyId, array $data): Backorder
     {
         $names = Product::forCompany($companyId)
             ->whereIn('id', collect($data['items'])->pluck('product_id')->filter())
             ->pluck('name', 'id');
 
         $rows = [];
-        foreach ($data['items'] as $i => $item) {
-            $qty = (float) $item['ordered_qty'];
-            if ($qty <= 0) {
-                throw ValidationException::withMessages(["items.{$i}.ordered_qty" => 'Quantity must be greater than zero.']);
-            }
+        foreach ($data['items'] as $item) {
             $rows[] = [
                 'product_id'    => $item['product_id'],
-                'product_name'  => $names[$item['product_id']] ?? 'Item',
-                'ordered_qty'   => $qty,
+                'sale_item_id'  => $item['sale_item_id'] ?? null,
+                'product_name'  => $item['product_name'] ?? ($names[$item['product_id']] ?? 'Item'),
+                'ordered_qty'   => (float) $item['ordered_qty'],
                 'fulfilled_qty' => 0,
                 'cancelled_qty' => 0,
                 'rate'          => (float) ($item['rate'] ?? 0),
             ];
         }
 
-        return DB::transaction(function () use ($companyId, $data, $rows) {
-            $order = Backorder::create([
-                'company_id'    => $companyId,
-                'customer_id'   => $data['customer_id'],
-                'location_id'   => $data['location_id'] ?? null,
-                'sale_id'       => $data['sale_id'] ?? null,
-                'order_no'      => $this->nextOrderNo($companyId),
-                'order_date'    => $data['order_date'],
-                'expected_date' => $data['expected_date'] ?? null,
-                'status'        => 'open',
-                'notes'         => $data['notes'] ?? null,
-            ]);
-            $order->items()->createMany($rows);
+        $order = Backorder::create([
+            'company_id'    => $companyId,
+            'customer_id'   => $data['customer_id'],
+            'location_id'   => $data['location_id'] ?? null,
+            'sale_id'       => $data['sale_id'] ?? null,
+            'order_no'      => $this->nextOrderNo($companyId),
+            'order_date'    => $data['order_date'],
+            'expected_date' => $data['expected_date'] ?? null,
+            'status'        => 'open',
+            'notes'         => $data['notes'] ?? null,
+        ]);
+        $order->items()->createMany($rows);
 
-            return $order->load(['items', 'customer:id,name,type']);
-        });
+        return $order->load(['items', 'customer:id,name,type']);
     }
 
-    /** Create backorder lines for shortage on a draft sale. */
-    public function createFromSale(Sale $sale, ?int $userId = null): Backorder
+    /**
+     * Resolve shortage on a draft sale: transfer from other branches when
+     * stock exists there, otherwise backorder the remainder.
+     *
+     * @return array{backorder: ?Backorder, transfers: list<\App\Models\StockTransfer>, resolution: list<array<string,mixed>>}
+     */
+    public function createFromSale(Sale $sale, ?int $userId = null): array
     {
         if (! $sale->isDraft()) {
             throw ValidationException::withMessages(['status' => 'Backorders can only be created from draft sales.']);
@@ -119,10 +176,11 @@ class BackorderService
             throw ValidationException::withMessages(['items' => 'All line items have sufficient stock — no backorder needed.']);
         }
 
-        return $this->create($sale->company_id, [
+        return $this->requestShortage($sale->company_id, [
             'customer_id' => $sale->customer_id,
             'location_id' => $sale->location_id,
             'sale_id'     => $sale->id,
+            'sale_no'     => $sale->sale_no,
             'order_date'  => now()->toDateString(),
             'notes'       => "Shortage from draft sale {$sale->sale_no}",
             'items'       => $shortageRows,

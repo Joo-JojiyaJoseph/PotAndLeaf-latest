@@ -8,6 +8,8 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
+import { useToast } from '../../lib/toast';
+import { apiMessage } from '../../lib/formErrors';
 
 const TABS = [{ value: 'payables', label: 'Payables' }, { value: 'history', label: 'Payment history' }];
 const payStatusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -25,7 +27,7 @@ function withPrefillParty(list, prefill, idKey, nameKey) {
     rows.unshift({
       id,
       name: prefill[nameKey] || 'Selected',
-      outstanding: 0,
+      outstanding: prefill.outstanding ?? 0,
       advance_balance: prefill.advance_balance ?? 0,
       company_id: prefill.company_id,
     });
@@ -35,6 +37,7 @@ function withPrefillParty(list, prefill, idKey, nameKey) {
 
 function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyParams }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(filterCompanyId);
   const [form, setForm] = useState({ supplier_id: '', purchase_id: '', amount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false });
   const [errors, setErrors] = useState({});
@@ -72,9 +75,14 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
       queryClient.invalidateQueries({ queryKey: ['supplier-payments'] });
       queryClient.invalidateQueries({ queryKey: ['payables'] });
       queryClient.invalidateQueries({ queryKey: ['purchases'] });
+      queryClient.invalidateQueries({ queryKey: ['accounting-book'] });
+      toast.success('Payment recorded.');
       handleClose();
     },
-    onError: (err) => setErrors(err.response?.data?.errors ?? {}),
+    onError: (err) => {
+      setErrors(err.response?.data?.errors ?? {});
+      toast.error(apiMessage(err, 'Could not record payment.'));
+    },
   });
 
   function handleClose() {
@@ -286,6 +294,7 @@ export default function PaymentsList() {
     balance: row.balance,
     company_id: row.company_id,
     advance_balance: row.advance_balance,
+    outstanding: row.outstanding,
   });
   const openRecord = (row) => { setPrefill(row ? rowPrefill(row) : null); setModal(true); };
   const payables = payablesQ.data ?? [];

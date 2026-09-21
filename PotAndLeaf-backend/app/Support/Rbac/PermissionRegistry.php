@@ -121,6 +121,12 @@ class PermissionRegistry
                 'api.view'   => 'View company API keys',
                 'api.manage' => 'Create, regenerate and revoke company API keys',
             ],
+            'Accounts' => [
+                'accounts.view'   => 'View cash book, bank book & journal',
+                'accounts.create' => 'Add accounting book entries',
+                'accounts.update' => 'Edit accounting book entries',
+                'accounts.delete' => 'Cancel accounting book entries',
+            ],
             'Customer Receipts' => [
                 'receipts.view'   => 'View customer receipts',
                 'receipts.create' => 'Record customer receipts',

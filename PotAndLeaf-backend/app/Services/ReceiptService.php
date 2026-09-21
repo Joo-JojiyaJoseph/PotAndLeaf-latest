@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\CustomerReceipt;
 use App\Models\CustomerReceiptAllocation;
 use App\Models\Sale;
+use App\Services\AccountingEngine;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -85,7 +86,10 @@ class ReceiptService
                 $this->syncSalePaid($data['sale_id']);
             }
 
-            return $receipt->load(['customer:id,name', 'sale:id,sale_no', 'allocations']);
+            $receipt = $receipt->load(['customer:id,name', 'sale:id,sale_no', 'allocations']);
+            app(AccountingEngine::class)->postReceipt($receipt);
+
+            return $receipt;
         });
     }
 
@@ -113,7 +117,10 @@ class ReceiptService
                 $customer->save();
             }
 
-            return $receipt->load(['customer:id,name']);
+            $receipt = $receipt->load(['customer:id,name']);
+            app(AccountingEngine::class)->postReceipt($receipt);
+
+            return $receipt;
         });
     }
 
@@ -127,6 +134,7 @@ class ReceiptService
                     $customer->advance_balance = max(0, (float) $customer->advance_balance - (float) $receipt->amount);
                     $customer->save();
                 }
+                app(AccountingEngine::class)->cancelBySource('customer_receipt', $receipt->id);
                 $receipt->delete();
             });
         }
@@ -151,7 +159,7 @@ class ReceiptService
             ? $sale->payment_mode
             : 'cash';
 
-        return CustomerReceipt::create([
+        $receipt = CustomerReceipt::create([
             'company_id'   => $sale->company_id,
             'customer_id'  => $sale->customer_id,
             'sale_id'      => $sale->id,
@@ -162,12 +170,19 @@ class ReceiptService
             'notes'        => "Receipt for sale {$sale->sale_no}",
             'created_by'   => $userId,
         ]);
+        app(AccountingEngine::class)->postReceipt($receipt);
+
+        return $receipt;
     }
 
     /** Remove auto receipts from a cancelled sale without reversing outstanding (none was adjusted). */
     public function voidForSale(Sale $sale): void
     {
-        CustomerReceipt::query()->where('sale_id', $sale->id)->get()->each->delete();
+        $receipts = CustomerReceipt::query()->where('sale_id', $sale->id)->get();
+        foreach ($receipts as $receipt) {
+            app(AccountingEngine::class)->cancelBySource('customer_receipt', $receipt->id);
+            $receipt->delete();
+        }
     }
 
     /**
@@ -260,6 +275,7 @@ class ReceiptService
                 $customer->save();
             }
 
+            app(AccountingEngine::class)->cancelBySource('customer_receipt', $receipt->id);
             $receipt->allocations()->delete();
             $receipt->delete();
 
@@ -277,7 +293,7 @@ class ReceiptService
             ->where('status', 'confirmed')
             ->whereNotNull('customer_id')
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
-            ->with('customer:id,name,credit_days,advance_balance')
+            ->with('customer:id,name,credit_days,advance_balance,outstanding')
             ->withSum('customerReceipts as received_sum', 'amount')
             ->withSum('receiptAllocations as allocated_sum', 'amount')
             ->orderByDesc('sale_date')
@@ -299,6 +315,7 @@ class ReceiptService
                     'customer_id'      => $s->customer_id,
                     'customer_name'    => $s->customer?->name,
                     'advance_balance'  => round((float) ($s->customer?->advance_balance ?? 0), 2),
+                    'outstanding'      => round((float) ($s->customer?->outstanding ?? 0), 2),
                     'invoice_total'    => $invoice,
                     'credit_amount' => $invoice,
                     'received'      => round($received, 2),

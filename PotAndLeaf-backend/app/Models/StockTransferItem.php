@@ -35,6 +35,11 @@ class StockTransferItem extends Model
         return (float) $this->qty;
     }
 
+    public function stockTransfer(): BelongsTo
+    {
+        return $this->belongsTo(StockTransfer::class);
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);

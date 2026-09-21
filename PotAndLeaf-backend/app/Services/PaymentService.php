@@ -7,6 +7,7 @@ use App\Models\Purchase;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Models\SupplierPaymentAllocation;
+use App\Services\AccountingEngine;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -100,7 +101,10 @@ class PaymentService
 
             $this->activity->log($companyId, $userId, 'create', 'payment', 'supplier_payment', $payment->id, "Payment {$payment->payment_no} recorded");
 
-            return $payment->load(['supplier:id,name', 'purchase:id,purchase_no', 'allocations']);
+            $payment = $payment->load(['supplier:id,name', 'purchase:id,purchase_no', 'allocations']);
+            app(AccountingEngine::class)->postPayment($payment);
+
+            return $payment;
         });
     }
 
@@ -191,6 +195,7 @@ class PaymentService
                 }
                 $supplier->save();
             }
+            app(AccountingEngine::class)->cancelBySource('supplier_payment', $payment->id);
             $payment->allocations()->delete();
             $payment->delete();
 
@@ -209,7 +214,7 @@ class PaymentService
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('status', 'confirmed')
             ->when(filled($supplierId), fn ($q) => $q->where('supplier_id', $supplierId))
-            ->with('supplier:id,name,credit_days,advance_balance')
+            ->with('supplier:id,name,credit_days,advance_balance,outstanding')
             ->withSum('supplierPayments as paid_sum', 'amount')
             ->withSum('paymentAllocations as allocated_sum', 'amount')
             ->orderByDesc('purchase_date')
@@ -228,6 +233,7 @@ class PaymentService
                     'supplier_id'     => $p->supplier_id,
                     'supplier_name'   => $p->supplier?->name,
                     'advance_balance' => round((float) ($p->supplier?->advance_balance ?? 0), 2),
+                    'outstanding'     => round((float) ($p->supplier?->outstanding ?? 0), 2),
                     'invoice_total' => $total,
                     'paid'          => round($paid, 2),
                     'balance'       => $balance,

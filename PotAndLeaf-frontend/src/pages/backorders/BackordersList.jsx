@@ -60,7 +60,7 @@ export default function BackordersList() {
       <Card className="overflow-hidden">
         {isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
           : isError ? <div className="px-4 py-12 text-center text-sm text-muted">{loadError}</div>
-          : rows.length === 0 ? <div className="px-4 py-16 text-center"><p className="text-sm font-medium">No backorders</p><p className="mt-1 text-sm text-muted">Create one when ordered qty exceeds available stock.</p></div>
+          : rows.length === 0 ? <div className="px-4 py-16 text-center"><p className="text-sm font-medium">No backorders</p><p className="mt-1 text-sm text-muted">Created only when an item is unavailable in every company. Other-branch stock becomes a transfer request instead.</p></div>
           : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
