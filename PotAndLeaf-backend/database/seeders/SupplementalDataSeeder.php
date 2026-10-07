@@ -150,6 +150,24 @@ class SupplementalDataSeeder extends Seeder
             ['company_id' => $company->id, 'name' => 'New plant care reminder'],
             ['product_id' => $product->id, 'days_after_purchase' => 15, 'season_months' => [6, 7, 8], 'message_template' => 'Remember to water and feed your new plant.', 'max_sends_per_customer' => 1, 'is_active' => true],
         );
+        foreach ([
+            ['Summer watering', 'summer', 'Water deeply in the early morning. Mulch the pot so the soil does not bake, and move tender plants out of harsh afternoon sun.'],
+            ['Monsoon drainage', 'monsoon', 'Check that pots drain freely. Tip out saucers after heavy rain, and watch for fungus on leaves during humid weeks.'],
+            ['Winter protection', 'winter', 'Reduce watering. Keep tropical plants away from cold drafts, and hold fertiliser until the weather warms.'],
+        ] as [$name, $season, $message]) {
+            SeasonalCareRule::updateOrCreate(
+                ['company_id' => $company->id, 'name' => $name],
+                [
+                    'category_id' => $categoryId,
+                    'season' => $season,
+                    'timing' => 'season_start',
+                    'days_after_purchase' => 0,
+                    'message_template' => "Hello {customer_name}, {$message} — {company_name}",
+                    'max_sends_per_customer' => 1,
+                    'is_active' => true,
+                ],
+            );
+        }
         $sale = DB::table('sales')->where('company_id', $company->id)->where('customer_id', $customer->id)->first();
         if ($sale) {
             SeasonalCareSend::firstOrCreate(['seasonal_care_rule_id' => $careRule->id, 'customer_id' => $customer->id, 'sale_id' => $sale->id], ['sent_at' => $now->copy()->subDay()]);

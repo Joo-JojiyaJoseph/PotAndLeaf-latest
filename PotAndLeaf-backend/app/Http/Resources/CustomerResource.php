@@ -38,6 +38,7 @@ class CustomerResource extends JsonResource
             'outstanding'     => (float) $this->outstanding,
             'advance_balance' => (float) $this->advance_balance,
             'loyalty_points'  => (int) $this->loyalty_points,
+            'whatsapp_opt_in' => $this->whatsapp_opt_in !== false,
             'notes'           => $this->notes,
             'status'          => $this->status?->value,
             'can'             => [

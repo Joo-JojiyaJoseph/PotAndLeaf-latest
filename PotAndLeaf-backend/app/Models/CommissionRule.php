@@ -14,6 +14,7 @@ class CommissionRule extends Model
         'company_id', 'user_id', 'location_id', 'rate_type', 'base_percent', 'per_unit_amount',
         'monthly_target', 'target_bonus', 'notes', 'is_active', 'is_supervisor',
         'effective_from', 'effective_to', 'max_commission', 'eligible_bill_kinds',
+        'tier_period', 'tier_mode', 'target_scope',
     ];
 
     protected function casts(): array

@@ -280,6 +280,14 @@ class TransferService
                         'out',
                         $dispatchQty,
                     );
+                    $this->supervisorCommission->accrue(
+                        $transfer->company_id,
+                        $item->product_id,
+                        $dispatchQty,
+                        'transfer',
+                        'stock-transfer',
+                        $transfer->id,
+                    );
                 } else {
                     $product = Product::forCompany($transfer->company_id)->lockForUpdate()->find($item->product_id);
                     if (! $product) {

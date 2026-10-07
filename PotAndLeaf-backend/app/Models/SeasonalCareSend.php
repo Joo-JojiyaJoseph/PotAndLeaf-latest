@@ -10,7 +10,9 @@ class SeasonalCareSend extends Model
 {
     use HasUuids;
 
-    protected $fillable = ['seasonal_care_rule_id', 'customer_id', 'sale_id', 'sent_at'];
+    protected $fillable = [
+        'seasonal_care_rule_id', 'customer_id', 'sale_id', 'product_id', 'season', 'season_year', 'sent_at',
+    ];
 
     protected function casts(): array
     {

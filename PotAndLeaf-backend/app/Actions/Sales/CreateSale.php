@@ -49,6 +49,12 @@ class CreateSale
             if (! $customer) {
                 throw ValidationException::withMessages(['loyalty_points_redeemed' => 'Select a customer to redeem loyalty points.']);
             }
+            $min = $this->loyalty->minimumRedeemPoints($companyId);
+            if ($min > 0 && $redeemPoints < $min) {
+                throw ValidationException::withMessages([
+                    'loyalty_points_redeemed' => "Redeem at least {$min} points.",
+                ]);
+            }
             $max = $this->loyalty->maxRedeemable($companyId, $customer, $billTotal);
             if ($redeemPoints > $max) {
                 throw ValidationException::withMessages([

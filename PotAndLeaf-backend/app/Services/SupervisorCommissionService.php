@@ -7,6 +7,7 @@ use App\Models\ProductionOrder;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SupervisorCommissionEntry;
+use App\Models\SupervisorCommissionRate;
 use Illuminate\Support\Collection;
 
 /**
@@ -63,7 +64,24 @@ class SupervisorCommissionService
 
             $product = Product::find($productId);
             $value = $unitValue ?? (float) ($order->output_unit_cost ?: $product?->cost_price ?: $product?->retail_price ?: 0);
-            $amount = $this->calculateAmount($rule, $take, $value);
+            $rate = $this->resolveRate($companyId, (int) $order->supervisor_id, $product);
+            $amount = $this->calculateAmount($rule, $take, $value, $rate);
+
+            $idempotencyKey = hash('sha256', implode('|', [
+                $companyId,
+                $order->id,
+                $triggerEvent,
+                $referenceType,
+                (string) $referenceId,
+                $productId,
+            ]));
+
+            if (SupervisorCommissionEntry::query()->where('idempotency_key', $idempotencyKey)->exists()) {
+                $order->commission_pending_qty = round((float) $order->commission_pending_qty - $take, 3);
+                $order->save();
+                $remaining = round($remaining - $take, 3);
+                continue;
+            }
 
             $entry = SupervisorCommissionEntry::create([
                 'company_id'          => $companyId,
@@ -78,6 +96,7 @@ class SupervisorCommissionService
                 'amount'              => $amount,
                 'accrued_date'        => now()->toDateString(),
                 'status'              => 'accrued',
+                'idempotency_key'     => $idempotencyKey,
             ]);
 
             $order->commission_pending_qty = round((float) $order->commission_pending_qty - $take, 3);
@@ -221,8 +240,36 @@ class SupervisorCommissionService
             ->paginate(min((int) ($filters['per_page'] ?? 30), 100));
     }
 
-    private function calculateAmount(?CommissionRule $rule, float $qty, float $unitValue): float
+    private function resolveRate(int|string $companyId, int $userId, ?Product $product): ?SupervisorCommissionRate
     {
+        if (! $product) {
+            return null;
+        }
+
+        $date = now()->toDateString();
+        $rates = SupervisorCommissionRate::forCompany($companyId)
+            ->where('user_id', $userId)
+            ->activeOn($date)
+            ->get();
+
+        $byProduct = $rates->first(fn (SupervisorCommissionRate $rate) => $rate->product_id === $product->id);
+        if ($byProduct) {
+            return $byProduct;
+        }
+
+        return $rates->first(fn (SupervisorCommissionRate $rate) => ! $rate->product_id && $rate->category_id && $rate->category_id === $product->category_id);
+    }
+
+    private function calculateAmount(?CommissionRule $rule, float $qty, float $unitValue, ?SupervisorCommissionRate $rate = null): float
+    {
+        if ($rate) {
+            if ($rate->rate_type === 'per_unit') {
+                return round($qty * (float) $rate->rate, 2);
+            }
+
+            return round($qty * $unitValue * (float) $rate->rate / 100, 2);
+        }
+
         if (! $rule) {
             return 0.0;
         }

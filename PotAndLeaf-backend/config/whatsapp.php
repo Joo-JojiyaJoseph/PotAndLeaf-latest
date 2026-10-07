@@ -38,6 +38,8 @@ return [
 
     'templates' => [
         'rental_invoice' => env('WHATSAPP_TEMPLATE_RENTAL_INVOICE', 'rental_invoice'),
+        'eod_commission' => env('WHATSAPP_TEMPLATE_EOD_COMMISSION', 'eod_commission'),
+        'seasonal_care'  => env('WHATSAPP_TEMPLATE_SEASONAL_CARE', 'seasonal_care'),
     ],
 
 ];

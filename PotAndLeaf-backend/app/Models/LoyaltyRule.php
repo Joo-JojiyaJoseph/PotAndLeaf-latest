@@ -12,7 +12,7 @@ class LoyaltyRule extends Model
 
     protected $fillable = [
         'company_id', 'name', 'rule_type', 'product_id', 'category_id', 'customer_tier',
-        'earn_rupees', 'earn_points', 'bonus_points_per_unit', 'min_purchase',
+        'earn_rupees', 'earn_points', 'bonus_points_per_unit', 'points_multiplier', 'min_purchase',
         'max_points_per_transaction', 'effective_from', 'effective_to', 'priority', 'is_active',
     ];
 
@@ -27,6 +27,7 @@ class LoyaltyRule extends Model
             'max_points_per_transaction'   => 'integer',
             'earn_points'                  => 'integer',
             'bonus_points_per_unit'        => 'integer',
+            'points_multiplier'            => 'decimal:3',
             'priority'                     => 'integer',
         ];
     }

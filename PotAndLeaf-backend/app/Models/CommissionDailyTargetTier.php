@@ -10,13 +10,14 @@ class CommissionDailyTargetTier extends Model
 {
     use HasUuids;
 
-    protected $fillable = ['commission_rule_id', 'min_amount', 'bonus_amount', 'sort_order'];
+    protected $fillable = ['commission_rule_id', 'min_amount', 'bonus_amount', 'bonus_percent', 'sort_order'];
 
     protected function casts(): array
     {
         return [
-            'min_amount'   => 'decimal:2',
-            'bonus_amount' => 'decimal:2',
+            'min_amount'    => 'decimal:2',
+            'bonus_amount'  => 'decimal:2',
+            'bonus_percent' => 'decimal:3',
         ];
     }
 

@@ -111,13 +111,23 @@ class LoyaltyEngine
 
     private function productRulePoints(Sale $sale, LoyaltyRule $rule): int
     {
-        if (! $rule->product_id || (int) $rule->bonus_points_per_unit <= 0) {
+        if (! $rule->product_id) {
             return 0;
         }
 
-        $qty = (float) $sale->items->where('product_id', $rule->product_id)->sum('qty');
+        $items = $sale->items->where('product_id', $rule->product_id);
+        $bonus = (int) $rule->bonus_points_per_unit > 0
+            ? (int) floor((float) $items->sum('qty')) * (int) $rule->bonus_points_per_unit
+            : 0;
 
-        return (int) floor($qty) * (int) $rule->bonus_points_per_unit;
+        $spend = 0;
+        if ((float) ($rule->points_multiplier ?? 1) > 1) {
+            $base = (float) $items->sum(fn ($item) => max(0, (float) $item->taxable_value));
+            $rupees = max(1, (float) $rule->earn_rupees);
+            $spend = (int) floor($base / $rupees) * max(1, (int) $rule->earn_points);
+        }
+
+        return $this->scalePoints($bonus + $spend, $rule);
     }
 
     private function categoryRulePoints(Sale $sale, LoyaltyRule $rule, $productMeta): int
@@ -147,12 +157,22 @@ class LoyaltyEngine
                 }
             }
 
-            return (int) floor($qty) * (int) $rule->bonus_points_per_unit;
+            return $this->scalePoints((int) floor($qty) * (int) $rule->bonus_points_per_unit, $rule);
         }
 
         $rupees = max(1, (float) $rule->earn_rupees);
 
-        return (int) floor($base / $rupees) * (int) $rule->earn_points;
+        return $this->scalePoints((int) floor($base / $rupees) * (int) $rule->earn_points, $rule);
+    }
+
+    private function scalePoints(int $points, LoyaltyRule $rule): int
+    {
+        $multiplier = (float) ($rule->points_multiplier ?? 1);
+        if ($points <= 0 || $multiplier <= 1) {
+            return $points;
+        }
+
+        return (int) floor($points * $multiplier);
     }
 
     private function fallbackPoints(int|string $companyId, float $billBase): int

@@ -2,6 +2,7 @@
 
 namespace App\Services\WhatsApp;
 
+use App\Contracts\WhatsAppSender;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -11,7 +12,7 @@ use Throwable;
  * order: WATI, then Twilio, then a logging "stub" so local/dev environments
  * fail gracefully instead of erroring.
  */
-class WhatsAppService
+class WhatsAppService implements WhatsAppSender
 {
     public function provider(): string
     {

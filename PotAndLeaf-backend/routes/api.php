@@ -113,6 +113,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('commission/rules', [CommissionController::class, 'rules']);
         Route::post('commission/rules', [CommissionController::class, 'upsertRule']);
         Route::get('commission/compute', [CommissionController::class, 'compute']);
+        Route::get('commission/summary', [CommissionController::class, 'summary']);
         Route::get('commission/supervisor-entries', [CommissionController::class, 'supervisorEntries']);
         Route::get('commission/payouts', [CommissionController::class, 'payouts']);
         Route::post('commission/payouts', [CommissionController::class, 'storePayout']);
@@ -126,6 +127,9 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('commission/promotions', [CommissionController::class, 'storePromotion']);
         Route::get('commission/seasonal-care-rules', [CommissionController::class, 'seasonalCareRules']);
         Route::post('commission/seasonal-care-rules', [CommissionController::class, 'storeSeasonalCareRule']);
+        Route::get('commission/seasonal-care-sends', [CommissionController::class, 'seasonalCareSends']);
+        Route::get('commission/supervisor-rates', [CommissionController::class, 'supervisorRates']);
+        Route::post('commission/supervisor-rates', [CommissionController::class, 'storeSupervisorRate']);
         Route::get('commission/whatsapp-logs', [CommissionController::class, 'whatsappLogs']);
         Route::get('commission/whatsapp-templates', [CommissionController::class, 'whatsappTemplates']);
         Route::post('commission/whatsapp-templates', [CommissionController::class, 'storeWhatsAppTemplate']);
@@ -183,6 +187,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('customers', [CustomerController::class, 'index']);
         Route::get('loyalty', [LoyaltyController::class, 'index']);
         Route::post('loyalty/adjust', [LoyaltyController::class, 'adjust']);
+        Route::get('loyalty/customers/{customer}', [LoyaltyController::class, 'customer']);
         Route::get('loyalty/rules', [LoyaltyController::class, 'rules']);
         Route::post('loyalty/rules', [LoyaltyController::class, 'storeRule']);
         Route::delete('loyalty/rules/{loyaltyRule}', [LoyaltyController::class, 'destroyRule']);

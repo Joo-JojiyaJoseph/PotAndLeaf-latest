@@ -18,7 +18,7 @@ class Customer extends Model
         'company_id', 'customer_code', 'name', 'type', 'email', 'phone', 'whatsapp',
         'gst_number', 'address_line1', 'address_line2', 'city', 'state', 'pincode',
         'credit_days', 'credit_limit', 'opening_balance', 'outstanding', 'advance_balance',
-        'loyalty_points', 'loyalty_tier', 'notes', 'status', 'photo',];
+        'loyalty_points', 'loyalty_tier', 'whatsapp_opt_in', 'notes', 'status', 'photo',];
 
     protected function casts(): array
     {
@@ -30,6 +30,7 @@ class Customer extends Model
             'outstanding'     => 'decimal:2',
             'advance_balance' => 'decimal:2',
             'loyalty_points'  => 'integer',
+            'whatsapp_opt_in' => 'boolean',
         ];
     }
 

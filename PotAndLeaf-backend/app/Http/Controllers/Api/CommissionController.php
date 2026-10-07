@@ -12,6 +12,8 @@ use App\Models\CommissionPromotion;
 use App\Models\CommissionRule;
 use App\Models\CommissionTier;
 use App\Models\CommissionTransaction;
+use App\Models\SeasonalCareSend;
+use App\Models\SupervisorCommissionRate;
 use App\Models\CommissionPayout;
 use App\Models\Location;
 use App\Models\ManagerCommissionRule;
@@ -84,20 +86,41 @@ class CommissionController extends Controller
 
     public function compute(Request $request): JsonResponse
     {
-        $this->allow($request, 'commission.view');
         $validated = $request->validate([
             'user_id' => ['required', 'integer'],
             'period'  => ['required', 'regex:/^\d{4}-\d{2}$/'],
         ]);
+        $this->assertCanViewStaff($request, (int) $validated['user_id']);
 
         return $this->ok($this->commission->compute($this->listCompanyId($request), (int) $validated['user_id'], $validated['period']));
     }
 
+    public function summary(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'user_id' => ['required', 'integer'],
+            'from'    => ['required', 'date'],
+            'to'      => ['required', 'date', 'after_or_equal:from'],
+        ]);
+        $this->assertCanViewStaff($request, (int) $validated['user_id']);
+
+        return $this->ok($this->commission->rangeSummary(
+            $this->listCompanyId($request),
+            (int) $validated['user_id'],
+            $validated['from'],
+            $validated['to'],
+        ));
+    }
+
     public function supervisorEntries(Request $request): JsonResponse
     {
-        $this->allow($request, 'commission.view');
+        $scope = $this->commissionScope($request);
+        $filters = $request->only(['user_id', 'from', 'to', 'per_page']);
+        if ($scope['mode'] === 'own') {
+            $filters['user_id'] = $scope['user_id'];
+        }
 
-        $entries = $this->commission->supervisorEntries($this->listCompanyId($request), $request->only(['user_id', 'from', 'to', 'per_page']));
+        $entries = $this->commission->supervisorEntries($this->listCompanyId($request), $filters);
         $entries->getCollection()->transform(fn ($e) => [
             'id'            => $e->id,
             'user_id'       => $e->user_id,
@@ -139,16 +162,20 @@ class CommissionController extends Controller
 
     public function transactions(Request $request): JsonResponse
     {
-        $this->allow($request, 'commission.view');
         $companyId = $this->listCompanyId($request);
+        $scope = $this->commissionScope($request);
 
         $rows = CommissionTransaction::forCompany($companyId)
             ->with('user:id,name')
             ->when($request->query('user_id'), fn ($q, $uid) => $q->where('user_id', $uid))
             ->when($request->query('from'), fn ($q, $d) => $q->whereDate('transaction_date', '>=', $d))
             ->when($request->query('to'), fn ($q, $d) => $q->whereDate('transaction_date', '<=', $d))
-            ->orderByDesc('transaction_date')
-            ->paginate(50);
+            ->when($request->query('status'), fn ($q, $status) => $q->where('status', $status))
+            ->when($request->query('role'), fn ($q, $role) => $q->where('role', $role))
+            ->when($request->query('commission_type'), fn ($q, $type) => $q->where('commission_type', $type))
+            ->when($request->query('branch_id'), fn ($q, $branch) => $q->where('branch_id', $branch));
+        $this->restrictCommissionQuery($rows, $scope);
+        $rows = $rows->orderByDesc('transaction_date')->paginate(50);
 
         return $this->ok($rows);
     }
@@ -159,12 +186,7 @@ class CommissionController extends Controller
             'user_id' => ['required', 'integer'],
             'date'    => ['nullable', 'date'],
         ]);
-        $permission = $request->user()->id === (int) $validated['user_id'] ? 'commission.view_own' : 'commission.view';
-        abort_unless(
-            $request->user()->is_super_admin || $request->user()->hasPermission($permission, $this->company($request)->id)
-            || $request->user()->hasPermission('commission.view', $this->company($request)->id),
-            403,
-        );
+        $this->assertCanViewStaff($request, (int) $validated['user_id']);
 
         return $this->ok($this->engine->dailySummary(
             $this->listCompanyId($request),
@@ -243,8 +265,9 @@ class CommissionController extends Controller
 
         $data = $request->validate([
             'targets' => ['required', 'array'],
-            'targets.*.min_amount'   => ['required', 'numeric', 'min:0'],
-            'targets.*.bonus_amount' => ['required', 'numeric', 'min:0'],
+            'targets.*.min_amount'    => ['required', 'numeric', 'min:0'],
+            'targets.*.bonus_amount'  => ['nullable', 'numeric', 'min:0'],
+            'targets.*.bonus_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
 
         CommissionDailyTargetTier::where('commission_rule_id', $commissionRule->id)->delete();
@@ -252,7 +275,8 @@ class CommissionController extends Controller
             CommissionDailyTargetTier::create([
                 'commission_rule_id' => $commissionRule->id,
                 'min_amount'         => $target['min_amount'],
-                'bonus_amount'       => $target['bonus_amount'],
+                'bonus_amount'       => $target['bonus_amount'] ?? 0,
+                'bonus_percent'      => $target['bonus_percent'] ?? 0,
                 'sort_order'         => $i,
             ]);
         }
@@ -311,16 +335,73 @@ class CommissionController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'product_id' => ['nullable', 'uuid'],
             'category_id' => ['nullable', 'uuid'],
-            'days_after_purchase' => ['required', 'integer', 'min:1'],
+            'days_after_purchase' => ['nullable', 'integer', 'min:0'],
+            'season' => ['nullable', 'in:summer,monsoon,winter'],
+            'timing' => ['nullable', 'in:days_after_purchase,season_start'],
             'season_months' => ['nullable', 'array'],
             'message_template' => ['required', 'string', 'max:2000'],
             'max_sends_per_customer' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['boolean'],
         ]);
 
-        $rule = SeasonalCareRule::create(array_merge($data, ['company_id' => $company->id]));
+        $rule = SeasonalCareRule::create(array_merge($data, [
+            'company_id' => $company->id,
+            'timing' => $data['timing'] ?? 'days_after_purchase',
+            'days_after_purchase' => $data['days_after_purchase'] ?? 0,
+        ]));
 
         return $this->created($rule, 'Seasonal care rule saved.');
+    }
+
+    public function seasonalCareSends(Request $request): JsonResponse
+    {
+        $this->allow($request, 'commission.manage');
+        $companyId = $this->listCompanyId($request);
+
+        $rows = SeasonalCareSend::query()
+            ->whereHas('rule', fn ($q) => $q->where('company_id', $companyId))
+            ->with('rule:id,name,season')
+            ->orderByDesc('sent_at')
+            ->paginate(50);
+
+        return $this->ok($rows);
+    }
+
+    public function supervisorRates(Request $request): JsonResponse
+    {
+        $this->allow($request, 'commission.view');
+
+        return $this->ok(
+            SupervisorCommissionRate::forCompany($this->listCompanyId($request))
+                ->with(['user:id,name', 'product:id,name', 'category:id,name'])
+                ->orderByDesc('created_at')
+                ->get()
+        );
+    }
+
+    public function storeSupervisorRate(Request $request): JsonResponse
+    {
+        $this->allow($request, 'commission.manage');
+        $company = $this->company($request);
+        $data = $request->validate([
+            'user_id'        => ['required', 'integer'],
+            'product_id'     => ['nullable', 'uuid'],
+            'category_id'    => ['nullable', 'uuid'],
+            'rate_type'      => ['required', 'in:percent,per_unit'],
+            'rate'           => ['required', 'numeric', 'min:0'],
+            'effective_from' => ['nullable', 'date'],
+            'effective_to'   => ['nullable', 'date'],
+            'is_active'      => ['boolean'],
+        ]);
+        if (empty($data['product_id']) && empty($data['category_id'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'product_id' => 'Choose a product or a category for the supervisor rate.',
+            ]);
+        }
+
+        $rate = SupervisorCommissionRate::create(array_merge($data, ['company_id' => $company->id]));
+
+        return $this->created($rate->load('user:id,name', 'product:id,name', 'category:id,name'), 'Supervisor rate saved.');
     }
 
     public function whatsappLogs(Request $request): JsonResponse
@@ -413,5 +494,58 @@ class CommissionController extends Controller
             }
         }
         abort(403);
+    }
+
+    /** @return array{mode: string, user_id?: int, locations?: array<int, string>} */
+    private function commissionScope(Request $request): array
+    {
+        $user = $request->user();
+        $companyId = $this->company($request)->id;
+        if ($user->is_super_admin || $user->hasPermission('*', $companyId)) {
+            return ['mode' => 'all'];
+        }
+        if ($user->hasRole('manager', $companyId) && $user->hasPermission('commission.view', $companyId)) {
+            $rules = ManagerCommissionRule::forCompany($companyId)->where('user_id', $user->id)->get();
+            if ($rules->isEmpty() || $rules->contains(fn ($rule) => $rule->location_id === null)) {
+                return ['mode' => 'all'];
+            }
+
+            return [
+                'mode'      => 'branch',
+                'locations' => $rules->pluck('location_id')->filter()->values()->all(),
+                'user_id'   => $user->id,
+            ];
+        }
+        if ($user->hasPermission('commission.view', $companyId)) {
+            return ['mode' => 'all'];
+        }
+        if ($user->hasPermission('commission.view_own', $companyId)) {
+            return ['mode' => 'own', 'user_id' => $user->id];
+        }
+        abort(403);
+    }
+
+    private function assertCanViewStaff(Request $request, int $userId): void
+    {
+        $scope = $this->commissionScope($request);
+        if ($scope['mode'] === 'own' && (int) $scope['user_id'] !== $userId) {
+            abort(403);
+        }
+    }
+
+    private function restrictCommissionQuery($query, array $scope, string $userColumn = 'user_id', ?string $branchColumn = 'branch_id')
+    {
+        if ($scope['mode'] === 'own') {
+            $query->where($userColumn, $scope['user_id']);
+        } elseif ($scope['mode'] === 'branch') {
+            $query->where(function ($inner) use ($scope, $userColumn, $branchColumn) {
+                $inner->where($userColumn, $scope['user_id']);
+                if ($branchColumn && ! empty($scope['locations'])) {
+                    $inner->orWhereIn($branchColumn, $scope['locations']);
+                }
+            });
+        }
+
+        return $query;
     }
 }

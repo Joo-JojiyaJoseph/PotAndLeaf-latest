@@ -12,7 +12,7 @@ class SeasonalCareRule extends Model
     use HasUuids;
 
     protected $fillable = [
-        'company_id', 'name', 'product_id', 'category_id', 'days_after_purchase',
+        'company_id', 'name', 'product_id', 'category_id', 'season', 'days_after_purchase', 'timing',
         'season_months', 'message_template', 'is_active', 'max_sends_per_customer',
     ];
 

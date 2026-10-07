@@ -36,6 +36,8 @@ class SettingsController extends Controller
             'loyalty_earn_points'        => ['sometimes', 'integer', 'min:1'],
             'loyalty_redeem_rupees'      => ['sometimes', 'numeric', 'min:0.01'],
             'loyalty_redeem_cap_percent' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'loyalty_redeem_min_points'  => ['sometimes', 'integer', 'min:0'],
+            'loyalty_points_expiry_days' => ['sometimes', 'integer', 'min:0', 'max:3650'],
             'discount_ceiling_percent'   => ['sometimes', 'numeric', 'min:0', 'max:100'],
             'reorder_alert_default'      => ['sometimes', 'numeric', 'min:0'],
             'website_integration'        => ['sometimes', 'in:0,1,true,false'],
@@ -55,6 +57,9 @@ class SettingsController extends Controller
             'eod_management_whatsapp_phones' => ['sometimes', 'string', 'max:2000'],
             'eod_management_email_recipients' => ['sometimes', 'string', 'max:2000'],
             'eod_management_send_time'       => ['sometimes', 'date_format:H:i'],
+            'eod_commission_send_time'       => ['sometimes', 'date_format:H:i'],
+            'company_timezone'               => ['sometimes', 'timezone'],
+            'seasonal_care_rate_limit'       => ['sometimes', 'integer', 'min:1', 'max:500'],
             'daily_expense'              => ['sometimes', 'numeric', 'min:0'],
         ]);
 

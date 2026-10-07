@@ -12,6 +12,8 @@ class SettingsService
         'loyalty_earn_points'          => '1',     // points awarded per earn unit
         'loyalty_redeem_rupees'        => '1',     // ₹ discount per point redeemed
         'loyalty_redeem_cap_percent'   => '50',    // max % of bill redeemable
+        'loyalty_redeem_min_points'    => '0',     // minimum points per redemption; 0 disables the floor
+        'loyalty_points_expiry_days'   => '0',     // days until earned points expire; 0 keeps them
         'discount_ceiling_percent'     => '20',    // max line/bill discount % by role default
         'reorder_alert_default'        => '10',    // default reorder level hint
         'website_integration'          => '0',     // company toggle
@@ -32,6 +34,9 @@ class SettingsService
         'eod_management_whatsapp_phones' => '',    // comma-separated HO/manager phones
         'eod_management_email_recipients' => '',   // comma-separated HO/manager emails
         'eod_management_send_time'     => '20:30', // company-local send time (HH:MM)
+        'eod_commission_send_time'     => '20:00', // staff commission WhatsApp time (HH:MM)
+        'company_timezone'             => 'Asia/Kolkata',
+        'seasonal_care_rate_limit'     => '40',    // max seasonal care WhatsApp sends per company per day
     ];
 
     /** @return array<string, string> */

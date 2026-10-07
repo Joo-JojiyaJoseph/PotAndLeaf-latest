@@ -24,12 +24,15 @@ class UpsertCommissionRuleRequest extends FormRequest
             'notes'           => ['nullable', 'string', 'max:1000'],
             'is_active'       => ['boolean'],
             'is_supervisor'   => ['boolean'],
-            'location_id'     => ['nullable', 'integer', Rule::exists('locations', 'id')->where('company_id', $this->route('current_company')->id)],
+            'location_id'     => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $this->route('current_company')->id)],
             'effective_from'  => ['nullable', 'date'],
             'effective_to'    => ['nullable', 'date', 'after_or_equal:effective_from'],
             'max_commission'  => ['nullable', 'numeric', 'min:0'],
             'eligible_bill_kinds' => ['nullable', 'array'],
             'eligible_bill_kinds.*' => [Rule::in(['tax_invoice', 'proforma', 'complimentary'])],
+            'tier_period'     => ['nullable', Rule::in(['daily', 'monthly'])],
+            'tier_mode'       => ['nullable', Rule::in(['marginal', 'flat'])],
+            'target_scope'    => ['nullable', Rule::in(['salesman', 'branch'])],
         ];
     }
 }

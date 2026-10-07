@@ -19,6 +19,9 @@ class RetryFailedWhatsAppMessages extends Command
             ->where('status', 'failed')
             ->where('retry_count', '<', 3)
             ->whereNotNull('recipient_phone')
+            ->where(function ($query) {
+                $query->whereNull('next_retry_at')->orWhere('next_retry_at', '<=', now());
+            })
             ->orderBy('created_at')
             ->limit($limit)
             ->get();
@@ -26,13 +29,23 @@ class RetryFailedWhatsAppMessages extends Command
         $sent = 0;
         foreach ($logs as $log) {
             $result = $whatsapp->sendMessage($log->recipient_phone, (string) $log->message);
-            $log->increment('retry_count');
+            $attempt = (int) $log->retry_count + 1;
 
             if ($result['success']) {
-                $log->update(['status' => 'sent', 'sent_at' => now(), 'error' => null]);
+                $log->update([
+                    'status' => 'sent',
+                    'sent_at' => now(),
+                    'error' => null,
+                    'retry_count' => $attempt,
+                    'next_retry_at' => null,
+                ]);
                 $sent++;
             } else {
-                $log->update(['error' => $result['message'] ?? 'Retry failed']);
+                $log->update([
+                    'error' => $result['message'] ?? 'Retry failed',
+                    'retry_count' => $attempt,
+                    'next_retry_at' => now()->addMinutes(2 ** min($attempt, 6)),
+                ]);
             }
         }
 

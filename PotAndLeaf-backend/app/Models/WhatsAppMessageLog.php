@@ -13,7 +13,7 @@ class WhatsAppMessageLog extends Model
 
     protected $fillable = [
         'company_id', 'recipient_type', 'recipient_id', 'recipient_phone',
-        'message_type', 'message', 'status', 'error', 'retry_count', 'business_date', 'sent_at',
+        'message_type', 'message', 'status', 'error', 'retry_count', 'next_retry_at', 'business_date', 'sent_at',
     ];
 
     protected function casts(): array
@@ -21,6 +21,7 @@ class WhatsAppMessageLog extends Model
         return [
             'business_date' => 'date',
             'sent_at'       => 'datetime',
+            'next_retry_at' => 'datetime',
         ];
     }
 

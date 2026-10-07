@@ -80,6 +80,8 @@ class LoyaltyController extends Controller
                 'loyalty_earn_points'        => (int) ($all['loyalty_earn_points'] ?? 1),
                 'loyalty_redeem_rupees'      => (float) ($all['loyalty_redeem_rupees'] ?? 1),
                 'loyalty_redeem_cap_percent' => (float) ($all['loyalty_redeem_cap_percent'] ?? 50),
+                'loyalty_redeem_min_points'  => (int) ($all['loyalty_redeem_min_points'] ?? 0),
+                'loyalty_points_expiry_days' => (int) ($all['loyalty_points_expiry_days'] ?? 0),
             ],
             'totals' => [
                 'customers'    => (int) ($totals->customers ?? 0),
@@ -111,6 +113,23 @@ class LoyaltyController extends Controller
         ], 'Points adjusted.');
     }
 
+    public function customer(Request $request, Customer $customer): JsonResponse
+    {
+        $this->allowAny($request, ['loyalty.view', 'customers.view']);
+        abort_unless((string) $customer->company_id === (string) $this->company($request)->id || $request->user()->is_super_admin, 404);
+
+        $ledger = LoyaltyLedgerEntry::query()
+            ->where('customer_id', $customer->id)
+            ->orderByDesc('created_at')
+            ->paginate(min(50, max(1, (int) $request->input('per_page', 25))));
+
+        return $this->ok([
+            'customer_id'    => $customer->id,
+            'loyalty_points' => (int) $customer->loyalty_points,
+            'ledger'         => $ledger,
+        ]);
+    }
+
     public function rules(Request $request): JsonResponse
     {
         $this->allowAny($request, ['loyalty.manage', 'loyalty.view', 'customers.view']);
@@ -131,6 +150,7 @@ class LoyaltyController extends Controller
             'earn_rupees'                => ['nullable', 'numeric', 'min:1'],
             'earn_points'                => ['nullable', 'integer', 'min:1'],
             'bonus_points_per_unit'      => ['nullable', 'integer', 'min:0'],
+            'points_multiplier'          => ['nullable', 'numeric', 'min:1', 'max:20'],
             'min_purchase'               => ['nullable', 'numeric', 'min:0'],
             'max_points_per_transaction' => ['nullable', 'integer', 'min:1'],
             'effective_from'             => ['nullable', 'date'],

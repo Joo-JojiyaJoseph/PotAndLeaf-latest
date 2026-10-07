@@ -11,9 +11,9 @@ class CommissionTransaction extends Model
     use HasUuids;
 
     protected $fillable = [
-        'company_id', 'user_id', 'commission_type', 'source_type', 'source_id',
+        'company_id', 'user_id', 'role', 'branch_id', 'rule_id', 'commission_type', 'source_type', 'source_id',
         'product_id', 'calculation_base', 'rate_percent', 'fixed_bonus', 'amount',
-        'rule_snapshot', 'transaction_date', 'status', 'reversal_of_id',
+        'rule_snapshot', 'transaction_date', 'period', 'status', 'reversal_of_id',
     ];
 
     protected function casts(): array

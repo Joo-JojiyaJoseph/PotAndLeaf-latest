@@ -28,6 +28,7 @@ class StoreCustomerRequest extends FormRequest
             'email'           => ['nullable', 'email', 'max:150'],
             'phone'           => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'whatsapp'        =>['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
+            'whatsapp_opt_in' => ['sometimes', 'boolean'],
             'gst_number'      => ['nullable', 'string', 'max:20'],
             'address_line1'   => ['nullable', 'string', 'max:200'],
             'address_line2'   => ['nullable', 'string', 'max:200'],

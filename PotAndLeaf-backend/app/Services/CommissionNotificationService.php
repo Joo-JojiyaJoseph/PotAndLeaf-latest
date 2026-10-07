@@ -9,6 +9,7 @@ use App\Models\WhatsAppTemplate;
 use App\Services\WhatsApp\WhatsAppService;
 use App\Support\WhatsApp\TemplateRenderer;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class CommissionNotificationService
 {
@@ -26,6 +27,7 @@ class CommissionNotificationService
         }
 
         $date ??= now()->toDateString();
+        $this->engine->accrueManagerCommissionForDate($companyId, $date);
         $company = Company::find($companyId);
         $sent = 0;
         $skipped = 0;
@@ -47,7 +49,7 @@ class CommissionNotificationService
                 ->where('recipient_type', 'employee')
                 ->where('recipient_id', (string) $userId)
                 ->whereDate('business_date', $date)
-                ->where('status', 'sent')
+                ->whereIn('status', ['sent', 'pending', 'failed'])
                 ->exists()) {
                 $skipped++;
                 continue;
@@ -55,7 +57,8 @@ class CommissionNotificationService
 
             $user = User::find($userId);
             $phone = $user?->phone;
-            if (! $phone) {
+            if (! $this->validPhone($phone)) {
+                Log::info('eod_commission.skipped_phone', ['company_id' => $companyId, 'user_id' => $userId]);
                 $skipped++;
                 continue;
             }
@@ -103,10 +106,14 @@ class CommissionNotificationService
             'supervisor_commission'  => $money($summary['supervisor_commission']),
             'manager_commission'     => $money($summary['manager_commission']),
             'total_incentive'        => $money($summary['total_incentive']),
+            'production_qty'         => (string) ($summary['production_qty'] ?? 0),
+            'mtd_sales'              => $money($summary['mtd_sales'] ?? 0),
+            'mtd_incentive'          => $money($summary['mtd_incentive'] ?? 0),
         ];
 
         if ($companyId) {
-            $tpl = WhatsAppTemplate::forCompany($companyId)->where('slug', 'eod_commission')->where('is_active', true)->first();
+            $slug = (string) config('whatsapp.templates.eod_commission', 'eod_commission');
+            $tpl = WhatsAppTemplate::forCompany($companyId)->where('slug', $slug)->where('is_active', true)->first();
             if ($tpl) {
                 return TemplateRenderer::render($tpl->body, $vars);
             }
@@ -127,8 +134,18 @@ class CommissionNotificationService
             'Promotion Bonus: '.$money($summary['promotion_bonus']),
             $summary['supervisor_commission'] > 0 ? 'Supervisor Commission: '.$money($summary['supervisor_commission']) : null,
             $summary['manager_commission'] > 0 ? 'Manager Commission: '.$money($summary['manager_commission']) : null,
+            ($summary['production_qty'] ?? 0) > 0 ? 'Produced qty moved: '.$summary['production_qty'] : null,
             '',
             '*Total Incentive: '.$money($summary['total_incentive']).'*',
+            'Month-to-date sales: '.$money($summary['mtd_sales'] ?? 0),
+            'Month-to-date incentive: '.$money($summary['mtd_incentive'] ?? 0),
         ]));
+    }
+
+    private function validPhone(?string $phone): bool
+    {
+        $digits = preg_replace('/\D/', '', (string) $phone) ?? '';
+
+        return strlen($digits) >= 10 && strlen($digits) <= 15;
     }
 }

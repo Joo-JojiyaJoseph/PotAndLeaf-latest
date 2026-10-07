@@ -12,6 +12,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SalesReturn;
 use App\Models\SupervisorCommissionEntry;
+use App\Support\Commission\TierCalculator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -143,6 +144,24 @@ class CommissionEngine
         $topTarget = (float) ($dailyTiers->max('min_amount') ?? 0);
         $targetPct = $topTarget > 0 ? round($salesTotal / $topTarget * 100, 1) : 0;
 
+        $supervisorRows = SupervisorCommissionEntry::forCompany($companyId)
+            ->where('user_id', $userId)
+            ->whereDate('accrued_date', $day)
+            ->where('status', 'accrued')
+            ->get();
+        $supervisorAmount = round((float) $supervisorRows->sum('amount'), 2);
+
+        $managerRows = $tx->where('commission_type', 'manager');
+        $dailyManager = $managerRows->where('source_type', 'branch-day');
+        $managerAmount = round((float) ($dailyManager->isNotEmpty()
+            ? $dailyManager->sum('amount')
+            : $managerRows->where('source_type', '!=', 'branch-day')->sum('amount')), 2);
+        $incentiveTx = $dailyManager->isNotEmpty()
+            ? $tx->reject(fn ($row) => $row->commission_type === 'manager' && $row->source_type === 'branch-period')
+            : $tx;
+
+        $mtd = $this->monthToDate($companyId, $userId, $day);
+
         return [
             'date'                  => $day,
             'user_id'               => $userId,
@@ -150,13 +169,51 @@ class CommissionEngine
             'sales_commission'      => round((float) $tx->where('commission_type', 'salesman_tier')->sum('amount'), 2),
             'daily_target_bonus'    => round((float) $tx->where('commission_type', 'daily_target')->sum('amount'), 2),
             'promotion_bonus'       => round((float) $tx->where('commission_type', 'promotion')->sum('amount'), 2),
-            'supervisor_commission' => round((float) SupervisorCommissionEntry::forCompany($companyId)
-                ->where('user_id', $userId)->whereDate('accrued_date', $day)->where('status', 'accrued')->sum('amount'), 2),
-            'manager_commission'    => round((float) $tx->where('commission_type', 'manager')->sum('amount'), 2),
-            'total_incentive'       => round((float) $tx->sum('amount') + (float) SupervisorCommissionEntry::forCompany($companyId)
-                ->where('user_id', $userId)->whereDate('accrued_date', $day)->where('status', 'accrued')->sum('amount'), 2),
+            'supervisor_commission' => $supervisorAmount,
+            'manager_commission'    => $managerAmount,
+            'total_incentive'       => round((float) $incentiveTx->sum('amount') + $supervisorAmount, 2),
             'daily_target'          => $topTarget,
             'target_achievement_pct'=> $targetPct,
+            'production_qty'        => round((float) $supervisorRows->sum('qty'), 3),
+            'mtd_sales'             => $mtd['sales'],
+            'mtd_incentive'         => $mtd['incentive'],
+        ];
+    }
+
+    /** Month-to-date sales and incentive for one employee, without double-counting a monthly manager rollup. */
+    private function monthToDate(int|string $companyId, int $userId, string $day): array
+    {
+        $monthStart = Carbon::parse($day)->startOfMonth()->toDateString();
+        $sales = (float) Sale::forCompany($companyId)
+            ->where('created_by', $userId)
+            ->where('status', 'confirmed')
+            ->whereDate('sale_date', '>=', $monthStart)
+            ->whereDate('sale_date', '<=', $day)
+            ->get()
+            ->sum(fn (Sale $s) => $this->netSalesBase($s));
+
+        $tx = CommissionTransaction::forCompany($companyId)
+            ->where('user_id', $userId)
+            ->whereDate('transaction_date', '>=', $monthStart)
+            ->whereDate('transaction_date', '<=', $day)
+            ->accrued()
+            ->get();
+
+        $hasDailyManager = $tx->contains(fn ($row) => $row->source_type === 'branch-day');
+        if ($hasDailyManager) {
+            $tx = $tx->reject(fn ($row) => $row->commission_type === 'manager' && $row->source_type === 'branch-period');
+        }
+
+        $supervisor = (float) SupervisorCommissionEntry::forCompany($companyId)
+            ->where('user_id', $userId)
+            ->whereDate('accrued_date', '>=', $monthStart)
+            ->whereDate('accrued_date', '<=', $day)
+            ->where('status', 'accrued')
+            ->sum('amount');
+
+        return [
+            'sales'     => round($sales, 2),
+            'incentive' => round((float) $tx->sum('amount') + $supervisor, 2),
         ];
     }
 
@@ -210,6 +267,9 @@ class CommissionEngine
             $tx = $this->recordTransaction([
                 'company_id'       => $companyId,
                 'user_id'          => $mr->user_id,
+                'role'             => 'manager',
+                'branch_id'        => $mr->location_id,
+                'rule_id'          => $mr->id,
                 'commission_type'  => 'manager',
                 'source_type'      => 'branch-period',
                 'source_id'        => $sourceId,
@@ -217,7 +277,80 @@ class CommissionEngine
                 'rate_percent'     => (float) $mr->percent,
                 'amount'           => $amount,
                 'transaction_date' => $to,
+                'period'           => $period,
                 'rule_snapshot'    => ['manager_rule_id' => $mr->id, 'period' => $period, 'location_id' => $mr->location_id],
+            ]);
+
+            if ($tx) {
+                $created->push($tx);
+            }
+        });
+
+        return $created;
+    }
+
+    /** One idempotent manager row per branch (or company) for a single day. */
+    public function accrueManagerCommissionForDate(int|string $companyId, string $date): Collection
+    {
+        $day = Carbon::parse($date)->toDateString();
+        $created = collect();
+
+        ManagerCommissionRule::forCompany($companyId)->each(function (ManagerCommissionRule $mr) use ($companyId, $day, &$created) {
+            if ($mr->effective_from && $mr->effective_from->toDateString() > $day) {
+                return;
+            }
+            if ($mr->effective_to && $mr->effective_to->toDateString() < $day) {
+                return;
+            }
+
+            $net = $this->branchNetSales($companyId, $day, $day, $mr->location_id);
+            $amount = round($net * (float) $mr->percent / 100, 2);
+            $sourceId = $mr->location_id
+                ? "{$companyId}:{$mr->location_id}:{$day}"
+                : "{$companyId}:{$day}";
+
+            $existing = CommissionTransaction::query()
+                ->where('company_id', $companyId)
+                ->where('user_id', $mr->user_id)
+                ->where('commission_type', 'manager')
+                ->where('source_type', 'branch-day')
+                ->where('source_id', $sourceId)
+                ->where('status', 'accrued')
+                ->first();
+
+            if ($existing) {
+                if ($amount <= 0) {
+                    $this->reverseTransaction($existing);
+                } elseif (abs((float) $existing->amount - $amount) >= 0.01) {
+                    $existing->update([
+                        'calculation_base' => $net,
+                        'amount'           => $amount,
+                        'rate_percent'     => (float) $mr->percent,
+                    ]);
+                }
+
+                return;
+            }
+
+            if ($amount <= 0) {
+                return;
+            }
+
+            $tx = $this->recordTransaction([
+                'company_id'       => $companyId,
+                'user_id'          => $mr->user_id,
+                'role'             => 'manager',
+                'branch_id'        => $mr->location_id,
+                'rule_id'          => $mr->id,
+                'commission_type'  => 'manager',
+                'source_type'      => 'branch-day',
+                'source_id'        => $sourceId,
+                'calculation_base' => $net,
+                'rate_percent'     => (float) $mr->percent,
+                'amount'           => $amount,
+                'transaction_date' => $day,
+                'period'           => Carbon::parse($day)->format('Y-m'),
+                'rule_snapshot'    => ['manager_rule_id' => $mr->id, 'date' => $day, 'location_id' => $mr->location_id],
             ]);
 
             if ($tx) {
@@ -283,6 +416,9 @@ class CommissionEngine
             $this->recordTransaction([
                 'company_id'      => $sale->company_id,
                 'user_id'         => $sale->created_by,
+                'role'            => 'salesman',
+                'branch_id'       => $sale->location_id,
+                'rule_id'         => $rule->id,
                 'commission_type' => 'salesman_tier',
                 'source_type'     => 'sale',
                 'source_id'       => $sale->id,
@@ -290,16 +426,20 @@ class CommissionEngine
                 'rate_percent'    => $rate,
                 'amount'          => $amount,
                 'transaction_date'=> $sale->sale_date,
-                'rule_snapshot'   => ['rule_id' => $rule->id, 'flat_percent' => true],
+                'period'          => $sale->sale_date->format('Y-m'),
+                'rule_snapshot'   => ['rule_id' => $rule->id, 'flat_percent' => true, 'tier_mode' => $rule->tier_mode, 'tier_period' => $rule->tier_period],
             ]);
 
             return;
         }
 
-        $monthStart = $sale->sale_date->copy()->startOfMonth();
-        $before = $this->monthNetSalesBefore($sale, $monthStart);
+        $period = $rule->tier_period ?: 'monthly';
+        $mode = $rule->tier_mode ?: 'marginal';
+        $before = $period === 'daily'
+            ? $this->dayNetSalesBefore($sale)
+            : $this->monthNetSalesBefore($sale, $sale->sale_date->copy()->startOfMonth());
         $after = $before + $saleBase;
-        $amount = $this->marginalTierAmount($before, $after, $tiers, $sale);
+        $amount = $this->marginalTierAmount($before, $after, $tiers, $sale, $mode);
 
         if ($amount <= 0) {
             return;
@@ -313,36 +453,54 @@ class CommissionEngine
         $this->recordTransaction([
             'company_id'      => $sale->company_id,
             'user_id'         => $sale->created_by,
+            'role'            => 'salesman',
+            'branch_id'       => $sale->location_id,
+            'rule_id'         => $rule->id,
             'commission_type' => 'salesman_tier',
             'source_type'     => 'sale',
             'source_id'       => $sale->id,
             'calculation_base'  => $saleBase,
             'amount'          => $amount,
             'transaction_date'=> $sale->sale_date,
-            'rule_snapshot'   => ['rule_id' => $rule->id, 'tiers' => $tiers->count(), 'mtd_before' => $before, 'mtd_after' => $after],
+            'period'          => $sale->sale_date->format('Y-m'),
+            'rule_snapshot'   => [
+                'rule_id' => $rule->id,
+                'tiers' => $tiers->count(),
+                'before' => $before,
+                'after' => $after,
+                'tier_mode' => $mode,
+                'tier_period' => $period,
+            ],
         ]);
     }
 
-    private function marginalTierAmount(float $before, float $after, Collection $tiers, Sale $sale): float
+    private function marginalTierAmount(float $before, float $after, Collection $tiers, Sale $sale, string $mode = 'marginal'): float
     {
         $generic = $tiers->filter(fn ($t) => ! $t->product_id && ! $t->category_id);
         $specific = $tiers->filter(fn ($t) => $t->product_id || $t->category_id);
 
         $amount = 0.0;
         if ($generic->isNotEmpty()) {
-            $commissionBefore = $this->tierTotalAt($before, $generic);
-            $commissionAfter = $this->tierTotalAt($after, $generic);
-            $amount += $commissionAfter - $commissionBefore;
+            $amount += TierCalculator::amount($before, $after, $this->tierRows($generic), $mode);
         }
 
         if ($specific->isNotEmpty()) {
-            $amount += $this->specificTierCommission($sale, $specific);
+            $amount += $this->specificTierCommission($sale, $specific, $mode);
         }
 
         return round($amount, 2);
     }
 
-    private function specificTierCommission(Sale $sale, Collection $tiers): float
+    private function tierRows(Collection $tiers): array
+    {
+        return $tiers->map(fn ($tier) => [
+            'min_amount' => (float) $tier->min_amount,
+            'max_amount' => $tier->max_amount !== null ? (float) $tier->max_amount : null,
+            'percent'    => (float) $tier->percent,
+        ])->values()->all();
+    }
+
+    private function specificTierCommission(Sale $sale, Collection $tiers, string $mode = 'marginal'): float
     {
         $sale->loadMissing('items');
         $productMeta = Product::whereIn('id', $sale->items->pluck('product_id')->filter())
@@ -353,24 +511,20 @@ class CommissionEngine
         foreach ($sale->items as $item) {
             $lineBase = max(0, (float) $item->taxable_value - (float) ($item->discount ?? 0));
             $product = $productMeta[$item->product_id] ?? null;
-
-            foreach ($tiers as $tier) {
+            $matching = $tiers->filter(function ($tier) use ($item, $product) {
                 if ($tier->product_id && $tier->product_id !== $item->product_id) {
-                    continue;
+                    return false;
                 }
                 if ($tier->category_id && $product?->category_id !== $tier->category_id) {
-                    continue;
+                    return false;
                 }
-                $min = (float) $tier->min_amount;
-                if ($lineBase <= $min) {
-                    continue;
-                }
-                $max = $tier->max_amount !== null ? (float) $tier->max_amount : $lineBase;
-                $slice = min($lineBase, $max) - $min;
-                if ($slice > 0) {
-                    $total += $slice * (float) $tier->percent / 100;
-                }
+
+                return (bool) ($tier->product_id || $tier->category_id);
+            });
+            if ($matching->isEmpty()) {
+                continue;
             }
+            $total += TierCalculator::amount(0, $lineBase, $this->tierRows($matching), $mode);
         }
 
         return $total;
@@ -392,6 +546,17 @@ class CommissionEngine
         }
 
         return $sum;
+    }
+
+    private function dayNetSalesBefore(Sale $sale): float
+    {
+        return (float) Sale::forCompany($sale->company_id)
+            ->where('created_by', $sale->created_by)
+            ->where('status', 'confirmed')
+            ->where('id', '!=', $sale->id)
+            ->whereDate('sale_date', $sale->sale_date)
+            ->get()
+            ->sum(fn (Sale $s) => $this->netSalesBase($s));
     }
 
     private function monthNetSalesBefore(Sale $sale, Carbon $monthStart): float
@@ -453,6 +618,9 @@ class CommissionEngine
                 $this->recordTransaction([
                     'company_id'      => $sale->company_id,
                     'user_id'         => $sale->created_by,
+                    'role'            => 'salesman',
+                    'branch_id'       => $sale->location_id,
+                    'rule_id'         => $promo->id,
                     'commission_type' => 'promotion',
                     'source_type'     => 'sale-line',
                     'source_id'       => "{$sale->id}:{$item->id}:{$promo->id}",
@@ -469,6 +637,15 @@ class CommissionEngine
 
     private function recordTransaction(array $data): ?CommissionTransaction
     {
+        $data['role'] ??= match ($data['commission_type'] ?? '') {
+            'salesman_tier', 'daily_target', 'promotion' => 'salesman',
+            'manager' => 'manager',
+            default => null,
+        };
+        if (! empty($data['transaction_date']) && empty($data['period'])) {
+            $data['period'] = Carbon::parse($data['transaction_date'])->format('Y-m');
+        }
+
         $dedupe = [
             'company_id'      => $data['company_id'],
             'user_id'         => $data['user_id'],
@@ -502,7 +679,9 @@ class CommissionEngine
             return;
         }
 
-        $dailyTotal = $this->dailyNetSales($companyId, $userId, $day);
+        $dailyTotal = ($rule->target_scope === 'branch')
+            ? $this->branchNetSales($companyId, $day, $day, $rule->location_id)
+            : $this->dailyNetSales($companyId, $userId, $day);
 
         foreach ($tiers as $tier) {
             $sourceId = "{$day}:{$tier->id}";
@@ -514,19 +693,37 @@ class CommissionEngine
                 ->where('status', 'accrued')
                 ->first();
 
-            if ($dailyTotal >= (float) $tier->min_amount) {
+            $percentBonus = round($dailyTotal * (float) ($tier->bonus_percent ?? 0) / 100, 2);
+            $bonus = round((float) $tier->bonus_amount + $percentBonus, 2);
+
+            if ($dailyTotal >= (float) $tier->min_amount && $bonus > 0) {
                 if (! $existing) {
                     $this->recordTransaction([
                         'company_id'       => $companyId,
                         'user_id'          => $userId,
+                        'role'             => 'salesman',
+                        'branch_id'        => $rule->location_id,
+                        'rule_id'          => $rule->id,
                         'commission_type'  => 'daily_target',
                         'source_type'      => 'daily-target',
                         'source_id'        => $sourceId,
                         'calculation_base' => $dailyTotal,
+                        'rate_percent'     => (float) ($tier->bonus_percent ?? 0),
                         'fixed_bonus'      => (float) $tier->bonus_amount,
-                        'amount'           => (float) $tier->bonus_amount,
+                        'amount'           => $bonus,
                         'transaction_date' => $day,
-                        'rule_snapshot'    => ['tier_id' => $tier->id, 'min_amount' => (float) $tier->min_amount],
+                        'period'           => Carbon::parse($day)->format('Y-m'),
+                        'rule_snapshot'    => [
+                            'tier_id' => $tier->id,
+                            'min_amount' => (float) $tier->min_amount,
+                            'target_scope' => $rule->target_scope ?: 'salesman',
+                        ],
+                    ]);
+                } elseif ((float) ($tier->bonus_percent ?? 0) > 0 && abs((float) $existing->amount - $bonus) >= 0.01) {
+                    $existing->update([
+                        'calculation_base' => $dailyTotal,
+                        'amount'           => $bonus,
+                        'rate_percent'     => (float) $tier->bonus_percent,
                     ]);
                 }
             } elseif ($existing) {
@@ -567,6 +764,9 @@ class CommissionEngine
         $created = $this->recordTransaction([
             'company_id'       => $tx->company_id,
             'user_id'          => $tx->user_id,
+            'role'             => $tx->role,
+            'branch_id'        => $tx->branch_id,
+            'rule_id'          => $tx->rule_id,
             'commission_type'  => 'reversal',
             'source_type'      => $refType,
             'source_id'        => "{$refId}:{$tx->id}",
@@ -615,6 +815,9 @@ class CommissionEngine
             CommissionTransaction::create([
                 'company_id'       => $tx->company_id,
                 'user_id'          => $tx->user_id,
+                'role'             => $tx->role,
+                'branch_id'        => $tx->branch_id,
+                'rule_id'          => $tx->rule_id,
                 'commission_type'  => 'reversal',
                 'source_type'      => $tx->source_type,
                 'source_id'        => $tx->source_id,

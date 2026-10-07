@@ -695,9 +695,9 @@ class ReportService
         $to = Carbon::parse($to)->toDateString();
 
         $base = ProductionOrder::query()
-            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
-            ->where('status', 'completed');
-        $base = $this->applyDateRange($base, 'order_date', $from, $to);
+            ->when($companyId !== null, fn ($q) => $q->where('production_orders.company_id', $companyId))
+            ->where('production_orders.status', 'completed');
+        $base = $this->applyDateRange($base, 'production_orders.order_date', $from, $to);
 
         $completed = (clone $base)->count();
         $outputQty = round((float) (clone $base)->sum('output_quantity'), 3);

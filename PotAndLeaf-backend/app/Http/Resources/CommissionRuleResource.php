@@ -28,12 +28,16 @@ class CommissionRuleResource extends JsonResource
             'effective_to'   => optional($this->effective_to)->toDateString(),
             'max_commission' => $this->max_commission !== null ? (float) $this->max_commission : null,
             'eligible_bill_kinds' => $this->eligible_bill_kinds,
+            'tier_period'    => $this->tier_period ?: 'monthly',
+            'tier_mode'      => $this->tier_mode ?: 'marginal',
+            'target_scope'   => $this->target_scope ?: 'salesman',
             'tiers'          => $this->whenLoaded('tiers', fn () => $this->tiers->map(fn ($t) => [
                 'id' => $t->id, 'min_amount' => (float) $t->min_amount, 'max_amount' => $t->max_amount !== null ? (float) $t->max_amount : null,
                 'percent' => (float) $t->percent, 'product_id' => $t->product_id, 'category_id' => $t->category_id,
             ])),
             'daily_target_tiers' => $this->whenLoaded('dailyTargetTiers', fn () => $this->dailyTargetTiers->map(fn ($t) => [
                 'id' => $t->id, 'min_amount' => (float) $t->min_amount, 'bonus_amount' => (float) $t->bonus_amount,
+                'bonus_percent' => (float) ($t->bonus_percent ?? 0),
             ])),
         ];
     }

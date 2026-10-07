@@ -27,22 +27,30 @@ class CommissionService
 
     public function upsertRule(int|string $companyId, array $data): CommissionRule
     {
+        $existing = CommissionRule::query()
+            ->where('company_id', $companyId)
+            ->where('user_id', $data['user_id'])
+            ->first();
+
         return CommissionRule::updateOrCreate(
             ['company_id' => $companyId, 'user_id' => $data['user_id']],
             [
-                'rate_type'           => $data['rate_type'] ?? 'percent',
-                'base_percent'        => $data['base_percent'] ?? 0,
-                'per_unit_amount'     => $data['per_unit_amount'] ?? 0,
-                'monthly_target'      => $data['monthly_target'] ?? 0,
-                'target_bonus'        => $data['target_bonus'] ?? 0,
-                'notes'               => $data['notes'] ?? null,
-                'is_active'           => $data['is_active'] ?? true,
-                'is_supervisor'       => $data['is_supervisor'] ?? false,
-                'location_id'         => $data['location_id'] ?? null,
-                'effective_from'      => $data['effective_from'] ?? null,
-                'effective_to'        => $data['effective_to'] ?? null,
-                'max_commission'      => $data['max_commission'] ?? null,
-                'eligible_bill_kinds' => $data['eligible_bill_kinds'] ?? null,
+                'rate_type'           => $data['rate_type'] ?? $existing?->rate_type ?? 'percent',
+                'base_percent'        => $data['base_percent'] ?? $existing?->base_percent ?? 0,
+                'per_unit_amount'     => $data['per_unit_amount'] ?? $existing?->per_unit_amount ?? 0,
+                'monthly_target'      => $data['monthly_target'] ?? $existing?->monthly_target ?? 0,
+                'target_bonus'        => $data['target_bonus'] ?? $existing?->target_bonus ?? 0,
+                'notes'               => array_key_exists('notes', $data) ? $data['notes'] : $existing?->notes,
+                'is_active'           => $data['is_active'] ?? $existing?->is_active ?? true,
+                'is_supervisor'       => $data['is_supervisor'] ?? $existing?->is_supervisor ?? false,
+                'location_id'         => array_key_exists('location_id', $data) ? $data['location_id'] : $existing?->location_id,
+                'effective_from'      => array_key_exists('effective_from', $data) ? $data['effective_from'] : $existing?->effective_from,
+                'effective_to'        => array_key_exists('effective_to', $data) ? $data['effective_to'] : $existing?->effective_to,
+                'max_commission'      => array_key_exists('max_commission', $data) ? $data['max_commission'] : $existing?->max_commission,
+                'eligible_bill_kinds' => array_key_exists('eligible_bill_kinds', $data) ? $data['eligible_bill_kinds'] : $existing?->eligible_bill_kinds,
+                'tier_period'         => $data['tier_period'] ?? $existing?->tier_period ?? 'monthly',
+                'tier_mode'           => $data['tier_mode'] ?? $existing?->tier_mode ?? 'marginal',
+                'target_scope'        => $data['target_scope'] ?? $existing?->target_scope ?? 'salesman',
             ],
         )->load('user:id,name');
     }
@@ -86,7 +94,9 @@ class CommissionService
         $ledgerSales = round((float) $ledger->where('commission_type', 'salesman_tier')->sum('amount'), 2);
         $ledgerDaily = round((float) $ledger->where('commission_type', 'daily_target')->sum('amount'), 2);
         $ledgerPromo = round((float) $ledger->where('commission_type', 'promotion')->sum('amount'), 2);
-        $ledgerManager = round((float) $ledger->where('commission_type', 'manager')->sum('amount'), 2);
+        $ledgerManagerMonthly = round((float) $ledger->where('commission_type', 'manager')->where('source_type', 'branch-period')->sum('amount'), 2);
+        $ledgerManagerDaily = round((float) $ledger->where('commission_type', 'manager')->where('source_type', 'branch-day')->sum('amount'), 2);
+        $ledgerManager = $ledgerManagerMonthly != 0.0 ? $ledgerManagerMonthly : $ledgerManagerDaily;
         $ledgerReversals = round((float) $ledger->where('commission_type', 'reversal')->sum('amount'), 2);
         $hasLedger = $ledger->whereIn('commission_type', ['salesman_tier', 'daily_target', 'promotion'])->isNotEmpty();
 
@@ -136,6 +146,51 @@ class CommissionService
                 'accrued_date'  => optional($e->accrued_date)->toDateString(),
                 'reference_type'=> $e->reference_type,
             ])->values()->all(),
+        ];
+    }
+
+    /** Ledger summary and per-day breakdown for an arbitrary date range. */
+    public function rangeSummary(int|string $companyId, int $userId, string $from, string $to): array
+    {
+        $ledger = CommissionTransaction::forCompany($companyId)
+            ->where('user_id', $userId)
+            ->whereDate('transaction_date', '>=', $from)
+            ->whereDate('transaction_date', '<=', $to)
+            ->orderBy('transaction_date')
+            ->get();
+
+        $accrued = $ledger->where('status', 'accrued');
+        $hasDailyManager = $accrued->contains(fn ($row) => $row->source_type === 'branch-day');
+        $payable = $hasDailyManager
+            ? $accrued->reject(fn ($row) => $row->commission_type === 'manager' && $row->source_type === 'branch-period')
+            : $accrued;
+
+        $supervisor = round((float) SupervisorCommissionEntry::forCompany($companyId)
+            ->where('user_id', $userId)
+            ->where('status', 'accrued')
+            ->whereDate('accrued_date', '>=', $from)
+            ->whereDate('accrued_date', '<=', $to)
+            ->sum('amount'), 2);
+
+        $sum = fn (string $type) => round((float) $payable->where('commission_type', $type)->sum('amount'), 2);
+
+        return [
+            'user_id'               => $userId,
+            'from'                  => $from,
+            'to'                    => $to,
+            'sales_commission'      => $sum('salesman_tier'),
+            'daily_target_bonus'    => $sum('daily_target'),
+            'promotion_bonus'       => $sum('promotion'),
+            'manager_commission'    => $sum('manager'),
+            'ledger_reversals'      => $sum('reversal'),
+            'supervisor_commission' => $supervisor,
+            'total'                 => round((float) $payable->sum('amount') + $supervisor, 2),
+            'daily'                 => $ledger->groupBy(fn ($row) => $row->transaction_date->toDateString())
+                ->map(fn ($rows, $date) => [
+                    'date'   => $date,
+                    'amount' => round((float) $rows->where('status', 'accrued')->sum('amount'), 2),
+                    'rows'   => $rows->count(),
+                ])->values()->all(),
         ];
     }
 
