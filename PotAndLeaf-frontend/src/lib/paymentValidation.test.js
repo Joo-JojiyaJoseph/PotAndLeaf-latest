@@ -174,6 +174,24 @@ describe('executePaymentSubmit', () => {
     });
   });
 
+  it('allows a GRN payment up to the invoice balance when supplier outstanding is lower', () => {
+    const mutate = vi.fn();
+    const setErrors = vi.fn();
+
+    const submitted = executePaymentSubmit({
+      supplierId: 'sup-1',
+      amount: 1400,
+      supplierOutstanding: 1280.5,
+      purchaseId: 'grn-1',
+      payables: [{ id: 'grn-1', balance: 1400 }],
+      mutate,
+      setErrors,
+    });
+
+    expect(submitted).toBe(true);
+    expect(mutate).toHaveBeenCalledOnce();
+  });
+
   it('does not call mutate when amount exceeds selected GRN balance', () => {
     const mutate = vi.fn();
     const setErrors = vi.fn();

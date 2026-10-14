@@ -107,6 +107,10 @@ class ProductController extends Controller
         $companyId = $this->listCompanyId($request);
         $status = $request->query('status', 'in_stock');
 
+        \Illuminate\Support\Facades\DB::transaction(function () use ($companyId) {
+            app(\App\Services\InventoryService::class)->alignBatchRemainingToOnHand($companyId);
+        });
+
         $batches = \App\Models\ProductBatch::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->when($status === 'in_stock', fn ($q) => $q->where('remaining_qty', '>', 0))

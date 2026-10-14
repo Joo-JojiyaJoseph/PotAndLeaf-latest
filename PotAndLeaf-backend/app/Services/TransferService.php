@@ -357,6 +357,8 @@ class TransferService
                                 $batch->update(['status' => 'depleted']);
                             }
                         }
+                    } else {
+                        $this->inventory->consumeBatchesFifo($product->id, $dispatchQty);
                     }
 
                     $this->supervisorCommission->accrue(

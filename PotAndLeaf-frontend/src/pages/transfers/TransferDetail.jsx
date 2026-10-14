@@ -77,7 +77,6 @@ export default function TransferDetail() {
       approvals: Object.entries(approvals).map(([itemId, row]) => ({
         id: itemId,
         approved_qty: Number(row.qty) || 0,
-        rejection_reason: row.reason || null,
       })),
     }, withCompany(sourceCompanyId)),
     onSuccess: () => { invalidate(); setApproving(false); },
@@ -195,7 +194,7 @@ export default function TransferDetail() {
           <Button size="sm" disabled={approveM.isPending} onClick={() => approveM.mutate()}>Confirm approval</Button>
         </>}
       >
-        <p className="mb-3 text-sm text-muted">Set approved quantity per line. Any shortfall is rejected and will not be dispatched.</p>
+        <p className="mb-3 text-sm text-muted">Set the approved quantity for each line. Only that quantity will be dispatched.</p>
         {!t.to_company_id && !t.is_intra_company && (
           <label className="mb-3 block text-sm">
             <span className="mb-1 block text-muted">Receiving company</span>
@@ -216,8 +215,6 @@ export default function TransferDetail() {
                   onChange={(e) => setApprovals((a) => ({ ...a, [it.id]: { ...a[it.id], qty: e.target.value } }))}
                   className="h-9 w-28 rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums" />
               </div>
-              <input value={approvals[it.id]?.reason ?? ''} onChange={(e) => setApprovals((a) => ({ ...a, [it.id]: { ...a[it.id], reason: e.target.value } }))}
-                placeholder="Rejection reason (optional)" className="h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-sm" />
             </div>
           ))}
         </div>

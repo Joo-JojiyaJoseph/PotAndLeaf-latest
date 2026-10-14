@@ -228,12 +228,13 @@ class PaymentService
             ->with('supplier:id,name,credit_days,advance_balance,outstanding')
             ->withSum('supplierPayments as paid_sum', 'amount')
             ->withSum('paymentAllocations as allocated_sum', 'amount')
+            ->withSum(['purchaseReturns as returned_sum' => fn ($q) => $q->where('status', 'confirmed')], 'grand_total')
             ->orderByDesc('purchase_date')
             ->get()
             ->map(function (Purchase $p) {
                 $total = (float) $p->grand_total;
                 $paid = (float) ($p->paid_sum ?? 0) + (float) ($p->allocated_sum ?? 0);
-                $balance = round($total - $paid, 2);
+                $balance = round($total - $paid - (float) ($p->returned_sum ?? 0), 2);
                 $status = $balance <= 0.005 ? 'paid' : ($paid <= 0.005 ? 'unpaid' : 'partial');
                 $due = $p->purchase_date?->copy()->addDays((int) ($p->supplier->credit_days ?? 0));
 
@@ -264,7 +265,7 @@ class PaymentService
         int|string|null $purchaseId = null,
     ): void {
         $outstanding = (float) $supplier->outstanding;
-        if ($amount > $outstanding + 1e-6) {
+        if (! filled($purchaseId) && $amount > $outstanding + 1e-6) {
             throw ValidationException::withMessages([
                 'amount' => "Payment amount cannot exceed supplier outstanding ({$outstanding}).",
             ]);

@@ -24,7 +24,9 @@ export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance 
     return { valid: true, errors: {} };
   }
 
-  if (supplierOutstanding != null && supplierOutstanding !== '') {
+  const payingGrn = grnBalance != null && grnBalance !== '';
+
+  if (!payingGrn && supplierOutstanding != null && supplierOutstanding !== '') {
     const outstanding = Number(supplierOutstanding);
     if (!Number.isNaN(outstanding) && num > outstanding + EPS) {
       return {
@@ -36,7 +38,7 @@ export function validatePaymentAmount({ amount, supplierOutstanding, grnBalance 
     }
   }
 
-  if (grnBalance != null && grnBalance !== '') {
+  if (payingGrn) {
     const balance = Number(grnBalance);
     if (!Number.isNaN(balance) && num > balance + EPS) {
       return {

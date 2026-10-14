@@ -160,7 +160,12 @@ export default function BatchesPage() {
                     </td>
                     <td className="px-4 py-2.5 text-muted">{b.batch_no ?? '—'}</td>
                     <td className="px-4 py-2.5"><Badge tone="default">{b.source ?? '—'}</Badge></td>
-                    <td className="tnum px-4 py-2.5 text-right font-medium">{b.remaining_qty ?? 0}</td>
+                    <td className="tnum px-4 py-2.5 text-right font-medium">
+                      {b.remaining_qty ?? 0}
+                      {Number(b.qty) > Number(b.remaining_qty ?? 0) + 0.001 && (
+                        <div className="text-xs font-normal text-muted">of {b.qty} received</div>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5"><div className="w-40"><SafeBarcode value={b.barcode} height={40} /></div></td>
                     <td className="px-4 py-2.5 text-right">
                       {b.barcode && (

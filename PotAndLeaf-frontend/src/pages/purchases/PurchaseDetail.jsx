@@ -184,7 +184,7 @@ export default function PurchaseDetail() {
                 <div className="min-w-0">
                   <div className="truncate font-medium text-ink">{b.product?.name}</div>
                   <div className="microlabel text-faint">
-                    Batch {b.batch_no} · Qty {b.qty}
+                    Batch {b.batch_no} · Remaining {b.remaining_qty ?? b.qty}
                   </div>
                 </div>
                 <div className="flex items-center justify-center rounded-xl bg-white p-3">

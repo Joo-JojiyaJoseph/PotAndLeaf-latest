@@ -105,6 +105,8 @@ class ConfirmSale
                         if ((float) $batch->fresh()->remaining_qty <= 0) {
                             $batch->update(['status' => 'depleted']);
                         }
+                    } else {
+                        $this->inventory->consumeBatchesFifo($product->id, (float) $item->qty);
                     }
                 }
 

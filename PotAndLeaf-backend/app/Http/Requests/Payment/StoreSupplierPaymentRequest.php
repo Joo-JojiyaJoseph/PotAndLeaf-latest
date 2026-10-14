@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Payment;
 
 use App\Models\Purchase;
+use App\Models\PurchaseReturn;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Models\SupplierPaymentAllocation;
@@ -71,7 +72,10 @@ class StoreSupplierPaymentRequest extends FormRequest
                 ? (float) $allocations->sum(fn ($r) => (float) $r['amount'])
                 : $amount;
 
-            if ($againstOutstanding > $outstanding + 1e-6) {
+            // A payment aimed at one GRN is limited by that invoice balance.
+            // Supplier outstanding can sit below a single unpaid GRN after
+            // returns or unallocated credits, and must not block settling it.
+            if (! filled($purchaseId) && $againstOutstanding > $outstanding + 1e-6) {
                 $validator->errors()->add(
                     'amount',
                     "Payment amount cannot exceed supplier outstanding ({$outstanding}).",
@@ -151,11 +155,16 @@ class StoreSupplierPaymentRequest extends FormRequest
     {
         $paid = (float) SupplierPayment::query()
             ->where('purchase_id', $purchase->id)
+            ->where('is_advance', false)
             ->sum('amount');
         $paid += (float) SupplierPaymentAllocation::query()
             ->where('purchase_id', $purchase->id)
             ->sum('amount');
+        $returned = (float) PurchaseReturn::query()
+            ->where('purchase_id', $purchase->id)
+            ->where('status', 'confirmed')
+            ->sum('grand_total');
 
-        return max(0, round((float) $purchase->grand_total - $paid, 2));
+        return max(0, round((float) $purchase->grand_total - $paid - $returned, 2));
     }
 }

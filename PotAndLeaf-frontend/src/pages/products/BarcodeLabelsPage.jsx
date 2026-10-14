@@ -21,18 +21,32 @@ export default function BarcodeLabelsPage() {
     queryFn: () => api.get('/products', { params: { per_page: 200 } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
   });
+  const { data: batchData } = useQuery({
+    queryKey: ['inventory-batches', activeCompany?.id, 'labels'],
+    queryFn: () => api.get('/inventory/batches', { params: { status: 'all' } }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany),
+  });
   const products = data?.data ?? [];
+  const remainingByProduct = useMemo(() => {
+    const totals = {};
+    (batchData?.batches ?? []).forEach((b) => {
+      if (!b.product_id) return;
+      totals[b.product_id] = (totals[b.product_id] ?? 0) + Number(b.remaining_qty || 0);
+    });
+    return totals;
+  }, [batchData]);
 
   const rows = useMemo(() => products.map((p) => ({
     id: p.id, name: p.name, sku: p.sku, barcode: p.barcode,
-    price: p.retail_price || p.mrp || 0, stock: p.current_stock,
+    price: p.retail_price || p.mrp || 0,
+    stock: remainingByProduct[p.id] ?? p.current_stock,
     poolRole: p.pool_role, linkedSkus: p.linked_skus ?? [],
     copies: copies[p.id] ?? '',
-  })), [products, copies]);
+  })), [products, copies, remainingByProduct]);
 
   const totalLabels = rows.reduce((n, r) => n + (Math.max(0, Math.floor(Number(r.copies) || 0))), 0);
   const setCopy = (id, v) => setCopies((c) => ({ ...c, [id]: v }));
-  const fillFromStock = () => setCopies(Object.fromEntries(products.map((p) => [p.id, String(Math.max(0, Math.floor(p.current_stock)))])));
+  const fillFromStock = () => setCopies(Object.fromEntries(products.map((p) => [p.id, String(Math.max(0, Math.floor(remainingByProduct[p.id] ?? p.current_stock)))])));
   const setAllOne = () => setCopies(Object.fromEntries(products.map((p) => [p.id, '1'])));
   const clearAll = () => setCopies({});
 

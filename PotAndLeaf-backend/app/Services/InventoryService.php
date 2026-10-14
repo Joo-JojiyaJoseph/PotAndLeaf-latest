@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\StockLedgerEntry;
 use Illuminate\Support\Carbon;
 use App\Models\StockTransfer;
@@ -70,6 +71,79 @@ class InventoryService
             'occurred_at'    => now(),
             'created_by'     => $userId,
         ]);
+    }
+
+    /**
+     * Reduce batch remaining quantities, oldest first, by a stock-out that
+     * was not aimed at one batch. Stops the batch screen from keeping the
+     * original received quantity after the product stock has already fallen.
+     */
+    public function consumeBatchesFifo(string $productId, float $qty): void
+    {
+        $left = round($qty, 3);
+        if ($left <= 0) {
+            return;
+        }
+
+        $batches = ProductBatch::query()
+            ->where('product_id', $productId)
+            ->where('remaining_qty', '>', 0)
+            ->orderBy('received_at')
+            ->orderBy('created_at')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($batches as $batch) {
+            if ($left <= 0.0001) {
+                break;
+            }
+            $take = min((float) $batch->remaining_qty, $left);
+            $batch->remaining_qty = round((float) $batch->remaining_qty - $take, 3);
+            if ((float) $batch->remaining_qty <= 0) {
+                $batch->status = 'depleted';
+            }
+            $batch->save();
+            $left = round($left - $take, 3);
+        }
+    }
+
+    /**
+     * Bring batch remaining quantities down to physical on-hand stock.
+     * Does not rewrite sales, purchases, or other financial documents.
+     */
+    public function alignBatchRemainingToOnHand(int|string|null $companyId): void
+    {
+        $products = Product::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->get(['id', 'current_stock']);
+
+        foreach ($products as $product) {
+            $batches = ProductBatch::query()
+                ->where('product_id', $product->id)
+                ->where('remaining_qty', '>', 0)
+                ->orderBy('received_at')
+                ->orderBy('created_at')
+                ->lockForUpdate()
+                ->get();
+
+            $excess = round((float) $batches->sum('remaining_qty') - (float) $product->current_stock, 3);
+            if ($excess <= 0.0001) {
+                continue;
+            }
+
+            foreach ($batches as $batch) {
+                if ($excess <= 0.0001) {
+                    break;
+                }
+                $take = min((float) $batch->remaining_qty, $excess);
+                $batch->remaining_qty = round((float) $batch->remaining_qty - $take, 3);
+                if ((float) $batch->remaining_qty <= 0) {
+                    $batch->status = 'depleted';
+                }
+                $batch->save();
+                $excess = round($excess - $take, 3);
+            }
+        }
     }
 
     /**

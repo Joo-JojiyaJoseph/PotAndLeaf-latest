@@ -50,7 +50,7 @@ class PurchaseResource extends JsonResource
             'can'               => [
                 'update'  => $this->status === 'draft' && $user?->hasPermission('purchases.update', $companyId),
                 'confirm' => $this->status === 'draft' && $user?->hasPermission('purchases.confirm', $companyId),
-                'cancel'  => $this->status !== 'cancelled' && $user?->hasPermission('purchases.delete', $companyId),
+                'cancel'  => $this->status === 'draft' && $user?->hasPermission('purchases.delete', $companyId),
             ],
         ];
     }
