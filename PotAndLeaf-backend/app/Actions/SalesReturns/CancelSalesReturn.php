@@ -9,6 +9,7 @@ use App\Models\SalesReturn;
 use App\Services\InventoryService;
 use App\Services\LoyaltyService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CancelSalesReturn
 {
@@ -19,6 +20,12 @@ class CancelSalesReturn
 
     public function handle(SalesReturn $return, ?int $userId = null): SalesReturn
     {
+        if ($return->isConfirmed()) {
+            throw ValidationException::withMessages([
+                'status' => 'Confirmed returns cannot be cancelled. Record a correction instead.',
+            ]);
+        }
+
         return DB::transaction(function () use ($return, $userId) {
             if ($return->isConfirmed()) {
                 $return->loadMissing(['items', 'sale']);

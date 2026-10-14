@@ -7,10 +7,9 @@ import { FormCompanyField, useFormCompany } from '../../components/FormCompanyFi
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, todayISO as today } from '../../lib/format';
 import { allocateSplit, buildSplitLines, splitByNumSplits, splitByQtyPerSplit } from '../../lib/bulkSplitCalc';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const numInput = 'h-9 w-full rounded-xl border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const selectCls = 'h-9 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 
@@ -21,6 +20,7 @@ export default function BulkSplitForm() {
   const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany();
 
   const [sourceId, setSourceId] = useState(location.state?.sourceProductId ?? '');
+  const [batchId, setBatchId] = useState('');
   const [availableQty, setAvailableQty] = useState(
     location.state?.sourceQty != null ? String(location.state.sourceQty) : '',
   );
@@ -42,8 +42,11 @@ export default function BulkSplitForm() {
 
   const products = data?.products ?? [];
   const source = products.find((p) => String(p.id) === String(sourceId));
+  const batches = source?.batches ?? [];
+  const batch = batches.find((b) => String(b.id) === String(batchId));
   const availableNum = Number(availableQty) || 0;
-  const maxStock = source ? Number(source.current_stock) || 0 : 0;
+  const maxStock = batch ? Number(batch.remaining_qty) || 0 : 0;
+  const unitCost = batch ? Number(batch.cost_price) || 0 : 0;
   const stockCap = source ? Math.min(availableNum || maxStock, maxStock) : availableNum;
   const availableExceedsStock = source && availableNum > maxStock;
 
@@ -51,7 +54,7 @@ export default function BulkSplitForm() {
   const remainingQty = round3(stockCap - totalSplitQty);
   const splitQtyExceeded = stockCap > 0 && totalSplitQty > stockCap;
   const splitQtyInvalid = lines.some((l) => (Number(l.qty) || 0) <= 0);
-  const totalCost = stockCap > 0 && source ? totalSplitQty * source.cost_price : 0;
+  const totalCost = stockCap > 0 && batch ? totalSplitQty * unitCost : 0;
 
   const allocated = useMemo(
     () => allocateSplit(totalCost, lines.map((l) => ({ qty: l.qty, weight: l.weight }))),
@@ -71,7 +74,7 @@ export default function BulkSplitForm() {
   }
 
   function applySourceStock() {
-    if (source) setAvailableQty(String(source.current_stock));
+    if (batch) setAvailableQty(String(batch.remaining_qty));
   }
 
   function generateSplits() {
@@ -97,6 +100,7 @@ export default function BulkSplitForm() {
   function validateClient() {
     const clientErrors = {};
     if (!sourceId) clientErrors.source_product_id = ['Select a bulk product.'];
+    if (!batchId) clientErrors.source_batch_id = ['Select the batch to split.'];
     if (stockCap <= 0) clientErrors.source_qty = ['Available quantity must be greater than zero.'];
     if (availableExceedsStock) {
       clientErrors.source_qty = [`Available quantity cannot exceed stock on hand (${maxStock}).`];
@@ -112,6 +116,7 @@ export default function BulkSplitForm() {
   function buildPayload(confirmImmediately) {
     return {
       source_product_id: sourceId,
+      source_batch_id: batchId,
       source_qty: stockCap,
       split_date: splitDate,
       notes: notes || null,
@@ -207,8 +212,9 @@ export default function BulkSplitForm() {
               value={sourceId}
               onChange={(e) => {
                 setSourceId(e.target.value);
-                const p = products.find((x) => x.id === e.target.value);
-                if (p) setAvailableQty(String(p.current_stock));
+                setBatchId('');
+                setAvailableQty('');
+                setLines([]);
               }}
               className={selectCls}
             >
@@ -217,6 +223,19 @@ export default function BulkSplitForm() {
                 <option key={p.id} value={p.id}>
                   {p.name} · stock {p.current_stock}
                 </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Batch" required error={err('source_batch_id')}>
+            <Select value={batchId} onChange={(e) => {
+              const id = e.target.value;
+              setBatchId(id);
+              const chosen = batches.find((b) => String(b.id) === String(id));
+              if (chosen) setAvailableQty(String(chosen.remaining_qty));
+            }} className={selectCls}>
+              <option value="">Select batch…</option>
+              {batches.map((b) => (
+                <option key={b.id} value={b.id}>{b.batch_no} · {b.barcode || 'no barcode'} · avail {b.remaining_qty} · cost {b.cost_price}</option>
               ))}
             </Select>
           </Field>

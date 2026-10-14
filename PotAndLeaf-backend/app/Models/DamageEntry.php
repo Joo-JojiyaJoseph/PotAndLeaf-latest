@@ -15,20 +15,31 @@ class DamageEntry extends Model
 
     protected $fillable = [
         'company_id', 'product_id', 'product_batch_id', 'location_id', 'entry_no', 'entry_date',
-        'qty', 'reason', 'notes', 'photo',
+        'qty', 'returned_qty', 'reason', 'notes', 'photo',
     ];
 
     protected function casts(): array
     {
         return [
-            'entry_date' => 'date',
-            'qty'        => 'decimal:3',
+            'entry_date'   => 'date',
+            'qty'          => 'decimal:3',
+            'returned_qty' => 'decimal:3',
         ];
     }
 
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(ProductBatch::class, 'product_batch_id');
+    }
+
+    public function eligibleReturnQty(): float
+    {
+        return max(0, round((float) $this->qty - (float) $this->returned_qty, 3));
     }
 
     public function location(): BelongsTo

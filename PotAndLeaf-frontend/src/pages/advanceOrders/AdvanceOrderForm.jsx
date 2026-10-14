@@ -4,10 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, todayISO as today } from '../../lib/format';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', qty: '', rate: '', gst_rate: '' });
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';

@@ -6,7 +6,7 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, todayISO as today } from '../../lib/format';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
@@ -14,7 +14,6 @@ import { apiMessage } from '../../lib/formErrors';
 const TABS = [{ value: 'receivables', label: 'Receivables' }, { value: 'history', label: 'Receipt history' }];
 const statusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
-const today = () => new Date().toISOString().slice(0, 10);
 
 function writeCompanyId(prefill, party, filterCompanyId) {
   return prefill?.company_id || party?.company_id || (filterCompanyId && filterCompanyId !== 'all' ? filterCompanyId : undefined);

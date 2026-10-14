@@ -56,8 +56,43 @@ class CreatePurchaseReturn
 
             $productId = $orig->product_id;
             $batchId = null;
+            $damageId = $row['damage_entry_id'] ?? null;
+            $damage = null;
 
-            if (! empty($row['product_batch_id'])) {
+            if ($damageId) {
+                $damage = \App\Models\DamageEntry::forCompany($companyId)->lockForUpdate()->find($damageId);
+                if (! $damage || (string) $damage->product_id !== (string) $orig->product_id) {
+                    throw ValidationException::withMessages([
+                        'items' => "Select a damage record that belongs to {$orig->product_name}.",
+                    ]);
+                }
+                $draftReserved = (float) \App\Models\PurchaseReturnItem::query()
+                    ->where('damage_entry_id', $damage->id)
+                    ->whereHas('purchaseReturn', fn ($q) => $q->where('status', 'draft'))
+                    ->sum('qty');
+                $eligible = round($damage->eligibleReturnQty() - $draftReserved, 3);
+                if ($qty > $eligible + 1e-6) {
+                    throw ValidationException::withMessages([
+                        'items' => "Only {$eligible} damaged units of {$orig->product_name} can still be returned.",
+                    ]);
+                }
+                $batchId = $damage->product_batch_id;
+                $productId = $damage->product_id;
+            } elseif (empty($row['product_batch_id'])) {
+                $candidates = \App\Models\ProductBatch::forCompany($companyId)
+                    ->where('purchase_item_id', $orig->id)
+                    ->where('remaining_qty', '>', 0)
+                    ->get();
+                if ($candidates->count() === 1) {
+                    $row['product_batch_id'] = $candidates->first()->id;
+                } else {
+                    throw ValidationException::withMessages([
+                        'items' => "Select the batch to return for {$orig->product_name}.",
+                    ]);
+                }
+            }
+
+            if (! $damage && ! empty($row['product_batch_id'])) {
                 $batch = \App\Models\ProductBatch::forCompany($companyId)
                     ->with('product:id,parent_product_id')
                     ->find($row['product_batch_id']);
@@ -85,8 +120,16 @@ class CreatePurchaseReturn
                 $batchId = $batch->id;
             }
 
-            $calcInput[] = ['qty' => $qty, 'rate' => (float) $orig->rate, 'discount' => 0, 'gst_rate' => (float) $orig->gst_rate];
-            $meta[] = ['orig' => $orig, 'product_id' => $productId, 'product_batch_id' => $batchId];
+            $share = (float) $orig->qty > 0 ? $qty / (float) $orig->qty : 0;
+            $discount = round((float) $orig->discount * $share, 2);
+            $calcInput[] = ['qty' => $qty, 'rate' => (float) $orig->rate, 'discount' => $discount, 'gst_rate' => (float) $orig->gst_rate];
+            $meta[] = [
+                'orig' => $orig,
+                'product_id' => $productId,
+                'product_batch_id' => $batchId,
+                'damage_entry_id' => $damage?->id,
+                'from_damage' => (bool) $damage,
+            ];
         }
 
         $computed = $this->calculator->compute($calcInput, (bool) $purchase->is_interstate, 0);
@@ -120,6 +163,7 @@ class CreatePurchaseReturn
                     'purchase_item_id' => $orig->id,
                     'product_id'       => $entry['product_id'],
                     'product_batch_id' => $entry['product_batch_id'] ?? ($batchByItem[$orig->id] ?? null),
+                    'damage_entry_id'  => $entry['damage_entry_id'] ?? null,
                     'product_name'     => $orig->product_name,
                     'hsn_code'         => $orig->hsn_code,
                     'qty'              => $line['qty'],

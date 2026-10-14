@@ -47,6 +47,7 @@ class PurchaseController extends Controller
             ]);
 
         $products = Product::query()->forCompany($company->id)
+            ->where('status', 'active')
             ->with('unit:id,short_name,name')
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'hsn_code', 'gst_rate', 'cost_price', 'unit_id', 'length_cm', 'width_cm', 'height_cm'])

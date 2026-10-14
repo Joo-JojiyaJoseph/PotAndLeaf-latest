@@ -27,6 +27,7 @@ export default function TransferDetail() {
   const [redirectTo, setRedirectTo] = useState('');
   const [approving, setApproving] = useState(false);
   const [approvals, setApprovals] = useState({});
+  const [approveTo, setApproveTo] = useState('');
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['transfer', headerCompanyId, id],
@@ -41,6 +42,12 @@ export default function TransferDetail() {
       ...withCompany(headerCompanyId),
     }).then((r) => r.data.data),
     enabled: Boolean(headerCompanyId && data?.company_id && redirecting),
+  });
+
+  const { data: approveMeta } = useQuery({
+    queryKey: ['transfer-form-data', headerCompanyId, 'approve'],
+    queryFn: () => api.get('/transfers/form-data', withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: approving && Boolean(headerCompanyId),
   });
 
   const sourceCompanyId = data?.company_id ?? headerCompanyId;
@@ -66,6 +73,7 @@ export default function TransferDetail() {
   });
   const approveM = useMutation({
     mutationFn: () => api.post(`/transfers/${id}/approve`, {
+      to_company_id: approveTo ? Number(approveTo) : undefined,
       approvals: Object.entries(approvals).map(([itemId, row]) => ({
         id: itemId,
         approved_qty: Number(row.qty) || 0,
@@ -188,6 +196,17 @@ export default function TransferDetail() {
         </>}
       >
         <p className="mb-3 text-sm text-muted">Set approved quantity per line. Any shortfall is rejected and will not be dispatched.</p>
+        {!t.to_company_id && !t.is_intra_company && (
+          <label className="mb-3 block text-sm">
+            <span className="mb-1 block text-muted">Receiving company</span>
+            <Select value={approveTo} onChange={(e) => setApproveTo(e.target.value)} className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm">
+              <option value="">Select company…</option>
+              {(approveMeta?.companies ?? companies ?? []).filter((c) => String(c.id) !== String(t.company_id)).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </Select>
+          </label>
+        )}
         <div className="space-y-3">
           {(t.items ?? []).map((it) => (
             <div key={it.id} className="rounded-xl border border-line bg-paper/40 p-3">

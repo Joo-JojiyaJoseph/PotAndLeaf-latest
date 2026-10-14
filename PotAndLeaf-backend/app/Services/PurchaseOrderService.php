@@ -272,12 +272,12 @@ class PurchaseOrderService
     /** Turn an open PO into a draft purchase (GRN) ready to receive. */
     public function convertToPurchase(PurchaseOrder $po, ?int $userId = null): array
     {
-        if (! $po->isOpen()) {
-            throw ValidationException::withMessages(['status' => 'This PO has already been received or cancelled.']);
-        }
-
         return DB::transaction(function () use ($po, $userId) {
-            $po->loadMissing('items');
+            $po = PurchaseOrder::query()->whereKey($po->id)->lockForUpdate()->first();
+            if (! $po || ! $po->isOpen() || $po->purchase_id) {
+                throw ValidationException::withMessages(['status' => 'This PO has already been received or cancelled.']);
+            }
+            $po->load('items');
             $purchase = $this->createPurchase->handle($po->company_id, [
                 'supplier_id'   => $po->supplier_id,
                 'purchase_date' => now()->toDateString(),

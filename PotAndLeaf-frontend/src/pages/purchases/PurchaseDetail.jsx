@@ -53,10 +53,13 @@ export default function PurchaseDetail() {
     queryClient.invalidateQueries({ queryKey: ['purchase', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['purchases'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    queryClient.invalidateQueries({ queryKey: ['purchase-batches'] });
+    queryClient.invalidateQueries({ queryKey: ['inventory-batches'] });
   };
   const confirmM = useMutation({
     mutationFn: () => api.post(`/purchases/${id}/confirm`, {}, withCompany(purchaseCompanyId)),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success('Purchase confirmed. Batches and barcodes are ready.'); },
+    onError: (err) => toast.error(err.response?.data?.message ?? 'Could not confirm this purchase.'),
   });
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/purchases/${id}`, withCompany(purchaseCompanyId)),
@@ -105,6 +108,12 @@ export default function PurchaseDetail() {
           </>
         }
       />
+
+      {p.status === 'draft' && (
+        <div className="rounded-xl border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Batches and barcodes are created when this purchase is confirmed and stock is received. Recording a payment does not receive the goods.
+        </div>
+      )}
 
       <Section title="Details">
         <InfoGrid cols={4}>

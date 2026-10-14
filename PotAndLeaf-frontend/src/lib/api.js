@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { queryClient } from './queryClient';
 
 // Token + active company live here so the axios interceptors and the auth
 // context share one source of truth. Persisted so a refresh keeps you signed in.
@@ -43,8 +44,45 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+const INVALIDATE_ON_WRITE = [
+  [/\/companies\b/, ['companies']],
+  [/\/masters\b/, ['masters']],
+  [/\/users\b/, ['users', 'user']],
+  [/\/suppliers\b/, ['suppliers', 'supplier']],
+  [/\/supplier-payments\b/, ['supplier-payments', 'suppliers', 'supplier', 'payables', 'accounting-book']],
+  [/\/purchase-orders\b/, ['purchase-orders', 'purchase-order', 'purchases']],
+  [/\/purchase-returns\b/, ['purchase-returns', 'purchase-return', 'inventory', 'suppliers']],
+  [/\/purchases\b/, ['purchases', 'purchase', 'purchase-batches', 'inventory', 'inventory-batches']],
+  [/\/sales-returns\b/, ['sales-returns', 'inventory', 'customers']],
+  [/\/sales\b/, ['sales', 'sale', 'inventory']],
+  [/\/products\b/, ['products', 'product', 'inventory']],
+  [/\/damage\b/, ['damage', 'inventory', 'inventory-batches']],
+  [/\/batches\b/, ['inventory-batches', 'inventory']],
+  [/\/inventory\b/, ['inventory', 'inventory-batches']],
+  [/\/transfers\b/, ['transfers', 'transfer', 'inventory']],
+  [/\/bulk-splits\b/, ['bulk-splits', 'inventory', 'inventory-batches', 'products']],
+  [/\/customers\b/, ['customers', 'customer']],
+  [/\/customer-receipts\b/, ['customer-receipts', 'customers', 'receivables']],
+];
+
+function invalidateForWrite(url) {
+  const path = String(url || '');
+  if (/\/(login|logout)\b/.test(path)) return;
+  const keys = new Set();
+  INVALIDATE_ON_WRITE.forEach(([pattern, list]) => {
+    if (pattern.test(path)) list.forEach((key) => keys.add(key));
+  });
+  keys.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+}
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const method = String(response.config?.method || 'get').toLowerCase();
+    if (method !== 'get' && method !== 'head') {
+      invalidateForWrite(response.config?.url);
+    }
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       setAuthToken(null);

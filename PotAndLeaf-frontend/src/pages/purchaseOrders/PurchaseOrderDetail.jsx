@@ -41,7 +41,10 @@ export default function PurchaseOrderDetail() {
     onSuccess: (res) => {
       invalidate();
       const pid = res.data.data?.purchase_id;
-      if (pid) navigate(recordDetailPath('/purchases', { id: pid, company_id: recordCompanyId }, recordCtx));
+      if (pid) {
+        const cid = recordCompanyId;
+        navigate(cid ? `/purchases/${pid}/edit?company_id=${cid}` : `/purchases/${pid}/edit`);
+      }
     },
   });
 

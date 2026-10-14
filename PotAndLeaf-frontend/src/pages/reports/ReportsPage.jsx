@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useCompanyFilter } from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
 import { Card, StatCard, Spinner, Badge, Select, Button, Input } from '../../components/ui';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { addCalendarDays, formatCurrency, formatDate, todayISO } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
 import AccountingReportPanels from './AccountingReportPanels';
 import ReorderReportPanel from './ReorderReportPanel';
@@ -14,8 +14,7 @@ import ReportNavGrid from './ReportNavGrid';
 import ReportEmptyState from './ReportEmptyState';
 import { REPORT_TABS, filterVisibleTabs, tabMeta } from './reportConfig';
 
-const iso = (d) => d.toISOString().slice(0, 10);
-const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
+const daysAgo = (n) => addCalendarDays(todayISO(), -n);
 const selectCls = 'h-10 w-full min-w-0 rounded-lg border border-line bg-surface px-2 text-sm sm:h-9 sm:w-auto';
 const statusTone = { active: 'active', returned: 'inactive', overdue: 'blocked', expected: 'warning', cancelled: 'blocked', draft: 'inactive', requested: 'warning', in_transit: 'info', received: 'active', rejected: 'blocked' };
 
@@ -52,7 +51,7 @@ export default function ReportsPage() {
   const { filterCompanyId, setFilterCompanyId, companyParams, viewingCompany } = useCompanyFilter();
   const toast = useToast();
   const [tab, setTab] = useState('dashboard');
-  const [range, setRange] = useState({ from: daysAgo(29), to: iso(new Date()) });
+  const [range, setRange] = useState({ from: daysAgo(29), to: todayISO() });
   const [showCustomDates, setShowCustomDates] = useState(false);
   const [reportSearch, setReportSearch] = useState('');
   const [period, setPeriod] = useState('daily');
@@ -84,7 +83,7 @@ export default function ReportsPage() {
   const [leaderboardPeriod, setLeaderboardPeriod] = useState('month');
   const [leaderboardMetric, setLeaderboardMetric] = useState('net_sales');
   const [waType, setWaType] = useState('');
-  const [eodDate, setEodDate] = useState(iso(new Date()));
+  const [eodDate, setEodDate] = useState(todayISO());
   const [locationSearch, setLocationSearch] = useState('');
 
   const visibleTabs = useMemo(() => filterVisibleTabs(REPORT_TABS, {

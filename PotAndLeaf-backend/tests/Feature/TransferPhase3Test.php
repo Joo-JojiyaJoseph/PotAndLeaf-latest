@@ -336,18 +336,14 @@ it('loads stock from a selected source company the user does not belong to', fun
     expect(collect($res->json('data.companies'))->pluck('id'))->toContain($this->company->id)->not->toContain($other->id);
 });
 
-it('lets a shop user request stock from another company', function () {
-    $other = Company::create(['name' => 'Source Branch', 'code' => 'SRC'.Str::upper(Str::random(3)), 'is_active' => true]);
-    $product = $this->createProduct(['company_id' => $other->id, 'current_stock' => 50]);
+it('lets a shop user request a transfer without choosing companies', function () {
+    $product = $this->createProduct(['current_stock' => 50]);
 
     $this->postJson('/api/transfers', [
-        'from_company_id' => $other->id,
-        'to_company_id'   => $this->company->id,
         'transfer_date'   => now()->toDateString(),
         'items'           => [['product_id' => $product->id, 'qty' => 10]],
     ], $this->apiHeaders())
         ->assertCreated()
-        ->assertJsonPath('data.from_company_id', $other->id)
-        ->assertJsonPath('data.to_company_id', $this->company->id)
+        ->assertJsonPath('data.from_company_id', $this->company->id)
         ->assertJsonPath('data.status', 'requested');
 });

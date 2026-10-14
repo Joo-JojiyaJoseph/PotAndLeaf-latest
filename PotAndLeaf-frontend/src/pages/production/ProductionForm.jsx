@@ -7,11 +7,10 @@ import { useAuth } from '../../context/AuthContext';
 import { defaultCreateCompanyId, recordDetailPath } from '../../lib/recordCompany';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import SearchSelect from '../../components/SearchSelect';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, todayISO as today } from '../../lib/format';
 import { apiMessage } from '../../lib/formErrors';
 import { useToast } from '../../lib/toast';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const emptyItem = () => ({ component_product_id: '', qty: '' });
 const defaultStages = () => ([
   { name: 'Stage 1', items: [emptyItem()] },

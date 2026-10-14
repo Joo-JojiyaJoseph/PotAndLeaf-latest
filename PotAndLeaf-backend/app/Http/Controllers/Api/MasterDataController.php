@@ -169,6 +169,16 @@ class MasterDataController extends Controller
             $data['parent_id'] = null;
         }
 
+        if ($hasParent && filled($data['parent_id'] ?? null)) {
+            $parent = ProductCategory::query()->where('company_id', $companyId)->whereKey($data['parent_id'])->first();
+            $keepingExisting = $id && $parent && (string) $parent->id === (string) ProductCategory::query()->whereKey($id)->value('parent_id');
+            if (! $parent || ($parent->status !== 'active' && ! $keepingExisting)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'parent_id' => 'Choose an active parent category.',
+                ]);
+            }
+        }
+
         return $data;
     }
 

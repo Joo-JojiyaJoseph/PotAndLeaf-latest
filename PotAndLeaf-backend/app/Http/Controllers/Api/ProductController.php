@@ -104,11 +104,17 @@ class ProductController extends Controller
     public function batchesOverview(Request $request): JsonResponse
     {
         $this->allow($request, 'products.view');
-        $companyId = $this->company($request)->id;
+        $companyId = $this->listCompanyId($request);
+        $status = $request->query('status', 'in_stock');
 
-        $batches = \App\Models\ProductBatch::forCompany($companyId)
-            ->where('remaining_qty', '>', 0)
-            ->with(['product:id,sku,name', 'purchase:id,purchase_no', 'bulkSplit:id,split_no,source_product_name'])
+        $batches = \App\Models\ProductBatch::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->when($status === 'in_stock', fn ($q) => $q->where('remaining_qty', '>', 0))
+            ->when($status === 'depleted', fn ($q) => $q->where('remaining_qty', '<=', 0))
+            ->when(filled($request->query('product_id')), fn ($q) => $q->where('product_id', $request->query('product_id')))
+            ->when(filled($request->query('batch_no')), fn ($q) => $q->where('batch_no', 'like', '%'.$request->query('batch_no').'%'))
+            ->when(filled($request->query('barcode')), fn ($q) => $q->where('barcode', 'like', '%'.$request->query('barcode').'%'))
+            ->with(['product:id,sku,name,company_id', 'company:id,name', 'purchase:id,purchase_no', 'bulkSplit:id,split_no,source_product_name'])
             ->orderBy('created_at')
             ->get()
             ->map(function ($b) {
@@ -119,6 +125,8 @@ class ProductController extends Controller
 
                     return [
                         'id'            => $b->id,
+                        'company_id'    => $b->company_id,
+                        'company_name'  => $b->company?->name,
                         'product_id'    => $b->product_id,
                         'sku'           => $b->product?->sku ?? '—',
                         'product'       => $b->product?->name ?? 'Unknown product',
@@ -150,7 +158,8 @@ class ProductController extends Controller
 
         // Products holding stock that isn't covered by any batch yet.
         $covered = $batches->groupBy('product_id')->map(fn ($g) => $g->sum('remaining_qty'));
-        $untracked = Product::forCompany($companyId)
+        $untracked = Product::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('current_stock', '>', 0)
             ->get(['id', 'sku', 'name', 'current_stock'])
             ->map(fn ($p) => [

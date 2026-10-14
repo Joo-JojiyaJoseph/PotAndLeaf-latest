@@ -5,9 +5,9 @@ import { ArrowLeftIcon, PlusIcon, TrashIcon, SparklesIcon } from '@heroicons/rea
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
-import { formatCurrency } from '../../lib/format';
+import { todayISO } from '../../lib/format';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = todayISO;
 const emptyLine = () => ({ product_id: '', qty: '', rate: '', gst_rate: '' });
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
@@ -56,12 +56,6 @@ export default function PurchaseOrderForm() {
     setLines([emptyLine()]);
     setErrors({});
   }
-
-  const lineTotal = (l) => {
-    const taxable = (Number(l.qty) || 0) * (Number(l.rate) || 0);
-    return taxable + taxable * (Number(l.gst_rate) || 0) / 100;
-  };
-  const grand = lines.reduce((s, l) => s + lineTotal(l), 0);
 
   async function loadSuggestions() {
     if (!companyReady || !targetCompanyId) {
@@ -169,9 +163,6 @@ export default function PurchaseOrderForm() {
             <thead><tr className="border-b border-line text-left text-faint">
               <th className="microlabel px-3 py-2 font-semibold">Product</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Qty</th>
-              <th className="microlabel px-3 py-2 text-right font-semibold">Rate</th>
-              <th className="microlabel px-3 py-2 text-right font-semibold">GST %</th>
-              <th className="microlabel px-3 py-2 text-right font-semibold">Total</th>
               <th className="px-3 py-2" />
             </tr></thead>
             <tbody>
@@ -184,9 +175,6 @@ export default function PurchaseOrderForm() {
                     </Select>
                   </td>
                   <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
-                  <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></td>
-                  <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.gst_rate} onChange={(e) => setLine(i, { gst_rate: e.target.value })} /></td>
-                  <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(lineTotal(line))}</td>
                   <td className="px-3 py-2"><button onClick={() => setLines((p) => (p.length === 1 ? p : p.filter((_, idx) => idx !== i)))} className="rounded-md p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button></td>
                 </tr>
               ))}
@@ -195,7 +183,7 @@ export default function PurchaseOrderForm() {
         </div>
         <div className="flex items-center justify-between border-t border-line px-3 py-2">
           <Button variant="ghost" size="sm" onClick={() => setLines((p) => [...p, emptyLine()])}><PlusIcon className="size-4" /> Add item</Button>
-          <div className="text-sm">Estimated total <span className="tnum ml-2 font-semibold">{formatCurrency(grand)}</span></div>
+          <p className="text-xs text-muted">Prices are applied when this order is received as a purchase.</p>
         </div>
         {err('items') && <p className="px-3 pb-2 text-xs text-danger">{err('items')}</p>}
       </Card>

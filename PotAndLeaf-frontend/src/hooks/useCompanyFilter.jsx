@@ -24,8 +24,15 @@ export function useCompanyFilter() {
   useEffect(() => {
     if (!isSuperAdmin) {
       setFilterState('');
+      return;
     }
-  }, [isSuperAdmin]);
+    if (!filterCompanyId || filterCompanyId === 'all') return;
+    const stillActive = (companies ?? []).some((c) => String(c.id) === String(filterCompanyId) && c.is_active !== false);
+    if (!stillActive && companies?.length) {
+      setFilterState('all');
+      try { sessionStorage.setItem(STORAGE_KEY, 'all'); } catch { /* ignore */ }
+    }
+  }, [isSuperAdmin, companies, filterCompanyId]);
 
   const setFilterCompanyId = (value) => {
     setFilterState(value);

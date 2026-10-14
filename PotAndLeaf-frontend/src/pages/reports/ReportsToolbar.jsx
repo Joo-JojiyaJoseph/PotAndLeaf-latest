@@ -7,8 +7,7 @@ import {
   BuildingOffice2Icon,
 } from '@heroicons/react/24/outline';
 import { Button } from '../../components/ui';
-import { formatDate } from '../../lib/format';
-import { classNames } from '../../lib/format';
+import { addCalendarDays, classNames, formatDate, startOfIstWeek, todayISO } from '../../lib/format';
 import CompanyFilter from '../../components/CompanyFilter';
 
 const PRESETS = [
@@ -25,20 +24,11 @@ const BUSINESS_PERIODS = [
 ];
 
 function rangeForKind(kind) {
-  const to = new Date();
-  const from = new Date();
-  if (kind === 'today') {
-    // from = to
-  } else if (kind === 'week') {
-    const day = from.getDay() || 7;
-    from.setDate(from.getDate() - day + 1);
-  } else if (kind === 'month') {
-    from.setDate(1);
-  } else if (kind === 'year') {
-    from.setMonth(0, 1);
-  }
-  const iso = (d) => d.toISOString().slice(0, 10);
-  return { from: iso(from), to: iso(to) };
+  const to = todayISO();
+  if (kind === 'week') return { from: startOfIstWeek(to), to };
+  if (kind === 'month') return { from: `${to.slice(0, 7)}-01`, to };
+  if (kind === 'year') return { from: `${to.slice(0, 4)}-01-01`, to };
+  return { from: to, to };
 }
 
 export default function ReportsToolbar({
@@ -59,12 +49,10 @@ export default function ReportsToolbar({
 }) {
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef(null);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO();
 
   const presetActive = (days) => {
-    const from = new Date();
-    from.setDate(from.getDate() - days);
-    return range.from === from.toISOString().slice(0, 10) && range.to === today;
+    return range.from === addCalendarDays(today, -days) && range.to === today;
   };
 
   useEffect(() => {
@@ -119,9 +107,7 @@ export default function ReportsToolbar({
                       key={p.label}
                       type="button"
                       onClick={() => {
-                        const from = new Date();
-                        from.setDate(from.getDate() - p.days);
-                        onRangeChange({ from: from.toISOString().slice(0, 10), to: today });
+                        onRangeChange({ from: addCalendarDays(today, -p.days), to: today });
                         onToggleCustomDates?.(false);
                       }}
                       className={chip(on)}

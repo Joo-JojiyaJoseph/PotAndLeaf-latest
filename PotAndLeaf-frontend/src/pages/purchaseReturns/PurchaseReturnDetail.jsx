@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { useToast } from '../../lib/toast';
 
 const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked' };
 
@@ -15,6 +16,7 @@ export default function PurchaseReturnDetail() {
   const [searchParams] = useSearchParams();
   const { companyId } = useAuth();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const headerCompanyId = searchParams.get('company_id') || companyId;
 
   const { data, isLoading, isError } = useQuery({
@@ -32,11 +34,13 @@ export default function PurchaseReturnDetail() {
   };
   const confirmM = useMutation({
     mutationFn: () => api.post(`/purchase-returns/${id}/confirm`, {}, withCompany(recordCompanyId)),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success('Return confirmed.'); },
+    onError: (e) => toast.error(e.response?.data?.message ?? Object.values(e.response?.data?.errors ?? {})?.[0]?.[0] ?? 'Confirm failed.'),
   });
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/purchase-returns/${id}`, withCompany(recordCompanyId)),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success('Return cancelled.'); },
+    onError: (e) => toast.error(e.response?.data?.message ?? Object.values(e.response?.data?.errors ?? {})?.[0]?.[0] ?? 'Cancel failed.'),
   });
 
   if (isLoading) return <DetailLoading />;

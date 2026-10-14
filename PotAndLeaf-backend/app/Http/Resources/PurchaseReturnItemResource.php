@@ -15,6 +15,8 @@ class PurchaseReturnItemResource extends JsonResource
             'id'               => $this->id,
             'purchase_item_id' => $this->purchase_item_id,
             'product_id'       => $this->product_id,
+            'product_batch_id' => $this->product_batch_id,
+            'damage_entry_id'  => $this->damage_entry_id,
             'product_name'     => $this->product_name,
             'hsn_code'         => $this->hsn_code,
             'qty'              => (float) $this->qty,

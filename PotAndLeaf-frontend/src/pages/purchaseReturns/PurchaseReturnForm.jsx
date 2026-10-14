@@ -4,11 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, todayISO } from '../../lib/format';
 import { computePurchase } from '../../lib/purchaseCalc';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = todayISO;
 const numInput =
   'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30 disabled:bg-paper disabled:text-muted';
 
@@ -22,6 +22,7 @@ export default function PurchaseReturnForm() {
   const [notes, setNotes] = useState('');
   const [qtys, setQtys] = useState({}); // purchase_item_id -> string
   const [batchIds, setBatchIds] = useState({}); // purchase_item_id -> batch uuid
+  const [damageIds, setDamageIds] = useState({});
   const [errors, setErrors] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -45,10 +46,16 @@ export default function PurchaseReturnForm() {
   useEffect(() => {
     setQtys({});
     setBatchIds({});
+    setDamageIds({});
     setErrors([]);
   }, [purchaseId]);
 
   function maxReturnQty(it) {
+    const damageId = damageIds[it.purchase_item_id];
+    if (damageId) {
+      const damage = (it.damage_entries ?? []).find((d) => String(d.id) === String(damageId));
+      return damage ? Number(damage.eligible_qty) : 0;
+    }
     const batchId = batchIds[it.purchase_item_id];
     if (batchId) {
       const batch = (it.batches ?? []).find((b) => String(b.id) === String(batchId));
@@ -64,7 +71,7 @@ export default function PurchaseReturnForm() {
     const lines = sourceItems.map((it) => ({
       qty: Number(qtys[it.purchase_item_id]) || 0,
       rate: it.rate,
-      discount: 0,
+      discount: it.qty > 0 ? (Number(it.discount) || 0) * ((Number(qtys[it.purchase_item_id]) || 0) / it.qty) : 0,
       gst_rate: it.gst_rate,
     }));
     return computePurchase(lines, isInterstate, 0);
@@ -75,13 +82,31 @@ export default function PurchaseReturnForm() {
 
   async function save() {
     setErrors([]);
+    const clientErrors = [];
+    sourceItems.forEach((it) => {
+      const qty = Number(qtys[it.purchase_item_id]) || 0;
+      if (qty <= 0) return;
+      const max = maxReturnQty(it);
+      if (qty > max + 0.0001) {
+        clientErrors.push(`${it.product_name}: return quantity cannot exceed ${max}.`);
+      }
+      const damageId = damageIds[it.purchase_item_id];
+      const batchId = batchIds[it.purchase_item_id];
+      if (!damageId && !batchId) clientErrors.push(`${it.product_name}: select a batch or a damage record.`);
+    });
+    if (clientErrors.length) {
+      setErrors(clientErrors);
+      return;
+    }
     setSaving(true);
     const items = sourceItems
       .filter((it) => Number(qtys[it.purchase_item_id]) > 0)
       .map((it) => {
         const row = { purchase_item_id: it.purchase_item_id, qty: Number(qtys[it.purchase_item_id]) };
+        const damageId = damageIds[it.purchase_item_id];
         const batchId = batchIds[it.purchase_item_id];
-        if (batchId) row.product_batch_id = batchId;
+        if (damageId) row.damage_entry_id = damageId;
+        else if (batchId) row.product_batch_id = batchId;
         return row;
       });
 
@@ -200,11 +225,24 @@ export default function PurchaseReturnForm() {
                               }}
                               className="mt-1.5 h-8 w-full max-w-xs rounded-[10px] border border-line bg-surface px-2 text-xs focus:outline-none focus:ring-2 focus:ring-leaf/30 disabled:bg-paper disabled:text-muted"
                             >
-                              <option value="">Whole purchase line</option>
+                              <option value="">Select batch…</option>
                               {it.batches.map((b) => (
                                 <option key={b.id} value={b.id}>
-                                  {b.batch_no} · {b.product_name ?? it.product_name} · avail {b.remaining_qty}
+                                  {b.batch_no} · {b.barcode || 'no barcode'} · avail {b.remaining_qty} · cost {b.cost_price}
                                 </option>
+                              ))}
+                            </Select>
+                          )}
+                          {(it.damage_entries?.length ?? 0) > 0 && (
+                            <Select
+                              value={damageIds[it.purchase_item_id] ?? ''}
+                              disabled={disabled}
+                              onChange={(e) => setDamageIds((d) => ({ ...d, [it.purchase_item_id]: e.target.value }))}
+                              className="mt-1.5 h-8 w-full max-w-xs rounded-[10px] border border-line bg-surface px-2 text-xs"
+                            >
+                              <option value="">Return saleable stock</option>
+                              {it.damage_entries.map((d) => (
+                                <option key={d.id} value={d.id}>{d.entry_no} · damaged left {d.eligible_qty} · batch {d.batch_no || '—'}</option>
                               ))}
                             </Select>
                           )}

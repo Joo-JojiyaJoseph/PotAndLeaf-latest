@@ -62,6 +62,17 @@ class ConfirmBulkSplit
                 ]);
             }
 
+            $batch = null;
+            if ($split->source_batch_id) {
+                $batch = ProductBatch::query()->whereKey($split->source_batch_id)->lockForUpdate()->first();
+                if (! $batch || (float) $batch->remaining_qty + 1e-6 < $totalSplitQty) {
+                    $left = $batch ? (float) $batch->remaining_qty : 0;
+                    throw ValidationException::withMessages([
+                        'source_batch_id' => "The selected batch has only {$left} available.",
+                    ]);
+                }
+            }
+
             $this->inventory->post(
                 product: $source,
                 direction: 'out',
@@ -71,8 +82,15 @@ class ConfirmBulkSplit
                 referenceId: $split->id,
                 note: "Split {$split->split_no}",
                 userId: $userId,
+                productBatchId: $batch?->id,
             );
             $source->save();
+            if ($batch) {
+                $batch->decrement('remaining_qty', $totalSplitQty);
+                if ((float) $batch->fresh()->remaining_qty <= 0) {
+                    $batch->update(['status' => 'depleted']);
+                }
+            }
 
             foreach ($split->items as $index => $item) {
                 $target = $this->resolveOrCreateSplitProduct($split, $source, $item, $index + 1);

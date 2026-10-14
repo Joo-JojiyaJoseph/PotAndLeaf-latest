@@ -4,11 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, todayISO as today } from '../../lib/format';
 import { computeSale } from '../../lib/saleCalc';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const numInput =
   'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30 disabled:bg-paper disabled:text-muted';
 

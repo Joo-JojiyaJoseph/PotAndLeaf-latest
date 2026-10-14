@@ -1070,13 +1070,31 @@ class ReportService
 
         SupplierPayment::forCompany($companyId)
             ->where('supplier_id', $supplierId)
-            ->where('is_advance', false)
             ->whereDate('payment_date', '>=', $from)
             ->whereDate('payment_date', '<=', $to)
             ->orderBy('payment_date')
             ->with('purchase:id,purchase_no')
-            ->get(['id', 'payment_no', 'payment_date', 'amount', 'applied_from_advance', 'purchase_id'])
+            ->get(['id', 'payment_no', 'payment_date', 'amount', 'adjusted_amount', 'mode', 'reference', 'is_advance', 'applied_from_advance', 'purchase_id'])
             ->each(function (SupplierPayment $p) use ($rows) {
+                if ($p->is_advance) {
+                    $rows->push([
+                        'date'        => $p->payment_date->toDateString(),
+                        'type'        => 'memo',
+                        'reference'   => $p->payment_no,
+                        'invoice'     => null,
+                        'description' => 'Supplier advance',
+                        'amount'      => (float) $p->amount,
+                        'debit'       => 0,
+                        'credit'      => 0,
+                        'mode'        => $p->mode,
+                        'payment_reference' => $p->reference,
+                        'adjusted_amount' => (float) ($p->adjusted_amount ?? 0),
+                        'remaining_advance' => round((float) $p->amount - (float) ($p->adjusted_amount ?? 0), 2),
+                    ]);
+
+                    return;
+                }
+
                 $rows->push([
                     'date'        => $p->payment_date->toDateString(),
                     'type'        => 'debit',
@@ -1086,12 +1104,16 @@ class ReportService
                     'amount'      => (float) $p->amount,
                     'debit'       => (float) $p->amount,
                     'credit'      => 0,
+                    'mode'        => $p->mode,
+                    'payment_reference' => $p->reference,
                 ]);
             });
 
         $balance = $opening;
         $entries = $rows->sortBy(fn ($r) => $r['date'].$r['reference'])->values()->map(function ($row) use (&$balance) {
-            $balance += $row['type'] === 'credit' ? $row['amount'] : -$row['amount'];
+            if (($row['type'] ?? '') !== 'memo') {
+                $balance += $row['type'] === 'credit' ? $row['amount'] : -$row['amount'];
+            }
             $row['balance'] = round($balance, 2);
 
             return $row;

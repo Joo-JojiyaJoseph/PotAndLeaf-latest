@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
@@ -37,11 +37,12 @@ export default function UsersList() {
   const targetCompanyId = isCreate && isSuperAdmin ? formCompanyId : null;
   const editCompanyId = editing?.id ? (formCompanyId || resolveUserCompany(editing)) : null;
 
-  const { data, isLoading, isError } = useQuery({
+  useEffect(() => { setPage(1); }, [filterCompanyId, statusFilter]);
+
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['users', activeCompany?.id, filterCompanyId, statusFilter, page],
     queryFn: () => api.get('/users', { params: { ...companyParams, status: statusFilter, page, per_page: 25 } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
-    placeholderData: keepPreviousData,
   });
   const { data: formData } = useQuery({
     queryKey: ['users-form-data', targetCompanyId || activeCompany?.id],
@@ -152,7 +153,10 @@ export default function UsersList() {
         {isLoading ? (
           <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
         ) : isError ? (
-          <div className="px-4 py-12 text-center text-sm text-muted">Couldn't load users.</div>
+          <div className="px-4 py-12 text-center text-sm text-muted">
+            <p>Couldn’t load users.</p>
+            <Button size="sm" variant="outline" className="mt-3" onClick={() => refetch()}>Try again</Button>
+          </div>
         ) : rows.length === 0 ? (
           <div className="px-4 py-16 text-center text-sm text-muted">
             {statusFilter === 'inactive' ? 'No inactive users in this company.' : 'No active users in this company yet.'}

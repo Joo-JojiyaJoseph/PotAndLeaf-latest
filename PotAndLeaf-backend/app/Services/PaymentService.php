@@ -167,6 +167,7 @@ class PaymentService
             $supplier->advance_balance = $advance - $amount;
             $supplier->outstanding = (float) $supplier->outstanding - $amount;
             $supplier->save();
+            $this->consumeAdvanceFifo($supplier->id, $amount);
 
             $this->syncPurchasePaid($purchase->id);
             $this->activity->log($companyId, $userId, 'create', 'payment', 'supplier_payment', $payment->id, "Advance applied {$payment->payment_no}");
@@ -192,7 +193,8 @@ class PaymentService
                     $supplier->advance_balance = (float) $supplier->advance_balance + (float) $payment->amount;
                     $supplier->outstanding = (float) $supplier->outstanding + (float) $payment->amount;
                 } elseif ($payment->is_advance) {
-                    $supplier->advance_balance = max(0, (float) $supplier->advance_balance - (float) $payment->amount);
+                    $unapplied = max(0, round((float) $payment->amount - (float) ($payment->adjusted_amount ?? 0), 2));
+                    $supplier->advance_balance = max(0, (float) $supplier->advance_balance - $unapplied);
                 } else {
                     $allocated = (float) $payment->allocations()->sum('amount');
                     $againstOutstanding = $allocated > 0.005 ? $allocated : (float) $payment->amount;
@@ -309,6 +311,33 @@ class PaymentService
 
         $purchase->amount_paid = round($paid, 2);
         $purchase->save();
+    }
+
+    /** Mark the oldest unapplied supplier advances as consumed, without a second cash entry. */
+    private function consumeAdvanceFifo(string $supplierId, float $amount): void
+    {
+        $left = round($amount, 2);
+        $advances = SupplierPayment::query()
+            ->where('supplier_id', $supplierId)
+            ->where('is_advance', true)
+            ->orderBy('payment_date')
+            ->orderBy('created_at')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($advances as $advance) {
+            if ($left <= 0.005) {
+                break;
+            }
+            $remaining = round((float) $advance->amount - (float) ($advance->adjusted_amount ?? 0), 2);
+            if ($remaining <= 0.005) {
+                continue;
+            }
+            $take = round(min($remaining, $left), 2);
+            $advance->adjusted_amount = round((float) ($advance->adjusted_amount ?? 0) + $take, 2);
+            $advance->save();
+            $left = round($left - $take, 2);
+        }
     }
 
     private function nextPaymentNo(int|string $companyId): string

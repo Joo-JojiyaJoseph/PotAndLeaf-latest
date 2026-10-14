@@ -40,7 +40,7 @@ class SalesReturnResource extends JsonResource
             'items'         => SalesReturnItemResource::collection($this->whenLoaded('items')),
             'can'           => [
                 'confirm' => $this->status === 'draft' && $user?->hasPermission('sales_returns.confirm', $companyId),
-                'cancel'  => $this->status !== 'cancelled' && $user?->hasPermission('sales_returns.delete', $companyId),
+                'cancel'  => $this->status === 'draft' && $user?->hasPermission('sales_returns.delete', $companyId),
             ],
         ];
     }

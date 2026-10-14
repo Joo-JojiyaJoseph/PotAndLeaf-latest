@@ -15,7 +15,7 @@ class SupplierPayment extends Model
 
     protected $fillable = [
         'company_id', 'supplier_id', 'purchase_id', 'payment_no',
-        'payment_date', 'amount', 'mode', 'reference', 'notes',
+        'payment_date', 'amount', 'adjusted_amount', 'mode', 'reference', 'notes',
         'is_advance', 'applied_from_advance',
     ];
 
@@ -24,6 +24,7 @@ class SupplierPayment extends Model
         return [
             'payment_date'         => 'date',
             'amount'               => 'decimal:2',
+            'adjusted_amount'      => 'decimal:2',
             'is_advance'           => 'boolean',
             'applied_from_advance' => 'boolean',
         ];

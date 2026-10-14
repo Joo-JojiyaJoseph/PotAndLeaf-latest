@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, todayISO } from '../../lib/format';
 
 const TABS = [
   { value: 'payouts', label: 'Payouts' },
@@ -19,8 +19,8 @@ const TABS = [
   { value: 'supervisor', label: 'Supervisor' },
 ];
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
-const thisMonth = () => new Date().toISOString().slice(0, 7);
-const today = () => new Date().toISOString().slice(0, 10);
+const thisMonth = () => todayISO().slice(0, 7);
+const today = todayISO;
 
 function RuleModal({ open, onClose, staff, editing }) {
   const queryClient = useQueryClient();

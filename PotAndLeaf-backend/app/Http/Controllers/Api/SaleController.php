@@ -46,7 +46,7 @@ class SaleController extends Controller
 
         $settings = app(\App\Services\SettingsService::class)->all($company->id);
 
-        $products = Product::forCompany($company->id)->orderBy('name')
+        $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')
             ->get(['id', 'sku', 'name', 'hsn_code', 'gst_rate', 'current_stock', 'retail_price', 'wholesale_price', 'dealer_price', 'mrp'])
             ->map(fn ($p) => [
                 'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'hsn_code' => $p->hsn_code,

@@ -298,6 +298,7 @@ describe('Inventory module — API', function () {
         $transferId = $transfer->json('data.id');
         $itemId = $transfer->json('data.items.0.id');
 
+        $this->postJson("/api/transfers/{$transferId}/approve", [], inventoryHeaders($this))->assertOk();
         $this->postJson("/api/transfers/{$transferId}/dispatch", [], inventoryHeaders($this))->assertOk();
 
         expect((float) $sourceProduct->fresh()->current_stock)->toBe(80.0);
@@ -325,6 +326,7 @@ describe('Inventory module — API', function () {
         $transferId = $transfer->json('data.id');
         $itemId = $transfer->json('data.items.0.id');
 
+        $this->postJson("/api/transfers/{$transferId}/approve", [], inventoryHeaders($this))->assertOk();
         $this->postJson("/api/transfers/{$transferId}/dispatch", [], inventoryHeaders($this))->assertOk();
 
         grantDestCompanyAccess($this, $dest);

@@ -8,11 +8,10 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { ImageUpload } from '../../components/media';
-import { formatDate } from '../../lib/format';
+import { formatDate, todayISO as today } from '../../lib/format';
 import Pagination from '../../components/Pagination';
 
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
-const today = () => new Date().toISOString().slice(0, 10);
 
 function DamageFormModal({ open, onClose }) {
   const toast = useToast();
@@ -161,7 +160,17 @@ function DamageFormModal({ open, onClose }) {
                 <option key={p.id} value={p.id}>{p.sku} — {p.name} (stock {p.current_stock})</option>
               ))}
             </Select>
-            {product && <span className="mt-1 block text-xs text-muted">Available: {product.current_stock}</span>}
+            {product && <span className="mt-1 block text-xs text-muted">On hand: {product.current_stock}</span>}
+          </Field>
+        </div>
+        <div className="sm:col-span-2">
+          <Field label="Batch" required error={err('product_batch_id')}>
+            <Select value={form.product_batch_id} onChange={set('product_batch_id')} className={selectCls}>
+              <option value="">Select batch…</option>
+              {(formData?.batches ?? []).filter((b) => String(b.product_id) === String(form.product_id)).map((b) => (
+                <option key={b.id} value={b.id}>{b.batch_no} · {b.barcode || 'no barcode'} · avail {b.remaining_qty} · cost {b.cost_price}</option>
+              ))}
+            </Select>
           </Field>
         </div>
         <Field label="Quantity" required error={err('qty')}>

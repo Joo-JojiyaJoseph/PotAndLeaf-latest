@@ -10,19 +10,18 @@ import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../lib/toast';
 import { Badge, Button, Card, Input, Spinner, StatCard, Select } from '../../components/ui';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { addCalendarDays, formatCurrency, formatDate, todayISO } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
 
 const selectCls =
   'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 
-const iso = (d) => d.toISOString().slice(0, 10);
-const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
+const daysAgo = (n) => addCalendarDays(todayISO(), -n);
 
 const PRESETS = [
-  { label: '7 days', from: daysAgo(6), to: iso(new Date()) },
-  { label: '30 days', from: daysAgo(29), to: iso(new Date()) },
-  { label: '90 days', from: daysAgo(89), to: iso(new Date()) },
+  { label: '7 days', from: daysAgo(6), to: todayISO() },
+  { label: '30 days', from: daysAgo(29), to: todayISO() },
+  { label: '90 days', from: daysAgo(89), to: todayISO() },
   { label: 'All time', from: '', to: '' },
 ];
 
@@ -42,7 +41,7 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
     direction: '',
     reference_type: '',
     from: daysAgo(29),
-    to: iso(new Date()),
+    to: todayISO(),
     search: '',
   });
   const [applied, setApplied] = useState(filters);
@@ -115,7 +114,7 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
   }
 
   function resetFilters() {
-    const blank = { product_id: '', direction: '', reference_type: '', from: daysAgo(29), to: iso(new Date()), search: '' };
+    const blank = { product_id: '', direction: '', reference_type: '', from: daysAgo(29), to: todayISO(), search: '' };
     setFilters(blank);
     setApplied(blank);
     setPage(1);

@@ -5,6 +5,7 @@ import { ExclamationTriangleIcon, MagnifyingGlassIcon, PrinterIcon, QrCodeIcon }
 import { useToast } from '../../lib/toast';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Spinner, PageHeader } from '../../components/ui';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 import { printBarcodeSheet } from '../../lib/barcodeSheet';
@@ -22,14 +23,18 @@ function SafeBarcode({ value, height = 40 }) {
 
 export default function BatchesPage() {
   const { activeCompany } = useAuth();
+  const { companyParams, Filter } = useCompanyFilter();
   const toast = useToast();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState(searchParams.get('q') ?? '');
+  const [batchNo, setBatchNo] = useState('');
+  const [barcode, setBarcode] = useState('');
+  const [status, setStatus] = useState('in_stock');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['inventory-batches', activeCompany?.id],
-    queryFn: () => api.get('/inventory/batches').then((r) => r.data.data),
+    queryKey: ['inventory-batches', activeCompany?.id, companyParams, batchNo, barcode, status],
+    queryFn: () => api.get('/inventory/batches', { params: { ...companyParams, batch_no: batchNo || undefined, barcode: barcode || undefined, status } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany),
   });
 
@@ -102,6 +107,17 @@ export default function BatchesPage() {
         </Card>
       )}
 
+      <div className="flex flex-wrap items-center gap-2">
+        <Filter />
+        <input value={batchNo} onChange={(e) => setBatchNo(e.target.value)} placeholder="Batch no." className="h-10 w-36 rounded-xl border border-line bg-surface px-3 text-sm" />
+        <input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="Barcode" className="h-10 w-36 rounded-xl border border-line bg-surface px-3 text-sm" />
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 rounded-xl border border-line bg-surface px-3 text-sm">
+          <option value="in_stock">In stock</option>
+          <option value="depleted">Depleted</option>
+          <option value="all">All statuses</option>
+        </select>
+      </div>
+
       <div className="relative">
         <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
         <input
@@ -122,6 +138,7 @@ export default function BatchesPage() {
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-faint">
+                  <th className="microlabel px-4 py-2 font-semibold">Company</th>
                   <th className="microlabel px-4 py-2 font-semibold">Product</th>
                   <th className="microlabel px-4 py-2 font-semibold">Batch</th>
                   <th className="microlabel px-4 py-2 font-semibold">Source</th>
@@ -133,6 +150,7 @@ export default function BatchesPage() {
               <tbody>
                 {batches.map((b) => (
                   <tr key={b.id ?? `${b.batch_no}-${b.barcode}`} className="border-b border-line/60 last:border-0">
+                    <td className="px-4 py-2.5 text-muted">{b.company_name || '—'}</td>
                     <td className="px-4 py-2.5">
                       <div className="font-medium text-ink">{b.product ?? 'Unknown product'}</div>
                       <div className="microlabel text-faint">{b.sku ?? '—'}</div>

@@ -219,13 +219,6 @@ export default function SupplierForm({ team, supplier, statusOptions = [] }) {
                     title="Commercials"
                     description="Credit terms and opening balance."
                 >
-                    <Field label="Credit days" error={errors.credit_days}>
-                        <Input
-                            type="number"
-                            min="0"
-                            {...register('credit_days', { valueAsNumber: true })}
-                        />
-                    </Field>
                     <Field label="Credit limit" error={errors.credit_limit}>
                         <Input
                             type="number"

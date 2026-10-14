@@ -37,6 +37,11 @@ class ProductBatch extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
     public function purchase(): BelongsTo
     {
         return $this->belongsTo(Purchase::class);

@@ -15,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 
 /**
  * User management within a company. Each user is a real login (email + password)
@@ -33,15 +34,24 @@ class UserController extends Controller
         $status = $request->query('status', 'active');
         abort_unless(in_array($status, ['active', 'inactive', 'all'], true), 422, 'Invalid status filter.');
 
-        $users = User::query()
-            ->companyMembers($companyId, $status)
-            ->with([
-                'companies:id,name',
-                'roles' => fn ($q) => $q->when($companyId !== null, fn ($q2) => $q2->wherePivot('company_id', $companyId)),
-            ])
-            ->orderBy('name')
-            ->paginate(min((int) $request->integer('per_page', 25), 100))
-            ->withQueryString();
+        try {
+            $users = User::query()
+                ->companyMembers($companyId, $status)
+                ->with([
+                    'companies:id,name',
+                    'roles' => fn ($q) => $q->when($companyId !== null, fn ($q2) => $q2->wherePivot('company_id', $companyId)),
+                ])
+                ->orderBy('name')
+                ->paginate(min((int) $request->integer('per_page', 25), 100))
+                ->withQueryString();
+        } catch (\Throwable $e) {
+            Log::error('users.index failed', [
+                'company_id' => $companyId,
+                'status' => $status,
+                'message' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
 
         return $this->ok(UserResource::collection($users));
     }

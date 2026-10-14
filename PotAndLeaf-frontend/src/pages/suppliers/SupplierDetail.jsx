@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { mediaUrl } from '../../components/media';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 
 const tone = { active: 'active', inactive: 'inactive', blocked: 'blocked' };
 const payTone = { paid: 'active', partial: 'pending', unpaid: 'blocked', 'n/a': 'default' };
@@ -23,6 +23,12 @@ export default function SupplierDetail() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['supplier', id, headerCompanyId],
     queryFn: () => api.get(`/suppliers/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(id && headerCompanyId),
+  });
+
+  const { data: payments } = useQuery({
+    queryKey: ['supplier-payments', id, headerCompanyId],
+    queryFn: () => api.get('/supplier-payments', { params: { supplier_id: id, per_page: 50 }, ...withCompany(headerCompanyId) }).then((r) => r.data.data),
     enabled: Boolean(id && headerCompanyId),
   });
 
@@ -91,12 +97,47 @@ export default function SupplierDetail() {
 
       <Section title="Terms & balances">
         <InfoGrid cols={4}>
-          <InfoItem label="Credit days" value={s.credit_days} mono />
           <InfoItem label="Credit limit" value={s.credit_limit != null ? formatCurrency(s.credit_limit) : null} mono />
           <InfoItem label="Opening balance" value={s.opening_balance != null ? formatCurrency(s.opening_balance) : null} mono />
           <InfoItem label="Outstanding" value={s.outstanding != null ? formatCurrency(s.outstanding) : null} mono />
+          <InfoItem label="Advance balance" value={s.advance_balance != null ? formatCurrency(s.advance_balance) : null} mono />
         </InfoGrid>
         {s.notes && <div className="mt-4 border-t border-line pt-4"><InfoItem label="Notes" value={s.notes} /></div>}
+      </Section>
+
+      <Section title="Advance and payments">
+        <Card className="overflow-hidden">
+          {(payments ?? []).length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-muted">No supplier payments yet.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Reference</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Method</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Amount</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Adjusted</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Remaining advance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(payments ?? []).map((p) => (
+                    <tr key={p.id} className="border-b border-line/60 last:border-0">
+                      <td className="px-4 py-2.5">{formatDate(p.payment_date)}</td>
+                      <td className="px-4 py-2.5">{p.reference || p.payment_no}{p.is_advance ? ' · Advance' : ''}{p.applied_from_advance ? ' · Applied' : ''}</td>
+                      <td className="px-4 py-2.5 text-muted">{p.mode}</td>
+                      <td className="tnum px-4 py-2.5 text-right">{formatCurrency(p.amount)}</td>
+                      <td className="tnum px-4 py-2.5 text-right">{p.is_advance ? formatCurrency(p.adjusted_amount) : '—'}</td>
+                      <td className="tnum px-4 py-2.5 text-right">{p.remaining_advance != null ? formatCurrency(p.remaining_advance) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       </Section>
 
       <Section title="Purchase history">

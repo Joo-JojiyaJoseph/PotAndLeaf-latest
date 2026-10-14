@@ -170,13 +170,34 @@ class InventoryService
     {
         $perPage = min((int) ($filters['per_page'] ?? 20), 100);
 
-        return Product::query()
+        $status = $filters['status'] ?? 'active';
+
+        $page = Product::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->when(filled($filters['search'] ?? null), fn ($q) => $q->search($filters['search']))
             ->when(($filters['low_only'] ?? false), fn ($q) => $q->whereColumn('current_stock', '<=', 'reorder_level'))
+            ->when($status !== 'all', fn ($q) => $q->where('status', in_array($status, ['active', 'inactive'], true) ? $status : 'active'))
             ->orderBy('name')
             ->paginate($perPage)
             ->withQueryString();
+
+        $ids = collect($page->items())->pluck('id');
+        $reserved = $ids->isEmpty()
+            ? collect()
+            : \App\Models\StockTransferItem::query()
+                ->whereIn('product_id', $ids)
+                ->whereHas('stockTransfer', fn ($q) => $q->whereIn('status', ['draft', 'requested']))
+                ->get()
+                ->groupBy('product_id')
+                ->map(fn ($rows) => round($rows->sum(fn ($row) => $row->dispatchQty()), 3));
+
+        foreach ($page->items() as $product) {
+            $draftQty = (float) ($reserved[$product->id] ?? 0);
+            $product->setAttribute('draft_transfer_qty', $draftQty);
+            $product->setAttribute('available_qty', round(max(0, (float) $product->current_stock - $draftQty), 3));
+        }
+
+        return $page;
     }
 
     public function reorderAlerts(int|string|null $companyId): \Illuminate\Support\Collection

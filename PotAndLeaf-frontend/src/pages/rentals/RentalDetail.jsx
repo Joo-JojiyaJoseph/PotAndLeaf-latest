@@ -6,13 +6,12 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, todayISO as today } from '../../lib/format';
 import { printRentalInvoice } from '../../lib/invoicePrint';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
 
 const tone = { draft: 'inactive', active: 'active', returned: 'approved', cancelled: 'blocked' };
-const today = () => new Date().toISOString().slice(0, 10);
 
 function inclusiveDays(fromStr, toStr) {
   const a = new Date(`${fromStr}T00:00:00`);

@@ -4,12 +4,13 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { todayISO } from '../../lib/format';
 import { useConfirm } from '../../lib/confirm';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import SearchSelect from '../../components/SearchSelect';
 import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = todayISO;
 const emptyLine = () => ({ product_id: '', product_batch_id: '', barcode: '', batch_no: '', qty: '' });
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
@@ -72,7 +73,7 @@ export default function TransferForm() {
   const productOptions = products.map((p) => ({
     value: p.id,
     label: p.name,
-    sublabel: [p.sku, `${Number(p.current_stock) || 0} in stock`].filter(Boolean).join(' · ') || undefined,
+    sublabel: [p.sku, `${Number(p.available_qty ?? p.current_stock) || 0} available`, Number(p.draft_transfer_qty) > 0 ? `${Number(p.draft_transfer_qty)} in draft transfers` : null].filter(Boolean).join(' · ') || undefined,
   }));
   const toCompanyOptions = companies.map((c) => ({ value: String(c.id), label: c.name, sublabel: c.code || undefined }));
   const fromCompanyOptions = sourceCompanies.map((c) => ({ value: String(c.id), label: c.name, sublabel: c.code || undefined }));
@@ -97,11 +98,11 @@ export default function TransferForm() {
       return locationStockByProduct[productId] ?? 0;
     }
     const prod = products.find((p) => p.id === productId);
-    return prod ? Number(prod.current_stock) : 0;
+    return prod ? Number(prod.available_qty ?? prod.current_stock) : 0;
   }
 
   useEffect(() => {
-    if (isIntra) return;
+    if (isIntra || !isSuperAdmin) return;
     if (companies.length === 1 && !header.to_company_id) {
       setHeader((h) => ({ ...h, to_company_id: String(companies[0].id) }));
       return;
@@ -138,7 +139,7 @@ export default function TransferForm() {
       return;
     }
     const clientErrors = {};
-    if (!isIntra && !header.to_company_id) clientErrors.to_company_id = ['Select a destination company.'];
+    if (!isIntra && isSuperAdmin && !header.to_company_id) clientErrors.to_company_id = ['Select a destination company.'];
     const totals = {};
     lines.filter((l) => l.product_id).forEach((l) => {
       totals[l.product_id] = (totals[l.product_id] ?? 0) + (Number(l.qty) || 0);
@@ -178,7 +179,7 @@ export default function TransferForm() {
       if (isIntra) {
         payload.from_location_id = header.from_location_id;
         payload.to_location_id = header.to_location_id;
-      } else {
+      } else if (isSuperAdmin) {
         payload.to_company_id = Number(header.to_company_id);
         payload.from_company_id = Number(sourceCompanyId);
       }
@@ -198,7 +199,9 @@ export default function TransferForm() {
         <div>
           <h1 className="page-title">New transfer</h1>
           <p className="text-sm text-muted">
-            {isIntra
+            {!isSuperAdmin
+              ? `Request a transfer from ${activeCompany?.name ?? 'your company'}. An admin assigns the other company and approves it.`
+              : isIntra
               ? `Move stock between locations at ${fromCompany?.name}.`
               : pullingFromOther
                 ? `Request stock from ${fromCompany?.name} into ${activeCompany?.name ?? 'your company'}.`
@@ -216,6 +219,7 @@ export default function TransferForm() {
           {/* <button type="button" onClick={() => { setTransferType('intra_company'); setHeader((h) => ({ ...h, to_company_id: '' })); }} className={'rounded-xl px-3 py-1.5 text-sm transition-colors ' + (isIntra ? 'bg-leaf text-white' : 'bg-surface text-muted ring-1 ring-line hover:text-ink')}>Godown → shop</button> */}
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {isSuperAdmin && (
           <Field label="From company" required error={err('from_company_id')}>
             <SearchSelect
               value={fromCompanyId}
@@ -228,6 +232,7 @@ export default function TransferForm() {
               Product stock below is from this company. {pullingFromOther ? 'The destination shop will receive a transfer request.' : 'Your workspace company stays unchanged.'}
             </p>
           </Field>
+          )}
           {isIntra ? (
             <>
               <Field label="From location" required error={err('from_location_id')}>
@@ -245,6 +250,7 @@ export default function TransferForm() {
             </>
           ) : (
             <>
+              {isSuperAdmin && (
               <Field label="To company" required error={err('to_company_id')}>
                 <SearchSelect
                   value={header.to_company_id}
@@ -254,6 +260,7 @@ export default function TransferForm() {
                   emptyLabel="No other companies"
                 />
               </Field>
+              )}
               <Field label="Date" required error={err('transfer_date')}><Input type="date" value={header.transfer_date} onChange={(e) => setHeader((h) => ({ ...h, transfer_date: e.target.value }))} /></Field>
             </>
           )}
@@ -330,18 +337,18 @@ export default function TransferForm() {
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
         {isSuperAdmin ? (
           <>
-            <Button variant="outline" onClick={() => save({ confirm: false })} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>
+            <Button variant="outline" onClick={() => save({ confirm: false })} disabled={saving || (isSuperAdmin && !isIntra && !companies.length) || (isIntra && locations.length < 2)}>
               {saving ? <Spinner /> : 'Save request'}
             </Button>
-            <Button onClick={() => save({ confirm: true })} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>
+            <Button onClick={() => save({ confirm: true })} disabled={saving || (isSuperAdmin && !isIntra && !companies.length) || (isIntra && locations.length < 2)}>
               {saving ? <Spinner className="border-white/40 border-t-white" /> : 'Confirm transfer'}
             </Button>
           </>
         ) : (
-          <Button onClick={() => save()} disabled={saving || (!isIntra && !companies.length) || (isIntra && locations.length < 2)}>{saving ? <Spinner className="border-white/40 border-t-white" /> : (pullingFromOther ? 'Request stock' : 'Save draft')}</Button>
+          <Button onClick={() => save()} disabled={saving || (isSuperAdmin && !isIntra && !companies.length) || (isIntra && locations.length < 2)}>{saving ? <Spinner className="border-white/40 border-t-white" /> : (pullingFromOther ? 'Request stock' : 'Save draft')}</Button>
         )}
       </div>
-      {!isIntra && !companies.length && <p className="text-sm text-muted">No other companies are set up yet. Add another company to transfer stock between shops.</p>}
+      {isSuperAdmin && !isIntra && !companies.length && <p className="text-sm text-muted">No other companies are set up yet. Add another company to transfer stock between shops.</p>}
       {isIntra && locations.length < 2 && <p className="text-sm text-muted">Add at least two locations (e.g. godown and shop) before moving stock internally.</p>}
     </div>
   );

@@ -9,7 +9,7 @@ import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { apiMessage } from '../../lib/formErrors';
 import { useToast } from '../../lib/toast';
 import { Badge, Button, Card, Field, Input, PageHeader, Spinner, StatCard, TableWrap } from '../../components/ui';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, todayISO } from '../../lib/format';
 import Pagination from '../../components/Pagination';
 
 const BOOKS = {
@@ -49,10 +49,9 @@ const TYPE_LABEL = {
 };
 
 function monthStart() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+  return `${todayISO().slice(0, 7)}-01`;
 }
-const today = () => new Date().toISOString().slice(0, 10);
+const today = todayISO;
 
 export function bookFromPath(pathname) {
   if (pathname.includes('/bank-book')) return BOOKS.bank;

@@ -11,7 +11,7 @@ class PurchaseReturnItem extends Model
     use HasUuids;
 
     protected $fillable = [
-        'purchase_return_id', 'purchase_item_id', 'product_id', 'product_batch_id', 'product_name',
+        'purchase_return_id', 'purchase_item_id', 'product_id', 'product_batch_id', 'damage_entry_id', 'product_name',
         'hsn_code', 'qty', 'rate', 'gst_rate', 'taxable_value', 'cgst_amount',
         'sgst_amount', 'igst_amount', 'line_total', 'unit_cost',
     ];

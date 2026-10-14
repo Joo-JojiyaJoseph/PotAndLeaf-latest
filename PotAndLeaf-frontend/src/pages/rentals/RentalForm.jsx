@@ -8,8 +8,7 @@ import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
-
-const today = () => new Date().toISOString().slice(0, 10);
+import { todayISO as today } from '../../lib/format';
 const emptyLine = () => ({ product_id: '', qty: '1', rate_per_cycle: '' });
 const CYCLE_DAYS = { daily: 1, weekly: 7, monthly: 30 };
 const cycleRate = (product, cycle) => {

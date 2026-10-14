@@ -24,7 +24,20 @@ class CreateBulkSplit
             throw ValidationException::withMessages(['source_product_id' => 'Source product not found.']);
         }
 
+        $batch = \App\Models\ProductBatch::forCompany($companyId)->find($data['source_batch_id'] ?? null);
+        if (! $batch || (string) $batch->product_id !== (string) $source->id) {
+            throw ValidationException::withMessages(['source_batch_id' => 'Select a batch that belongs to this product.']);
+        }
+        if ((float) $batch->remaining_qty <= 0) {
+            throw ValidationException::withMessages(['source_batch_id' => 'The selected batch has no quantity left to split.']);
+        }
+
         $sourceQty = (float) $data['source_qty'];
+        if ($sourceQty > (float) $batch->remaining_qty + 1e-6) {
+            throw ValidationException::withMessages([
+                'source_qty' => "Available quantity cannot exceed this batch ({$batch->remaining_qty}).",
+            ]);
+        }
         $totalSplitQty = collect($data['items'])->sum(fn ($item) => (float) ($item['qty'] ?? 0));
 
         if ($totalSplitQty <= 0) {
@@ -43,7 +56,7 @@ class CreateBulkSplit
             ]);
         }
 
-        $unitCost = (float) $source->cost_price;
+        $unitCost = (float) $batch->cost_price;
         $totalCost = round($totalSplitQty * $unitCost, 2);
 
         $allocated = $this->calculator->allocate($totalCost, $data['items']);
@@ -54,10 +67,11 @@ class CreateBulkSplit
             ? Product::forCompany($companyId)->whereIn('id', $productIds)->pluck('name', 'id')
             : collect();
 
-        return DB::transaction(function () use ($companyId, $data, $source, $sourceQty, $unitCost, $totalCost, $totalSplitQty, $allocated, $names, $autoCreate) {
+        return DB::transaction(function () use ($companyId, $data, $source, $batch, $sourceQty, $unitCost, $totalCost, $totalSplitQty, $allocated, $names, $autoCreate) {
             $split = $this->splits->create([
                 'company_id'          => $companyId,
                 'source_product_id'   => $source->id,
+                'source_batch_id'     => $batch->id,
                 'source_purchase_id'  => $data['source_purchase_id'] ?? null,
                 'source_product_name' => $source->name,
                 'split_no'            => $this->splits->nextSplitNo($companyId),

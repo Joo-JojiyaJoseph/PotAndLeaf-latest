@@ -2,9 +2,11 @@
 
 namespace App\Actions\PurchaseReturns;
 
+use App\Models\DamageEntry;
 use App\Models\Product;
 use App\Models\PurchaseItem;
 use App\Models\PurchaseReturn;
+use App\Models\Supplier;
 use App\Repositories\Contracts\PurchaseReturnRepositoryInterface;
 use App\Services\InventoryService;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +38,20 @@ class ConfirmPurchaseReturn
             $this->guardReturnable($return);
 
             foreach ($return->items as $item) {
+                if ($item->damage_entry_id) {
+                    $damage = DamageEntry::query()->whereKey($item->damage_entry_id)->lockForUpdate()->first();
+                    $eligible = $damage ? $damage->eligibleReturnQty() : 0;
+                    if (! $damage || (float) $item->qty > $eligible + 1e-6) {
+                        throw ValidationException::withMessages([
+                            'items' => "{$item->product_name}: only {$eligible} damaged units can still be returned.",
+                        ]);
+                    }
+                    $damage->returned_qty = round((float) $damage->returned_qty + (float) $item->qty, 3);
+                    $damage->save();
+
+                    continue;
+                }
+
                 if (! $item->product_id) {
                     continue;
                 }
@@ -76,6 +92,7 @@ class ConfirmPurchaseReturn
                 }
             }
 
+            $this->creditSupplier($return);
             $return->update(['status' => 'confirmed', 'confirmed_at' => now()]);
 
             return $return->refresh()->load(['supplier', 'purchase:id,purchase_no', 'items']);
@@ -102,6 +119,10 @@ class ConfirmPurchaseReturn
                 ]);
             }
 
+            if ($item->damage_entry_id) {
+                continue;
+            }
+
             if ($item->product_batch_id) {
                 $batch = \App\Models\ProductBatch::where('id', $item->product_batch_id)->lockForUpdate()->first();
                 if (! $batch || (float) $batch->remaining_qty + 1e-6 < (float) $item->qty) {
@@ -112,5 +133,28 @@ class ConfirmPurchaseReturn
                 }
             }
         }
+    }
+
+    /** Reduce what we owe the supplier. Any credit beyond outstanding becomes advance. */
+    private function creditSupplier(PurchaseReturn $return): void
+    {
+        if (! $return->supplier_id) {
+            return;
+        }
+
+        $supplier = Supplier::query()->whereKey($return->supplier_id)->lockForUpdate()->first();
+        if (! $supplier) {
+            return;
+        }
+
+        $credit = round((float) $return->grand_total, 2);
+        $outstanding = (float) $supplier->outstanding;
+        $applied = round(min(max($outstanding, 0), $credit), 2);
+        $supplier->outstanding = round($outstanding - $applied, 2);
+        $excess = round($credit - $applied, 2);
+        if ($excess > 0.005) {
+            $supplier->advance_balance = round((float) $supplier->advance_balance + $excess, 2);
+        }
+        $supplier->save();
     }
 }

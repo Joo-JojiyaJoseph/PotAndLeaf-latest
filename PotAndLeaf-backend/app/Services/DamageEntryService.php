@@ -50,13 +50,12 @@ class DamageEntryService
                 throw ValidationException::withMessages(['product_id' => 'Product not found.']);
             }
 
-            // If a batch barcode was scanned, damage draws from that exact batch.
-            $batch = null;
-            if (! empty($data['product_batch_id'])) {
-                $batch = \App\Models\ProductBatch::forCompany($companyId)->lockForUpdate()->find($data['product_batch_id']);
-                if ($batch && (float) $batch->remaining_qty < $qty) {
-                    throw ValidationException::withMessages(['qty' => "Batch {$batch->batch_no} has only {$batch->remaining_qty} left."]);
-                }
+            $batch = \App\Models\ProductBatch::forCompany($companyId)->lockForUpdate()->find($data['product_batch_id'] ?? null);
+            if (! $batch || (string) $batch->product_id !== (string) $product->id) {
+                throw ValidationException::withMessages(['product_batch_id' => 'Select a batch that belongs to this product.']);
+            }
+            if ((float) $batch->remaining_qty + 1e-6 < $qty) {
+                throw ValidationException::withMessages(['qty' => "Batch {$batch->batch_no} has only {$batch->remaining_qty} left."]);
             }
 
             if ((float) $product->current_stock < $qty) {

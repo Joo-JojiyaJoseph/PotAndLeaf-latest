@@ -18,7 +18,7 @@ class StoreDamageEntryRequest extends FormRequest
 
         return [
             'product_id'  => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],
-            'product_batch_id' => ['nullable', 'uuid', Rule::exists('product_batches', 'id')->where('company_id', $companyId)],
+            'product_batch_id' => ['required', 'uuid', Rule::exists('product_batches', 'id')->where('company_id', $companyId)],
             'location_id' => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)],
             'qty'         => ['required', 'numeric', 'gt:0'],
             'reason'      => ['required', 'string', 'max:120'],
@@ -32,6 +32,7 @@ class StoreDamageEntryRequest extends FormRequest
     {
         return [
             'product_id.required' => 'Please select a product.',
+            'product_batch_id.required' => 'Select the batch that was damaged.',
             'reason.required'     => 'Please provide a damage reason.',
             'qty.required'        => 'Please enter the damaged quantity.',
             'qty.gt'              => 'Quantity must be greater than zero.',

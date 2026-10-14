@@ -33,7 +33,20 @@ class DamageEntryController extends Controller
         $company = $this->company($request);
         $this->allow($request, 'damage.create');
 
+        $batches = \App\Models\ProductBatch::forCompany($company->id)
+            ->where('remaining_qty', '>', 0)
+            ->orderBy('batch_no')
+            ->get(['id', 'product_id', 'batch_no', 'barcode', 'remaining_qty', 'cost_price']);
+
         return $this->ok([
+            'batches' => $batches->map(fn ($b) => [
+                'id' => $b->id,
+                'product_id' => $b->product_id,
+                'batch_no' => $b->batch_no,
+                'barcode' => $b->barcode,
+                'remaining_qty' => (float) $b->remaining_qty,
+                'cost_price' => (float) $b->cost_price,
+            ])->values(),
             'products' => Product::forCompany($company->id)
                 ->where('status', 'active')
                 ->orderBy('name')

@@ -9,8 +9,7 @@ import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 import { useToast } from '../../lib/toast';
 import { parseShortageResponse, shortageNavigatePath } from '../../lib/shortageResult';
 import { apiMessage, fieldError } from '../../lib/formErrors';
-
-const today = () => new Date().toISOString().slice(0, 10);
+import { todayISO as today } from '../../lib/format';
 const emptyLine = () => ({ product_id: '', ordered_qty: '', rate: '' });
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';

@@ -37,6 +37,12 @@ class ResolveApiCompany
             return response()->json(['message' => 'You do not have access to this company.'], 403);
         }
 
+        if (! $company->is_active && ! $request->isMethod('GET')) {
+            return response()->json([
+                'message' => 'This company is inactive. Historical records can still be viewed, but new changes are not allowed.',
+            ], 422);
+        }
+
         $request->attributes->set('company', $company);
         $request->route()?->setParameter('current_company', $company);
 

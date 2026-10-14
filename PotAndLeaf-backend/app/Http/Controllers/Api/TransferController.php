@@ -11,6 +11,7 @@ use App\Models\Company;
 use App\Models\Location;
 use App\Models\Product;
 use App\Models\StockTransfer;
+use App\Models\StockTransferItem;
 use App\Services\TransferService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\ResolvesFilterCompany;
@@ -45,8 +46,20 @@ class TransferController extends Controller
             ->get(['id', 'name', 'code'])
             ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code]);
 
-        $products = Product::forCompany($source->id)->orderBy('name')->get(['id', 'sku', 'name', 'current_stock'])
-            ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'current_stock' => (float) $p->current_stock]);
+        $productRows = Product::forCompany($source->id)->where('status', 'active')->orderBy('name')->get(['id', 'sku', 'name', 'current_stock']);
+        $reserved = $this->draftTransferQtyByProduct($source->id, $productRows->pluck('id'));
+        $products = $productRows->map(function ($p) use ($reserved) {
+            $draft = (float) ($reserved[$p->id] ?? 0);
+
+            return [
+                'id' => $p->id,
+                'sku' => $p->sku,
+                'name' => $p->name,
+                'current_stock' => (float) $p->current_stock,
+                'draft_transfer_qty' => $draft,
+                'available_qty' => round(max(0, (float) $p->current_stock - $draft), 3),
+            ];
+        });
 
         $locations = Location::forCompany($source->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'type', 'is_default'])
@@ -70,11 +83,21 @@ class TransferController extends Controller
         unset($data['confirm'], $data['from_company_id']);
 
         $pullingFromOther = (string) $sourceId !== (string) $company->id;
-        // Super-admins always create a request unless they explicitly confirm.
-        // Pulling stock from another shop is always a request until HO/source approves.
-        $autoApprove = $user->is_super_admin
-            ? $request->boolean('confirm')
-            : (! $pullingFromOther && $user->hasPermission('transfers.approve', $company->id));
+        if (! $user->is_super_admin && $pullingFromOther) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'from_company_id' => 'Company users request a transfer from their own company. An admin assigns the other company.',
+            ]);
+        }
+        if (! $user->is_super_admin) {
+            $sourceId = $company->id;
+            unset($data['from_company_id']);
+        }
+        $isIntra = ($data['transfer_type'] ?? 'inter_company') === 'intra_company';
+        // Inter-company requests from company users always wait for admin approval.
+        // Location transfers keep the previous approve-permission shortcut.
+        $autoApprove = $isIntra
+            ? ($user->is_super_admin ? $request->boolean('confirm') : $user->hasPermission('transfers.approve', $company->id))
+            : ($user->is_super_admin && $request->boolean('confirm') && filled($data['to_company_id'] ?? null));
 
         $transfer = $this->transfers->create($sourceId, $data, $user->id, $autoApprove);
 
@@ -89,7 +112,12 @@ class TransferController extends Controller
         $this->sameCompanyOrDestination($request, $stockTransfer);
 
         return $this->ok(
-            new StockTransferResource($this->transfers->approve($stockTransfer, $request->validated()['approvals'] ?? [], $request->user()->id)),
+            new StockTransferResource($this->transfers->approve(
+                $stockTransfer,
+                $request->validated()['approvals'] ?? [],
+                $request->user()->id,
+                $request->validated()['to_company_id'] ?? null,
+            )),
             'Transfer approved.',
         );
     }
@@ -200,6 +228,22 @@ class TransferController extends Controller
         }
 
         abort(404);
+    }
+
+    /** @param  \Illuminate\Support\Collection<int, string>  $productIds */
+    private function draftTransferQtyByProduct(int|string $companyId, $productIds): array
+    {
+        if ($productIds->isEmpty()) {
+            return [];
+        }
+
+        return StockTransferItem::query()
+            ->whereIn('product_id', $productIds)
+            ->whereHas('stockTransfer', fn ($q) => $q->where('company_id', $companyId)->whereIn('status', ['draft', 'requested']))
+            ->get()
+            ->groupBy('product_id')
+            ->map(fn ($rows) => round($rows->sum(fn ($row) => $row->dispatchQty()), 3))
+            ->all();
     }
 
     private function sameSourceCompany(Request $request, StockTransfer $transfer): void

@@ -5,7 +5,7 @@ import { ArrowLeftIcon, PlusIcon, TrashIcon, BuildingOffice2Icon, UserIcon, Cred
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Textarea, Spinner, Select, PageHeader } from '../../components/ui';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, todayISO as today } from '../../lib/format';
 import { computeSale, tierPrice } from '../../lib/saleCalc';
 import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 
@@ -14,7 +14,6 @@ const BILL_KINDS = [
   { value: 'proforma', label: 'Proforma (no stock until converted)' },
   { value: 'complimentary', label: 'Complimentary (free issue)' },
 ];
-const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({ product_id: '', product_batch_id: '', barcode: '', batch_no: '', qty: '1', rate: '', discount: '', gst_rate: '', price_level: 'retail' });
 const PRICE_LEVELS = [
   { value: 'retail', label: 'Retail' },

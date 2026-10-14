@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Transfer;
 
 use App\Models\Product;
+use App\Models\StockTransferItem;
 use App\Services\LocationStockService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -25,7 +26,7 @@ class StoreTransferRequest extends FormRequest
         return [
             'transfer_type'        => ['nullable', Rule::in(['inter_company', 'intra_company'])],
             'from_company_id'      => ['nullable', 'integer', Rule::exists('companies', 'id')->where('is_active', true)],
-            'to_company_id'        => [$isIntra ? 'nullable' : 'required', 'integer', Rule::exists('companies', 'id')->where('is_active', true), Rule::notIn([$sourceId])],
+            'to_company_id'        => ['nullable', 'integer', Rule::exists('companies', 'id')->where('is_active', true), Rule::notIn([$sourceId])],
             'from_location_id'     => [$isIntra ? 'required' : 'nullable', 'uuid', $loc()],
             'to_location_id'       => [$isIntra ? 'required' : 'nullable', 'uuid', $loc(), Rule::notIn([$this->input('from_location_id')])],
             'transfer_date'        => ['required', 'date'],
@@ -41,13 +42,20 @@ class StoreTransferRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
+            $companyId = $this->route('current_company')->id;
+            $sourceId = (int) ($this->input('from_company_id') ?: $companyId);
+            if (! $this->user()->is_super_admin && (string) $sourceId !== (string) $companyId) {
+                $validator->errors()->add(
+                    'from_company_id',
+                    'Company users request a transfer from their own company. An admin assigns the other company.',
+                );
+            }
+
             if ($validator->errors()->isNotEmpty()) {
                 return;
             }
 
-            $companyId = $this->route('current_company')->id;
             $isIntra = $this->input('transfer_type') === 'intra_company';
-            $sourceId = (int) ($this->input('from_company_id') ?: $companyId);
             if ($isIntra && $sourceId !== (int) $companyId) {
                 $validator->errors()->add('from_company_id', 'Location transfers must stay in the current company.');
 
@@ -72,11 +80,19 @@ class StoreTransferRequest extends FormRequest
                             "Not enough stock at source location for {$product->name}: {$available} available, {$requestedQty} requested.",
                         );
                     }
-                } elseif ($requestedQty > (float) $product->current_stock + 0.0001) {
-                    $validator->errors()->add(
-                        'items',
-                        "Not enough stock for {$product->name}: {$product->current_stock} available, {$requestedQty} requested.",
-                    );
+                } else {
+                    $reserved = (float) StockTransferItem::query()
+                        ->where('product_id', $productId)
+                        ->whereHas('stockTransfer', fn ($q) => $q->where('company_id', $sourceId)->whereIn('status', ['draft', 'requested']))
+                        ->get()
+                        ->sum(fn ($row) => $row->dispatchQty());
+                    $available = max(0, round((float) $product->current_stock - $reserved, 3));
+                    if ($requestedQty > $available + 0.0001) {
+                        $validator->errors()->add(
+                            'items',
+                            "Not enough stock for {$product->name}: {$available} available after draft transfers, {$requestedQty} requested.",
+                        );
+                    }
                 }
             }
         });

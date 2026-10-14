@@ -23,6 +23,7 @@ function LevelsTab({ onViewLedger, companyParams }) {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [lowOnly, setLowOnly] = useState(false);
+  const [stockStatus, setStockStatus] = useState('active');
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -30,8 +31,8 @@ function LevelsTab({ onViewLedger, companyParams }) {
   }, [search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', 'stock', activeCompany?.id, companyParams, debounced, lowOnly],
-    queryFn: () => api.get('/inventory/stock', { params: { ...companyParams, search: debounced, low_only: lowOnly ? 1 : 0 } }).then((r) => r.data),
+    queryKey: ['inventory', 'stock', activeCompany?.id, companyParams, debounced, lowOnly, stockStatus],
+    queryFn: () => api.get('/inventory/stock', { params: { ...companyParams, search: debounced, low_only: lowOnly ? 1 : 0, status: stockStatus } }).then((r) => r.data),
     keepPreviousData: true,
   });
   const { data: alerts } = useQuery({
@@ -55,6 +56,11 @@ function LevelsTab({ onViewLedger, companyParams }) {
           <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products…" className="pl-9" />
         </div>
+        <div className="flex rounded-xl border border-line p-0.5">
+          {[['active', 'Active'], ['inactive', 'Inactive'], ['all', 'All']].map(([value, label]) => (
+            <button key={value} type="button" onClick={() => setStockStatus(value)} className={`rounded-lg px-3 py-1.5 text-xs font-medium ${stockStatus === value ? 'bg-leaf text-white' : 'text-muted'}`}>{label}</button>
+          ))}
+        </div>
         <label className="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} className="size-4 rounded border-line text-leaf focus:ring-leaf/40" />
           Low stock only
@@ -69,7 +75,9 @@ function LevelsTab({ onViewLedger, companyParams }) {
               <thead><tr className="border-b border-line text-left text-faint">
                 <th className="microlabel px-4 py-2.5 font-semibold">SKU</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
-                <th className="microlabel px-4 py-2.5 text-right font-semibold">In stock</th>
+                <th className="microlabel px-4 py-2.5 text-right font-semibold">On hand</th>
+                <th className="microlabel px-4 py-2.5 text-right font-semibold">Draft transfers</th>
+                <th className="microlabel px-4 py-2.5 text-right font-semibold">Available</th>
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Reorder</th>
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Unit cost</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
@@ -81,6 +89,8 @@ function LevelsTab({ onViewLedger, companyParams }) {
                     <td className="tnum px-4 py-2.5 text-xs">{p.sku}</td>
                     <td className="px-4 py-2.5 font-medium">{p.name}</td>
                     <td className="tnum px-4 py-2.5 text-right"><span className={p.is_low_stock ? 'text-amber' : ''}>{p.current_stock}</span></td>
+                    <td className="tnum px-4 py-2.5 text-right text-muted">{p.draft_transfer_qty ?? 0}</td>
+                    <td className="tnum px-4 py-2.5 text-right">{p.available_qty ?? p.current_stock}</td>
                     <td className="tnum px-4 py-2.5 text-right text-muted">{p.reorder_level}</td>
                     <td className="tnum px-4 py-2.5 text-right text-muted">{p.cost_price != null ? formatCurrency(p.cost_price) : '—'}</td>
                     <td className="px-4 py-2.5">{p.is_low_stock ? <Badge tone="warning">Low</Badge> : <Badge tone="active">OK</Badge>}</td>

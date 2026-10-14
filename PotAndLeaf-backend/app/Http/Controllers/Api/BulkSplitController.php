@@ -32,14 +32,29 @@ class BulkSplitController extends Controller
         $company = $this->company($request);
         $this->allow($request, 'bulk_splits.create');
 
+        $batches = \App\Models\ProductBatch::forCompany($company->id)
+            ->where('remaining_qty', '>', 0)
+            ->orderBy('batch_no')
+            ->get(['id', 'product_id', 'batch_no', 'barcode', 'remaining_qty', 'cost_price'])
+            ->groupBy('product_id');
+
         $products = Product::forCompany($company->id)
+            ->where('status', 'active')
             ->with('unit:id,short_name,name')
             ->orderBy('name')
-            ->get(['id', 'sku', 'name', 'current_stock', 'cost_price', 'unit_id'])
+            ->get(['id', 'sku', 'name', 'current_stock', 'cost_price', 'retail_price', 'unit_id'])
             ->map(fn ($p) => [
                 'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name,
                 'current_stock' => (float) $p->current_stock, 'cost_price' => (float) $p->cost_price,
+                'retail_price' => (float) $p->retail_price,
                 'unit' => $p->unit?->short_name ?? $p->unit?->name,
+                'batches' => ($batches[$p->id] ?? collect())->map(fn ($b) => [
+                    'id' => $b->id,
+                    'batch_no' => $b->batch_no,
+                    'barcode' => $b->barcode,
+                    'remaining_qty' => (float) $b->remaining_qty,
+                    'cost_price' => (float) $b->cost_price,
+                ])->values(),
             ]);
 
         return $this->ok(['products' => $products]);

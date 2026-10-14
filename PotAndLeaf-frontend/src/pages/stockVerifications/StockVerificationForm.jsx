@@ -6,9 +6,7 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
-import { classNames } from '../../lib/format';
-
-const today = () => new Date().toISOString().slice(0, 10);
+import { classNames, todayISO as today } from '../../lib/format';
 const selectCls =
   'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const numInput =

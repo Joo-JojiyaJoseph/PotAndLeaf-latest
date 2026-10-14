@@ -5,11 +5,10 @@ import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline'
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, todayISO as today } from '../../lib/format';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { computePurchase } from '../../lib/purchaseCalc';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const emptyLine = () => ({
   product_id: '', qty: '', rate: '', discount: '', gst_rate: '',
   is_bulk: false, sell_as: '', units_per_set: '', split_product_id: '', set_product_id: '',

@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\PurchaseReturn;
 use App\Services\InventoryService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Cancelling a confirmed return brings the goods back in (opposite "in"
@@ -17,6 +18,12 @@ class CancelPurchaseReturn
 
     public function handle(PurchaseReturn $return, ?int $userId = null): PurchaseReturn
     {
+        if ($return->isConfirmed()) {
+            throw ValidationException::withMessages([
+                'status' => 'Confirmed returns cannot be cancelled. Record a correction instead.',
+            ]);
+        }
+
         return DB::transaction(function () use ($return, $userId) {
             if ($return->isConfirmed()) {
                 $return->loadMissing('items');

@@ -39,6 +39,14 @@ class ProductResource extends JsonResource
             'reorder_level'   => (float) $this->reorder_level,
             'opening_stock'   => (float) $this->opening_stock,
             'current_stock'   => (float) $this->current_stock,
+            'draft_transfer_qty' => $this->when(
+                array_key_exists('draft_transfer_qty', $this->resource->getAttributes()),
+                fn () => (float) $this->draft_transfer_qty,
+            ),
+            'available_qty' => $this->when(
+                array_key_exists('available_qty', $this->resource->getAttributes()),
+                fn () => (float) $this->available_qty,
+            ),
             'length_cm'       => $this->length_cm !== null ? (float) $this->length_cm : null,
             'width_cm'        => $this->width_cm !== null ? (float) $this->width_cm : null,
             'height_cm'       => $this->height_cm !== null ? (float) $this->height_cm : null,

@@ -9,10 +9,9 @@ import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import useCompanyFilter from '../hooks/useCompanyFilter';
 import { Card, Spinner, StatCard, PageHeader } from '../components/ui';
-import { formatCurrency, formatDate } from '../lib/format';
+import { addCalendarDays, formatCurrency, formatDate, todayISO } from '../lib/format';
 
-const iso = (d) => d.toISOString().slice(0, 10);
-const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return iso(d); };
+const daysAgo = (n) => addCalendarDays(todayISO(), -n);
 
 const QUICK = [
   { label: 'New sale', desc: 'Ring up a bill', to: '/sales/new', icon: BanknotesIcon },
@@ -27,7 +26,7 @@ const QUICK = [
 export default function Dashboard() {
   const { activeCompany, isSuperAdmin, can, user } = useAuth();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
-  const range = { from: daysAgo(29), to: iso(new Date()) };
+  const range = { from: daysAgo(29), to: todayISO() };
   const canReports = isSuperAdmin || can('reports.view') || can('*');
   const canSales = isSuperAdmin || can('sales.view') || can('*');
   const canIncentive = isSuperAdmin || can('commission.view') || can('commission.view_own') || can('*');
@@ -62,7 +61,7 @@ export default function Dashboard() {
   });
   const incentiveQ = useQuery({
     queryKey: ['dashboard-incentive', activeCompany?.id, user?.id],
-    queryFn: () => api.get('/commission/daily-summary', { params: { user_id: user.id, date: iso(new Date()) } }).then((r) => r.data.data),
+    queryFn: () => api.get('/commission/daily-summary', { params: { user_id: user.id, date: todayISO() } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany && user?.id) && canIncentive && filterCompanyId !== 'all',
     retry: false,
   });

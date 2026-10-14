@@ -6,9 +6,7 @@ import api, { withCompany } from '../../lib/api';
 import { downloadWithParams } from '../../lib/pdfDownload';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
-import { formatCurrency } from '../../lib/format';
-
-const today = () => new Date().toISOString().slice(0, 10);
+import { formatCurrency, todayISO as today } from '../../lib/format';
 const numInput = 'h-9 w-full max-w-[7rem] rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
 const selectCls = 'h-9 w-full min-w-[10rem] rounded-[10px] border border-line bg-surface px-2 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30';
 

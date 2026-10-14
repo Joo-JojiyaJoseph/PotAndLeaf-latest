@@ -120,7 +120,8 @@ export default function CompaniesList() {
     }
     await api.patch(`/companies/${c.id}/status`, { is_active: next });
     toast.success(`${c.name} ${next ? 'activated' : 'deactivated'}`);
-    queryClient.invalidateQueries({ queryKey: ['companies'] });
+    await queryClient.invalidateQueries({ queryKey: ['companies'] });
+    await refreshCompanies();
   }
 
   if (booting) {

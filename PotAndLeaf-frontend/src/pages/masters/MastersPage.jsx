@@ -99,7 +99,7 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
 
   function handleClose() { if (saveM.isPending) return; setApplied(null); setErrors({}); onClose(); }
   const err = (k) => fieldError(errors, k);
-  const rootCategories = (parentsQ.data ?? []).filter((c) => !c.parent_id);
+  const rootCategories = (parentsQ.data ?? []).filter((c) => !c.parent_id && (c.status === 'active' || String(c.id) === String(form.parent_id)));
 
   return (
     <Modal open={open} onClose={handleClose} title={`${editing ? 'Edit' : 'New'} ${tab.singular}`} dismissible={!saveM.isPending}

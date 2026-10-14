@@ -7,10 +7,9 @@ import { FormCompanyField, useFormCompany } from '../../components/FormCompanyFi
 import { Button, Card, Field, Input, PageHeader, Select, Spinner, Textarea } from '../../components/ui';
 import { apiMessage, fieldError } from '../../lib/formErrors';
 import { useToast } from '../../lib/toast';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, todayISO as today } from '../../lib/format';
 import { bookFromPath } from './AccountingBookPage';
 
-const today = () => new Date().toISOString().slice(0, 10);
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const emptyLine = () => ({ ledger_account_id: '', debit: '', credit: '', narration: '' });
 

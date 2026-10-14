@@ -20,6 +20,10 @@ class SupplierPaymentResource extends JsonResource
             'purchase_id'   => $this->purchase_id,
             'purchase_no'   => $this->purchase?->purchase_no,
             'amount'        => (float) $this->amount,
+            'adjusted_amount' => (float) ($this->adjusted_amount ?? 0),
+            'remaining_advance' => $this->is_advance
+                ? round((float) $this->amount - (float) ($this->adjusted_amount ?? 0), 2)
+                : null,
             'mode'          => $this->mode,
             'reference'     => $this->reference,
             'notes'         => $this->notes,

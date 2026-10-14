@@ -68,6 +68,26 @@ class PurchaseReturnController extends Controller
                     'product_id'    => $b->product_id,
                     'product_name'  => $b->product?->name,
                     'remaining_qty' => (float) $b->remaining_qty,
+                    'cost_price'    => (float) $b->cost_price,
+                ])
+                ->values();
+
+            $damages = \App\Models\DamageEntry::forCompany($company->id)
+                ->where('product_id', $item->product_id)
+                ->whereColumn('qty', '>', 'returned_qty')
+                ->with('batch:id,batch_no,barcode,cost_price')
+                ->orderByDesc('entry_date')
+                ->get()
+                ->map(fn ($d) => [
+                    'id' => $d->id,
+                    'entry_no' => $d->entry_no,
+                    'qty' => (float) $d->qty,
+                    'returned_qty' => (float) $d->returned_qty,
+                    'eligible_qty' => $d->eligibleReturnQty(),
+                    'product_batch_id' => $d->product_batch_id,
+                    'batch_no' => $d->batch?->batch_no,
+                    'barcode' => $d->batch?->barcode,
+                    'cost_price' => (float) ($d->batch?->cost_price ?? 0),
                 ])
                 ->values();
 
@@ -79,8 +99,10 @@ class PurchaseReturnController extends Controller
                 'returned'         => $already,
                 'returnable'       => $returnable,
                 'rate'             => (float) $item->rate,
+                'discount'         => (float) $item->discount,
                 'gst_rate'         => (float) $item->gst_rate,
                 'batches'          => $batches,
+                'damage_entries'   => $damages,
             ];
         })->values();
 

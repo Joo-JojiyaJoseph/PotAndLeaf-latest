@@ -29,6 +29,7 @@ class InventoryController extends Controller
         $filters = [
             'search'   => $request->query('search'),
             'low_only' => $request->boolean('low_only'),
+            'status'   => $request->query('status', 'active'),
             'per_page' => $request->query('per_page'),
         ];
 

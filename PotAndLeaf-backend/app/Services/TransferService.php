@@ -10,6 +10,7 @@ use App\Models\ProductBrand;
 use App\Models\ProductCategory;
 use App\Models\ProductUnit;
 use App\Models\StockTransfer;
+use App\Models\StockTransferItem;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -62,12 +63,14 @@ class TransferService
 
     private function createInterCompany(int|string $companyId, array $data, string $status): StockTransfer
     {
-        $toCompanyId = (int) $data['to_company_id'];
-        if ((string) $toCompanyId === (string) $companyId) {
+        $toCompanyId = filled($data['to_company_id'] ?? null) ? (int) $data['to_company_id'] : null;
+        if ($toCompanyId !== null && (string) $toCompanyId === (string) $companyId) {
             throw ValidationException::withMessages(['to_company_id' => 'Destination company must differ from the source company.']);
         }
 
-        abort_unless(Company::whereKey($toCompanyId)->where('is_active', true)->exists(), 422, 'Destination company not found.');
+        if ($toCompanyId !== null) {
+            abort_unless(Company::whereKey($toCompanyId)->where('is_active', true)->exists(), 422, 'Destination company not found.');
+        }
 
         $names = Product::forCompany($companyId)
             ->whereIn('id', collect($data['items'])->pluck('product_id'))
@@ -144,7 +147,7 @@ class TransferService
     }
 
     /** HO approves a requested transfer, optionally with per-line approved quantities. */
-    public function approve(StockTransfer $transfer, array $approvals = [], ?int $userId = null): StockTransfer
+    public function approve(StockTransfer $transfer, array $approvals = [], ?int $userId = null, int|string|null $toCompanyId = null): StockTransfer
     {
         if ($transfer->isDraft()) {
             return $transfer->load(['items', 'fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name']);
@@ -172,7 +175,46 @@ class TransferService
             throw ValidationException::withMessages(['approvals' => 'At least one line must have an approved quantity greater than zero.']);
         }
 
-        $transfer->update(['status' => 'draft', 'approved_at' => now(), 'rejection_reason' => null]);
+        $destinationId = $transfer->to_company_id ?: $toCompanyId;
+        if (! $transfer->isIntraCompany() && ! $destinationId) {
+            throw ValidationException::withMessages(['to_company_id' => 'Choose the receiving company before approving.']);
+        }
+        if ($destinationId && (string) $destinationId === (string) $transfer->company_id && ! $transfer->isIntraCompany()) {
+            throw ValidationException::withMessages(['to_company_id' => 'Destination company must differ from the sending company.']);
+        }
+        if ($destinationId && ! $transfer->isIntraCompany()) {
+            abort_unless(Company::whereKey($destinationId)->where('is_active', true)->exists(), 422, 'Destination company not found.');
+        }
+
+        foreach ($transfer->items as $item) {
+            $needed = $item->dispatchQty();
+            if ($needed <= 0 || ! $item->product_id) {
+                continue;
+            }
+            $product = Product::forCompany($transfer->company_id)->lockForUpdate()->find($item->product_id);
+            if (! $product) {
+                continue;
+            }
+            $reservedElsewhere = (float) StockTransferItem::query()
+                ->where('product_id', $item->product_id)
+                ->where('stock_transfer_id', '!=', $transfer->id)
+                ->whereHas('stockTransfer', fn ($q) => $q->where('company_id', $transfer->company_id)->whereIn('status', ['draft', 'requested']))
+                ->get()
+                ->sum(fn ($row) => $row->dispatchQty());
+            $available = max(0, round((float) $product->current_stock - $reservedElsewhere, 3));
+            if ($needed > $available + 0.0001) {
+                throw ValidationException::withMessages([
+                    'approvals' => "Not enough stock for {$item->product_name}: {$available} available after other draft transfers, {$needed} approved.",
+                ]);
+            }
+        }
+
+        $transfer->update([
+            'status' => 'draft',
+            'approved_at' => now(),
+            'rejection_reason' => null,
+            'to_company_id' => $transfer->isIntraCompany() ? $transfer->to_company_id : $destinationId,
+        ]);
 
         $this->logTransfer($transfer->company_id, $userId, 'approve', $transfer->fresh(), 'Transfer approved');
 
@@ -538,7 +580,7 @@ class TransferService
         $sku = $sourceProduct?->sku;
         $name = $sourceProduct?->name ?: ($item->product_name ?? 'Transferred product');
 
-        $destProduct = $this->findDestinationProduct($destCompanyId, $sku, $name);
+        $destProduct = $this->findDestinationProduct($destCompanyId, $sku, $name, $sourceProduct);
         if ($destProduct) {
             return $destProduct;
         }
@@ -548,14 +590,14 @@ class TransferService
             if ($trashed) {
                 $trashed->restore();
 
-                return $this->findDestinationProduct($destCompanyId, $sku, $name) ?? $trashed;
+                return $this->findDestinationProduct($destCompanyId, $sku, $name, $sourceProduct) ?? $trashed;
             }
         }
 
         try {
             return $this->copyProductToCompany($destCompanyId, $sourceProduct, $sku, $name);
         } catch (\Illuminate\Database\QueryException $e) {
-            $existing = $this->findDestinationProduct($destCompanyId, $sku, $name);
+            $existing = $this->findDestinationProduct($destCompanyId, $sku, $name, $sourceProduct);
             if ($existing) {
                 return $existing;
             }
@@ -563,14 +605,32 @@ class TransferService
         }
     }
 
-    private function findDestinationProduct(int|string $destCompanyId, ?string $sku, string $name): ?Product
+    private function findDestinationProduct(int|string $destCompanyId, ?string $sku, string $name, ?Product $sourceProduct = null): ?Product
     {
         $query = Product::forCompany($destCompanyId)->lockForUpdate();
+        $sku = filled($sku) ? trim($sku) : null;
+
         if (filled($sku)) {
-            return $query->whereRaw('LOWER(sku) = ?', [mb_strtolower($sku)])->first();
+            $bySku = (clone $query)->whereRaw('LOWER(TRIM(sku)) = ?', [mb_strtolower($sku)])->first();
+            if ($bySku) {
+                return $bySku;
+            }
         }
 
-        return $query->where('name', $name)->first();
+        $barcode = $sourceProduct?->barcode;
+        if (filled($barcode)) {
+            $byBarcode = (clone $query)->where('barcode', trim((string) $barcode))->first();
+            if ($byBarcode) {
+                return $byBarcode;
+            }
+        }
+
+        $trimmed = trim($name);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        return (clone $query)->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower($trimmed)])->first();
     }
 
     private function copyProductToCompany(int|string $destCompanyId, ?Product $sourceProduct, ?string $sku, string $name): Product

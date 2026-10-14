@@ -39,7 +39,7 @@ class PurchaseReturnResource extends JsonResource
             'items'         => PurchaseReturnItemResource::collection($this->whenLoaded('items')),
             'can'           => [
                 'confirm' => $this->status === 'draft' && $user?->hasPermission('purchase_returns.confirm', $companyId),
-                'cancel'  => $this->status !== 'cancelled' && $user?->hasPermission('purchase_returns.delete', $companyId),
+                'cancel'  => $this->status === 'draft' && $user?->hasPermission('purchase_returns.delete', $companyId),
             ],
         ];
     }
