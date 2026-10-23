@@ -250,6 +250,14 @@ function LocationTab({ companyParams }) {
           : rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No location balances.</div>
           : (
             <div className="overflow-x-auto">
+              {(() => {
+                const low = rows.filter((r) => Number(r.reorder_level) > 0 && Number(r.qty) <= Number(r.reorder_level)).length;
+                return low > 0 ? (
+                  <div className="border-b border-line bg-amber-soft px-4 py-2 text-sm text-amber">
+                    <b>{low}</b> item{low === 1 ? '' : 's'} at or below reorder level at {low === 1 ? 'its' : 'their'} location.
+                  </div>
+                ) : null;
+              })()}
               <table className="w-full min-w-[640px] text-sm">
                 <thead><tr className="border-b border-line text-left text-faint">
                   <th className="microlabel px-4 py-2.5 font-semibold">Location</th>
@@ -257,6 +265,7 @@ function LocationTab({ companyParams }) {
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Available</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Reorder</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Value</th>
+                  <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                 </tr></thead>
                 <tbody>
                   {rows.map((r) => (
@@ -266,6 +275,8 @@ function LocationTab({ companyParams }) {
                       <td className="tnum px-4 py-2.5 text-right">{r.qty}</td>
                       <td className="tnum px-4 py-2.5 text-right text-muted">{r.reorder_level}</td>
                       <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.stock_value)}</td>
+                      {/* Reorder alert per location: this shop's own stock vs the product's reorder level. */}
+                      <td className="px-4 py-2.5">{Number(r.reorder_level) > 0 && Number(r.qty) <= Number(r.reorder_level) ? <Badge tone="warning">Low here</Badge> : <Badge tone="active">OK</Badge>}</td>
                     </tr>
                   ))}
                 </tbody>

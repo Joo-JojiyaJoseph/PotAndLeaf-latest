@@ -165,6 +165,7 @@ class StoreSupplierPaymentRequest extends FormRequest
             ->where('status', 'confirmed')
             ->sum('grand_total');
 
-        return max(0, round((float) $purchase->grand_total - $paid - $returned, 2));
+        // Owed to the supplier = what this purchase added to outstanding.
+        return max(0, round($purchase->supplierPayable() - $paid - $returned, 2));
     }
 }

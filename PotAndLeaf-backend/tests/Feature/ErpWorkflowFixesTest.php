@@ -207,7 +207,8 @@ it('shows supplier advance balance and leaves outstanding unchanged when only th
         ->getJson('/api/suppliers/'.$supplier->id)
         ->assertOk();
 
-    expect($show->json('data'))->not->toHaveKey('credit_days')
+    // credit_days is a payment term (sets each bill's due date), so it is returned.
+    expect($show->json('data'))->toHaveKey('credit_days')
         ->and((float) $show->json('data.advance_balance'))->toBe(25.0)
         ->and((float) $show->json('data.outstanding'))->toBe(80.0);
 

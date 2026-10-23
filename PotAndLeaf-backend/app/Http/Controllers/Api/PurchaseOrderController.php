@@ -40,8 +40,12 @@ class PurchaseOrderController extends Controller
         $suppliers = Supplier::forCompany($company->id)->orderBy('name')->get(['id', 'name'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name]);
         $products = Product::forCompany($company->id)->orderBy('name')
-            ->get(['id', 'sku', 'name', 'cost_price', 'gst_rate'])
-            ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'cost_price' => (float) $p->cost_price, 'gst_rate' => (float) $p->gst_rate]);
+            ->get(['id', 'sku', 'name', 'cost_price', 'gst_rate', 'length_cm', 'width_cm', 'height_cm'])
+            ->map(fn ($p) => [
+                'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'cost_price' => (float) $p->cost_price, 'gst_rate' => (float) $p->gst_rate,
+                // Dimensions for CBM (container planning on import orders).
+                'length_cm' => (float) $p->length_cm, 'width_cm' => (float) $p->width_cm, 'height_cm' => (float) $p->height_cm,
+            ]);
 
         return $this->ok(['suppliers' => $suppliers, 'products' => $products]);
     }

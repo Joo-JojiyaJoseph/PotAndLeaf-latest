@@ -43,6 +43,16 @@ export default function PurchaseOrderForm() {
   const productMap = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
 
   const err = (k) => errors[k]?.[0];
+  // CBM for import orders: Σ L×W×H (cm) × qty ÷ 1,000,000 → m³, against the container size.
+  const [containerCbm, setContainerCbm] = useState('');
+  const totalCbm = lines.reduce((sum, l) => {
+    const p = productMap[l.product_id];
+    if (!p) return sum;
+    const vol = (Number(p.length_cm) || 0) * (Number(p.width_cm) || 0) * (Number(p.height_cm) || 0);
+    return sum + (vol * (Number(l.qty) || 0)) / 1_000_000;
+  }, 0);
+  const fillPct = Number(containerCbm) > 0 ? (totalCbm / Number(containerCbm)) * 100 : 0;
+
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
   function onPickProduct(i, productId) {
@@ -186,6 +196,31 @@ export default function PurchaseOrderForm() {
           <p className="text-xs text-muted">Prices are applied when this order is received as a purchase.</p>
         </div>
         {err('items') && <p className="px-3 pb-2 text-xs text-danger">{err('items')}</p>}
+      </Card>
+
+      <Card className="p-5">
+        <div className="microlabel mb-2 text-faint">CBM / container planning (import orders)</div>
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <div className="text-xs text-muted">Total CBM</div>
+            <div className="tnum text-lg font-semibold">{totalCbm.toFixed(3)} m³</div>
+          </div>
+          <label className="text-sm">
+            <span className="mb-1 block text-xs text-muted">Container capacity (m³)</span>
+            <Input type="number" step="0.01" value={containerCbm} onChange={(e) => setContainerCbm(e.target.value)} placeholder="e.g. 28 (20ft) / 58 (40ft)" className="w-52" />
+          </label>
+          {Number(containerCbm) > 0 && (
+            <div className="min-w-[160px] flex-1">
+              <div className="mb-1 flex justify-between text-xs text-muted">
+                <span>{fillPct > 100 ? 'Over capacity — split into another container' : 'Container fill'}</span><span className="tnum">{fillPct.toFixed(0)}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-paper">
+                <div className={'h-full ' + (fillPct > 100 ? 'bg-danger' : 'bg-leaf')} style={{ width: `${Math.min(100, fillPct)}%` }} />
+              </div>
+            </div>
+          )}
+        </div>
+        {totalCbm === 0 && <p className="mt-2 text-xs text-muted">Add length × width × height (cm) on the products to see the volume.</p>}
       </Card>
 
       <div className="flex items-center justify-end gap-3">

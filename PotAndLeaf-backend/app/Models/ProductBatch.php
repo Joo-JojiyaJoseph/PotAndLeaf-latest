@@ -72,6 +72,12 @@ class ProductBatch extends Model
         return $this->belongsTo(BulkSplit::class, 'bulk_split_id');
     }
 
+    /** Where the batch was received (used by the production batches report). */
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
+    }
+
     public function scopeForCompany($query, int|string $companyId)
     {
         return $query->where('company_id', $companyId);

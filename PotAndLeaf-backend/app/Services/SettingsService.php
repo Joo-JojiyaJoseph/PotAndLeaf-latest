@@ -15,6 +15,7 @@ class SettingsService
         'loyalty_redeem_min_points'    => '0',     // minimum points per redemption; 0 disables the floor
         'loyalty_points_expiry_days'   => '0',     // days until earned points expire; 0 keeps them
         'discount_ceiling_percent'     => '20',    // max line/bill discount % by role default
+        'landed_cost_payable_to_supplier' => '1',  // 1 = freight/loading on a purchase is owed to the supplier; 0 = paid to someone else
         'reorder_alert_default'        => '10',    // default reorder level hint
         'website_integration'          => '0',     // company toggle
         'whatsapp_enabled'             => '1',     // allow sending invoices via WhatsApp

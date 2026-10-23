@@ -45,4 +45,13 @@ class SupervisorCommissionEntry extends Model
     {
         return $query->where('company_id', $companyId);
     }
+
+    /** Same append-only rule as CommissionTransaction::COUNTED_STATUSES. */
+    public const COUNTED_STATUSES = ['accrued', 'reversed'];
+
+    /** Rows that make up supervisor commission totals (originals + reversals). */
+    public function scopeCounted($query)
+    {
+        return $query->whereIn('status', self::COUNTED_STATUSES);
+    }
 }

@@ -701,6 +701,47 @@ class ReportController extends Controller
         ));
     }
 
+    /** Owner-only internal estimate: share% × (net sales + profit), then × rate%. */
+    public function internalEstimate(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $user = $request->user();
+        abort_unless($user->is_super_admin || $user->hasPermission('*', $company->id), 403);
+
+        $companyId = $this->reportCompanyId($request);
+        $data = $request->validate([
+            'share_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'rate_percent'  => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ]);
+        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        return $this->ok($this->reports->internalEstimate(
+            $companyId,
+            $from,
+            $to,
+            (float) ($data['share_percent'] ?? 50),
+            (float) ($data['rate_percent'] ?? 18),
+        ));
+    }
+
+    /** Tally-compatible XML (ledgers + vouchers) for one company and date range. */
+    public function tallyExport(Request $request, \App\Services\TallyExportService $tally)
+    {
+        $this->allowAccounting($request);
+        // Tally imports into one company at a time: fall back to the open company.
+        $companyId = $this->reportCompanyId($request) ?? $this->company($request)->id;
+        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
+        $to = $request->query('to') ?: now()->toDateString();
+
+        $result = $tally->build($companyId, $from, $to);
+
+        return response($result['xml'], 200, [
+            'Content-Type'        => 'application/xml; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"tally-vouchers-{$from}-to-{$to}.xml\"",
+        ]);
+    }
+
     public function gstReconciliation(Request $request): JsonResponse
     {
         $this->allowAccounting($request);

@@ -39,6 +39,7 @@ class SettingsController extends Controller
             'loyalty_redeem_min_points'  => ['sometimes', 'integer', 'min:0'],
             'loyalty_points_expiry_days' => ['sometimes', 'integer', 'min:0', 'max:3650'],
             'discount_ceiling_percent'   => ['sometimes', 'numeric', 'min:0', 'max:100'],
+            'landed_cost_payable_to_supplier' => ['sometimes', 'in:0,1,true,false'],
             'reorder_alert_default'      => ['sometimes', 'numeric', 'min:0'],
             'website_integration'        => ['sometimes', 'in:0,1,true,false'],
             'whatsapp_enabled'           => ['sometimes', 'in:0,1,true,false'],
@@ -63,7 +64,7 @@ class SettingsController extends Controller
             'daily_expense'              => ['sometimes', 'numeric', 'min:0'],
         ]);
 
-        foreach (['website_integration', 'whatsapp_enabled', 'sms_enabled', 'rental_auto_bill', 'rental_whatsapp_on_bill', 'sale_cancel_requires_approval', 'eod_management_enabled'] as $flag) {
+        foreach (['website_integration', 'whatsapp_enabled', 'sms_enabled', 'rental_auto_bill', 'rental_whatsapp_on_bill', 'sale_cancel_requires_approval', 'eod_management_enabled', 'landed_cost_payable_to_supplier'] as $flag) {
             if (isset($data[$flag])) {
                 $data[$flag] = in_array($data[$flag], [true, 'true', '1', 1], true) ? '1' : '0';
             }

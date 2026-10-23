@@ -133,7 +133,7 @@ class CommissionEngine
         $tx = CommissionTransaction::forCompany($companyId)
             ->where('user_id', $userId)
             ->whereDate('transaction_date', $day)
-            ->accrued()
+            ->counted()
             ->get();
 
         $rule = CommissionRule::forCompany($companyId)->where('user_id', $userId)->first();
@@ -147,9 +147,12 @@ class CommissionEngine
         $supervisorRows = SupervisorCommissionEntry::forCompany($companyId)
             ->where('user_id', $userId)
             ->whereDate('accrued_date', $day)
-            ->where('status', 'accrued')
+            ->counted()
             ->get();
         $supervisorAmount = round((float) $supervisorRows->sum('amount'), 2);
+        // Reversal rows carry a positive qty; net them out of produced qty.
+        $productionQty = (float) $supervisorRows->where('trigger_event', '!=', 'reversal')->sum('qty')
+            - (float) $supervisorRows->where('trigger_event', 'reversal')->sum('qty');
 
         $managerRows = $tx->where('commission_type', 'manager');
         $dailyManager = $managerRows->where('source_type', 'branch-day');
@@ -174,7 +177,7 @@ class CommissionEngine
             'total_incentive'       => round((float) $incentiveTx->sum('amount') + $supervisorAmount, 2),
             'daily_target'          => $topTarget,
             'target_achievement_pct'=> $targetPct,
-            'production_qty'        => round((float) $supervisorRows->sum('qty'), 3),
+            'production_qty'        => round(max(0.0, $productionQty), 3),
             'mtd_sales'             => $mtd['sales'],
             'mtd_incentive'         => $mtd['incentive'],
         ];
@@ -196,7 +199,7 @@ class CommissionEngine
             ->where('user_id', $userId)
             ->whereDate('transaction_date', '>=', $monthStart)
             ->whereDate('transaction_date', '<=', $day)
-            ->accrued()
+            ->counted()
             ->get();
 
         $hasDailyManager = $tx->contains(fn ($row) => $row->source_type === 'branch-day');
@@ -208,7 +211,7 @@ class CommissionEngine
             ->where('user_id', $userId)
             ->whereDate('accrued_date', '>=', $monthStart)
             ->whereDate('accrued_date', '<=', $day)
-            ->where('status', 'accrued')
+            ->counted()
             ->sum('amount');
 
         return [
@@ -387,13 +390,20 @@ class CommissionEngine
 
         $monthStart = $sale->sale_date->copy()->startOfMonth()->toDateString();
         $monthEnd = $sale->sale_date->toDateString();
-        $already = (float) CommissionTransaction::forCompany($sale->company_id)
+        $tierRows = CommissionTransaction::forCompany($sale->company_id)
             ->where('user_id', $sale->created_by)
             ->where('commission_type', 'salesman_tier')
-            ->where('status', 'accrued')
+            ->counted()
             ->whereDate('transaction_date', '>=', $monthStart)
             ->whereDate('transaction_date', '<=', $monthEnd)
+            ->get(['id', 'amount']);
+
+        // Net of reversals: a cancelled or returned sale frees up cap room.
+        $reversed = $tierRows->isEmpty() ? 0.0 : (float) CommissionTransaction::query()
+            ->where('commission_type', 'reversal')
+            ->whereIn('reversal_of_id', $tierRows->pluck('id'))
             ->sum('amount');
+        $already = (float) $tierRows->sum('amount') + $reversed;
 
         return max(0.0, min($amount, (float) $rule->max_commission - $already));
     }
@@ -509,7 +519,8 @@ class CommissionEngine
 
         $total = 0.0;
         foreach ($sale->items as $item) {
-            $lineBase = max(0, (float) $item->taxable_value - (float) ($item->discount ?? 0));
+            // taxable_value is already qty × rate − discount.
+            $lineBase = max(0, (float) $item->taxable_value);
             $product = $productMeta[$item->product_id] ?? null;
             $matching = $tiers->filter(function ($tier) use ($item, $product) {
                 if ($tier->product_id && $tier->product_id !== $item->product_id) {
@@ -606,7 +617,8 @@ class CommissionEngine
                     continue;
                 }
 
-                $lineBase = max(0, (float) $item->taxable_value - (float) ($item->discount ?? 0));
+                // taxable_value is already qty × rate − discount.
+                $lineBase = max(0, (float) $item->taxable_value);
                 $amount = (float) $promo->bonus_fixed
                     + $qty * (float) $promo->bonus_per_unit
                     + round($lineBase * (float) $promo->bonus_percent / 100, 2);
@@ -657,6 +669,19 @@ class CommissionEngine
 
         if (CommissionTransaction::query()->where($dedupe)->exists()) {
             return null;
+        }
+
+        // A daily-target / branch-day row that was reversed earlier still holds
+        // this unique key. Retire its key so the bonus can be earned again
+        // (e.g. a same-day return dropped the day below target, then a new
+        // sale lifted it back). The reversed row and its reversal stay in the
+        // ledger and still net to zero.
+        $retired = CommissionTransaction::query()
+            ->where(array_diff_key($dedupe, ['status' => true]))
+            ->where('status', 'reversed')
+            ->first();
+        if ($retired) {
+            $retired->update(['source_id' => substr($retired->source_id.'#'.$retired->id, 0, 191)]);
         }
 
         try {
@@ -757,6 +782,8 @@ class CommissionEngine
         }
 
         $amount = round((float) $tx->amount * min(1.0, $ratio), 2);
+        // Never reverse more than is still left on the original row.
+        $amount = min($amount, $this->unreversedAmount($tx));
         if ($amount <= 0) {
             return;
         }
@@ -805,6 +832,23 @@ class CommissionEngine
         return in_array($e->errorInfo[1] ?? null, [1062, 19], true);
     }
 
+    /** What is still left on an original row after earlier (partial) reversals. */
+    private function unreversedAmount(CommissionTransaction $tx): float
+    {
+        $reversed = abs((float) CommissionTransaction::query()
+            ->where('reversal_of_id', $tx->id)
+            ->where('commission_type', 'reversal')
+            ->sum('amount'));
+
+        return max(0.0, round((float) $tx->amount - $reversed, 2));
+    }
+
+    /**
+     * Reverse whatever is still open on a row. The original keeps its amount
+     * (status "reversed") and one negative row is added, so totals over
+     * COUNTED_STATUSES net to zero. A sale returned in part and then
+     * cancelled is only reversed for the part not already reversed.
+     */
     private function reverseTransaction(CommissionTransaction $tx): void
     {
         if ($tx->status !== 'accrued') {
@@ -812,23 +856,36 @@ class CommissionEngine
         }
 
         DB::transaction(function () use ($tx) {
-            CommissionTransaction::create([
-                'company_id'       => $tx->company_id,
-                'user_id'          => $tx->user_id,
-                'role'             => $tx->role,
-                'branch_id'        => $tx->branch_id,
-                'rule_id'          => $tx->rule_id,
-                'commission_type'  => 'reversal',
-                'source_type'      => $tx->source_type,
-                'source_id'        => $tx->source_id,
-                'product_id'       => $tx->product_id,
-                'calculation_base' => $tx->calculation_base,
-                'amount'           => -1 * (float) $tx->amount,
-                'transaction_date' => now()->toDateString(),
-                'status'           => 'accrued',
-                'reversal_of_id'   => $tx->id,
-                'rule_snapshot'    => ['reversed_type' => $tx->commission_type],
-            ]);
+            $remaining = $this->unreversedAmount($tx);
+            if ($remaining > 0.005) {
+                // Keep the original key (reports look reversals up by sale id);
+                // fall back to a per-row key when a re-earned bonus is reversed
+                // a second time and the original key is already used.
+                $keyTaken = CommissionTransaction::query()
+                    ->where('company_id', $tx->company_id)
+                    ->where('user_id', $tx->user_id)
+                    ->where('commission_type', 'reversal')
+                    ->where('source_type', $tx->source_type)
+                    ->where('source_id', $tx->source_id)
+                    ->exists();
+                CommissionTransaction::create([
+                    'company_id'       => $tx->company_id,
+                    'user_id'          => $tx->user_id,
+                    'role'             => $tx->role,
+                    'branch_id'        => $tx->branch_id,
+                    'rule_id'          => $tx->rule_id,
+                    'commission_type'  => 'reversal',
+                    'source_type'      => $tx->source_type,
+                    'source_id'        => $keyTaken ? 'rev:'.$tx->id : $tx->source_id,
+                    'product_id'       => $tx->product_id,
+                    'calculation_base' => $tx->calculation_base,
+                    'amount'           => -1 * $remaining,
+                    'transaction_date' => now()->toDateString(),
+                    'status'           => 'accrued',
+                    'reversal_of_id'   => $tx->id,
+                    'rule_snapshot'    => ['reversed_type' => $tx->commission_type],
+                ]);
+            }
             $tx->update(['status' => 'reversed']);
         });
     }

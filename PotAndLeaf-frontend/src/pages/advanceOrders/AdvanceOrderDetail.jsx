@@ -1,6 +1,7 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, XCircleIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
+import { useToast } from '../../lib/toast';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { recordDetailPath } from '../../lib/recordCompany';
@@ -16,6 +17,7 @@ export default function AdvanceOrderDetail() {
   const [searchParams] = useSearchParams();
   const { companyId } = useAuth();
   const queryClient = useQueryClient();
+  const toast = useToast();
   const headerCompanyId = searchParams.get('company_id') || companyId;
 
   const { data, isLoading, isError } = useQuery({
@@ -31,7 +33,16 @@ export default function AdvanceOrderDetail() {
     queryClient.invalidateQueries({ queryKey: ['advance-order', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['advance-orders'] });
   };
-  const cancelM = useMutation({ mutationFn: () => api.delete(`/advance-orders/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const cancelM = useMutation({
+    mutationFn: () => api.delete(`/advance-orders/${id}`, withCompany(recordCompanyId)),
+    onSuccess: () => { invalidate(); toast.success('Advance order cancelled — advance returned to the customer.'); },
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not cancel the order.'),
+  });
+  const notifyM = useMutation({
+    mutationFn: () => api.post(`/advance-orders/${id}/notify`, {}, withCompany(recordCompanyId)),
+    onSuccess: (res) => toast.success(res?.data?.message || 'Customer notified.'),
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not send the WhatsApp message.'),
+  });
   const fulfillM = useMutation({
     mutationFn: () => api.post(`/advance-orders/${id}/fulfill`, {}, withCompany(recordCompanyId)),
     onSuccess: (res) => {
@@ -39,6 +50,7 @@ export default function AdvanceOrderDetail() {
       const sid = res.data.data?.sale_id;
       if (sid) navigate(recordDetailPath('/sales', { id: sid, company_id: recordCompanyId }, recordCtx));
     },
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not fulfil the order.'),
   });
 
   if (isLoading) return <DetailLoading />;
@@ -53,6 +65,11 @@ export default function AdvanceOrderDetail() {
         backTo="/advance-orders"
         actions={<>
           <Badge tone={tone[o.status] ?? 'default'}>{o.status}</Badge>
+          {o.status === 'booked' && (
+            <Button variant="outline" size="sm" onClick={() => notifyM.mutate()} disabled={notifyM.isPending} title="Send the customer a WhatsApp that the booking is ready">
+              <ChatBubbleLeftRightIcon className="size-4" /> Tell customer it's ready
+            </Button>
+          )}
           {o.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {o.can?.fulfill && <Button size="sm" onClick={() => fulfillM.mutate()} disabled={fulfillM.isPending}><CheckCircleIcon className="size-4" /> Fulfil → sale</Button>}
           {o.sale_id && <Button variant="outline" size="sm" onClick={() => navigate(recordDetailPath('/sales', { id: o.sale_id, company_id: recordCompanyId }, recordCtx))}>View sale</Button>}

@@ -41,3 +41,13 @@ export function tierPrice(product, customerType) {
   const byTier = { wholesale: product.wholesale_price, dealer: product.dealer_price, retail: product.retail_price };
   return Number(byTier[customerType] || product.retail_price || product.mrp || 0);
 }
+
+/**
+ * The POS discount box takes a percentage of qty × rate; the API (and the
+ * HO discount ceiling) work on the rupee amount. Converts % → ₹ for a line.
+ */
+export function discountAmount(line) {
+  const pct = Math.min(100, Math.max(0, Number(line.discount) || 0));
+  const gross = (Number(line.qty) || 0) * (Number(line.rate) || 0);
+  return round((gross * pct) / 100);
+}

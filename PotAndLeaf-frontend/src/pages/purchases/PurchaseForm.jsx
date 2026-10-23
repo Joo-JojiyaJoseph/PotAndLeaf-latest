@@ -341,7 +341,7 @@ export default function PurchaseForm() {
                 <th className="px-3 py-2 font-medium">Product</th>
                 <th className="px-3 py-2 text-right font-medium">Qty</th>
                 <th className="px-3 py-2 text-right font-medium">Rate</th>
-                <th className="px-3 py-2 text-right font-medium">Disc.</th>
+                <th className="px-3 py-2 text-right font-medium">Disc. ₹</th>
                 <th className="px-3 py-2 text-right font-medium">GST %</th>
                 <th className="px-3 py-2 text-right font-medium">Taxable</th>
                 <th className="px-3 py-2 text-right font-medium">Tax</th>
@@ -521,8 +521,9 @@ export default function PurchaseForm() {
             </Field>
           </div>
           <p className="mt-3 text-xs text-muted">
-            Landed cost is spread across lines by value to set each item's true unit cost — it
-            isn't added to the amount payable to the supplier.
+            Landed cost is spread across lines by value to set each item's true unit cost (GST
+            not included). It is added to the supplier's bill unless Settings says freight and
+            loading are paid to someone else (a transporter).
           </p>
 
           <div className="mt-4 border-t border-line pt-4">

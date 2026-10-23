@@ -31,37 +31,63 @@ import {
   QrCodeIcon,
   ChevronRightIcon,
   XMarkIcon,
+  ArrowUturnRightIcon,
+  CalendarDaysIcon,
+  Squares2X2Icon,
+  MapPinIcon,
+  Cog6ToothIcon,
+  CircleStackIcon,
+  EyeIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { classNames } from '../lib/format';
 
+// Grouped the way the business works: buy → keep stock → sell → money → setup.
+// Every page in App.jsx that a user may need is listed here (Reports, Sales
+// Returns, Advance Orders, Locations, Backups and Activity log were reachable
+// only by typing the address).
 const GROUPS = [
   {
     label: 'Main',
     items: [
       { key: 'dashboard', label: 'Dashboard', to: '/', icon: HomeIcon, end: true, anyOf: ['reports.view', 'sales.view', 'commission.view', 'commission.view_own', 'inventory.view'] },
-      { key: 'purchase', label: 'Purchase', to: '/purchases', icon: ShoppingCartIcon, permission: 'purchases.view' },
-      { key: 'purchase-orders', label: 'Purchase Orders', to: '/purchase-orders', icon: ClipboardDocumentListIcon, permission: 'po.view' },
-      { key: 'inventory', label: 'Inventory', to: '/inventory', icon: CubeIcon, end: true, permission: 'inventory.view' },
-      { key: 'batches', label: 'Batches & barcodes', to: '/inventory/batches', icon: QrCodeIcon, permission: 'inventory.view' },
-      { key: 'damage', label: 'Damage Entry', to: '/damage-entries', icon: ExclamationTriangleIcon, permission: 'damage.view' },
-      { key: 'purchase-returns', label: 'Purch. Returns', to: '/purchase-returns', icon: ArrowUturnLeftIcon, permission: 'purchase_returns.view' },
-      { key: 'stock-verifications', label: 'Stock Count', to: '/stock-verifications', icon: ClipboardDocumentCheckIcon, permission: 'stock_verifications.view' },
-      { key: 'bulk-splits', label: 'Bulk Split', to: '/bulk-splits', icon: ScissorsIcon, permission: 'bulk_splits.view' },
-      { key: 'transfers', label: 'Transfers', to: '/transfers', icon: ArrowsRightLeftIcon, permission: 'transfers.view' },
-      { key: 'production', label: 'Production', to: '/production', icon: BeakerIcon, permission: 'production.view' },
+      { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
     ],
   },
   {
-    label: 'Commerce',
+    label: 'Selling',
     items: [
-      { key: 'sales', label: 'Sales', to: '/sales', icon: CalculatorIcon, permission: 'sales.view' },
+      { key: 'sales', label: 'Sales (POS)', to: '/sales', icon: CalculatorIcon, permission: 'sales.view' },
+      { key: 'sales-returns', label: 'Sales Returns', to: '/sales-returns', icon: ArrowUturnLeftIcon, permission: 'sales_returns.view' },
+      { key: 'advance-orders', label: 'Advance Orders', to: '/advance-orders', icon: CalendarDaysIcon, permission: 'advance.view' },
       { key: 'backorders', label: 'Backorders', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
       { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon, permission: 'rental.view' },
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon, permission: 'customers.view' },
-      { key: 'loyalty', label: 'Loyalty', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
+      { key: 'receipts', label: 'Customer Receipts', to: '/receipts', icon: ReceiptRefundIcon, permission: 'receipts.view' },
+      { key: 'loyalty', label: 'Loyalty Points', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
       { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
-      // { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
+    ],
+  },
+  {
+    label: 'Buying',
+    items: [
+      { key: 'purchase', label: 'Purchases (GRN)', to: '/purchases', icon: ShoppingCartIcon, permission: 'purchases.view' },
+      { key: 'purchase-orders', label: 'Purchase Orders', to: '/purchase-orders', icon: ClipboardDocumentListIcon, permission: 'po.view' },
+      { key: 'purchase-returns', label: 'Purchase Returns', to: '/purchase-returns', icon: ArrowUturnRightIcon, permission: 'purchase_returns.view' },
+      { key: 'suppliers', label: 'Suppliers', to: '/suppliers', icon: TruckIcon, permission: 'suppliers.view' },
+      { key: 'payments', label: 'Supplier Payments', to: '/payments', icon: BanknotesIcon, permission: 'payments.view' },
+    ],
+  },
+  {
+    label: 'Stock',
+    items: [
+      { key: 'inventory', label: 'Inventory', to: '/inventory', icon: CubeIcon, end: true, permission: 'inventory.view' },
+      { key: 'batches', label: 'Batches & Barcodes', to: '/inventory/batches', icon: QrCodeIcon, permission: 'inventory.view' },
+      { key: 'transfers', label: 'Stock Transfers', to: '/transfers', icon: ArrowsRightLeftIcon, permission: 'transfers.view' },
+      { key: 'stock-verifications', label: 'Stock Count', to: '/stock-verifications', icon: ClipboardDocumentCheckIcon, permission: 'stock_verifications.view' },
+      { key: 'damage', label: 'Damage Entry', to: '/damage-entries', icon: ExclamationTriangleIcon, permission: 'damage.view' },
+      { key: 'bulk-splits', label: 'Bulk Split', to: '/bulk-splits', icon: ScissorsIcon, permission: 'bulk_splits.view' },
+      { key: 'production', label: 'Production', to: '/production', icon: BeakerIcon, permission: 'production.view' },
     ],
   },
   {
@@ -75,15 +101,15 @@ const GROUPS = [
   {
     label: 'Setup',
     items: [
-      { key: 'suppliers', label: 'Suppliers', to: '/suppliers', icon: TruckIcon, permission: 'suppliers.view' },
-      { key: 'payments', label: 'Payments', to: '/payments', icon: BanknotesIcon, permission: 'payments.view' },
-      { key: 'receipts', label: 'Receipts', to: '/receipts', icon: ReceiptRefundIcon, permission: 'receipts.view' },
-      { key: 'companies', label: 'Companies', to: '/companies', icon: BuildingOffice2Icon, superAdmin: true },
-      { key: 'roles', label: 'Roles', to: '/roles', icon: ShieldCheckIcon, permission: 'roles.view' },
-      { key: 'users', label: 'Users', to: '/users', icon: UserGroupIcon, permission: 'users.view' },
-      { key: 'masters', label: 'Master data', to: '/masters', icon: TagIcon, anyOf: ['categories.view', 'subcategories.view', 'units.view'] },
       { key: 'products', label: 'Products', to: '/products', icon: TagIcon, permission: 'products.view' },
-      { key: 'settings', label: 'Settings', to: '/settings', icon: TagIcon, anyOf: ['settings.view', 'api.view', 'api.manage'] },
+      { key: 'masters', label: 'Categories & Units', to: '/masters', icon: Squares2X2Icon, anyOf: ['categories.view', 'subcategories.view', 'units.view'] },
+      { key: 'locations', label: 'Locations', to: '/locations', icon: MapPinIcon, permission: 'locations.view' },
+      { key: 'companies', label: 'Companies', to: '/companies', icon: BuildingOffice2Icon, superAdmin: true },
+      { key: 'users', label: 'Users', to: '/users', icon: UserGroupIcon, permission: 'users.view' },
+      { key: 'roles', label: 'Roles & Permissions', to: '/roles', icon: ShieldCheckIcon, permission: 'roles.view' },
+      { key: 'settings', label: 'Settings', to: '/settings', icon: Cog6ToothIcon, anyOf: ['settings.view', 'api.view', 'api.manage'] },
+      { key: 'backups', label: 'Backups', to: '/backups', icon: CircleStackIcon, permission: 'backup.view' },
+      { key: 'activity', label: 'Activity Log', to: '/activity-monitoring', icon: EyeIcon, permission: 'activity.view' },
     ],
   },
 ];

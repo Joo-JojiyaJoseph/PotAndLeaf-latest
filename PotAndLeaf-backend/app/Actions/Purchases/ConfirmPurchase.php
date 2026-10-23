@@ -9,6 +9,7 @@ use App\Models\Supplier;
 use App\Services\ActivityLogService;
 use App\Services\InventoryService;
 use App\Services\SellAsFulfillmentService;
+use App\Services\SettingsService;
 use App\Support\Barcode\BarcodeGenerator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -28,6 +29,7 @@ class ConfirmPurchase
         private readonly SellAsFulfillmentService $sellAs,
         private readonly ActivityLogService $activity,
         private readonly BarcodeGenerator $barcodes,
+        private readonly SettingsService $settings,
     ) {}
 
     public function handle(Purchase $purchase, ?int $userId = null): Purchase
@@ -94,15 +96,21 @@ class ConfirmPurchase
                 $product->save();
             }
 
-            // A confirmed purchase is money owed to the supplier.
+            // A confirmed purchase is money owed to the supplier. Landed cost
+            // (freight, loading) is part of it only when the company says the
+            // supplier is the one charging it; otherwise it is paid to someone
+            // else and must not sit in this supplier's outstanding.
+            $landedToSupplier = $this->settings->get($purchase->company_id, 'landed_cost_payable_to_supplier') !== '0';
+            $payable = round((float) $purchase->grand_total - ($landedToSupplier ? 0.0 : (float) $purchase->landed_cost_total), 2);
+
             $supplier = Supplier::where('company_id', $purchase->company_id)
                 ->lockForUpdate()->find($purchase->supplier_id);
             if ($supplier) {
-                $supplier->outstanding = (float) $supplier->outstanding + (float) $purchase->grand_total;
+                $supplier->outstanding = (float) $supplier->outstanding + $payable;
                 $supplier->save();
             }
 
-            $purchase->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+            $purchase->update(['status' => 'confirmed', 'confirmed_at' => now(), 'supplier_payable' => $payable]);
 
             $this->activity->log(
                 $purchase->company_id, $userId, 'confirm', 'purchases', 'purchase', $purchase->id,

@@ -92,7 +92,7 @@ class CommissionController extends Controller
         ]);
         $this->assertCanViewStaff($request, (int) $validated['user_id']);
 
-        return $this->ok($this->commission->compute($this->listCompanyId($request), (int) $validated['user_id'], $validated['period']));
+        return $this->ok($this->commission->compute($this->statementCompanyId($request), (int) $validated['user_id'], $validated['period']));
     }
 
     public function summary(Request $request): JsonResponse
@@ -105,7 +105,7 @@ class CommissionController extends Controller
         $this->assertCanViewStaff($request, (int) $validated['user_id']);
 
         return $this->ok($this->commission->rangeSummary(
-            $this->listCompanyId($request),
+            $this->statementCompanyId($request),
             (int) $validated['user_id'],
             $validated['from'],
             $validated['to'],
@@ -165,7 +165,8 @@ class CommissionController extends Controller
         $companyId = $this->listCompanyId($request);
         $scope = $this->commissionScope($request);
 
-        $rows = CommissionTransaction::forCompany($companyId)
+        // $companyId is null when a super-admin views "All companies".
+        $rows = CommissionTransaction::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('user:id,name')
             ->when($request->query('user_id'), fn ($q, $uid) => $q->where('user_id', $uid))
             ->when($request->query('from'), fn ($q, $d) => $q->whereDate('transaction_date', '>=', $d))
@@ -189,7 +190,7 @@ class CommissionController extends Controller
         $this->assertCanViewStaff($request, (int) $validated['user_id']);
 
         return $this->ok($this->engine->dailySummary(
-            $this->listCompanyId($request),
+            $this->statementCompanyId($request),
             (int) $validated['user_id'],
             $validated['date'] ?? now()->toDateString(),
         ));
@@ -289,7 +290,7 @@ class CommissionController extends Controller
         $this->allow($request, 'commission.view');
 
         return $this->ok(
-            CommissionPromotion::forCompany($this->listCompanyId($request))
+            CommissionPromotion::query()->when(($cid = $this->listCompanyId($request)) !== null, fn ($q) => $q->forCompany($cid))
                 ->with(['product:id,name', 'category:id,name'])
                 ->orderByDesc('start_date')
                 ->get()
@@ -324,7 +325,7 @@ class CommissionController extends Controller
     {
         $this->allow($request, 'commission.manage');
 
-        return $this->ok(SeasonalCareRule::forCompany($this->listCompanyId($request))->orderBy('name')->get());
+        return $this->ok(SeasonalCareRule::query()->when(($cid = $this->listCompanyId($request)) !== null, fn ($q) => $q->forCompany($cid))->orderBy('name')->get());
     }
 
     public function storeSeasonalCareRule(Request $request): JsonResponse
@@ -359,7 +360,7 @@ class CommissionController extends Controller
         $companyId = $this->listCompanyId($request);
 
         $rows = SeasonalCareSend::query()
-            ->whereHas('rule', fn ($q) => $q->where('company_id', $companyId))
+            ->when($companyId !== null, fn ($q) => $q->whereHas('rule', fn ($r) => $r->where('company_id', $companyId)))
             ->with('rule:id,name,season')
             ->orderByDesc('sent_at')
             ->paginate(50);
@@ -372,7 +373,7 @@ class CommissionController extends Controller
         $this->allow($request, 'commission.view');
 
         return $this->ok(
-            SupervisorCommissionRate::forCompany($this->listCompanyId($request))
+            SupervisorCommissionRate::query()->when(($cid = $this->listCompanyId($request)) !== null, fn ($q) => $q->forCompany($cid))
                 ->with(['user:id,name', 'product:id,name', 'category:id,name'])
                 ->orderByDesc('created_at')
                 ->get()
@@ -408,7 +409,7 @@ class CommissionController extends Controller
     {
         $this->allow($request, 'commission.view');
 
-        $rows = WhatsAppMessageLog::forCompany($this->listCompanyId($request))
+        $rows = WhatsAppMessageLog::query()->when(($cid = $this->listCompanyId($request)) !== null, fn ($q) => $q->forCompany($cid))
             ->when($request->query('message_type'), fn ($q, $t) => $q->where('message_type', $t))
             ->orderByDesc('created_at')
             ->paginate(50);
@@ -420,7 +421,7 @@ class CommissionController extends Controller
     {
         $this->allowAny($request, ['whatsapp.templates', 'commission.manage']);
 
-        return $this->ok(WhatsAppTemplate::forCompany($this->listCompanyId($request))->orderBy('slug')->get());
+        return $this->ok(WhatsAppTemplate::query()->when(($cid = $this->listCompanyId($request)) !== null, fn ($q) => $q->forCompany($cid))->orderBy('slug')->get());
     }
 
     public function storeWhatsAppTemplate(Request $request): JsonResponse
@@ -446,7 +447,7 @@ class CommissionController extends Controller
     {
         $this->allow($request, 'commission.view');
 
-        return $this->ok(ManagerCommissionRule::forCompany($this->listCompanyId($request))->with('user:id,name', 'location:id,name')->get());
+        return $this->ok(ManagerCommissionRule::query()->when(($cid = $this->listCompanyId($request)) !== null, fn ($q) => $q->forCompany($cid))->with('user:id,name', 'location:id,name')->get());
     }
 
     public function storeManagerRule(Request $request): JsonResponse
@@ -494,6 +495,16 @@ class CommissionController extends Controller
             }
         }
         abort(403);
+    }
+
+    /**
+     * A staff member's commission statement belongs to one company. When a
+     * super-admin is viewing "All companies" (listCompanyId = null), use the
+     * company that is open instead of failing.
+     */
+    private function statementCompanyId(Request $request): int|string
+    {
+        return $this->listCompanyId($request) ?? $this->company($request)->id;
     }
 
     /** @return array{mode: string, user_id?: int, locations?: array<int, string>} */

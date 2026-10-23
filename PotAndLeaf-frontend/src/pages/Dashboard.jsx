@@ -17,7 +17,7 @@ const QUICK = [
   { label: 'New sale', desc: 'Ring up a bill', to: '/sales/new', icon: BanknotesIcon },
   { label: 'New purchase', desc: 'Record a GRN', to: '/purchases/new', icon: ShoppingCartIcon },
   { label: 'Add product', desc: 'Create a catalogue item', to: '/products/new', icon: PlusCircleIcon },
-  // { label: 'Reports', desc: 'Sales, stock and dues', to: '/reports', icon: ChartBarIcon },
+  { label: 'Reports', desc: 'Sales, stock, GST and dues', to: '/reports', icon: ChartBarIcon },
   { label: 'Masters', desc: 'Categories, units', to: '/masters', icon: TagIcon },
   { label: 'Companies', desc: 'Manage companies', to: '/companies', icon: BuildingOffice2Icon },
   { label: 'Suppliers', desc: 'Manage suppliers', to: '/suppliers', icon: TruckIcon },
@@ -45,7 +45,9 @@ export default function Dashboard() {
   const dashQ = useQuery({
     queryKey: ['dashboard', activeCompany?.id, filterCompanyId],
     queryFn: () => api.get('/dashboard', { params: companyParams }).then((r) => r.data.data),
-    enabled: Boolean(activeCompany),
+    // /dashboard needs reports.view — don't call it (and show zeros) for staff without it.
+    enabled: Boolean(activeCompany) && canReports,
+    retry: false,
   });
   const repQ = useQuery({
     queryKey: ['dashboard-reports', activeCompany?.id, filterCompanyId],
@@ -193,6 +195,7 @@ export default function Dashboard() {
             </Card>
             )}
 
+            {canReports && dashQ.data && (
             <Card className="mt-5 p-5">
               <div className="flex items-center gap-3">
                 <span className="flex size-10 items-center justify-center rounded-2xl bg-leaf text-white"><CubeIcon className="size-5" /></span>
@@ -205,6 +208,7 @@ export default function Dashboard() {
                 Manage catalogue <ArrowRightIcon className="size-4" />
               </Link>
             </Card>
+            )}
           </div>
         </div>
       )}

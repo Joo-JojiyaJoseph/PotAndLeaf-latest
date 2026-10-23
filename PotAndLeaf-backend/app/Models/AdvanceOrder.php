@@ -36,6 +36,11 @@ class AdvanceOrder extends Model
         return $this->hasMany(AdvanceOrderItem::class);
     }
 
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);

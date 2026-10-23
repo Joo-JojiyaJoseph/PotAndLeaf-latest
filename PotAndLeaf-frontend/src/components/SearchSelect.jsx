@@ -21,6 +21,8 @@ export default function SearchSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  // Keyboard highlight: ↑/↓ move, Enter picks — so a cashier never needs the mouse.
+  const [hi, setHi] = useState(0);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
   const searchRef = useRef(null);
@@ -88,6 +90,17 @@ export default function SearchSelect({
   function pick(next) {
     onChange(next);
     setOpen(false);
+    triggerRef.current?.focus();
+  }
+
+  useEffect(() => { setHi(0); }, [query, open]);
+
+  function onListKey(e) {
+    const usable = filtered.filter((o) => !o.disabled);
+    if (!usable.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHi((i) => Math.min(i + 1, usable.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHi((i) => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter') { e.preventDefault(); pick(usable[Math.min(hi, usable.length - 1)].value); }
   }
 
   const compact = size === 'sm';
@@ -137,7 +150,8 @@ export default function SearchSelect({
                   ref={searchRef}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search…"
+                  onKeyDown={onListKey}
+                  placeholder="Type to search, Enter to pick…"
                   className="h-9 w-full rounded-xl glass-control pl-8 pr-3 text-sm placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-leaf/25"
                 />
               </div>
@@ -148,6 +162,7 @@ export default function SearchSelect({
               <p className="px-3 py-6 text-center text-sm text-muted">{options.length === 0 ? emptyLabel : 'No matches'}</p>
             ) : filtered.map((opt) => {
               const active = String(opt.value) === String(value);
+              const highlighted = !opt.disabled && filtered.filter((o) => !o.disabled).indexOf(opt) === hi;
               return (
                 <button
                   key={String(opt.value) + opt.label}
@@ -161,7 +176,9 @@ export default function SearchSelect({
                     opt.disabled && 'cursor-not-allowed opacity-40',
                     active
                       ? 'bg-leaf text-white'
-                      : 'text-ink hover:bg-leaf-soft hover:text-leaf-hover',
+                      : highlighted
+                        ? 'bg-leaf-soft text-leaf-hover'
+                        : 'text-ink hover:bg-leaf-soft hover:text-leaf-hover',
                   )}
                 >
                   <span className="min-w-0 flex-1">

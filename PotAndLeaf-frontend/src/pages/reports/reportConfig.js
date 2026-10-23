@@ -37,6 +37,7 @@ export const REPORT_TABS = [
   { value: 'whatsapp_report', label: 'WhatsApp Messages', shortLabel: 'WhatsApp', icon: ChatBubbleLeftRightIcon, whatsapp: true },
   { value: 'margin', label: 'Profit & Margin', shortLabel: 'Margin', icon: ScaleIcon, ho: true },
   { value: 'profit', label: 'Approx. Profit', shortLabel: 'Profit', icon: CalculatorIcon, ho: true },
+  { value: 'internal_estimate', label: 'Internal Estimate (owner only)', shortLabel: 'Internal', icon: CalculatorIcon, owner: true },
   { value: 'price_levels', label: 'Sales by Price Tier', shortLabel: 'Price Tier', icon: TagIcon },
   { value: 'inventory_movement', label: 'Stock Movement', shortLabel: 'Stock Move', icon: ChartPieIcon, inventory: true },
   { value: 'inventory_location', label: 'Location Inventory', shortLabel: 'By Location', icon: MapPinIcon, inventory: true },
@@ -61,8 +62,9 @@ export const REPORT_TABS = [
   { value: 'eod_management', label: 'EOD Summary', shortLabel: 'EOD', icon: EnvelopeIcon, eod: true },
 ];
 
-export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport, canEod }) {
+export function filterVisibleTabs(tabs, { canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport, canEod, canOwner }) {
   return tabs.filter((t) => {
+    if (t.owner) return Boolean(canOwner);
     if (t.rental) return canRentalReports;
     if (t.production) return canProductionReports;
     if (t.transfer) return canTransferReports;

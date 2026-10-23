@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Customer;
 use App\Models\LoyaltyLedgerEntry;
 use App\Models\Sale;
+use App\Models\SalesReturn;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -198,6 +199,68 @@ class LoyaltyService
                     ? now()->addDays($this->settings->getInt($locked->company_id, 'loyalty_points_expiry_days'))->toDateString()
                     : null,
             ]);
+        });
+    }
+
+    /**
+     * Take back the points a sale earned, in proportion to what is returned.
+     * Uses the points the sale actually earned (rules included), not the
+     * default earn rate, and never takes back more than the sale earned
+     * across all its returns. Returns the points removed.
+     */
+    public function reverseEarnForReturn(Customer $customer, Sale $sale, SalesReturn $return): int
+    {
+        $earned = (int) LoyaltyLedgerEntry::query()
+            ->where('company_id', $sale->company_id)
+            ->where('customer_id', $customer->id)
+            ->where('type', 'earn')
+            ->where('reference_type', 'sale')
+            ->where('reference_id', $sale->id)
+            ->sum('points');
+
+        $saleTotal = (float) $sale->grand_total;
+        if ($earned <= 0 || $saleTotal <= 0) {
+            return 0;
+        }
+
+        $points = (int) floor($earned * min(1.0, (float) $return->grand_total / $saleTotal));
+
+        $returnIds = SalesReturn::query()->where('sale_id', $sale->id)->pluck('id');
+        $alreadyBack = (int) abs((int) LoyaltyLedgerEntry::query()
+            ->where('customer_id', $customer->id)
+            ->where('type', 'reverse')
+            ->where('reference_type', 'sales-return')
+            ->whereIn('reference_id', $returnIds)
+            ->sum('points'));
+        $points = min($points, max(0, $earned - $alreadyBack));
+        if ($points <= 0) {
+            return 0;
+        }
+
+        return DB::transaction(function () use ($customer, $return, $points) {
+            $locked = $this->lockCustomer($customer);
+            $points = min($points, (int) $locked->loyalty_points);
+            if ($points <= 0) {
+                return 0;
+            }
+            // Take them from the oldest open lots so expiry stays correct.
+            $this->consumeEarnLots($locked, $points);
+            $locked->loyalty_points = (int) $locked->loyalty_points - $points;
+            $locked->save();
+            $customer->loyalty_points = (int) $locked->loyalty_points;
+
+            LoyaltyLedgerEntry::create([
+                'company_id'     => $locked->company_id,
+                'customer_id'    => $locked->id,
+                'type'           => 'reverse',
+                'points'         => -$points,
+                'balance_after'  => (int) $locked->loyalty_points,
+                'reference_type' => 'sales-return',
+                'reference_id'   => $return->id,
+                'note'           => "Return {$return->return_no}",
+            ]);
+
+            return $points;
         });
     }
 

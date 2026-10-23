@@ -197,7 +197,7 @@ export default function SaleDetail() {
               <th className="microlabel py-2 pr-3 font-semibold">Product</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Qty</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Rate</th>
-              <th className="microlabel px-3 py-2 text-right font-semibold">Disc.</th>
+              <th className="microlabel px-3 py-2 text-right font-semibold">Disc. ₹</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Taxable</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">GST</th>
               <th className="microlabel py-2 pl-3 text-right font-semibold">Total</th>

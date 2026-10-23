@@ -13,6 +13,7 @@ use App\Models\Location;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Services\BackorderService;
+use App\Services\CustomerOrderNotificationService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
@@ -63,6 +64,11 @@ class BackorderController extends Controller
         $company = $this->company($request);
         $result = $this->backorders->requestShortage($company->id, $request->validated(), $request->user()->id);
 
+        // Tell the customer the order is noted (best-effort; never blocks saving).
+        if (! empty($result['backorder'])) {
+            app(CustomerOrderNotificationService::class)->notifyBackorder($result['backorder'], 'booked');
+        }
+
         return $this->shortageCreated($result);
     }
 
@@ -83,6 +89,18 @@ class BackorderController extends Controller
             'order'   => new BackorderResource($result['order']),
             'sale_id' => $result['sale_id'],
         ], 'Draft sale created from backorder fulfillment — confirm to post stock.');
+    }
+
+    /** Staff action: WhatsApp the customer that their items are in stock. */
+    public function notify(Request $request, Backorder $backorder, CustomerOrderNotificationService $notifications): JsonResponse
+    {
+        $this->allow($request, 'backorder.view');
+        $this->assertRecordCompany($request, $backorder);
+        $result = $notifications->notifyBackorder($backorder, 'ready');
+
+        return $result['success']
+            ? $this->ok(['provider' => $result['provider'] ?? null], 'Customer notified on WhatsApp.')
+            : $this->message($result['message'], 422);
     }
 
     public function destroy(Request $request, Backorder $backorder): JsonResponse

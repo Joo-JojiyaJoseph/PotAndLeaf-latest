@@ -7,7 +7,9 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Services\CommissionEngine;
 use App\Services\InventoryService;
+use App\Models\AdvanceOrder;
 use App\Services\LoyaltyService;
+use App\Services\PoolStockService;
 use App\Services\ReceiptService;
 use Illuminate\Support\Facades\DB;
 
@@ -18,6 +20,7 @@ class CancelSale
         private readonly LoyaltyService $loyalty,
         private readonly CommissionEngine $commissionEngine,
         private readonly ReceiptService $receipts,
+        private readonly PoolStockService $pool,
     ) {}
 
     public function handle(Sale $sale, ?int $userId = null): Sale
@@ -32,6 +35,17 @@ class CancelSale
                     }
                     $product = Product::forCompany($sale->company_id)->lockForUpdate()->find($item->product_id);
                     if (! $product) {
+                        continue;
+                    }
+                    // Pooled set/unit products were sold out of the shared
+                    // unit pool, so they must go back through the pool too;
+                    // posting on the set product directly left its derived
+                    // stock wrong.
+                    if ($this->pool->isPooled($product)) {
+                        $this->pool->restore(
+                            $product, (float) $item->qty, 'sale-cancel', $sale->id, "Reversal of {$sale->sale_no}", $userId,
+                        );
+
                         continue;
                     }
                     $this->inventory->post(
@@ -65,6 +79,14 @@ class CancelSale
                 $this->receipts->voidForSale($sale);
                 $this->commissionEngine->reverseOnSaleCancel($sale);
             }
+
+            // A cancelled sale made from a booking re-opens the booking, so it
+            // can be fulfilled again or cancelled (which refunds its advance).
+            AdvanceOrder::query()
+                ->where('company_id', $sale->company_id)
+                ->where('sale_id', $sale->id)
+                ->where('status', 'fulfilled')
+                ->update(['status' => 'booked', 'sale_id' => null]);
 
             $sale->update([
                 'status'                   => 'cancelled',

@@ -38,8 +38,23 @@ class CommissionTransaction extends Model
         return $query->where('company_id', $companyId);
     }
 
+    /**
+     * Statuses whose amounts belong in commission totals. The ledger is
+     * append-only: a reversed row keeps its positive amount (status
+     * "reversed") and its negative reversal row is "accrued", so totals must
+     * include both or a cancelled sale would be deducted twice.
+     */
+    public const COUNTED_STATUSES = ['accrued', 'reversed'];
+
+    /** Rows still open (not yet reversed) — used to find what can be reversed. */
     public function scopeAccrued($query)
     {
         return $query->where('status', 'accrued');
+    }
+
+    /** Rows that make up commission totals (originals + their reversals). */
+    public function scopeCounted($query)
+    {
+        return $query->whereIn('status', self::COUNTED_STATUSES);
     }
 }

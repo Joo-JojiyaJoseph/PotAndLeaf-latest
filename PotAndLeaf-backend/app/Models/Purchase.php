@@ -17,7 +17,7 @@ class Purchase extends Model
     protected $fillable = [
         'company_id', 'supplier_id', 'location_id', 'purchase_no', 'invoice_no', 'invoice_date',
         'purchase_date', 'is_interstate', 'subtotal', 'discount_total', 'tax_total',
-        'landed_cost_total', 'grand_total', 'amount_paid', 'status', 'notes', 'confirmed_at',
+        'landed_cost_total', 'grand_total', 'supplier_payable', 'amount_paid', 'status', 'notes', 'confirmed_at',
     ];
 
     protected function casts(): array
@@ -31,6 +31,7 @@ class Purchase extends Model
             'tax_total'         => 'decimal:2',
             'landed_cost_total' => 'decimal:2',
             'grand_total'       => 'decimal:2',
+            'supplier_payable'  => 'decimal:2',
             'confirmed_at'      => 'datetime',
         ];
     }
@@ -75,13 +76,23 @@ class Purchase extends Model
         return $query->where('company_id', $companyId);
     }
 
+    /**
+     * What this purchase adds to the supplier's outstanding: fixed at confirm
+     * (see ConfirmPurchase). Older rows fall back to grand_total, which is
+     * what was added for them.
+     */
+    public function supplierPayable(): float
+    {
+        return (float) ($this->supplier_payable ?? $this->grand_total);
+    }
+
     public function paymentStatus(): string
     {
         if ($this->status !== 'confirmed') {
             return 'n/a';
         }
         $paid = (float) $this->amount_paid;
-        $total = (float) $this->grand_total;
+        $total = $this->supplierPayable();
         if ($paid <= 0) return 'unpaid';
         if ($paid + 0.01 < $total) return 'partial';
         return 'paid';

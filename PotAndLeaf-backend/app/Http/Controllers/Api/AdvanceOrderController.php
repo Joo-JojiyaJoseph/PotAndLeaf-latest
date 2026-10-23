@@ -9,6 +9,7 @@ use App\Models\AdvanceOrder;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Services\AdvanceOrderService;
+use App\Services\CustomerOrderNotificationService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
@@ -46,6 +47,8 @@ class AdvanceOrderController extends Controller
     {
         $company = $this->company($request);
         $order = $this->orders->create($company->id, $request->validated(), $request->user()->id);
+        // Booking confirmation to the customer (best-effort; never blocks saving).
+        app(CustomerOrderNotificationService::class)->notifyAdvanceOrder($order, 'booked');
 
         return $this->created(new AdvanceOrderResource($order), 'Advance order booked.');
     }
@@ -65,6 +68,18 @@ class AdvanceOrderController extends Controller
         $result = $this->orders->fulfill($advanceOrder, $request->user()->id);
 
         return $this->ok(['sale_id' => $result['sale_id']], 'Draft sale created from advance order.');
+    }
+
+    /** Staff action: WhatsApp the customer that the booking is ready to collect. */
+    public function notify(Request $request, AdvanceOrder $advanceOrder, CustomerOrderNotificationService $notifications): JsonResponse
+    {
+        $this->allow($request, 'advance.view');
+        $this->assertRecordCompany($request, $advanceOrder);
+        $result = $notifications->notifyAdvanceOrder($advanceOrder, 'ready');
+
+        return $result['success']
+            ? $this->ok(['provider' => $result['provider'] ?? null], 'Customer notified on WhatsApp.')
+            : $this->message($result['message'], 422);
     }
 
     public function destroy(Request $request, AdvanceOrder $advanceOrder): JsonResponse

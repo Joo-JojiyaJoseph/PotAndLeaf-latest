@@ -159,28 +159,51 @@ class SupervisorCommissionService
             ->each(fn (SupervisorCommissionEntry $entry) => $this->createFullReversal($entry));
     }
 
+    /** Amount and qty already taken back from an entry by earlier reversals. */
+    private function reversedSoFar(SupervisorCommissionEntry $entry): array
+    {
+        $rows = SupervisorCommissionEntry::query()
+            ->where('reversal_of_id', $entry->id)
+            ->where('trigger_event', 'reversal')
+            ->get(['amount', 'qty']);
+
+        return [abs((float) $rows->sum('amount')), (float) $rows->sum('qty')];
+    }
+
+    /**
+     * Reverse what is still open on an entry. The original keeps its amount
+     * (status "reversed") and a negative row is added, so totals over
+     * COUNTED_STATUSES net to zero. After a partial return only the remainder
+     * is reversed, and only that qty goes back to pending production.
+     */
     private function createFullReversal(SupervisorCommissionEntry $entry): void
     {
-        SupervisorCommissionEntry::create([
-            'company_id'          => $entry->company_id,
-            'user_id'             => $entry->user_id,
-            'product_id'          => $entry->product_id,
-            'production_order_id' => $entry->production_order_id,
-            'trigger_event'       => 'reversal',
-            'reference_type'      => $entry->reference_type,
-            'reference_id'        => $entry->reference_id,
-            'qty'                 => $entry->qty,
-            'unit_value'          => $entry->unit_value,
-            'amount'              => -1 * (float) $entry->amount,
-            'accrued_date'        => now()->toDateString(),
-            'status'              => 'accrued',
-            'reversal_of_id'      => $entry->id,
-        ]);
+        [$amountDone, $qtyDone] = $this->reversedSoFar($entry);
+        $amount = max(0.0, round((float) $entry->amount - $amountDone, 2));
+        $qty = max(0.0, round((float) $entry->qty - $qtyDone, 3));
+
+        if ($amount > 0.005 || $qty > 0.0001) {
+            SupervisorCommissionEntry::create([
+                'company_id'          => $entry->company_id,
+                'user_id'             => $entry->user_id,
+                'product_id'          => $entry->product_id,
+                'production_order_id' => $entry->production_order_id,
+                'trigger_event'       => 'reversal',
+                'reference_type'      => $entry->reference_type,
+                'reference_id'        => $entry->reference_id,
+                'qty'                 => $qty,
+                'unit_value'          => $entry->unit_value,
+                'amount'              => -1 * $amount,
+                'accrued_date'        => now()->toDateString(),
+                'status'              => 'accrued',
+                'reversal_of_id'      => $entry->id,
+            ]);
+        }
         $entry->update(['status' => 'reversed']);
 
-        if ($entry->production_order_id) {
+        if ($entry->production_order_id && $qty > 0) {
             ProductionOrder::whereKey($entry->production_order_id)
-                ->increment('commission_pending_qty', (float) $entry->qty);
+                ->increment('commission_pending_qty', $qty);
         }
     }
 
@@ -190,8 +213,10 @@ class SupervisorCommissionService
             return;
         }
 
-        $amount = round((float) $entry->amount * min(1.0, $ratio), 2);
-        $qty = round((float) $entry->qty * min(1.0, $ratio), 3);
+        [$amountDone, $qtyDone] = $this->reversedSoFar($entry);
+        // Never reverse more than is still open on the entry.
+        $amount = min(round((float) $entry->amount * min(1.0, $ratio), 2), max(0.0, round((float) $entry->amount - $amountDone, 2)));
+        $qty = min(round((float) $entry->qty * min(1.0, $ratio), 3), max(0.0, round((float) $entry->qty - $qtyDone, 3)));
         if ($amount <= 0) {
             return;
         }

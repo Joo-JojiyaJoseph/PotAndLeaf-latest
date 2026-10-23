@@ -550,6 +550,9 @@ class ProductionService
                 userId: $userId,
             );
             $product->save();
+            // Components leave their batches oldest first, so batch
+            // quantities keep matching stock.
+            $this->inventory->consumeBatchesFifo($product->id, $needed);
             $lineCost = round($needed * $unitCost, 2);
             $inputCost += $lineCost;
             $order->items()->create([

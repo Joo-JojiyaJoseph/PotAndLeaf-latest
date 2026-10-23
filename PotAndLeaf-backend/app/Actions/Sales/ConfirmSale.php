@@ -126,7 +126,18 @@ class ConfirmSale
                 if ($customer) {
                     $due = max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount);
                     if ($sale->payment_mode === 'credit' && $due > 0) {
-                        $customer->outstanding = (float) $customer->outstanding + ($due - (float) $sale->amount_paid);
+                        $newOutstanding = (float) $customer->outstanding + ($due - (float) $sale->amount_paid);
+                        // Credit limit (0 = no limit) was saved but never enforced.
+                        $limit = (float) $customer->credit_limit;
+                        if ($limit > 0 && $newOutstanding > $limit + 0.005) {
+                            throw ValidationException::withMessages([
+                                'payment_mode' => sprintf(
+                                    'Credit limit exceeded for %s: limit %.2f, already owed %.2f, this bill would make it %.2f. Collect payment or raise the limit.',
+                                    $customer->name, $limit, (float) $customer->outstanding, $newOutstanding,
+                                ),
+                            ]);
+                        }
+                        $customer->outstanding = $newOutstanding;
                         $customer->save();
                     }
 
@@ -148,6 +159,10 @@ class ConfirmSale
             }
 
             $sale->update(['status' => 'confirmed', 'confirmed_at' => now()]);
+
+            // A sale made from an advance order: use up the booking advance
+            // (before the POS receipt, so the advance is not receipted twice).
+            $this->receipts->consumeAdvanceOrderAdvance($sale->fresh());
 
             $this->receipts->recordFromConfirmedSale($sale->fresh(), $userId);
 

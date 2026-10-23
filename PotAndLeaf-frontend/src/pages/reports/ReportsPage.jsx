@@ -75,6 +75,8 @@ export default function ReportsPage() {
   const canInventory = isSuperAdmin || can('*') || (can('reports.view') && can('inventory.view'));
   const canPo = isSuperAdmin || can('*') || can('po.view');
   const canEod = isSuperAdmin || can('*') || can('settings.update') || can('commission.manage');
+  // Internal estimate page: owner only (super-admin or full access).
+  const canOwner = isSuperAdmin || can('*');
   const isRentalTab = tab.startsWith('rental_');
   const isProductionTab = tab.startsWith('production_');
   const isTransferTab = tab.startsWith('transfer_');
@@ -87,8 +89,8 @@ export default function ReportsPage() {
   const [locationSearch, setLocationSearch] = useState('');
 
   const visibleTabs = useMemo(() => filterVisibleTabs(REPORT_TABS, {
-    canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport, canEod,
-  }), [canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport, canEod]);
+    canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport, canEod, canOwner,
+  }), [canHo, canRentalReports, canProductionReports, canTransferReports, canAccounting, canCommissionReport, canInventory, canPo, canLoyaltyReport, canWhatsappReport, canEod, canOwner]);
 
   const { data: formData } = useQuery({
     queryKey: ['reports-form-data', activeCompany?.id, filterCompanyId],
@@ -122,6 +124,17 @@ export default function ReportsPage() {
       params: { ...range, period, ...companyParams },
     }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'profit' && canHo,
+    placeholderData: keepPreviousData,
+  });
+
+  const [estimateShare, setEstimateShare] = useState('50');
+  const [estimateRate, setEstimateRate] = useState('18');
+  const internalEstimateQ = useQuery({
+    queryKey: ['reports-internal-estimate', activeCompany?.id, filterCompanyId, range.from, range.to, estimateShare, estimateRate],
+    queryFn: () => api.get('/reports/internal-estimate', {
+      params: { ...range, ...companyParams, share_percent: estimateShare || 0, rate_percent: estimateRate || 0 },
+    }).then((r) => r.data.data),
+    enabled: Boolean(activeCompany) && tab === 'internal_estimate' && canOwner,
     placeholderData: keepPreviousData,
   });
 
@@ -402,6 +415,10 @@ export default function ReportsPage() {
     }
     if (tab === 'cash_book') {
       opts.push({ label: 'Export PDF', path: '/reports/accounting/cash-book/export', params: { ...base }, file: `cash-book-${range.from}.pdf`, mime: 'application/pdf' });
+    }
+    // Tally import file (sales, purchases, returns, receipts, payments + ledgers) for the selected dates.
+    if (['cash_book', 'bank_book', 'gst_reconciliation', 'debtor_ledger', 'creditor_ledger'].includes(tab)) {
+      opts.push({ label: 'Export for Tally (XML)', path: '/reports/accounting/tally-export', params: { ...base }, file: `tally-vouchers-${range.from}-to-${range.to}.xml`, mime: 'application/xml' });
     }
     if (tab === 'bank_book') {
       opts.push({ label: 'Export PDF', path: '/reports/accounting/bank-book/export', params: { ...base }, file: `bank-book-${range.from}.pdf`, mime: 'application/pdf' });
@@ -722,6 +739,81 @@ export default function ReportsPage() {
                               </tr>
                             ))}
                           </tbody>
+                        </table>
+                      </div>
+                    )}
+                </Card>
+              </>
+            )}
+        </>
+      )}
+
+      {tab === 'internal_estimate' && canOwner && (
+        <>
+          <Card className="border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 print:border-0 print:bg-transparent">
+            <strong>Internal estimate — for the owner only.</strong> This is your own calculation, not GST. GST is
+            payable on the full sale value; see <em>GST Reconciliation</em> for the real figures to file and pay.
+          </Card>
+          <div className="flex flex-wrap items-end gap-3 print:hidden">
+            <label className="text-sm">
+              <span className="mb-1 block text-muted">Share of (sales + profit) %</span>
+              <Input type="number" min="0" max="100" step="1" value={estimateShare} onChange={(e) => setEstimateShare(e.target.value)} className="w-32" />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-muted">Estimate rate %</span>
+              <Input type="number" min="0" max="100" step="0.5" value={estimateRate} onChange={(e) => setEstimateRate(e.target.value)} className="w-32" />
+            </label>
+            <Button type="button" variant="secondary" onClick={() => window.print()}>Print</Button>
+          </div>
+          {internalEstimateQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
+            : !internalEstimateQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Couldn't load the internal estimate.</Card>
+            : (
+              <>
+                <p className="text-sm text-muted">
+                  {formatDate(internalEstimateQ.data.from)} to {formatDate(internalEstimateQ.data.to)} ·
+                  Base = {internalEstimateQ.data.share_percent}% × (sales + profit) · Estimate = base × {internalEstimateQ.data.rate_percent}%
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
+                  <StatCard label="Sales (before GST)" value={formatCurrency(internalEstimateQ.data.totals.sales)} />
+                  <StatCard label="Cost of goods" value={formatCurrency(internalEstimateQ.data.totals.cogs)} />
+                  <StatCard label="Profit" value={formatCurrency(internalEstimateQ.data.totals.profit)} />
+                  <StatCard label={`Base (${internalEstimateQ.data.share_percent}% of sales + profit)`} value={formatCurrency(internalEstimateQ.data.totals.base)} />
+                  <StatCard label={`Estimate at ${internalEstimateQ.data.rate_percent}%`} value={formatCurrency(internalEstimateQ.data.totals.estimate)} />
+                </div>
+                <Card className="overflow-hidden">
+                  <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">Day by day</div>
+                  {(internalEstimateQ.data.rows?.length ?? 0) === 0 ? <div className="px-4 py-12 text-center text-sm text-muted">No confirmed sales in this range.</div>
+                    : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead><tr className="border-b border-line text-left text-faint">
+                            <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
+                            <th className="microlabel px-4 py-2.5 text-right font-semibold">Sales</th>
+                            <th className="microlabel px-4 py-2.5 text-right font-semibold">Cost</th>
+                            <th className="microlabel px-4 py-2.5 text-right font-semibold">Profit</th>
+                            <th className="microlabel px-4 py-2.5 text-right font-semibold">Base</th>
+                            <th className="microlabel px-4 py-2.5 text-right font-semibold">Estimate</th>
+                          </tr></thead>
+                          <tbody>
+                            {internalEstimateQ.data.rows.map((r) => (
+                              <tr key={r.date} className="border-b border-line/60 last:border-0">
+                                <td className="px-4 py-2.5">{formatDate(r.date)}</td>
+                                <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.sales)}</td>
+                                <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(r.cogs)}</td>
+                                <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.profit)}</td>
+                                <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.base)}</td>
+                                <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.estimate)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot><tr className="border-t border-line font-semibold">
+                            <td className="px-4 py-2.5">Total</td>
+                            <td className="tnum px-4 py-2.5 text-right">{formatCurrency(internalEstimateQ.data.totals.sales)}</td>
+                            <td className="tnum px-4 py-2.5 text-right">{formatCurrency(internalEstimateQ.data.totals.cogs)}</td>
+                            <td className="tnum px-4 py-2.5 text-right">{formatCurrency(internalEstimateQ.data.totals.profit)}</td>
+                            <td className="tnum px-4 py-2.5 text-right">{formatCurrency(internalEstimateQ.data.totals.base)}</td>
+                            <td className="tnum px-4 py-2.5 text-right">{formatCurrency(internalEstimateQ.data.totals.estimate)}</td>
+                          </tr></tfoot>
                         </table>
                       </div>
                     )}

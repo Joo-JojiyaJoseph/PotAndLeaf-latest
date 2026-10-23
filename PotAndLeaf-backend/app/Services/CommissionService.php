@@ -88,9 +88,11 @@ class CommissionService
             ->where('user_id', $userId)
             ->whereDate('transaction_date', '>=', $from)
             ->whereDate('transaction_date', '<=', $to)
-            ->accrued()
+            ->counted()
             ->get();
 
+        // Per-type amounts are gross; reversal rows are summed separately
+        // and netted in the total below.
         $ledgerSales = round((float) $ledger->where('commission_type', 'salesman_tier')->sum('amount'), 2);
         $ledgerDaily = round((float) $ledger->where('commission_type', 'daily_target')->sum('amount'), 2);
         $ledgerPromo = round((float) $ledger->where('commission_type', 'promotion')->sum('amount'), 2);
@@ -111,7 +113,7 @@ class CommissionService
             ->where('user_id', $userId)
             ->whereYear('accrued_date', $year)
             ->whereMonth('accrued_date', $month)
-            ->where('status', 'accrued')
+            ->counted()
             ->get();
 
         $supervisorTotal = round((float) $supervisorEntries->sum('amount'), 2);
@@ -159,7 +161,7 @@ class CommissionService
             ->orderBy('transaction_date')
             ->get();
 
-        $accrued = $ledger->where('status', 'accrued');
+        $accrued = $ledger->whereIn('status', CommissionTransaction::COUNTED_STATUSES);
         $hasDailyManager = $accrued->contains(fn ($row) => $row->source_type === 'branch-day');
         $payable = $hasDailyManager
             ? $accrued->reject(fn ($row) => $row->commission_type === 'manager' && $row->source_type === 'branch-period')
@@ -167,7 +169,7 @@ class CommissionService
 
         $supervisor = round((float) SupervisorCommissionEntry::forCompany($companyId)
             ->where('user_id', $userId)
-            ->where('status', 'accrued')
+            ->counted()
             ->whereDate('accrued_date', '>=', $from)
             ->whereDate('accrued_date', '<=', $to)
             ->sum('amount'), 2);
@@ -188,7 +190,7 @@ class CommissionService
             'daily'                 => $ledger->groupBy(fn ($row) => $row->transaction_date->toDateString())
                 ->map(fn ($rows, $date) => [
                     'date'   => $date,
-                    'amount' => round((float) $rows->where('status', 'accrued')->sum('amount'), 2),
+                    'amount' => round((float) $rows->whereIn('status', CommissionTransaction::COUNTED_STATUSES)->sum('amount'), 2),
                     'rows'   => $rows->count(),
                 ])->values()->all(),
         ];

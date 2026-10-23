@@ -333,6 +333,11 @@ export default function TransferForm() {
         <CrossBranchStockPanel productId={lines.find((l) => l.product_id)?.product_id} />
       )}
 
+      {isSuperAdmin && (
+        <p className="text-right text-xs text-muted">
+          <b>Save request</b> keeps it waiting for approval (nothing moves yet). <b>Confirm transfer</b> approves it now so it can be dispatched.
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-end gap-3">
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
         {isSuperAdmin ? (

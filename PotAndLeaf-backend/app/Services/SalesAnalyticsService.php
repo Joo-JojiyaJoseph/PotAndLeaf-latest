@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\CommissionTransaction;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
+use App\Models\PurchaseReturn;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalesReturn;
@@ -17,10 +18,11 @@ class SalesAnalyticsService
 {
     public function __construct(private readonly SettingsService $settings) {}
 
-    public function financialYearStart(int|string $companyId, ?Carbon $asOf = null): Carbon
+    public function financialYearStart(int|string|null $companyId, ?Carbon $asOf = null): Carbon
     {
         $asOf ??= now();
-        $startMonth = max(1, min(12, $this->settings->getInt($companyId, 'financial_year_start_month') ?: 4));
+        // All companies (null) share the default April start.
+        $startMonth = max(1, min(12, ($companyId !== null ? $this->settings->getInt($companyId, 'financial_year_start_month') : 0) ?: 4));
         $fyStart = $asOf->copy()->month >= $startMonth
             ? Carbon::create($asOf->year, $startMonth, 1)
             : Carbon::create($asOf->year - 1, $startMonth, 1);
@@ -29,7 +31,7 @@ class SalesAnalyticsService
     }
 
     /** Detailed sales metrics for a date range. */
-    public function salesMetrics(int|string $companyId, string $from, string $to, ?string $locationId = null): array
+    public function salesMetrics(int|string|null $companyId, string $from, string $to, ?string $locationId = null): array
     {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
@@ -88,7 +90,7 @@ class SalesAnalyticsService
     }
 
     /** Current calendar month vs previous calendar month. */
-    public function monthComparison(int|string $companyId, ?string $asOf = null, ?string $locationId = null): array
+    public function monthComparison(int|string|null $companyId, ?string $asOf = null, ?string $locationId = null): array
     {
         $asOf = Carbon::parse($asOf ?? now());
         $curFrom = $asOf->copy()->startOfMonth()->toDateString();
@@ -107,7 +109,7 @@ class SalesAnalyticsService
     }
 
     /** Same period year-over-year (defaults to current calendar month). */
-    public function yearOnYear(int|string $companyId, ?string $month = null, ?string $locationId = null): array
+    public function yearOnYear(int|string|null $companyId, ?string $month = null, ?string $locationId = null): array
     {
         $ref = $month ? Carbon::parse($month.'-01') : now();
         $curFrom = $ref->copy()->startOfMonth()->toDateString();
@@ -125,7 +127,7 @@ class SalesAnalyticsService
     }
 
     /** Financial year-to-date with prior-year YTD comparison. */
-    public function yearToDate(int|string $companyId, ?string $asOf = null, ?string $locationId = null): array
+    public function yearToDate(int|string|null $companyId, ?string $asOf = null, ?string $locationId = null): array
     {
         $asOf = Carbon::parse($asOf ?? now());
         $fyStart = $this->financialYearStart($companyId, $asOf);
@@ -154,12 +156,12 @@ class SalesAnalyticsService
         return array_merge($this->comparisonPayload('ytd', $current, $previous, [
             'financial_year_start' => $from,
             'as_of'                => $to,
-            'fy_start_month'       => (int) ($this->settings->getInt($companyId, 'financial_year_start_month') ?: 4),
+            'fy_start_month'       => (int) (($companyId !== null ? $this->settings->getInt($companyId, 'financial_year_start_month') : 0) ?: 4),
         ]), ['monthly_breakdown' => $monthly]);
     }
 
     /** Rolling 12 calendar months ending on reference date. */
-    public function twelveMonthTrend(int|string $companyId, ?string $asOf = null, ?string $locationId = null): array
+    public function twelveMonthTrend(int|string|null $companyId, ?string $asOf = null, ?string $locationId = null): array
     {
         $asOf = Carbon::parse($asOf ?? now())->startOfMonth();
         $months = [];
@@ -186,7 +188,7 @@ class SalesAnalyticsService
     }
 
     /** Output vs input GST summary with drill-down lines. */
-    public function gstReconciliation(int|string $companyId, string $from, string $to, ?string $locationId = null): array
+    public function gstReconciliation(int|string|null $companyId, string $from, string $to, ?string $locationId = null): array
     {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
@@ -232,7 +234,17 @@ class SalesAnalyticsService
             ->selectRaw('SUM(cgst_amount) as cgst, SUM(sgst_amount) as sgst, SUM(igst_amount) as igst')
             ->first();
 
-        $netPayable = round($outputTax - $returnTax - $inputTax, 2);
+        // GST on goods sent back to suppliers is input credit given back, so
+        // it reduces the input tax claimed for the period.
+        $purchaseReturnTax = round((float) PurchaseReturn::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->where('status', 'confirmed')
+            ->whereDate('return_date', '>=', $from)
+            ->whereDate('return_date', '<=', $to)
+            ->when($locationId, fn ($q) => $q->whereHas('purchase', fn ($pq) => $pq->where('location_id', $locationId)))
+            ->sum('tax_total'), 2);
+
+        $netPayable = round($outputTax - $returnTax - ($inputTax - $purchaseReturnTax), 2);
 
         return [
             'from' => $from,
@@ -247,6 +259,7 @@ class SalesAnalyticsService
                 'invoice_count' => $sales->count(),
             ],
             'sales_returns' => ['tax' => $returnTax],
+            'purchase_returns' => ['tax' => $purchaseReturnTax],
             'input' => [
                 'taxable'   => $inputTaxable,
                 'tax_total' => $inputTax,
@@ -268,12 +281,12 @@ class SalesAnalyticsService
     }
 
     /** Commission & incentive report for all staff types. */
-    public function commissionReport(int|string $companyId, string $from, string $to, ?int $userId = null): array
+    public function commissionReport(int|string|null $companyId, string $from, string $to, ?int $userId = null): array
     {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
 
-        $txQ = CommissionTransaction::forCompany($companyId)
+        $txQ = CommissionTransaction::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->whereDate('transaction_date', '>=', $from)
             ->whereDate('transaction_date', '<=', $to)
             ->when($userId, fn ($q) => $q->where('user_id', $userId))
@@ -281,7 +294,7 @@ class SalesAnalyticsService
 
         $byUser = $txQ->get()->groupBy('user_id')->map(function ($rows, $uid) use ($companyId, $from, $to) {
             $user = $rows->first()->user;
-            $salesForUser = (float) Sale::forCompany($companyId)
+            $salesForUser = (float) Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
                 ->where('created_by', $uid)->where('status', 'confirmed')
                 ->whereDate('sale_date', '>=', $from)->whereDate('sale_date', '<=', $to)
                 ->selectRaw('SUM(subtotal - loyalty_discount) as n')->value('n');
@@ -291,16 +304,16 @@ class SalesAnalyticsService
                 'user_name'         => $user?->name,
                 'staff_type'        => $this->roleLabelsForUsers($companyId, [(int) $uid])[(int) $uid] ?? '—',
                 'sales_net'         => round($salesForUser, 2),
-                'salesman_tier'     => round((float) $rows->where('commission_type', 'salesman_tier')->where('status', 'accrued')->sum('amount'), 2),
-                'daily_target'      => round((float) $rows->where('commission_type', 'daily_target')->where('status', 'accrued')->sum('amount'), 2),
-                'promotion'         => round((float) $rows->where('commission_type', 'promotion')->where('status', 'accrued')->sum('amount'), 2),
-                'manager'           => round((float) $rows->where('commission_type', 'manager')->where('status', 'accrued')->sum('amount'), 2),
+                'salesman_tier'     => round((float) $rows->where('commission_type', 'salesman_tier')->whereIn('status', CommissionTransaction::COUNTED_STATUSES)->sum('amount'), 2),
+                'daily_target'      => round((float) $rows->where('commission_type', 'daily_target')->whereIn('status', CommissionTransaction::COUNTED_STATUSES)->sum('amount'), 2),
+                'promotion'         => round((float) $rows->where('commission_type', 'promotion')->whereIn('status', CommissionTransaction::COUNTED_STATUSES)->sum('amount'), 2),
+                'manager'           => round((float) $rows->where('commission_type', 'manager')->whereIn('status', CommissionTransaction::COUNTED_STATUSES)->sum('amount'), 2),
                 'reversals'         => round((float) $rows->where('commission_type', 'reversal')->sum('amount'), 2),
-                'total_ledger'      => round((float) $rows->where('status', 'accrued')->sum('amount'), 2),
+                'total_ledger'      => round((float) $rows->whereIn('status', CommissionTransaction::COUNTED_STATUSES)->sum('amount'), 2),
             ];
         })->values();
 
-        $supervisor = SupervisorCommissionEntry::forCompany($companyId)
+        $supervisor = SupervisorCommissionEntry::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->whereDate('accrued_date', '>=', $from)
             ->whereDate('accrued_date', '<=', $to)
             ->when($userId, fn ($q) => $q->where('user_id', $userId))
@@ -310,7 +323,7 @@ class SalesAnalyticsService
             ->map(fn ($rows, $uid) => [
                 'user_id'   => (int) $uid,
                 'user_name' => $rows->first()->user?->name,
-                'supervisor_commission' => round((float) $rows->where('status', 'accrued')->sum('amount'), 2),
+                'supervisor_commission' => round((float) $rows->whereIn('status', SupervisorCommissionEntry::COUNTED_STATUSES)->sum('amount'), 2),
             ])->values();
 
         return [
@@ -326,7 +339,7 @@ class SalesAnalyticsService
     }
 
     /** Monthly or yearly staff leaderboard. Default rank metric is net sales (existing). */
-    public function leaderboard(int|string $companyId, string $period = 'month', ?string $asOf = null, ?string $locationId = null, string $metric = 'net_sales'): array
+    public function leaderboard(int|string|null $companyId, string $period = 'month', ?string $asOf = null, ?string $locationId = null, string $metric = 'net_sales'): array
     {
         $asOf = Carbon::parse($asOf ?? now());
 
@@ -364,7 +377,7 @@ class SalesAnalyticsService
                 ->where('user_id', $r->user_id)
                 ->whereDate('transaction_date', '>=', $from)
                 ->whereDate('transaction_date', '<=', $to)
-                ->where('status', 'accrued')
+                ->counted()
                 ->sum('amount'), 2);
 
             return [
@@ -409,7 +422,7 @@ class SalesAnalyticsService
 
     /** Day-of-month alignment of current vs previous period (gross, invoices, net). */
     private function dailyComparison(
-        int|string $companyId,
+        int|string|null $companyId,
         string $curFrom,
         string $curTo,
         string $prevFrom,
@@ -450,7 +463,7 @@ class SalesAnalyticsService
     }
 
     /** @return array<string, array{net_sales: float, invoice_count: int, gross_sales: float}> */
-    private function dailySalesByDate(int|string $companyId, string $from, string $to, ?string $locationId): array
+    private function dailySalesByDate(int|string|null $companyId, string $from, string $to, ?string $locationId): array
     {
         $rows = Sale::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))

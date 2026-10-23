@@ -17,6 +17,7 @@ use App\Models\Rental;
 use App\Models\RentalInvoice;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\StockLedgerEntry;
 use App\Models\StockTransfer;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
@@ -56,8 +57,11 @@ class ReportService
         ];
     }
 
-    /** Product-wise or shop-wise margin (HO cost data). */
-    public function marginAnalysis(int|string $companyId, string $from, string $to, string $groupBy = 'product'): array
+    /**
+     * Product-wise or shop-wise margin (HO cost data). Revenue is the taxable
+     * value (before GST): GST is collected for the government, not earned.
+     */
+    public function marginAnalysis(int|string|null $companyId, string $from, string $to, string $groupBy = 'product'): array
     {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
@@ -67,11 +71,11 @@ class ReportService
                 ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
                 ->leftJoin('products', 'products.id', '=', 'sale_items.product_id')
                 ->leftJoin('locations', 'locations.id', '=', 'sales.location_id')
-                ->where('sales.company_id', $companyId)
+                ->when($companyId !== null, fn ($q) => $q->where('sales.company_id', $companyId))
                 ->where('sales.status', 'confirmed')
                 ->whereBetween('sales.sale_date', [$from, $to])
                 ->selectRaw('sales.location_id as group_id, COALESCE(locations.name, ?) as group_name,
-                    SUM(sale_items.line_total) as revenue,
+                    SUM(sale_items.taxable_value) as revenue,
                     SUM(sale_items.qty * COALESCE(products.cost_price, 0)) as cogs', ['Unassigned'])
                 ->groupBy('sales.location_id', 'locations.name')
                 ->get();
@@ -79,11 +83,11 @@ class ReportService
             $rows = SaleItem::query()
                 ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
                 ->leftJoin('products', 'products.id', '=', 'sale_items.product_id')
-                ->where('sales.company_id', $companyId)
+                ->when($companyId !== null, fn ($q) => $q->where('sales.company_id', $companyId))
                 ->where('sales.status', 'confirmed')
                 ->whereBetween('sales.sale_date', [$from, $to])
                 ->selectRaw('sale_items.product_id as group_id, COALESCE(sale_items.product_name, products.name, ?) as group_name,
-                    SUM(sale_items.line_total) as revenue,
+                    SUM(sale_items.taxable_value) as revenue,
                     SUM(sale_items.qty * COALESCE(products.cost_price, 0)) as cogs', ['Unknown'])
                 ->groupBy('sale_items.product_id', 'sale_items.product_name', 'products.name')
                 ->get();
@@ -114,10 +118,12 @@ class ReportService
     }
 
     /**
-     * Approximate profit: Sales − COGS − daily expenses.
+     * Approximate profit: net sales (before GST, after loyalty discount)
+     * − cost of goods sold (at the cost recorded when each sale left stock)
+     * − daily expenses.
      */
     public function approximateProfit(
-        int|string $companyId,
+        int|string|null $companyId,
         string $from,
         string $to,
         string $period = 'daily',
@@ -125,23 +131,20 @@ class ReportService
     ): array {
         $fromC = Carbon::parse($from)->startOfDay();
         $toC = Carbon::parse($to)->endOfDay();
-        $dailyExpense = $this->settings->getFloat($companyId, 'daily_expense');
+        // All companies (null): each company's own daily expense, added up.
+        $dailyExpense = $companyId !== null
+            ? $this->settings->getFloat($companyId, 'daily_expense')
+            : (float) \App\Models\Company::query()->pluck('id')->sum(fn ($id) => $this->settings->getFloat($id, 'daily_expense'));
 
         $salesQ = Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('status', 'confirmed')
-            ->whereBetween('sale_date', [$fromC->toDateString(), $toC->toDateString()])
+            ->whereDate('sale_date', '>=', $fromC->toDateString())
+            ->whereDate('sale_date', '<=', $toC->toDateString())
             ->when($branchId, fn ($q) => $q->where('location_id', $branchId));
 
-        $salesTotal = (float) (clone $salesQ)->sum('grand_total');
+        $salesTotal = (float) (clone $salesQ)->sum(DB::raw('subtotal - loyalty_discount'));
 
-        $cogs = (float) SaleItem::query()
-            ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-            ->leftJoin('products', 'products.id', '=', 'sale_items.product_id')
-            ->where('sales.company_id', $companyId)
-            ->where('sales.status', 'confirmed')
-            ->whereBetween('sales.sale_date', [$fromC->toDateString(), $toC->toDateString()])
-            ->when($branchId, fn ($q) => $q->where('sales.location_id', $branchId))
-            ->sum(DB::raw('sale_items.qty * COALESCE(products.cost_price, 0)'));
+        $cogs = $this->saleCogs($companyId, $fromC->toDateString(), $toC->toDateString(), $branchId);
 
         $days = max(1, (int) $fromC->diffInDays($toC) + 1);
         $expenses = round($dailyExpense * $days, 2);
@@ -158,7 +161,7 @@ class ReportService
             ->where('status', 'confirmed')
             ->whereBetween('sale_date', [$fromC->toDateString(), $toC->toDateString()])
             ->when($branchId, fn ($q) => $q->where('location_id', $branchId))
-            ->selectRaw("{$bucketExpr} as bucket, SUM(grand_total) as sales")
+            ->selectRaw("{$bucketExpr} as bucket, SUM(subtotal - loyalty_discount) as sales")
             ->groupBy(DB::raw($bucketExpr))
             ->orderBy('bucket')
             ->get()
@@ -175,17 +178,12 @@ class ReportService
                 $sales = (float) Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
                     ->where('status', 'confirmed')
                     ->where('location_id', $loc->id)
-                    ->whereBetween('sale_date', [$fromC->toDateString(), $toC->toDateString()])
-                    ->sum('grand_total');
-                $branchCogs = (float) SaleItem::query()
-                    ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-                    ->leftJoin('products', 'products.id', '=', 'sale_items.product_id')
-                    ->where('sales.company_id', $companyId)
-                    ->where('sales.status', 'confirmed')
-                    ->where('sales.location_id', $loc->id)
-                    ->whereBetween('sales.sale_date', [$fromC->toDateString(), $toC->toDateString()])
-                    ->sum(DB::raw('sale_items.qty * COALESCE(products.cost_price, 0)'));
-                $exp = round($dailyExpense * $days, 2);
+                    ->whereDate('sale_date', '>=', $fromC->toDateString())
+                    ->whereDate('sale_date', '<=', $toC->toDateString())
+                    ->sum(DB::raw('subtotal - loyalty_discount'));
+                $branchCogs = $this->saleCogs($companyId, $fromC->toDateString(), $toC->toDateString(), $loc->id);
+                // With all companies selected, each branch uses its own company's expense.
+                $exp = round(($companyId !== null ? $dailyExpense : $this->settings->getFloat($loc->company_id, 'daily_expense')) * $days, 2);
 
                 return [
                     'location_id'   => $loc->id,
@@ -215,6 +213,107 @@ class ReportService
             'trend'     => $trend,
             'by_branch' => $byBranch,
         ];
+    }
+
+    /**
+     * Owner-only internal estimate (NOT a GST figure): for each day,
+     *   base     = share% × (net sales + gross profit)
+     *   estimate = base × rate%
+     * Net sales are before GST and after loyalty discount; gross profit is
+     * net sales − cost of goods sold at the cost recorded when sold. The real
+     * GST liability is in SalesAnalyticsService::gstReconciliation.
+     */
+    public function internalEstimate(
+        int|string|null $companyId,
+        string $from,
+        string $to,
+        float $sharePercent = 50.0,
+        float $ratePercent = 18.0,
+    ): array {
+        $from = Carbon::parse($from)->toDateString();
+        $to = Carbon::parse($to)->toDateString();
+        $share = max(0.0, min(100.0, $sharePercent));
+        $rate = max(0.0, min(100.0, $ratePercent));
+
+        $salesByDay = Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->where('status', 'confirmed')
+            ->whereDate('sale_date', '>=', $from)
+            ->whereDate('sale_date', '<=', $to)
+            ->get(['sale_date', 'subtotal', 'loyalty_discount'])
+            ->groupBy(fn (Sale $s) => $s->sale_date->toDateString())
+            ->map(fn ($rows) => (float) $rows->sum(fn (Sale $s) => (float) $s->subtotal - (float) $s->loyalty_discount));
+
+        $cogsByDay = StockLedgerEntry::query()
+            ->join('sales', 'sales.id', '=', 'stock_ledger_entries.reference_id')
+            ->leftJoin('products', 'products.id', '=', 'stock_ledger_entries.product_id')
+            ->where('stock_ledger_entries.reference_type', 'sale')
+            ->where('stock_ledger_entries.direction', 'out')
+            ->where(fn ($q) => $q->whereNull('products.pool_role')->orWhere('products.pool_role', '!=', 'set'))
+            ->when($companyId !== null, fn ($q) => $q->where('sales.company_id', $companyId))
+            ->where('sales.status', 'confirmed')
+            ->whereDate('sales.sale_date', '>=', $from)
+            ->whereDate('sales.sale_date', '<=', $to)
+            ->get(['sales.sale_date as day', 'stock_ledger_entries.qty', 'stock_ledger_entries.unit_cost'])
+            ->groupBy(fn ($r) => Carbon::parse($r->day)->toDateString())
+            ->map(fn ($rows) => (float) $rows->sum(fn ($r) => (float) $r->qty * (float) ($r->unit_cost ?? 0)));
+
+        $days = $salesByDay->keys()->merge($cogsByDay->keys())->unique()->sort()->values();
+
+        $rows = $days->map(function (string $day) use ($salesByDay, $cogsByDay, $share, $rate) {
+            $sales = round((float) ($salesByDay[$day] ?? 0), 2);
+            $cogs = round((float) ($cogsByDay[$day] ?? 0), 2);
+            $profit = round($sales - $cogs, 2);
+            $base = round(($sales + $profit) * $share / 100, 2);
+
+            return [
+                'date'     => $day,
+                'sales'    => $sales,
+                'cogs'     => $cogs,
+                'profit'   => $profit,
+                'base'     => $base,
+                'estimate' => round($base * $rate / 100, 2),
+            ];
+        })->all();
+
+        $sum = fn (string $k) => round((float) collect($rows)->sum($k), 2);
+
+        return [
+            'from'          => $from,
+            'to'            => $to,
+            'share_percent' => $share,
+            'rate_percent'  => $rate,
+            'note'          => 'Internal estimate for the owner only. Not a GST figure: GST is payable on the full sale value (see GST Reconciliation).',
+            'totals'        => [
+                'sales'    => $sum('sales'),
+                'cogs'     => $sum('cogs'),
+                'profit'   => $sum('profit'),
+                'base'     => $sum('base'),
+                'estimate' => $sum('estimate'),
+            ],
+            'rows'          => $rows,
+        ];
+    }
+
+    /**
+     * Cost of goods sold for confirmed sales in a range, at the unit cost the
+     * stock ledger recorded when each sale took stock out (not today's cost
+     * price). Rows on pooled "set" products are derived mirrors of the unit
+     * movement, so they are skipped to avoid counting the same goods twice.
+     */
+    private function saleCogs(int|string|null $companyId, string $from, string $to, ?string $locationId = null): float
+    {
+        return (float) StockLedgerEntry::query()
+            ->join('sales', 'sales.id', '=', 'stock_ledger_entries.reference_id')
+            ->leftJoin('products', 'products.id', '=', 'stock_ledger_entries.product_id')
+            ->where('stock_ledger_entries.reference_type', 'sale')
+            ->where('stock_ledger_entries.direction', 'out')
+            ->where(fn ($q) => $q->whereNull('products.pool_role')->orWhere('products.pool_role', '!=', 'set'))
+            ->when($companyId !== null, fn ($q) => $q->where('sales.company_id', $companyId))
+            ->where('sales.status', 'confirmed')
+            ->whereDate('sales.sale_date', '>=', $from)
+            ->whereDate('sales.sale_date', '<=', $to)
+            ->when($locationId, fn ($q) => $q->where('sales.location_id', $locationId))
+            ->sum(DB::raw('stock_ledger_entries.qty * COALESCE(stock_ledger_entries.unit_cost, 0)'));
     }
 
     private function sales(int|string|null $companyId, string $from, string $to, ?string $locationId = null): array
@@ -332,7 +431,7 @@ class ReportService
      * Status is derived: active / returned / overdue (active past expected end).
      */
     public function rentalDelivery(
-        int|string $companyId,
+        int|string|null $companyId,
         string $from,
         string $to,
         ?string $locationId = null,
@@ -386,7 +485,7 @@ class ReportService
      * Grouped by day|week|month and by branch/location.
      */
     public function rentalIncome(
-        int|string $companyId,
+        int|string|null $companyId,
         string $from,
         string $to,
         string $period = 'daily',
@@ -399,7 +498,7 @@ class ReportService
         }
 
         $invoices = RentalInvoice::query()
-            ->forCompany($companyId)
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['rental:id,location_id,rental_no,customer_id', 'rental.location:id,name', 'rental.customer:id,name'])
             ->whereBetween('period_from', [$from, $to])
             ->when($locationId, fn ($q) => $q->whereHas('rental', fn ($rq) => $rq->where('location_id', $locationId)))
@@ -533,7 +632,7 @@ class ReportService
 
     /** Live snapshot of items still out on rent (no date filter). */
     public function rentalCurrent(
-        int|string $companyId,
+        int|string|null $companyId,
         ?string $locationId = null,
         int $perPage = 50,
         int $page = 1,
@@ -588,7 +687,7 @@ class ReportService
 
     /** Full rental history for one customer (past + current). */
     public function rentalCustomerHistory(
-        int|string $companyId,
+        int|string|null $companyId,
         string $customerId,
         ?string $locationId = null,
         ?string $from = null,
@@ -649,14 +748,14 @@ class ReportService
     }
 
     /** Revenue breakdown by price tier used at POS (retail / wholesale / dealer). */
-    public function salesByPriceLevel(int|string $companyId, string $from, string $to): array
+    public function salesByPriceLevel(int|string|null $companyId, string $from, string $to): array
     {
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
 
         $rows = SaleItem::query()
             ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-            ->where('sales.company_id', $companyId)
+            ->when($companyId !== null, fn ($q) => $q->where('sales.company_id', $companyId))
             ->where('sales.status', 'confirmed')
             ->whereBetween('sales.sale_date', [$from, $to])
             ->selectRaw("COALESCE(sale_items.price_level, 'retail') as price_level,
@@ -751,11 +850,13 @@ class ReportService
         $from = Carbon::parse($from)->toDateString();
         $to = Carbon::parse($to)->toDateString();
 
+        // Columns are table-qualified: products also has company_id and
+        // status, which made this query fail with "ambiguous column".
         $rows = $this->applyDateRange(
             ProductionOrder::query()
-                ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
-                ->where('status', 'completed'),
-            'order_date',
+                ->when($companyId !== null, fn ($q) => $q->where('production_orders.company_id', $companyId))
+                ->where('production_orders.status', 'completed'),
+            'production_orders.order_date',
             $from,
             $to,
         )
@@ -1054,7 +1155,7 @@ class ReportService
             ->whereDate('purchase_date', '>=', $from)
             ->whereDate('purchase_date', '<=', $to)
             ->orderBy('purchase_date')
-            ->get(['purchase_no', 'purchase_date', 'grand_total'])
+            ->get(['purchase_no', 'purchase_date', 'grand_total', 'supplier_payable'])
             ->each(function (Purchase $p) use ($rows) {
                 $rows->push([
                     'date'        => $p->purchase_date->toDateString(),
@@ -1062,9 +1163,9 @@ class ReportService
                     'reference'   => $p->purchase_no,
                     'invoice'     => $p->purchase_no,
                     'description' => 'Purchase',
-                    'amount'      => (float) $p->grand_total,
+                    'amount'      => $p->supplierPayable(),
                     'debit'       => 0,
-                    'credit'      => (float) $p->grand_total,
+                    'credit'      => $p->supplierPayable(),
                 ]);
             });
 
@@ -1372,7 +1473,7 @@ class ReportService
             ->where('supplier_id', $supplierId)
             ->where('status', 'confirmed')
             ->whereDate('purchase_date', '<=', $asOf)
-            ->sum('grand_total');
+            ->sum(DB::raw('COALESCE(supplier_payable, grand_total)'));
 
         $payments = (float) SupplierPayment::forCompany($companyId)
             ->where('supplier_id', $supplierId)

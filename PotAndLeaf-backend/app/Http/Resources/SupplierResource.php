@@ -39,6 +39,7 @@ class SupplierResource extends JsonResource
             'bank_account_no'   => $this->bank_account_no,
             'bank_ifsc'         => $this->bank_ifsc,
             'credit_limit'    => (float) $this->credit_limit,
+            'credit_days'     => (int) $this->credit_days,
             'opening_balance' => (float) $this->opening_balance,
             'outstanding'     => (float) $this->outstanding,
             'advance_balance' => (float) $this->advance_balance,

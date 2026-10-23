@@ -32,6 +32,11 @@ class Backorder extends Model
         return $this->hasMany(BackorderItem::class);
     }
 
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);

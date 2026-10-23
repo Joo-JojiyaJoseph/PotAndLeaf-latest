@@ -6,7 +6,7 @@ import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Textarea, Spinner, Select, PageHeader } from '../../components/ui';
 import { formatCurrency, todayISO as today } from '../../lib/format';
-import { computeSale, tierPrice } from '../../lib/saleCalc';
+import { computeSale, tierPrice, discountAmount } from '../../lib/saleCalc';
 import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 
 const BILL_KINDS = [
@@ -101,7 +101,11 @@ export default function SaleForm() {
 
   useEffect(() => { setHeader((h) => ({ ...h, customer_id: '', loyalty_points_redeemed: '' })); setLines([emptyLine()]); setErrors({}); }, [activeCompany?.id]);
 
-  const computed = useMemo(() => computeSale(lines, header.is_interstate), [lines, header.is_interstate]);
+  // The Disc. box is a percentage; the server stores the line discount in rupees.
+  const computed = useMemo(
+    () => computeSale(lines.map((l) => ({ ...l, discount: discountAmount(l) })), header.is_interstate),
+    [lines, header.is_interstate],
+  );
   const t = computed.totals;
   const settings = data?.settings ?? {};
   const redeemRate = Number(settings.loyalty_redeem_rupees) || 1;
@@ -147,7 +151,7 @@ export default function SaleForm() {
         items: lines.filter((l) => l.product_id).map((l) => ({
           product_id: l.product_id, product_batch_id: l.product_batch_id || undefined, qty: Number(l.qty) || 0, rate: Number(l.rate) || 0,
           price_level: l.price_level || 'retail',
-          discount: Number(l.discount) || 0, gst_rate: Number(l.gst_rate) || 0,
+          discount: discountAmount(l), gst_rate: Number(l.gst_rate) || 0,
         })),
       });
       navigate(`/sales/${res.data.data.id}`);
@@ -256,7 +260,7 @@ export default function SaleForm() {
                 <th className="microlabel px-1 pb-2 font-semibold">Price tier</th>
                 <th className="microlabel px-1 pb-2 font-semibold">Qty</th>
                 <th className="microlabel px-1 pb-2 font-semibold">Rate</th>
-                <th className="microlabel px-1 pb-2 font-semibold">Disc.</th>
+                <th className="microlabel px-1 pb-2 font-semibold">Disc. %</th>
                 <th className="microlabel px-1 pb-2 font-semibold">GST %</th>
                 <th className="microlabel px-1 pb-2 text-right font-semibold">Total</th>
                 <th className="px-1 pb-2" />

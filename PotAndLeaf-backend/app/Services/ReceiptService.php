@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AdvanceOrder;
 use App\Models\Customer;
 use App\Models\CustomerReceipt;
 use App\Models\CustomerReceiptAllocation;
@@ -199,9 +200,66 @@ class ReceiptService
         return $receipt;
     }
 
+    /**
+     * A sale created by fulfilling an advance order already counts the
+     * booking advance as paid (amount_paid). On confirm, move that advance
+     * out of the customer's advance balance and link its receipts to the
+     * sale, so the same money cannot be applied to another invoice and no
+     * second (cash) receipt is created for it. Returns the amount consumed.
+     */
+    public function consumeAdvanceOrderAdvance(Sale $sale): float
+    {
+        if (! $sale->customer_id) {
+            return 0.0;
+        }
+
+        $order = AdvanceOrder::query()
+            ->where('company_id', $sale->company_id)
+            ->where('sale_id', $sale->id)
+            ->first();
+        if (! $order) {
+            return 0.0;
+        }
+
+        $receipts = CustomerReceipt::query()
+            ->where('advance_order_id', $order->id)
+            ->whereNull('sale_id')
+            ->lockForUpdate()
+            ->get();
+        $total = round((float) $receipts->sum('amount'), 2);
+        if ($total <= 0) {
+            return 0.0;
+        }
+
+        $customer = Customer::forCompany($sale->company_id)->lockForUpdate()->find($sale->customer_id);
+        if ($customer) {
+            $customer->advance_balance = max(0, round((float) $customer->advance_balance - $total, 2));
+            $customer->save();
+        }
+
+        CustomerReceipt::query()->whereIn('id', $receipts->pluck('id'))->update(['sale_id' => $sale->id]);
+
+        return $total;
+    }
+
     /** Remove auto receipts from a cancelled sale without reversing outstanding (none was adjusted). */
     public function voidForSale(Sale $sale): void
     {
+        // Booking advances used on this sale go back to the customer's
+        // advance balance instead of being deleted with the sale.
+        $advanceReceipts = CustomerReceipt::query()
+            ->where('sale_id', $sale->id)
+            ->whereNotNull('advance_order_id')
+            ->get();
+        if ($advanceReceipts->isNotEmpty()) {
+            $customer = Customer::forCompany($sale->company_id)->lockForUpdate()->find($sale->customer_id);
+            if ($customer) {
+                $customer->advance_balance = round((float) $customer->advance_balance + (float) $advanceReceipts->sum('amount'), 2);
+                $customer->save();
+            }
+            CustomerReceipt::query()->whereIn('id', $advanceReceipts->pluck('id'))->update(['sale_id' => null]);
+        }
+
         $receipts = CustomerReceipt::query()->where('sale_id', $sale->id)->get();
         foreach ($receipts as $receipt) {
             app(AccountingEngine::class)->cancelBySource('customer_receipt', $receipt->id);
@@ -284,6 +342,10 @@ class ReceiptService
             if ($customer) {
                 if ($receipt->applied_from_advance) {
                     $customer->advance_balance = (float) $customer->advance_balance + (float) $receipt->amount;
+                    $customer->outstanding = (float) $customer->outstanding + (float) $receipt->amount;
+                } elseif ($receipt->advance_order_id && $receipt->sale_id) {
+                    // A booking advance already used on a confirmed sale: the
+                    // money now pays that sale, so removing it re-opens the debt.
                     $customer->outstanding = (float) $customer->outstanding + (float) $receipt->amount;
                 } elseif ($receipt->is_advance || $receipt->advance_order_id) {
                     $customer->advance_balance = max(0, (float) $customer->advance_balance - (float) $receipt->amount);

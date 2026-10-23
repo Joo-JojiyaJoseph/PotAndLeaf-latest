@@ -232,7 +232,8 @@ class PaymentService
             ->orderByDesc('purchase_date')
             ->get()
             ->map(function (Purchase $p) {
-                $total = (float) $p->grand_total;
+                // What this bill added to the supplier's outstanding.
+                $total = $p->supplierPayable();
                 $paid = (float) ($p->paid_sum ?? 0) + (float) ($p->allocated_sum ?? 0);
                 $balance = round($total - $paid - (float) ($p->returned_sum ?? 0), 2);
                 $status = $balance <= 0.005 ? 'paid' : ($paid <= 0.005 ? 'unpaid' : 'partial');

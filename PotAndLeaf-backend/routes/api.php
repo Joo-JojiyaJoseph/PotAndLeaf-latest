@@ -247,6 +247,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('advance-orders', [AdvanceOrderController::class, 'store']);
         Route::get('advance-orders/{advanceOrder}', [AdvanceOrderController::class, 'show']);
         Route::post('advance-orders/{advanceOrder}/fulfill', [AdvanceOrderController::class, 'fulfill']);
+        Route::post('advance-orders/{advanceOrder}/notify', [AdvanceOrderController::class, 'notify']);
         Route::delete('advance-orders/{advanceOrder}', [AdvanceOrderController::class, 'destroy']);
 
         // Module 10b — Backorders (shortage when stock unavailable)
@@ -255,6 +256,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('backorders', [BackorderController::class, 'store']);
         Route::get('backorders/{backorder}', [BackorderController::class, 'show']);
         Route::post('backorders/{backorder}/fulfill', [BackorderController::class, 'fulfill']);
+        Route::post('backorders/{backorder}/notify', [BackorderController::class, 'notify']);
         Route::delete('backorders/{backorder}', [BackorderController::class, 'destroy']);
         Route::post('sales/{sale}/backorder', [BackorderController::class, 'createFromSale']);
 
@@ -286,6 +288,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('reports/margin/export', [ReportController::class, 'exportMargin']);
         Route::get('reports/profit', [ReportController::class, 'profit']);
         Route::get('reports/profit/export', [ReportController::class, 'exportProfit']);
+        Route::get('reports/internal-estimate', [ReportController::class, 'internalEstimate']);
         Route::get('reports/price-levels', [ReportController::class, 'priceLevels']);
         Route::get('reports/rental/delivery', [ReportController::class, 'rentalDelivery']);
         Route::get('reports/rental/delivery/export', [ReportController::class, 'exportRentalDelivery']);
@@ -317,6 +320,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('reports/sales/ytd', [ReportController::class, 'salesYtd']);
         Route::get('reports/sales/twelve-month-trend', [ReportController::class, 'twelveMonthTrend']);
         Route::get('reports/gst-reconciliation', [ReportController::class, 'gstReconciliation']);
+        Route::get('reports/accounting/tally-export', [ReportController::class, 'tallyExport']);
         Route::get('reports/commission', [ReportController::class, 'commissionReport']);
         Route::get('reports/leaderboard', [ReportController::class, 'leaderboard']);
         Route::get('reports/eod-management/preview', [ReportController::class, 'eodManagementPreview']);

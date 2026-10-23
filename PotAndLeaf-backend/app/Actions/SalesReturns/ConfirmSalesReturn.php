@@ -4,12 +4,14 @@ namespace App\Actions\SalesReturns;
 
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\ProductBatch;
 use App\Models\SaleItem;
 use App\Models\SalesReturn;
 use App\Repositories\Contracts\SalesReturnRepositoryInterface;
 use App\Services\CommissionEngine;
 use App\Services\InventoryService;
 use App\Services\LoyaltyService;
+use App\Services\PoolStockService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -24,6 +26,7 @@ class ConfirmSalesReturn
         private readonly InventoryService $inventory,
         private readonly LoyaltyService $loyalty,
         private readonly CommissionEngine $commissionEngine,
+        private readonly PoolStockService $pool,
     ) {}
 
     public function handle(SalesReturn $return, ?int $userId = null): SalesReturn
@@ -33,7 +36,10 @@ class ConfirmSalesReturn
         }
 
         return DB::transaction(function () use ($return, $userId) {
-            $return->loadMissing(['items', 'sale']);
+            // Always reload the full sale: a return handed over straight from
+            // CreateSalesReturn carries only sale:id,sale_no, which left
+            // payment_mode and company_id blank here.
+            $return->load(['items', 'sale']);
             $this->guardReturnable($return);
 
             foreach ($return->items as $item) {
@@ -46,6 +52,22 @@ class ConfirmSalesReturn
                     continue;
                 }
 
+                // Pooled set/unit products go back into the shared unit pool
+                // (posting on the set product directly broke its derived stock).
+                if ($this->pool->isPooled($product)) {
+                    $this->pool->restore(
+                        $product, (float) $item->qty, 'sales-return', $return->id, "Return {$return->return_no}", $userId,
+                    );
+
+                    continue;
+                }
+
+                // If the sold line was scanned to a batch, the goods go back
+                // to that batch so batch quantities match stock again.
+                $batchId = $item->sale_item_id
+                    ? SaleItem::query()->whereKey($item->sale_item_id)->value('product_batch_id')
+                    : null;
+
                 $this->inventory->post(
                     product: $product,
                     direction: 'in',
@@ -55,8 +77,19 @@ class ConfirmSalesReturn
                     referenceId: $return->id,
                     note: "Return {$return->return_no}",
                     userId: $userId,
+                    productBatchId: $batchId,
                 );
                 $product->save();
+
+                if ($batchId) {
+                    $batch = ProductBatch::query()->whereKey($batchId)->lockForUpdate()->first();
+                    if ($batch) {
+                        $batch->increment('remaining_qty', (float) $item->qty);
+                        if ($batch->status === 'depleted') {
+                            $batch->update(['status' => 'active']);
+                        }
+                    }
+                }
             }
 
             if ($return->customer_id) {
@@ -68,7 +101,16 @@ class ConfirmSalesReturn
                         $customer->save();
                     }
 
-                    $points = $this->loyalty->pointsEarned($return->company_id, (float) $return->grand_total);
+                    // Take back the share of points this sale really earned
+                    // (rules included). Only a return with no sale falls back
+                    // to the default earn rate.
+                    $points = $sale
+                        ? 0
+                        : $this->loyalty->pointsEarned($return->company_id, (float) $return->grand_total);
+                    if ($sale) {
+                        $this->loyalty->reverseEarnForReturn($customer, $sale, $return);
+                        $customer->refresh();
+                    }
                     if ($points > 0) {
                         $customer->refresh();
                         $customer->loyalty_points = max(0, (int) $customer->loyalty_points - $points);

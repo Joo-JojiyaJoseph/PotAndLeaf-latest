@@ -29,6 +29,7 @@ const GROUPS = [
     keys: [
       { key: 'cash_opening_balance', label: 'Cash opening balance (₹)', type: 'number', step: '0.01' },
       { key: 'bank_opening_balance', label: 'Bank opening balance (₹)', type: 'number', step: '0.01' },
+      { key: 'landed_cost_payable_to_supplier', label: 'Freight / loading on purchases is paid to the supplier (off = paid to a transporter)', type: 'toggle' },
     ],
   },
   {

@@ -124,10 +124,12 @@ export function StatCard({ label, value, sub, tone = 'default', icon: Icon }) {
     <div className="glass-card relative min-w-0 overflow-hidden p-3 transition-transform duration-150 sm:p-5 sm:hover:-translate-y-0.5">
       <span className={classNames('absolute inset-y-3 left-0 w-[3px] rounded-full sm:inset-y-4', statAccent[tone] ?? statAccent.default)} />
       <div className="flex items-start justify-between gap-2 pl-2">
-        <div className="microlabel min-w-0 truncate text-muted">{label}</div>
+        <div className="microlabel min-w-0 leading-snug text-muted">{label}</div>
         {Icon ? <Icon className="size-4 shrink-0 text-leaf/80 sm:size-5" strokeWidth={1.6} /> : null}
       </div>
-      <div className="tnum mt-1.5 break-words pl-2 text-lg font-semibold leading-tight text-ink sm:mt-2 sm:text-[22px] lg:text-[26px] lg:leading-none">{value}</div>
+      {/* Never break a figure in the middle ("₹2,832." / "00"): keep it on one
+          line and let very long values scroll inside the card instead. */}
+      <div title={typeof value === 'string' ? value : undefined} className="tnum mt-1.5 overflow-x-auto whitespace-nowrap pl-2 text-lg font-semibold leading-tight text-ink sm:mt-2 sm:text-xl xl:text-[24px] xl:leading-none">{value}</div>
       {sub && <div className="mt-1 pl-2 text-[11px] leading-snug text-muted sm:mt-1.5">{sub}</div>}
     </div>
   );

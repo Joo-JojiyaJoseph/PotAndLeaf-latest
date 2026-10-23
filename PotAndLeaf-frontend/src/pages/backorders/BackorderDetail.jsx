@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, XCircleIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { recordDetailPath } from '../../lib/recordCompany';
@@ -38,6 +38,11 @@ export default function BackorderDetail() {
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/backorders/${id}`, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Backorder cancelled.'); },
+  });
+  const notifyM = useMutation({
+    mutationFn: () => api.post(`/backorders/${id}/notify`, {}, withCompany(recordCompanyId)),
+    onSuccess: (res) => toast.success(res?.data?.message || 'Customer notified.'),
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not send the WhatsApp message.'),
   });
   const fulfillM = useMutation({
     mutationFn: (items) => api.post(`/backorders/${id}/fulfill`, { items }, withCompany(recordCompanyId)),
@@ -85,6 +90,11 @@ export default function BackorderDetail() {
         backTo="/backorders"
         actions={<>
           <Badge tone={tone[o.status] ?? 'default'}>{o.status}</Badge>
+          {['open', 'partial'].includes(o.status) && (
+            <Button variant="outline" size="sm" onClick={() => notifyM.mutate()} disabled={notifyM.isPending} title="Send the customer a WhatsApp that their items are in stock">
+              <ChatBubbleLeftRightIcon className="size-4" /> Tell customer stock is in
+            </Button>
+          )}
           {o.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {o.can?.fulfill && (
             <>

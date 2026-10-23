@@ -56,6 +56,7 @@ class StoreSupplierRequest extends FormRequest
             'address'           => ['required', 'string', 'max:2000'],
             'photo'             => ['nullable', 'string', 'max:500'],
             'credit_limit'      => ['nullable', 'numeric', 'min:0'],
+            'credit_days'       => ['nullable', 'integer', 'min:0', 'max:365'],
             'opening_balance'   => ['nullable', 'numeric'],
             'notes'             => ['nullable', 'string', 'max:2000'],
             'status'            => ['required', new Enum(SupplierStatus::class)],

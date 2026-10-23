@@ -16,13 +16,15 @@ class UpdateSupplier
     /** @param array<string,mixed> $data */
     public function handle(Supplier $supplier, array $data): Supplier
     {
-        foreach (['credit_limit', 'opening_balance'] as $k) {
+        foreach (['credit_limit', 'opening_balance', 'credit_days'] as $k) {
             if (array_key_exists($k, $data) && ($data[$k] === '' || $data[$k] === null)) $data[$k] = 0;
         }
         if (array_key_exists('country', $data) && blank($data['country'])) $data['country'] = 'India';
         // Financial balances are maintained by purchases, payments, returns and
         // advances. A supplier edit must not overwrite them from the form.
-        unset($data['supplier_code'], $data['outstanding'], $data['advance_balance'], $data['credit_days']);
+        // credit_days is a payment term (not a balance), so it stays editable:
+        // it sets each purchase's due date = purchase_date + credit_days.
+        unset($data['supplier_code'], $data['outstanding'], $data['advance_balance']);
 
         return DB::transaction(function () use ($supplier, $data) {
             $locked = Supplier::query()->whereKey($supplier->id)->lockForUpdate()->first() ?? $supplier;

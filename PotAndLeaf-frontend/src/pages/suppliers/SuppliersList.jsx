@@ -46,6 +46,7 @@ const EMPTY = {
   bank_account_no: '',
   bank_ifsc: '',
   credit_limit: '',
+  credit_days: '',
   opening_balance: '',
   notes: '',
   status: 'active',
@@ -149,7 +150,7 @@ export default function SuppliersList() {
       setErrors({});
       const payload = { ...form };
       if (payload.bank_ifsc) payload.bank_ifsc = String(payload.bank_ifsc).trim().toUpperCase();
-      ['credit_limit', 'opening_balance'].forEach((k) => {
+      ['credit_limit', 'credit_days', 'opening_balance'].forEach((k) => {
         if (payload[k] === '' || payload[k] == null) payload[k] = 0;
       });
       if (!payload.country?.trim?.()) payload.country = 'India';
@@ -398,6 +399,9 @@ export default function SuppliersList() {
 
               <Field label="Credit limit" error={err('credit_limit')}>
                 <Input type="number" step="0.01" value={form.credit_limit ?? ''} onChange={set('credit_limit')} />
+              </Field>
+              <Field label="Credit days" error={err('credit_days')}>
+                <Input type="number" step="1" min="0" max="365" value={form.credit_days ?? ''} onChange={set('credit_days')} placeholder="e.g. 30" />
               </Field>
               <Field label="Opening balance" error={err('opening_balance')}>
                 <Input type="number" step="0.01" value={form.opening_balance ?? ''} onChange={set('opening_balance')} />

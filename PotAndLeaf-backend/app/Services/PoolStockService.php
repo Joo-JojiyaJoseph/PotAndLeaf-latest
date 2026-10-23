@@ -100,6 +100,42 @@ class PoolStockService
             userId: $userId,
         );
         $unit->save();
+        // Keep the pool's batches in step with its stock.
+        $this->inventory->consumeBatchesFifo($unit->id, $unitsNeeded);
+
+        $this->refreshSetMirrors($unit, $referenceType, $referenceId, $note, $userId);
+    }
+
+    /**
+     * Undo a pooled sale (cancel): put the same base units back on the unit
+     * product at its current cost and refresh the set mirrors — the exact
+     * reverse of deduct().
+     */
+    public function restore(
+        Product $product,
+        float $qty,
+        string $referenceType,
+        ?string $referenceId,
+        ?string $note,
+        ?int $userId,
+    ): void {
+        $unit = $this->lockUnitPartner($product);
+        if (! $unit) {
+            throw ValidationException::withMessages([
+                'items' => "{$product->name} is missing its linked pooled stock — cannot restore it.",
+            ]);
+        }
+
+        $unitsPerSet = $product->pool_role === 'unit' ? 1.0 : ((float) $product->units_per_set ?: 1.0);
+        $unitsBack = round($qty * $unitsPerSet, 3);
+
+        $this->inventory->post(
+            product: $unit, direction: 'in', qty: $unitsBack, unitCost: (float) $unit->cost_price,
+            referenceType: $referenceType, referenceId: $referenceId,
+            note: $product->pool_role === 'unit' ? $note : trim(($note ?? '') . " (as {$qty} × {$product->name})"),
+            userId: $userId,
+        );
+        $unit->save();
 
         $this->refreshSetMirrors($unit, $referenceType, $referenceId, $note, $userId);
     }

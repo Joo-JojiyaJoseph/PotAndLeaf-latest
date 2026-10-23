@@ -64,6 +64,11 @@ class ApproveStockVerification
                     userId: $userId,
                 );
                 $product->save();
+                // A shortage found in the count also comes off the batches
+                // (oldest first), so the batch screen matches the shelf.
+                if ($delta < 0) {
+                    $this->inventory->consumeBatchesFifo($product->id, abs($delta));
+                }
             }
 
             $verification->update([

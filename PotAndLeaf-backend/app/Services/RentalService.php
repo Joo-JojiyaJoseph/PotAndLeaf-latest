@@ -125,6 +125,8 @@ class RentalService
                     referenceId: $rental->id, note: "Rental {$rental->rental_no}", userId: $userId,
                 );
                 $product->save();
+                // Rented plants leave their batches oldest first.
+                $this->inventory->consumeBatchesFifo($product->id, (float) $item->qty);
             }
 
             $rental->update([
@@ -207,11 +209,18 @@ class RentalService
             $cycles = max(1, (int) ceil($days / $cycleDays));
             $rentalCharge = round($rental->items->sum(fn ($i) => (float) $i->qty * (float) $i->rate_per_cycle * $cycles), 2);
 
+            // Rent already invoiced by the billing cycle (and already added to
+            // the customer's outstanding) must not be charged again here.
+            $alreadyBilled = round((float) RentalInvoice::query()
+                ->where('rental_id', $rental->id)
+                ->sum('amount'), 2);
+            $rentStillDue = round(max(0, $rentalCharge - $alreadyBilled), 2);
+
             $damage = $damageCharge === null
                 ? round($autoDamage, 2)
                 : round((float) $damageCharge, 2);
             $missingCharge = round($missingCharge, 2);
-            $totalCharges = round($rentalCharge + $damage + $missingCharge, 2);
+            $totalCharges = round($rentStillDue + $damage + $missingCharge, 2);
             $deposit = (float) $rental->deposit;
             $refund = round(max(0, $deposit - $totalCharges), 2);
             $balanceDue = round(max(0, $totalCharges - $deposit), 2);
@@ -238,7 +247,7 @@ class RentalService
                 'cycles'      => $cycles,
                 'amount'      => $totalCharges,
                 'status'      => $balanceDue > 0 ? 'unpaid' : 'paid',
-                'notes'       => "Rental {$rentalCharge}, damage {$damage}, missing {$missingCharge}; deposit {$deposit}, refund {$refund}.",
+                'notes'       => "Rental {$rentalCharge} (already billed {$alreadyBilled}, now {$rentStillDue}), damage {$damage}, missing {$missingCharge}; deposit {$deposit}, refund {$refund}.",
             ]);
 
             // Only the shortfall beyond the deposit is owed by the customer.
