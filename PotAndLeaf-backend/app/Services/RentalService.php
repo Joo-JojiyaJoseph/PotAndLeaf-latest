@@ -188,6 +188,7 @@ class RentalService
                             referenceId: $rental->id, note: "Return {$rental->rental_no}", userId: $userId,
                         );
                         $product->save();
+                        $this->inventory->restoreBatchesFifo($product->id, $good); // back onto the batches it left
                     }
                 }
 
@@ -293,6 +294,7 @@ class RentalService
                         referenceId: $rental->id, note: "Return {$rental->rental_no}", userId: $userId,
                     );
                     $product->save();
+                    $this->inventory->restoreBatchesFifo($product->id, $back); // back onto the batches it left
                 }
                 $item->update(['returned_qty' => (float) $item->returned_qty + $back]);
             }

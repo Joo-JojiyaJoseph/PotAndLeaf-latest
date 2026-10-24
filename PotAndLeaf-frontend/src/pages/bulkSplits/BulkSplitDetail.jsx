@@ -5,10 +5,11 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, formatDateTime } from '../../lib/format';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 import { printBarcodeSheet } from '../../lib/barcodeSheet';
 import useSubmitLock from '../../hooks/useSubmitLock';
+import { useConfirm } from '../../lib/confirm';
 
 const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked' };
 
@@ -64,6 +65,34 @@ export default function BulkSplitDetail() {
   const confirmM = useMutation({ mutationFn: () => api.post(`/bulk-splits/${id}/confirm`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
   const cancelM = useMutation({ mutationFn: () => api.delete(`/bulk-splits/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
   const { submit, release, locked } = useSubmitLock(confirmM.isPending || cancelM.isPending);
+  const confirm = useConfirm();
+
+  // Issue 25: show the prices once more before confirming a saved draft.
+  async function confirmWithCheck(rows) {
+    const ok = await confirm({
+      title: 'Check prices before confirming',
+      wide: true,
+      tone: 'primary',
+      confirmLabel: 'Confirm split',
+      cancelLabel: 'Go back',
+      message: (
+        <table className="mt-2 w-full text-xs">
+          <thead><tr className="text-left text-faint"><th className="py-1">Item</th><th className="py-1 text-right">Qty</th><th className="py-1 text-right">Cost each</th><th className="py-1 text-right">Selling price</th></tr></thead>
+          <tbody>
+            {rows.map((it) => (
+              <tr key={it.id} className={'border-t border-line/60 ' + (Number(it.retail_price) < Number(it.unit_cost) ? 'text-danger' : 'text-ink')}>
+                <td className="py-1">{it.split_label || it.product_name}</td>
+                <td className="tnum py-1 text-right">{it.qty}</td>
+                <td className="tnum py-1 text-right">{formatCurrency(it.unit_cost)}</td>
+                <td className="tnum py-1 text-right font-medium">{it.retail_price != null ? formatCurrency(it.retail_price) : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ),
+    });
+    if (ok) confirmM.mutate(undefined, { onSettled: release }); else release();
+  }
 
   if (isLoading) return <DetailLoading />;
   if (isError || !data) return <DetailError backTo="/bulk-splits" />;
@@ -100,7 +129,7 @@ export default function BulkSplitDetail() {
               </Button>
             )}
             {s.can?.confirm && (
-              <Button size="sm" onClick={() => submit(() => confirmM.mutate(undefined, { onSettled: release }))} disabled={locked}>
+              <Button size="sm" onClick={() => submit(() => confirmWithCheck(items))} disabled={locked}>
                 <CheckCircleIcon className="size-4" /> Confirm split
               </Button>
             )}
@@ -123,7 +152,7 @@ export default function BulkSplitDetail() {
           <InfoItem label="Unit cost" value={formatCurrency(s.source_unit_cost)} mono />
           <InfoItem label="Cost allocated" value={formatCurrency(s.total_cost)} mono />
           {s.split_mode && <InfoItem label="Split mode" value={s.split_mode.replace(/_/g, ' ')} />}
-          {s.confirmed_at && <InfoItem label="Confirmed" value={new Date(s.confirmed_at).toLocaleString()} />}
+          {s.confirmed_at && <InfoItem label="Confirmed" value={formatDateTime(s.confirmed_at)} />}
         </InfoGrid>
         {s.notes && <div className="mt-4 border-t border-line pt-4"><InfoItem label="Notes" value={s.notes} /></div>}
       </Section>

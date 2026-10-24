@@ -29,10 +29,16 @@ class PurchaseOrderService
             ->get();
 
         $lastRates = $this->lastPurchaseRates($companyId, $products->pluck('id')->all());
+        $onOrder = $this->openOrderQty($companyId, $products->pluck('id')->all());
 
-        return $products->map(function (Product $p) use ($lastRates) {
+        // Stock already on an open (draft/sent) PO counts as coming in, so a
+        // product is not suggested again once enough is on order (issue 3).
+        $products = $products->filter(fn (Product $p) => (float) $p->current_stock + (float) ($onOrder[$p->id]['qty'] ?? 0) <= (float) $p->reorder_level)->values();
+
+        return $products->map(function (Product $p) use ($lastRates, $onOrder) {
+            $ordered = (float) ($onOrder[$p->id]['qty'] ?? 0);
             $target = (float) $p->reorder_level * 2;
-            $suggested = max(0.0, round($target - (float) $p->current_stock, 3));
+            $suggested = max(0.0, round($target - (float) $p->current_stock - $ordered, 3));
             $shortfall = max(0.0, round((float) $p->reorder_level - (float) $p->current_stock, 3));
             $primary = $p->suppliers->first();
             $lastPrice = isset($lastRates[$p->id]) ? (float) $lastRates[$p->id] : null;
@@ -55,6 +61,8 @@ class PurchaseOrderService
                 'category'            => $p->category?->name,
                 'unit'                => $p->unit?->short_name ?: $p->unit?->name,
                 'current_stock'       => (float) $p->current_stock,
+                'on_order'            => $ordered,
+                'open_po_nos'         => $onOrder[$p->id]['po_nos'] ?? [],
                 'reorder_level'       => (float) $p->reorder_level,
                 'required_qty'        => $shortfall,
                 'shortfall'           => $shortfall,
@@ -69,6 +77,33 @@ class PurchaseOrderService
                 'suppliers'           => $suppliers,
             ];
         })->all();
+    }
+
+    /**
+     * Quantity still to arrive on open purchase orders (draft or sent), per product.
+     *
+     * @return array<string, array{qty: float, po_nos: list<string>}>
+     */
+    public function openOrderQty(int|string $companyId, array $productIds, ?string $exceptOrderId = null): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        return DB::table('purchase_order_items')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->where('purchase_orders.company_id', $companyId)
+            ->whereIn('purchase_orders.status', ['draft', 'sent'])
+            ->whereNull('purchase_orders.deleted_at')
+            ->when($exceptOrderId, fn ($q) => $q->where('purchase_orders.id', '!=', $exceptOrderId))
+            ->whereIn('purchase_order_items.product_id', $productIds)
+            ->get(['purchase_order_items.product_id', 'purchase_order_items.qty', 'purchase_orders.po_no'])
+            ->groupBy('product_id')
+            ->map(fn ($rows) => [
+                'qty'    => round((float) $rows->sum('qty'), 3),
+                'po_nos' => $rows->pluck('po_no')->unique()->values()->all(),
+            ])
+            ->all();
     }
 
     /** Latest confirmed purchase rate per product. */
@@ -170,6 +205,8 @@ class PurchaseOrderService
                         ? trim($data['notes']).' — Auto-generated from reorder report'
                         : 'Auto-generated from reorder report',
                     'items'         => $items,
+                    // The reorder report already subtracts what is on order and shows it.
+                    'allow_duplicate' => true,
                 ], $userId);
             }
 
@@ -207,6 +244,23 @@ class PurchaseOrderService
         $names = Product::forCompany($companyId)
             ->whereIn('id', collect($data['items'])->pluck('product_id')->filter())
             ->pluck('name', 'id');
+
+        // Issue 3: one line per product, and warn when it is already on an open PO.
+        $ids = collect($data['items'])->pluck('product_id');
+        $dupes = $ids->duplicates()->unique();
+        if ($dupes->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'items' => $dupes->map(fn ($id) => ($names[$id] ?? 'An item').' is added more than once. Put the total quantity on one line.')->values()->all(),
+            ]);
+        }
+        if (empty($data['allow_duplicate'])) {
+            $open = $this->openOrderQty($companyId, $ids->unique()->values()->all());
+            if ($open !== []) {
+                throw ValidationException::withMessages([
+                    'open_orders' => collect($open)->map(fn ($o, $id) => ($names[$id] ?? 'An item').' is already on '.implode(', ', $o['po_nos']).' ('.rtrim(rtrim(number_format($o['qty'], 3, '.', ''), '0'), '.').' still to come).')->values()->all(),
+                ]);
+            }
+        }
 
         $rows = [];
         $subtotal = 0.0;

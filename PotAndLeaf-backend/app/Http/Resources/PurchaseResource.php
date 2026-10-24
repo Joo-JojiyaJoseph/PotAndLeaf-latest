@@ -32,7 +32,7 @@ class PurchaseResource extends JsonResource
             'payment_status'    => $this->paymentStatus(),
             'status'            => $this->status,
             'notes'             => $this->notes,
-            'confirmed_at'      => optional($this->confirmed_at)->toDateTimeString(),
+            'confirmed_at'      => optional($this->confirmed_at)->toIso8601String(),
             'entered_by'        => $this->whenLoaded('createdBy', fn () => $this->createdBy?->name),
             'created_by'        => $this->created_by,
             'items_count'       => $this->when($this->items_count !== null, $this->items_count),

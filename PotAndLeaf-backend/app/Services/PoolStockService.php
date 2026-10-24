@@ -136,6 +136,8 @@ class PoolStockService
             userId: $userId,
         );
         $unit->save();
+        // deduct() took these units off the unit batches oldest-first; put them back.
+        $this->inventory->restoreBatchesFifo($unit->id, $unitsBack);
 
         $this->refreshSetMirrors($unit, $referenceType, $referenceId, $note, $userId);
     }

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Card, Spinner, StatCard, Select } from '../../components/ui';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatCurrency, formatDate, formatDateTime } from '../../lib/format';
 
 const selectCls = 'h-9 rounded-lg border border-line bg-surface px-2 text-sm';
 
@@ -100,7 +100,7 @@ export default function ActivityMonitoringPage() {
                     <tbody>
                       {data.recent_logs.map((e) => (
                         <tr key={e.id} className="border-b border-line/60 last:border-0">
-                          <td className="px-4 py-2 text-xs text-muted">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                          <td className="px-4 py-2 text-xs text-muted">{e.created_at ? formatDateTime(e.created_at) : '—'}</td>
                           <td className="px-4 py-2">{e.user_name || '—'}</td>
                           <td className="px-4 py-2"><Badge tone="info">{e.action}</Badge></td>
                           <td className="px-4 py-2 text-muted">{e.description || e.module}</td>

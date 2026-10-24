@@ -98,7 +98,6 @@ export default function CompanyDetail() {
           <InfoItem label="Address" value={c.address || '—'} />
           <InfoItem label="State" value={c.state || '—'} />
           <InfoItem label="State code" value={c.state_code || '—'} />
-          <InfoItem label="Locations" value={c.locations || '—'} />
         </InfoGrid>
       </Section>
 

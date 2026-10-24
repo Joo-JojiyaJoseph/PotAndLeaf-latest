@@ -44,7 +44,7 @@ class BackorderController extends Controller
             ->get(['id', 'name', 'type'])
             ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'type' => $c->type?->value]);
 
-        $products = Product::forCompany($company->id)->orderBy('name')
+        $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')
             ->get(['id', 'sku', 'name', 'current_stock', 'retail_price', 'gst_rate'])
             ->map(fn ($p) => [
                 'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name,

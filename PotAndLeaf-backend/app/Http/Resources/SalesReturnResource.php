@@ -27,7 +27,7 @@ class SalesReturnResource extends JsonResource
             'grand_total'   => (float) $this->grand_total,
             'status'        => $this->status,
             'notes'         => $this->notes,
-            'confirmed_at'  => optional($this->confirmed_at)->toDateTimeString(),
+            'confirmed_at'  => optional($this->confirmed_at)->toIso8601String(),
             'sale'          => $this->whenLoaded('sale', fn () => [
                 'id'      => $this->sale?->id,
                 'sale_no' => $this->sale?->sale_no,

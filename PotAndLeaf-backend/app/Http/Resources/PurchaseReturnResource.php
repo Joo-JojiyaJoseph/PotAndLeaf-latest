@@ -26,7 +26,7 @@ class PurchaseReturnResource extends JsonResource
             'grand_total'   => (float) $this->grand_total,
             'status'        => $this->status,
             'notes'         => $this->notes,
-            'confirmed_at'  => optional($this->confirmed_at)->toDateTimeString(),
+            'confirmed_at'  => optional($this->confirmed_at)->toIso8601String(),
             'purchase'      => $this->whenLoaded('purchase', fn () => [
                 'id'          => $this->purchase?->id,
                 'purchase_no' => $this->purchase?->purchase_no,

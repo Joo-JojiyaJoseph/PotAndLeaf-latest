@@ -8,6 +8,7 @@ import useSubmitLock from '../../hooks/useSubmitLock';
 import { useToast } from '../../lib/toast';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency, todayISO as today } from '../../lib/format';
+import { useConfirm } from '../../lib/confirm';
 import { allocateSplit, buildSplitLines, splitByNumSplits, splitByQtyPerSplit } from '../../lib/bulkSplitCalc';
 
 const numInput = 'h-9 w-full rounded-xl border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/25';
@@ -17,6 +18,7 @@ export default function BulkSplitForm() {
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
+  const confirm = useConfirm();
   const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany();
 
   const [sourceId, setSourceId] = useState(location.state?.sourceProductId ?? '');
@@ -165,6 +167,35 @@ export default function BulkSplitForm() {
       return;
     }
     setErrors({});
+    // Issue 25: check the prices before stock moves and products are created.
+    const rows = buildPayload(true).items.map((it, i) => ({ ...it, unit_cost: allocated[i]?.unit_cost ?? 0 }));
+    const costTotal = rows.reduce((t, r) => t + r.qty * r.unit_cost, 0);
+    const ok = await confirm({
+      title: 'Check prices before confirming',
+      wide: true,
+      tone: 'primary',
+      confirmLabel: 'Confirm split',
+      cancelLabel: 'Go back',
+      message: (
+        <>
+          <table className="mt-2 w-full text-xs">
+            <thead><tr className="text-left text-faint"><th className="py-1">Item</th><th className="py-1 text-right">Qty</th><th className="py-1 text-right">Cost each</th><th className="py-1 text-right">Selling price</th></tr></thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={i} className={'border-t border-line/60 ' + (r.retail_price < r.unit_cost ? 'text-danger' : 'text-ink')}>
+                  <td className="py-1">{r.split_label || `Row ${i + 1}`}</td>
+                  <td className="tnum py-1 text-right">{r.qty}</td>
+                  <td className="tnum py-1 text-right">{formatCurrency(r.unit_cost)}</td>
+                  <td className="tnum py-1 text-right font-medium">{formatCurrency(r.retail_price)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs">Total cost {formatCurrency(costTotal)} (same as the bulk stock used; cost each is rounded on screen). Red rows sell below cost.</p>
+        </>
+      ),
+    });
+    if (!ok) { release(); return; }
     setSaving(true);
     try {
       const res = await api.post('/bulk-splits', buildPayload(true), companyRequest());

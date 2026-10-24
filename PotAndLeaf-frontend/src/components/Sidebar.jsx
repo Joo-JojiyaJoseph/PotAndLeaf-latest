@@ -34,7 +34,6 @@ import {
   ArrowUturnRightIcon,
   CalendarDaysIcon,
   Squares2X2Icon,
-  MapPinIcon,
   Cog6ToothIcon,
   CircleStackIcon,
   EyeIcon,
@@ -103,7 +102,6 @@ const GROUPS = [
     items: [
       { key: 'products', label: 'Products', to: '/products', icon: TagIcon, permission: 'products.view' },
       { key: 'masters', label: 'Categories & Units', to: '/masters', icon: Squares2X2Icon, anyOf: ['categories.view', 'subcategories.view', 'units.view'] },
-      { key: 'locations', label: 'Locations', to: '/locations', icon: MapPinIcon, permission: 'locations.view' },
       { key: 'companies', label: 'Companies', to: '/companies', icon: BuildingOffice2Icon, superAdmin: true },
       { key: 'users', label: 'Users', to: '/users', icon: UserGroupIcon, permission: 'users.view' },
       { key: 'roles', label: 'Roles & Permissions', to: '/roles', icon: ShieldCheckIcon, permission: 'roles.view' },

@@ -61,6 +61,9 @@ class CancelSale
                             $batch->increment('remaining_qty', (float) $item->qty);
                             if ($batch->status === 'depleted') $batch->update(['status' => 'active']);
                         }
+                    } else {
+                        // Sold without a scanned batch (taken oldest-first): refill those batches.
+                        $this->inventory->restoreBatchesFifo($product->id, (float) $item->qty);
                     }
                 }
 

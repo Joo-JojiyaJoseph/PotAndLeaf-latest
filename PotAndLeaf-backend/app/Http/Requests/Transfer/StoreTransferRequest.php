@@ -16,6 +16,11 @@ class StoreTransferRequest extends FormRequest
         return $this->user()->hasPermission('transfers.create', $this->route('current_company')->id);
     }
 
+    public function messages(): array
+    {
+        return ['transfer_type.in' => 'Each company has one location. Transfer stock to another company instead.'];
+    }
+
     public function rules(): array
     {
         $companyId = $this->route('current_company')->id;
@@ -24,7 +29,8 @@ class StoreTransferRequest extends FormRequest
         $loc = fn () => Rule::exists('locations', 'id')->where('company_id', $sourceId)->where('is_active', true);
 
         return [
-            'transfer_type'        => ['nullable', Rule::in(['inter_company', 'intra_company'])],
+            // One location per company: stock only moves between companies.
+            'transfer_type'        => ['nullable', Rule::in(['inter_company'])],
             'from_company_id'      => ['nullable', 'integer', Rule::exists('companies', 'id')->where('is_active', true)],
             'to_company_id'        => ['nullable', 'integer', Rule::exists('companies', 'id')->where('is_active', true), Rule::notIn([$sourceId])],
             'from_location_id'     => [$isIntra ? 'required' : 'nullable', 'uuid', $loc()],

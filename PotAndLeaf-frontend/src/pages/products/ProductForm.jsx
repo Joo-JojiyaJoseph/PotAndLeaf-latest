@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
@@ -280,10 +280,15 @@ export default function ProductForm() {
               )}
             </Field>
             <Field label="GST %">
-              <Select value={form.gst_rate} onChange={set('gst_rate')} className={selectCls}>
-                <option value="">—</option>
-                {(formData?.tax_rates ?? [0, 5, 12, 18, 28]).map((r) => <option key={r} value={r}>{r}%</option>)}
-              </Select>
+              {/* Typed box (any rate 0–100) with the usual slabs offered as suggestions. */}
+              <Input
+                type="number" step="0.01" min="0" max="100" inputMode="decimal"
+                list="gst-rate-suggestions" placeholder="e.g. 18"
+                value={form.gst_rate} onChange={set('gst_rate')}
+              />
+              <datalist id="gst-rate-suggestions">
+                {(formData?.tax_rates ?? [0, 5, 12, 18, 28]).map((r) => <option key={r} value={r} />)}
+              </datalist>
             </Field>
           </div>
 
@@ -326,7 +331,9 @@ export default function ProductForm() {
               )}
               {isEdit && (
                 <p className="sm:col-span-2 text-xs text-muted">
-                  Changing opening stock adjusts current stock by the difference (via inventory ledger).
+                  Stock on hand changes only through purchases, sales, returns, damage and stock counts, so every change is recorded.
+                  To correct it, use <Link to="/stock-verifications/new" className="text-leaf underline">Stock count</Link>.
+                  Changing opening stock adjusts current stock by the difference.
                 </p>
               )}
             </div>

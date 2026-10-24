@@ -131,6 +131,9 @@ class CommissionService
             'target'                => $target,
             'target_met'            => $targetMet,
             'bonus'                 => $bonus,
+            // Display only: which kind of bonus the "bonus" figure above is.
+            'daily_target_bonus'    => $hasLedger ? $bonus : 0.0,
+            'monthly_target_bonus'  => $hasLedger ? 0.0 : $bonus,
             'promotion_bonus'       => $promotionBonus,
             'manager_commission'    => $ledgerManager,
             'ledger_reversals'      => $ledgerReversals,

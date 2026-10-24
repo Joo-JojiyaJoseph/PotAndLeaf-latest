@@ -22,7 +22,6 @@ import { ChartBarIcon,
   ChartPieIcon,
   SparklesIcon,
   ChatBubbleLeftRightIcon,
-  MapPinIcon,
   EnvelopeIcon,
 } from '@heroicons/react/24/outline';
 
@@ -40,7 +39,6 @@ export const REPORT_TABS = [
   { value: 'internal_estimate', label: 'Internal Estimate (owner only)', shortLabel: 'Internal', icon: CalculatorIcon, owner: true },
   { value: 'price_levels', label: 'Sales by Price Tier', shortLabel: 'Price Tier', icon: TagIcon },
   { value: 'inventory_movement', label: 'Stock Movement', shortLabel: 'Stock Move', icon: ChartPieIcon, inventory: true },
-  { value: 'inventory_location', label: 'Location Inventory', shortLabel: 'By Location', icon: MapPinIcon, inventory: true },
   { value: 'rental_delivery', label: 'Rental Delivery', shortLabel: 'Rental Del.', icon: TruckIcon, rental: true },
   { value: 'rental_income', label: 'Rental Income', shortLabel: 'Rental Inc.', icon: CurrencyRupeeIcon, rental: true },
   { value: 'rental_staff', label: 'Rental by Staff', shortLabel: 'Rental Staff', icon: UserIcon, rental: true },

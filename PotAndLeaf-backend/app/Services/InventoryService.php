@@ -78,11 +78,13 @@ class InventoryService
      * was not aimed at one batch. Stops the batch screen from keeping the
      * original received quantity after the product stock has already fallen.
      */
-    public function consumeBatchesFifo(string $productId, float $qty): void
+    /** @return list<array{batch_id: string, batch_no: ?string, qty: float}> what was taken from each batch */
+    public function consumeBatchesFifo(string $productId, float $qty): array
     {
         $left = round($qty, 3);
+        $taken = [];
         if ($left <= 0) {
-            return;
+            return $taken;
         }
 
         $batches = ProductBatch::query()
@@ -103,7 +105,102 @@ class InventoryService
                 $batch->status = 'depleted';
             }
             $batch->save();
+            $taken[] = ['batch_id' => $batch->id, 'batch_no' => $batch->batch_no, 'qty' => round($take, 3)];
             $left = round($left - $take, 3);
+        }
+
+        return $taken;
+    }
+
+    /**
+     * Keep the product's opening-stock batch (OPEN-<sku>, with its own barcode)
+     * in step with opening stock, so a product added with stock shows a batch
+     * and barcode straight away (issue 40). A decrease comes off the oldest
+     * batches first.
+     */
+    public function adjustOpeningBatch(Product $product, float $delta): void
+    {
+        $delta = round($delta, 3);
+        if (abs($delta) < 0.0005) {
+            return;
+        }
+        if ($delta < 0) {
+            $this->consumeBatchesFifo($product->id, abs($delta));
+
+            return;
+        }
+
+        $batch = ProductBatch::query()
+            ->where('product_id', $product->id)
+            ->where('batch_no', 'OPEN-'.$product->sku)
+            ->lockForUpdate()
+            ->first();
+
+        if ($batch) {
+            $batch->qty = round((float) $batch->qty + $delta, 3);
+            $batch->remaining_qty = round((float) $batch->remaining_qty + $delta, 3);
+            $batch->status = 'active';
+            $batch->save();
+
+            return;
+        }
+
+        ProductBatch::create([
+            'company_id'    => $product->company_id,
+            'product_id'    => $product->id,
+            'batch_no'      => 'OPEN-'.$product->sku,
+            'barcode'       => 'PLO'.$product->company_id.'-'.strtoupper(substr(str_replace('-', '', (string) \Illuminate\Support\Str::uuid()), 0, 12)),
+            'qty'           => $delta,
+            'remaining_qty' => $delta,
+            'cost_price'    => (float) $product->cost_price,
+            'status'        => 'active',
+            'received_at'   => now(),
+        ]);
+    }
+
+    /**
+     * Put units back onto batches when stock returns without a known batch
+     * (e.g. rented plants coming back). Refills the oldest batches that were
+     * drawn down first — the reverse of consumeBatchesFifo — never above the
+     * batch's original quantity; anything left goes on the newest batch.
+     */
+    public function restoreBatchesFifo(string $productId, float $qty): void
+    {
+        $left = round($qty, 3);
+        if ($left <= 0) {
+            return;
+        }
+
+        $batches = ProductBatch::query()
+            ->where('product_id', $productId)
+            ->orderBy('received_at')
+            ->orderBy('created_at')
+            ->lockForUpdate()
+            ->get();
+        if ($batches->isEmpty()) {
+            return;
+        }
+
+        foreach ($batches as $batch) {
+            if ($left <= 0.0001) {
+                break;
+            }
+            $room = round((float) $batch->qty - (float) $batch->remaining_qty, 3);
+            if ($room <= 0) {
+                continue;
+            }
+            $put = min($room, $left);
+            $batch->remaining_qty = round((float) $batch->remaining_qty + $put, 3);
+            $batch->status = 'active';
+            $batch->save();
+            $left = round($left - $put, 3);
+        }
+
+        if ($left > 0.0001) {
+            $newest = $batches->last();
+            $newest->remaining_qty = round((float) $newest->remaining_qty + $left, 3);
+            $newest->status = 'active';
+            $newest->save();
         }
     }
 
@@ -330,21 +427,44 @@ class InventoryService
             });
     }
 
-    /** Stock valuation: current_stock × cost_price per product, plus totals. */
+    /**
+     * Stock valuation at what the stock actually cost (issue 54):
+     *   each batch still on the shelf × that batch's landed purchase cost,
+     *   plus any stock not held in a batch (opening stock, old data) × product cost price.
+     * "cost" is the resulting average cost per unit.
+     */
     public function valuation(int|string|null $companyId): array
     {
+        $batchTotals = ProductBatch::query()
+            ->when($companyId !== null, fn ($q) => $q->where('company_id', $companyId))
+            ->where('remaining_qty', '>', 0)
+            ->selectRaw('product_id, SUM(remaining_qty) as qty, SUM(remaining_qty * cost_price) as value')
+            ->groupBy('product_id')
+            ->get()
+            ->keyBy('product_id');
+
         $rows = Product::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->orderBy('name')
             ->get(['id', 'sku', 'name', 'current_stock', 'cost_price'])
-            ->map(fn ($p) => [
-                'id'    => $p->id,
-                'sku'   => $p->sku,
-                'name'  => $p->name,
-                'stock' => (float) $p->current_stock,
-                'cost'  => (float) $p->cost_price,
-                'value' => round((float) $p->current_stock * (float) $p->cost_price, 2),
-            ]);
+            ->map(function ($p) use ($batchTotals) {
+                $stock = max(0.0, (float) $p->current_stock);
+                $batch = $batchTotals[$p->id] ?? null;
+                $batchQty = min($stock, (float) ($batch->qty ?? 0));
+                $batchValue = $batch && (float) $batch->qty > 0
+                    ? (float) $batch->value * $batchQty / (float) $batch->qty
+                    : 0.0;
+                $value = $batchValue + ($stock - $batchQty) * (float) $p->cost_price;
+
+                return [
+                    'id'    => $p->id,
+                    'sku'   => $p->sku,
+                    'name'  => $p->name,
+                    'stock' => (float) $p->current_stock,
+                    'cost'  => $stock > 0 ? round($value / $stock, 4) : (float) $p->cost_price,
+                    'value' => round($value, 2),
+                ];
+            });
 
         return [
             'items'  => $rows->values(),

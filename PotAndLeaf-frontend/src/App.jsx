@@ -39,7 +39,6 @@ const CommissionList = lazy(() => import('./pages/commission/CommissionList'));
 const TransfersList = lazy(() => import('./pages/transfers/TransfersList'));
 const TransferForm = lazy(() => import('./pages/transfers/TransferForm'));
 const TransferDetail = lazy(() => import('./pages/transfers/TransferDetail'));
-const LocationsList = lazy(() => import('./pages/locations/LocationsList'));
 const ProductionList = lazy(() => import('./pages/production/ProductionList'));
 const ProductionForm = lazy(() => import('./pages/production/ProductionForm'));
 const ProductionOrderDetail = lazy(() => import('./pages/production/ProductionOrderDetail'));
@@ -136,7 +135,8 @@ export default function App() {
             <Route path="transfers" element={<PermissionRoute permission="transfers.view"><TransfersList /></PermissionRoute>} />
             <Route path="transfers/new" element={<PermissionRoute permission="transfers.create"><TransferForm /></PermissionRoute>} />
             <Route path="transfers/:id" element={<PermissionRoute permission="transfers.view"><TransferDetail /></PermissionRoute>} />
-            <Route path="locations" element={<PermissionRoute permission="locations.view"><LocationsList /></PermissionRoute>} />
+            {/* One location per company (created with the company) — no Locations screen. */}
+            <Route path="locations" element={<Navigate to="/companies" replace />} />
             <Route path="production" element={<PermissionRoute permission="production.view"><ProductionList /></PermissionRoute>} />
             <Route path="production/new" element={<PermissionRoute permission="production.create"><ProductionForm /></PermissionRoute>} />
             <Route path="production/:id/edit" element={<PermissionRoute permission="production.create"><ProductionForm /></PermissionRoute>} />

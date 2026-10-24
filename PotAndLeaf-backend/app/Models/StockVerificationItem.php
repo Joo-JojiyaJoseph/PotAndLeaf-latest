@@ -12,7 +12,7 @@ class StockVerificationItem extends Model
 
     protected $fillable = [
         'stock_verification_id', 'product_id', 'product_name',
-        'system_qty', 'counted_qty', 'variance', 'unit_cost',
+        'system_qty', 'counted_qty', 'variance', 'unit_cost', 'batch_adjustments',
     ];
 
     protected function casts(): array
@@ -22,6 +22,7 @@ class StockVerificationItem extends Model
             'counted_qty' => 'decimal:3',
             'variance'    => 'decimal:3',
             'unit_cost'   => 'decimal:4',
+            'batch_adjustments' => 'array',
         ];
     }
 

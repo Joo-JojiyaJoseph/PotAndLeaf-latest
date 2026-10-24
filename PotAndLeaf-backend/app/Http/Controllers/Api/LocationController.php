@@ -34,6 +34,8 @@ class LocationController extends Controller
     public function store(StoreLocationRequest $request): JsonResponse
     {
         $company = $this->company($request);
+        // One location per company — it is created with the company.
+        abort_if(Location::forCompany($company->id)->exists(), 422, 'Each company has one location, created with the company. Rename it instead of adding another.');
         $location = $this->save($company->id, null, $request->validated());
 
         return $this->created(new LocationResource($location), 'Location created.');
@@ -51,6 +53,7 @@ class LocationController extends Controller
     {
         $this->allow($request, 'locations.manage');
         $this->assertRecordCompany($request, $location, writable: true);
+        abort_if(Location::forCompany($location->company_id)->whereKeyNot($location->id)->doesntExist(), 422, 'This is the company\'s only location and cannot be deleted.');
         $location->delete();
 
         return $this->message('Location deleted.');

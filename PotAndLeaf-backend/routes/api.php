@@ -188,6 +188,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('loyalty', [LoyaltyController::class, 'index']);
         Route::post('loyalty/adjust', [LoyaltyController::class, 'adjust']);
         Route::get('loyalty/customers/{customer}', [LoyaltyController::class, 'customer']);
+        Route::get('loyalty/rules/form-data', [LoyaltyController::class, 'ruleFormData']);
         Route::get('loyalty/rules', [LoyaltyController::class, 'rules']);
         Route::post('loyalty/rules', [LoyaltyController::class, 'storeRule']);
         Route::delete('loyalty/rules/{loyaltyRule}', [LoyaltyController::class, 'destroyRule']);
@@ -415,6 +416,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('users', [UserController::class, 'store']);
         Route::put('users/{user}', [UserController::class, 'update']);
         Route::delete('users/{user}', [UserController::class, 'destroy']);
+        Route::post('users/{user}/restore', [UserController::class, 'restore']);
 
         Route::get('roles/form-data', [RoleController::class, 'formData']);
         Route::get('roles', [RoleController::class, 'index']);

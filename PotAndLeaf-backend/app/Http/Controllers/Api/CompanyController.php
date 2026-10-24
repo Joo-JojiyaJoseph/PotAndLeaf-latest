@@ -125,6 +125,12 @@ class CompanyController extends Controller
         $this->ensureSuperAdmin($request);
         abort_if(ProtectedRecords::isProtectedCompany($company), 403, 'This company cannot be deleted.');
 
+        // A company that has any records (products, bills, customers, users…) is
+        // never deleted — deactivate it instead so its history stays intact.
+        $found = $this->companyData($company);
+        abort_if($found !== [], 422, $company->name.' cannot be deleted because it has '.implode(', ', $found)
+            .'. Make it Inactive instead — its records stay safe.');
+
         $company->delete();
 
         return $this->message('Company deleted.');
@@ -139,6 +145,41 @@ class CompanyController extends Controller
         $company->update(['is_active' => $data['is_active']]);
 
         return $this->ok(['id' => $company->id, 'is_active' => (bool) $company->is_active], 'Status updated.');
+    }
+
+    /** @return list<string> what this company still holds, e.g. ["12 products", "3 sales"] */
+    private function companyData(Company $company): array
+    {
+        $checks = [
+            'products' => 'products', 'customers' => 'customers', 'suppliers' => 'suppliers',
+            'sales' => 'sales', 'purchases' => 'purchases', 'purchase_orders' => 'purchase orders',
+            'sales_returns' => 'sales returns', 'purchase_returns' => 'purchase returns',
+            'stock_transfers' => 'stock transfers', 'customer_receipts' => 'customer receipts',
+            'supplier_payments' => 'supplier payments', 'rentals' => 'rentals',
+            'production_orders' => 'production orders', 'damage_entries' => 'damage entries',
+            'bulk_splits' => 'bulk splits', 'stock_verifications' => 'stock counts',
+            'advance_orders' => 'advance orders', 'backorders' => 'backorders',
+            'accounting_transactions' => 'account entries', 'commission_transactions' => 'commission records',
+            'product_categories' => 'categories', 'company_user' => 'users',
+        ];
+
+        $found = [];
+        foreach ($checks as $table => $label) {
+            if (! \Illuminate\Support\Facades\Schema::hasTable($table)) {
+                continue;
+            }
+            $query = \Illuminate\Support\Facades\DB::table($table)->where('company_id', $company->id);
+            if ($table === 'stock_transfers') {
+                $query = \Illuminate\Support\Facades\DB::table($table)
+                    ->where(fn ($q) => $q->where('company_id', $company->id)->orWhere('to_company_id', $company->id));
+            }
+            $count = $query->count();
+            if ($count > 0) {
+                $found[] = $count.' '.$label;
+            }
+        }
+
+        return $found;
     }
 
     private function ensureSuperAdmin(Request $request): void

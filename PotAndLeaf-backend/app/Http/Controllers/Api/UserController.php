@@ -32,7 +32,8 @@ class UserController extends Controller
         $this->allow($request, 'users.view');
 
         $status = $request->query('status', 'active');
-        abort_unless(in_array($status, ['active', 'inactive', 'all'], true), 422, 'Invalid status filter.');
+        abort_unless(in_array($status, ['active', 'inactive', 'all', 'removed'], true), 422, 'Invalid status filter.');
+        abort_if($status === 'removed' && ! $request->user()->is_super_admin, 403, 'Only HO super admins can see removed users.');
 
         try {
             $users = User::query()
@@ -70,9 +71,34 @@ class UserController extends Controller
     public function show(Request $request, User $user): JsonResponse
     {
         $this->allow($request, 'users.view');
+
+        // A removed user belongs to no company; HO can still open the record.
+        if ($request->user()->is_super_admin && ! $user->companies()->exists()) {
+            return $this->ok(new UserResource($user->load(['companies:id,name'])->setRelation('roles', collect())));
+        }
+
         $companyId = $this->resolveUserCompanyContext($request, $user);
 
         return $this->ok($this->present($user, $companyId));
+    }
+
+    /** Bring a removed user back into the open company (their email stays reserved, so re-adding would fail). */
+    public function restore(Request $request, User $user): JsonResponse
+    {
+        $company = $this->company($request);
+        $this->allow($request, 'users.create');
+        abort_unless($request->user()->is_super_admin, 403, 'Only HO super admins can restore removed users.');
+        abort_if($user->companies()->exists(), 422, 'This user is not removed. Edit them instead.');
+
+        $data = $request->validate(['role_id' => ['nullable', 'uuid', 'exists:roles,id']]);
+
+        DB::transaction(function () use ($user, $company, $data) {
+            $user->companies()->syncWithoutDetaching([$company->id => ['is_default' => true]]);
+            $this->syncCompanyRole($user, $company->id, $data['role_id'] ?? null);
+            $user->update(['is_active' => true]);
+        });
+
+        return $this->ok($this->present($user->refresh(), $company->id), 'User restored to '.$company->name.'.');
     }
 
     public function store(StoreUserRequest $request): JsonResponse

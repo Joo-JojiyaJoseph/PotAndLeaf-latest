@@ -19,6 +19,7 @@ export function ConfirmProvider({ children }) {
       confirmLabel: opts.confirmLabel ?? 'Confirm',
       cancelLabel: opts.cancelLabel ?? 'Cancel',
       tone: opts.tone ?? 'danger',
+      wide: Boolean(opts.wide),
     });
   }), []);
 
@@ -30,14 +31,16 @@ export function ConfirmProvider({ children }) {
       {state && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/30 backdrop-blur-sm" onClick={() => close(false)} />
-          <div className="dialog-in glass-card relative w-full max-w-sm p-6">
+          <div className={'dialog-in glass-card relative w-full p-6 ' + (state.wide ? 'max-w-lg' : 'max-w-sm')}>
             <div className="flex items-start gap-3">
               <span className={'flex size-10 shrink-0 items-center justify-center rounded-2xl ' + (state.tone === 'danger' ? 'bg-danger-soft text-danger' : 'bg-leaf-soft text-leaf')}>
                 <ExclamationTriangleIcon className="size-5" />
               </span>
               <div className="min-w-0">
                 <h3 className="text-base font-semibold text-ink">{state.title}</h3>
-                <p className="mt-1 text-sm text-muted">{state.message}</p>
+                {typeof state.message === 'string'
+                  ? <p className="mt-1 text-sm text-muted">{state.message}</p>
+                  : <div className="mt-1 text-sm text-muted">{state.message}</div>}
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">

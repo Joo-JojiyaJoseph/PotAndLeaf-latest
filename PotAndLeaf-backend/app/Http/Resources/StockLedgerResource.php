@@ -21,7 +21,7 @@ class StockLedgerResource extends JsonResource
             'reference_id'   => $this->reference_id,
             'reference_label'=> $this->referenceLabel($this->reference_type),
             'note'           => $this->note,
-            'occurred_at'    => optional($this->occurred_at)->toDateTimeString(),
+            'occurred_at'    => optional($this->occurred_at)->toIso8601String(),
             'company_id'     => $this->company_id,
             'company'        => $this->whenLoaded('company', fn () => [
                 'id'   => $this->company?->id,

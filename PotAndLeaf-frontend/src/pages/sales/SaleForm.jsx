@@ -101,6 +101,17 @@ export default function SaleForm() {
 
   useEffect(() => { setHeader((h) => ({ ...h, customer_id: '', loyalty_points_redeemed: '' })); setLines([emptyLine()]); setErrors({}); }, [activeCompany?.id]);
 
+  // Customer picked after the items: switch untouched lines to that customer's price level.
+  useEffect(() => {
+    const level = customerType === 'wholesale' || customerType === 'dealer' ? customerType : 'retail';
+    setLines((prev) => prev.map((l) => {
+      const p = productsById[l.product_id];
+      if (!p || l.rate_manual || l.price_level === level) return l;
+      return { ...l, price_level: level, rate: String(tierPrice(p, level)) };
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerType]);
+
   // The Disc. box is a percentage; the server stores the line discount in rupees.
   const computed = useMemo(
     () => computeSale(lines.map((l) => ({ ...l, discount: discountAmount(l) })), header.is_interstate),
@@ -286,7 +297,7 @@ export default function SaleForm() {
                       </Select>
                     </td>
                     <td className="px-1 py-1.5"><QtyControl value={line.qty} onChange={(qty) => setLine(i, { qty })} /></td>
-                    <td className="px-1 py-1.5"><Input prefix="₹" type="number" step="0.01" className="h-9 text-right tabular-nums" value={line.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></td>
+                    <td className="px-1 py-1.5"><Input prefix="₹" type="number" step="0.01" className="h-9 text-right tabular-nums" value={line.rate} onChange={(e) => setLine(i, { rate: e.target.value, rate_manual: true })} /></td>
                     <td className="px-1 py-1.5"><Input suffix="%" type="number" step="0.01" className="h-9 text-right tabular-nums" value={line.discount} onChange={(e) => setLine(i, { discount: e.target.value })} /></td>
                     <td className="px-1 py-1.5"><input type="number" step="0.01" className={numInput} value={line.gst_rate} onChange={(e) => setLine(i, { gst_rate: e.target.value })} /></td>
                     <td className="tnum px-1 py-1.5 text-right font-medium">{formatCurrency(lt)}</td>

@@ -19,7 +19,7 @@ class ProductBatchResource extends JsonResource
             'remaining_qty' => (float) $this->remaining_qty,
             'cost_price'    => (float) $this->cost_price,
             'status'        => $this->status,
-            'received_at'   => optional($this->received_at)->toDateTimeString(),
+            'received_at'   => optional($this->received_at)->toIso8601String(),
             'purchase_id'   => $this->purchase_id,
             'purchase_no'   => $this->whenLoaded('purchase', fn () => $this->purchase?->purchase_no),
             'supplier'      => $this->whenLoaded('supplier', fn () => $this->supplier?->name),

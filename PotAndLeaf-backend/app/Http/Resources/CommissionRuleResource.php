@@ -13,6 +13,7 @@ class CommissionRuleResource extends JsonResource
     {
         return [
             'id'             => $this->id,
+            'company_id'     => $this->company_id,
             'user_id'        => $this->user_id,
             'user_name'      => $this->user?->name,
             'rate_type'      => $this->rate_type ?? 'percent',

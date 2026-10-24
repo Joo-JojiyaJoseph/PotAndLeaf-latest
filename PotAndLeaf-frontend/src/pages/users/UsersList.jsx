@@ -86,6 +86,22 @@ export default function UsersList() {
     return cid ? `/users/${u.id}?company_id=${cid}` : `/users/${u.id}`;
   }
 
+  async function onRestore(u) {
+    const target = (filterCompanyId && filterCompanyId !== 'all') ? filterCompanyId : companyId;
+    const targetName = companies.find((c) => String(c.id) === String(target))?.name ?? 'this company';
+    const ok = await confirm({
+      title: 'Restore user',
+      message: `Give ${u.name} access to ${targetName} again? Their login is switched back on; set their role with Edit afterwards.`,
+      confirmLabel: 'Restore',
+    });
+    if (!ok) return;
+    try {
+      await api.post(`/users/${u.id}/restore`, {}, withCompany(target));
+      toast.success(`${u.name} restored to ${targetName}`);
+      invalidate();
+    } catch (e) { toast.error(e.response?.data?.message ?? 'Could not restore user.'); }
+  }
+
   async function onRemove(u) {
     const ok = await confirm({
       title: 'Remove user',
@@ -134,6 +150,7 @@ export default function UsersList() {
             {[
               { key: 'active', label: 'Active' },
               { key: 'inactive', label: 'Inactive' },
+              ...(isSuperAdmin ? [{ key: 'removed', label: 'Removed' }] : []),
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -159,7 +176,7 @@ export default function UsersList() {
           </div>
         ) : rows.length === 0 ? (
           <div className="px-4 py-16 text-center text-sm text-muted">
-            {statusFilter === 'inactive' ? 'No inactive users in this company.' : 'No active users in this company yet.'}
+            {statusFilter === 'removed' ? 'No removed users.' : statusFilter === 'inactive' ? 'No inactive users in this company.' : 'No active users in this company yet.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -184,14 +201,17 @@ export default function UsersList() {
                     <td className="px-4 py-2.5">{u.roles?.length ? <Badge tone="info">{u.roles[0].name}</Badge> : <span className="text-muted">—</span>}</td>
                     <td className="tnum px-4 py-2.5 text-xs text-muted">{u.phone || '—'}</td>
                     <td className="px-4 py-2.5">
-                      {can('users.update')
+                      {statusFilter === 'removed'
+                        ? <Badge tone="blocked">removed</Badge>
+                        : can('users.update')
                         ? <StatusToggle active={u.is_active} onToggle={(next) => onToggle(u, next)} />
                         : <Badge tone={u.is_active ? 'active' : 'inactive'}>{u.is_active ? 'active' : 'inactive'}</Badge>}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1.5">
-                        {can('users.update') && <button onClick={() => openEdit(u)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="Edit"><PencilSquareIcon className="size-4" /></button>}
-                        {can('users.delete') && <button onClick={() => onRemove(u)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Remove"><TrashIcon className="size-4" /></button>}
+                        {statusFilter === 'removed' && can('users.create') && <Button size="sm" variant="soft" onClick={() => onRestore(u)}>Restore</Button>}
+                        {statusFilter !== 'removed' && can('users.update') && <button onClick={() => openEdit(u)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="Edit"><PencilSquareIcon className="size-4" /></button>}
+                        {statusFilter !== 'removed' && can('users.delete') && <button onClick={() => onRemove(u)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Remove"><TrashIcon className="size-4" /></button>}
                       </div>
                     </td>
                   </tr>

@@ -91,7 +91,14 @@ export default function StockVerificationDetail() {
             <tbody>
               {(v.items ?? []).map((it) => (
                 <tr key={it.id} className="border-b border-line/60 last:border-0">
-                  <td className="py-2 pr-3 font-medium">{it.product_name}</td>
+                  <td className="py-2 pr-3 font-medium">
+                    {it.product_name}
+                    {it.batch_adjustments?.length > 0 && (
+                      <div className="mt-0.5 text-xs font-normal text-muted">
+                        Batches: {it.batch_adjustments.map((b) => `${b.batch_no ?? 'batch'} ${b.qty > 0 ? '+' : ''}${b.qty}`).join(', ')}
+                      </div>
+                    )}
+                  </td>
                   <td className="tnum px-3 py-2 text-right text-muted">{it.system_qty}</td>
                   <td className="tnum px-3 py-2 text-right">{it.counted_qty}</td>
                   <td className={classNames('tnum py-2 pl-3 text-right font-medium', varClass(it.variance))}>{it.variance > 0 ? '+' : ''}{it.variance}</td>

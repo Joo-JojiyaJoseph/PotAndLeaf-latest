@@ -6,6 +6,7 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { todayISO } from '../../lib/format';
+import { useConfirm } from '../../lib/confirm';
 
 const today = todayISO;
 const emptyLine = () => ({ product_id: '', qty: '', rate: '', gst_rate: '' });
@@ -14,6 +15,7 @@ const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 t
 
 export default function PurchaseOrderForm() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [searchParams] = useSearchParams();
   const { activeCompany, isSuperAdmin, companies, companyId } = useAuth();
   const presetCompanyId = searchParams.get('company_id') ?? '';
@@ -87,7 +89,7 @@ export default function PurchaseOrderForm() {
     } finally { setLoadingSug(false); }
   }
 
-  async function save() {
+  async function save(allowDuplicate = false) {
     if (!companyReady || !targetCompanyId) {
       setErrors({ company_id: ['Select a company first.'] });
       return;
@@ -98,10 +100,22 @@ export default function PurchaseOrderForm() {
         supplier_id: header.supplier_id, po_date: header.po_date,
         expected_date: header.expected_date || null, notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, qty: Number(l.qty) || 0, rate: Number(l.rate) || 0, gst_rate: Number(l.gst_rate) || 0 })),
+        allow_duplicate: allowDuplicate,
       }, companyCfg);
       const cid = res.data.data.company_id ?? targetCompanyId;
       navigate(cid ? `/purchase-orders/${res.data.data.id}?company_id=${cid}` : `/purchase-orders/${res.data.data.id}`);
     } catch (e) {
+      const open = e.response?.data?.errors?.open_orders;
+      if (open?.length) {
+        setSaving(false);
+        const ok = await confirm({
+          title: 'Already on order',
+          message: `${open.join(' ')} Order it again anyway?`,
+          confirmLabel: 'Order again',
+        });
+        if (ok) return save(true);
+        return;
+      }
       setErrors(e.response?.data?.errors ?? { _: [e.response?.data?.message ?? 'Could not save PO.'] });
     } finally { setSaving(false); }
   }
@@ -225,7 +239,7 @@ export default function PurchaseOrderForm() {
 
       <div className="flex items-center justify-end gap-3">
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
-        <Button onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save PO'}</Button>
+        <Button onClick={() => save()} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save PO'}</Button>
       </div>
     </div>
   );

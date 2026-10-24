@@ -25,8 +25,9 @@ import { formatCurrency } from '../../lib/format';
 const STATUS = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
-  { value: 'blocked', label: 'Blocked' },
 ];
+// "Blocked" behaved exactly like Inactive, so it is no longer offered (issue 41).
+// Old blocked suppliers still show it until they are changed.
 
 const EMPTY = {
   supplier_code: '',
@@ -408,7 +409,7 @@ export default function SuppliersList() {
               </Field>
               <Field label="Status" required error={err('status')}>
                 <Select value={form.status} onChange={set('status')} className={selectClass}>
-                  {STATUS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  {(form.status === 'blocked' ? [...STATUS, { value: 'blocked', label: 'Blocked (old)' }] : STATUS).map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </Select>
               </Field>
               <div className="sm:col-span-2">

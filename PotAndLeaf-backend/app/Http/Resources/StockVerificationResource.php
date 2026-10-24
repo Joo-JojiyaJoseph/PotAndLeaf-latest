@@ -23,8 +23,8 @@ class StockVerificationResource extends JsonResource
             'status'           => $this->status,
             'notes'            => $this->notes,
             'rejection_reason' => $this->rejection_reason,
-            'submitted_at'     => optional($this->submitted_at)->toDateTimeString(),
-            'approved_at'      => optional($this->approved_at)->toDateTimeString(),
+            'submitted_at'     => optional($this->submitted_at)->toIso8601String(),
+            'approved_at'      => optional($this->approved_at)->toIso8601String(),
             'items_count'      => $this->when($this->items_count !== null, $this->items_count),
             'items'            => StockVerificationItemResource::collection($this->whenLoaded('items')),
             'can'              => [

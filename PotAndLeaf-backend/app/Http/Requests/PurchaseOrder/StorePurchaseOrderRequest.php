@@ -22,6 +22,7 @@ class StorePurchaseOrderRequest extends FormRequest
             'expected_date' => ['nullable', 'date', 'after_or_equal:po_date'],
             'notes'         => ['nullable', 'string', 'max:1000'],
             'items'                => ['required', 'array', 'min:1'],
+            'allow_duplicate'      => ['sometimes', 'boolean'],
             'items.*.product_id'   => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],
             'items.*.qty'          => ['required', 'numeric', 'gt:0'],
             'items.*.rate'         => ['required', 'numeric', 'min:0'],

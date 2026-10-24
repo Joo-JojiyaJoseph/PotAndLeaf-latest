@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatDateTime } from '../../lib/format';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { SparklesIcon, PlusIcon } from '@heroicons/react/24/outline';
@@ -8,6 +9,9 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import Pagination from '../../components/Pagination';
+import SearchSelect from '../../components/SearchSelect';
+import { useConfirm } from '../../lib/confirm';
+import { fieldError } from '../../lib/formErrors';
 
 const ledgerTone = { earn: 'active', redeem: 'pending', reverse: 'blocked' };
 
@@ -35,7 +39,22 @@ export default function LoyaltyPage() {
   });
 
   const [adjustForm, setAdjustForm] = useState({ customer_id: '', points: '', reason: '' });
-  const [ruleForm, setRuleForm] = useState({ name: '', rule_type: 'spend', earn_rupees: '100', earn_points: '1', customer_tier: '' });
+  const emptyRule = {
+    name: '', rule_type: 'spend', earn_rupees: '100', earn_points: '1', customer_tier: '', min_purchase: '',
+    product_id: '', category_id: '', bonus_points_per_unit: '', points_multiplier: '', category_mode: 'spend',
+    max_points_per_transaction: '', priority: '', effective_from: '', effective_to: '',
+  };
+  const [ruleForm, setRuleForm] = useState(emptyRule);
+  const [ruleErrors, setRuleErrors] = useState({});
+  const setR = (k) => (e) => setRuleForm((f) => ({ ...f, [k]: e?.target ? e.target.value : e }));
+  const ruleErr = (k) => fieldError(ruleErrors, k);
+  const confirm = useConfirm();
+  const ruleFormQ = useQuery({
+    queryKey: ['loyalty-rule-form', formCompanyId || activeCompany?.id],
+    queryFn: () => api.get('/loyalty/rules/form-data', companyRequest()).then((r) => r.data.data),
+    enabled: ruleOpen,
+  });
+  const rf = ruleFormQ.data ?? {};
 
   const adjustM = useMutation({
     mutationFn: () => {
@@ -45,14 +64,49 @@ export default function LoyaltyPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loyalty'] }); setAdjustOpen(false); setAdjustForm({ customer_id: '', points: '', reason: '' }); },
   });
 
+  const num = (v) => (v === '' || v == null ? null : Number(v));
   const ruleM = useMutation({
-    mutationFn: () => api.post('/loyalty/rules', {
-      name: ruleForm.name, rule_type: ruleForm.rule_type,
-      earn_rupees: Number(ruleForm.earn_rupees), earn_points: Number(ruleForm.earn_points),
-      customer_tier: ruleForm.customer_tier || null, is_active: true,
-    }, companyRequest()),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loyalty-rules'] }); setRuleOpen(false); },
+    mutationFn: () => {
+      const t = ruleForm.rule_type;
+      const perPiece = t === 'product' || (t === 'category' && ruleForm.category_mode === 'piece');
+      return api.post('/loyalty/rules', {
+        name: ruleForm.name, rule_type: t, is_active: true,
+        customer_tier: ruleForm.customer_tier || null,
+        earn_rupees: num(ruleForm.earn_rupees) ?? 100, earn_points: num(ruleForm.earn_points) ?? 1,
+        min_purchase: t === 'product' ? null : num(ruleForm.min_purchase),
+        product_id: t === 'product' ? ruleForm.product_id || null : null,
+        category_id: t === 'category' ? ruleForm.category_id || null : null,
+        bonus_points_per_unit: perPiece ? num(ruleForm.bonus_points_per_unit) : null,
+        points_multiplier: t === 'product' || t === 'category' ? num(ruleForm.points_multiplier) : null,
+        max_points_per_transaction: num(ruleForm.max_points_per_transaction),
+        priority: num(ruleForm.priority) ?? 0,
+        effective_from: ruleForm.effective_from || null, effective_to: ruleForm.effective_to || null,
+      }, companyRequest());
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loyalty-rules'] }); setRuleOpen(false); setRuleForm(emptyRule); setRuleErrors({}); },
+    onError: (e) => setRuleErrors(e.response?.data?.errors ?? { name: [e.response?.data?.message ?? 'Could not save rule.'] }),
   });
+  const deleteRuleM = useMutation({
+    mutationFn: (rule) => api.delete(`/loyalty/rules/${rule.id}`, withCompany(rule.company_id)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['loyalty-rules'] }),
+  });
+  async function removeRule(rule) {
+    if (await confirm({ title: 'Remove rule', message: `Stop giving points by "${rule.name}"? Points already earned stay.`, confirmLabel: 'Remove' })) deleteRuleM.mutate(rule);
+  }
+  // Plain-words summary of a rule for the list.
+  const describeRule = (r) => {
+    const per = `${r.earn_points} pt per ₹${Number(r.earn_rupees)}`;
+    const parts = [];
+    if (r.rule_type === 'spend' || r.rule_type === 'customer_tier') parts.push(`${per} of the bill`);
+    if (r.rule_type === 'product') parts.push(r.bonus_points_per_unit > 0 ? `+${r.bonus_points_per_unit} pt per piece` : '', Number(r.points_multiplier) > 1 ? `×${Number(r.points_multiplier)} points on it` : '');
+    if (r.rule_type === 'category') parts.push(r.bonus_points_per_unit > 0 ? `+${r.bonus_points_per_unit} pt per piece` : `${per} spent in the category`, Number(r.points_multiplier) > 1 ? `×${Number(r.points_multiplier)}` : '');
+    if (Number(r.min_purchase) > 0) parts.push(`min ₹${Number(r.min_purchase)}`);
+    if (r.max_points_per_transaction) parts.push(`max ${r.max_points_per_transaction} pt/bill`);
+    if (r.customer_tier) parts.push(`only ${r.customer_tier}`);
+    if (r.effective_from || r.effective_to) parts.push(`${r.effective_from ? String(r.effective_from).slice(0, 10) : '…'} to ${r.effective_to ? String(r.effective_to).slice(0, 10) : '…'}`);
+    return parts.filter(Boolean).join(' · ');
+  };
+  const ruleTypeLabel = { spend: 'Spend-based', customer_tier: 'Customer tier', product: 'Product bonus', category: 'Category bonus' };
 
   const cp = data?.customers;
   const customers = cp?.data ?? [];
@@ -101,10 +155,10 @@ export default function LoyaltyPage() {
           <Card className="divide-y divide-line">
             {loyaltyRules.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                <div><span className="font-medium">{r.name}</span> <Badge tone="info">{r.rule_type}</Badge></div>
-                <div className="text-muted">
-                  {r.rule_type === 'spend' && `₹${r.earn_rupees} → ${r.earn_points} pt`}
-                  {r.customer_tier && ` · tier: ${r.customer_tier}`}
+                <div><span className="font-medium">{r.name}</span> <Badge tone="info">{ruleTypeLabel[r.rule_type] ?? r.rule_type}</Badge>{r.priority > 0 && <span className="ml-1 text-xs text-muted">priority {r.priority}</span>}</div>
+                <div className="flex items-center gap-3 text-muted">
+                  <span>{describeRule(r)}</span>
+                  <button type="button" onClick={() => removeRule(r)} className="text-xs text-danger hover:underline">Remove</button>
                 </div>
               </div>
             ))}
@@ -172,7 +226,7 @@ export default function LoyaltyPage() {
                 <tbody>
                   {ledger.map((e) => (
                     <tr key={e.id} className="border-b border-line/60 last:border-0">
-                      <td className="tnum px-4 py-2.5 text-xs text-muted">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                      <td className="tnum px-4 py-2.5 text-xs text-muted">{e.created_at ? formatDateTime(e.created_at) : '—'}</td>
                       <td className="px-4 py-2.5">
                         {e.customer_id ? (
                           <button onClick={() => navigate(`/customers/${e.customer_id}`)} className="hover:text-leaf">{e.customer_name}</button>
@@ -200,23 +254,86 @@ export default function LoyaltyPage() {
         </div>
       </Modal>
 
-      <Modal open={ruleOpen} onClose={() => setRuleOpen(false)} title="Loyalty earn rule"
-        footer={<><Button variant="ghost" size="sm" onClick={() => setRuleOpen(false)}>Cancel</Button><Button size="sm" disabled={ruleM.isPending} onClick={() => ruleM.mutate()}>Save</Button></>}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
-          <Field label="Name" className="sm:col-span-2"><Input value={ruleForm.name} onChange={(e) => setRuleForm((f) => ({ ...f, name: e.target.value }))} /></Field>
-          <Field label="Type">
-            <Select className={selectCls} value={ruleForm.rule_type} onChange={(e) => setRuleForm((f) => ({ ...f, rule_type: e.target.value }))}>
-              <option value="spend">Spend-based</option>
-              <option value="customer_tier">Customer tier</option>
-              <option value="product">Product bonus</option>
-              <option value="category">Category bonus</option>
-            </Select>
-          </Field>
-          <Field label="Customer tier (optional)"><Input value={ruleForm.customer_tier} onChange={(e) => setRuleForm((f) => ({ ...f, customer_tier: e.target.value }))} placeholder="silver / gold / retail" /></Field>
-          <Field label="₹ per earn unit"><Input type="number" value={ruleForm.earn_rupees} onChange={(e) => setRuleForm((f) => ({ ...f, earn_rupees: e.target.value }))} /></Field>
-          <Field label="Points per unit"><Input type="number" value={ruleForm.earn_points} onChange={(e) => setRuleForm((f) => ({ ...f, earn_points: e.target.value }))} /></Field>
-        </div>
+      <Modal open={ruleOpen} onClose={() => setRuleOpen(false)} title="Add loyalty rule"
+        footer={<><Button variant="ghost" size="sm" onClick={() => setRuleOpen(false)}>Cancel</Button><Button size="sm" disabled={ruleM.isPending || !ruleForm.name} onClick={() => { setRuleErrors({}); ruleM.mutate(); }}>Save rule</Button></>}>
+        {(() => {
+          const t = ruleForm.rule_type;
+          const help = {
+            spend: 'Points for the whole bill. Example: ₹100 → 1 point means a ₹2,350 bill earns 23 points.',
+            customer_tier: 'Same as Spend-based, but only for one group of customers (e.g. dealers or “gold” members) — give them a better rate.',
+            product: 'Extra points when a chosen product is on the bill, on top of the normal points.',
+            category: 'Extra points for everything bought from one category (e.g. all Pots), on top of the normal points.',
+          }[t];
+          return (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
+              <Field label="Rule name" required error={ruleErr('name')} className="sm:col-span-2"><Input value={ruleForm.name} onChange={setR('name')} placeholder="e.g. Diwali double points" /></Field>
+              <Field label="What gives points?" className="sm:col-span-2">
+                <Select className={selectCls} value={t} onChange={setR('rule_type')}>
+                  <option value="spend">Spend-based — points on the bill amount</option>
+                  <option value="customer_tier">Customer tier — special rate for one customer group</option>
+                  <option value="product">Product bonus — extra points for one product</option>
+                  <option value="category">Category bonus — extra points for a category</option>
+                </Select>
+                <p className="mt-1 text-xs text-muted">{help}</p>
+              </Field>
+
+              {t === 'product' && (
+                <Field label="Product" required error={ruleErr('product_id')} className="sm:col-span-2">
+                  <SearchSelect value={ruleForm.product_id} onChange={setR('product_id')} placeholder="Search product…"
+                    options={(rf.products ?? []).map((p) => ({ value: p.id, label: p.name, sublabel: p.sku }))} emptyLabel="No products" />
+                </Field>
+              )}
+              {t === 'category' && (
+                <Field label="Category" required error={ruleErr('category_id')} className="sm:col-span-2">
+                  <Select className={selectCls} value={ruleForm.category_id} onChange={setR('category_id')}>
+                    <option value="">Select category…</option>
+                    {(rf.categories ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </Select>
+                </Field>
+              )}
+              {t === 'category' && (
+                <Field label="Give points" className="sm:col-span-2">
+                  <Select className={selectCls} value={ruleForm.category_mode} onChange={setR('category_mode')}>
+                    <option value="spend">by money spent in the category</option>
+                    <option value="piece">a fixed number per piece</option>
+                  </Select>
+                </Field>
+              )}
+
+              {(t === 'spend' || t === 'customer_tier' || (t === 'category' && ruleForm.category_mode === 'spend')) && (
+                <>
+                  <Field label="For every ₹" error={ruleErr('earn_rupees')}><Input type="number" min="1" value={ruleForm.earn_rupees} onChange={setR('earn_rupees')} /></Field>
+                  <Field label="Give points" error={ruleErr('earn_points')}><Input type="number" min="1" value={ruleForm.earn_points} onChange={setR('earn_points')} /></Field>
+                  <Field label={t === 'category' ? 'Minimum spent in category (₹)' : 'Minimum bill (₹)'} error={ruleErr('min_purchase')}><Input type="number" min="0" value={ruleForm.min_purchase} onChange={setR('min_purchase')} placeholder="0 = any bill" /></Field>
+                </>
+              )}
+              {(t === 'product' || (t === 'category' && ruleForm.category_mode === 'piece')) && (
+                <Field label="Bonus points per piece" error={ruleErr('bonus_points_per_unit')}><Input type="number" min="0" value={ruleForm.bonus_points_per_unit} onChange={setR('bonus_points_per_unit')} placeholder="e.g. 5" /></Field>
+              )}
+              {(t === 'product' || t === 'category') && (
+                <Field label="Multiply by (optional)" error={ruleErr('points_multiplier')}>
+                  <Input type="number" min="1" max="20" step="0.5" value={ruleForm.points_multiplier} onChange={setR('points_multiplier')} placeholder="e.g. 2 = double" />
+                  <p className="mt-1 text-xs text-muted">{t === 'product' ? `Above 1 also gives ${ruleForm.earn_points || 1} pt per ₹${ruleForm.earn_rupees || 100} on this product, multiplied.` : 'Multiplies this rule’s points.'}</p>
+                </Field>
+              )}
+
+              <Field label="Only for customer group (optional)" error={ruleErr('customer_tier')}>
+                <Select className={selectCls} value={ruleForm.customer_tier} onChange={setR('customer_tier')}>
+                  <option value="">All customers</option>
+                  {(rf.tiers ?? ['retail', 'wholesale', 'dealer']).map((x) => <option key={x} value={x}>{x}</option>)}
+                </Select>
+              </Field>
+              <Field label="Max points per bill (optional)" error={ruleErr('max_points_per_transaction')}><Input type="number" min="1" value={ruleForm.max_points_per_transaction} onChange={setR('max_points_per_transaction')} placeholder="no limit" /></Field>
+              <Field label="Starts on (optional)" error={ruleErr('effective_from')}><Input type="date" value={ruleForm.effective_from} onChange={setR('effective_from')} /></Field>
+              <Field label="Ends on (optional)" error={ruleErr('effective_to')}><Input type="date" value={ruleForm.effective_to} onChange={setR('effective_to')} /></Field>
+              <Field label="Priority (optional)" error={ruleErr('priority')}>
+                <Input type="number" min="0" value={ruleForm.priority} onChange={setR('priority')} placeholder="0" />
+                <p className="mt-1 text-xs text-muted">Only one Spend-based / Customer-tier rule counts per bill — the highest priority one that fits the customer.</p>
+              </Field>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );

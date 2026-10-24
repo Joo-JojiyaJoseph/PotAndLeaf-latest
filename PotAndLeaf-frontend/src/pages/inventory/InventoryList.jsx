@@ -14,7 +14,6 @@ const TABS = [
   { value: 'ledger', label: 'Stock ledger' },
   { value: 'valuation', label: 'Valuation' },
   { value: 'movement', label: 'Fast / slow / dead' },
-  { value: 'location', label: 'By location' },
 ];
 const classTone = { fast: 'active', slow: 'warning', dead: 'blocked' };
 
@@ -227,67 +226,6 @@ function MovementTab({ companyParams }) {
   );
 }
 
-function LocationTab({ companyParams }) {
-  const { activeCompany } = useAuth();
-  const [search, setSearch] = useState('');
-  const { data, isLoading } = useQuery({
-    queryKey: ['inventory', 'by-location', activeCompany?.id, companyParams],
-    queryFn: () => api.get('/inventory/by-location', { params: companyParams }).then((r) => r.data.data),
-  });
-  const all = data?.balances ?? [];
-  const q = search.trim().toLowerCase();
-  const rows = q ? all.filter((r) => `${r.product_name} ${r.sku} ${r.location_name}`.toLowerCase().includes(q)) : all;
-  const totalValue = rows.reduce((s, r) => s + (Number(r.stock_value) || 0), 0);
-  return (
-    <div className="space-y-4">
-      <div className="relative max-w-md">
-        <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search location or product…" className="pl-9" />
-      </div>
-      <StatCard label="Stock value (shown)" value={formatCurrency(totalValue)} />
-      <Card className="overflow-hidden">
-        {isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
-          : rows.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No location balances.</div>
-          : (
-            <div className="overflow-x-auto">
-              {(() => {
-                const low = rows.filter((r) => Number(r.reorder_level) > 0 && Number(r.qty) <= Number(r.reorder_level)).length;
-                return low > 0 ? (
-                  <div className="border-b border-line bg-amber-soft px-4 py-2 text-sm text-amber">
-                    <b>{low}</b> item{low === 1 ? '' : 's'} at or below reorder level at {low === 1 ? 'its' : 'their'} location.
-                  </div>
-                ) : null;
-              })()}
-              <table className="w-full min-w-[640px] text-sm">
-                <thead><tr className="border-b border-line text-left text-faint">
-                  <th className="microlabel px-4 py-2.5 font-semibold">Location</th>
-                  <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
-                  <th className="microlabel px-4 py-2.5 text-right font-semibold">Available</th>
-                  <th className="microlabel px-4 py-2.5 text-right font-semibold">Reorder</th>
-                  <th className="microlabel px-4 py-2.5 text-right font-semibold">Value</th>
-                  <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
-                </tr></thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={`${r.location_id}-${r.product_id}`} className="border-b border-line/60 last:border-0">
-                      <td className="px-4 py-2.5">{r.location_name || '—'}</td>
-                      <td className="px-4 py-2.5 font-medium">{r.product_name}<div className="text-xs text-muted">{r.sku}</div></td>
-                      <td className="tnum px-4 py-2.5 text-right">{r.qty}</td>
-                      <td className="tnum px-4 py-2.5 text-right text-muted">{r.reorder_level}</td>
-                      <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.stock_value)}</td>
-                      {/* Reorder alert per location: this shop's own stock vs the product's reorder level. */}
-                      <td className="px-4 py-2.5">{Number(r.reorder_level) > 0 && Number(r.qty) <= Number(r.reorder_level) ? <Badge tone="warning">Low here</Badge> : <Badge tone="active">OK</Badge>}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-      </Card>
-    </div>
-  );
-}
-
 export default function InventoryList() {
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const [tab, setTab] = useState('levels');
@@ -327,7 +265,6 @@ export default function InventoryList() {
       {tab === 'ledger' && <InventoryLedgerTab key={`${ledgerProductId}-${filterCompanyId}`} initialProductId={ledgerProductId} companyParams={companyParams} />}
       {tab === 'valuation' && <ValuationTab companyParams={companyParams} />}
       {tab === 'movement' && <MovementTab companyParams={companyParams} />}
-      {tab === 'location' && <LocationTab companyParams={companyParams} />}
     </div>
   );
 }

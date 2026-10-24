@@ -61,7 +61,7 @@ class ProductController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name', 'short_name'])
                 ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'short_name' => $u->short_name]),
-            'suppliers'  => Supplier::forCompany($company->id)->orderBy('name')->get(['id', 'name'])
+            'suppliers'  => Supplier::forCompany($company->id)->where('status', 'active')->orderBy('name')->get(['id', 'name'])
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name]),
             'tax_rates'  => [0, 5, 12, 18, 28],
         ]);
@@ -220,6 +220,7 @@ class ProductController extends Controller
         $sourceId = $request->query('source_company_id');
         if (filled($sourceId) && (string) $sourceId !== (string) $companyId) {
             abort_unless($request->user()->hasPermission('transfers.create', $companyId), 403);
+            abort_unless($request->user()->is_super_admin, 403, 'You can only scan stock from your own company.');
             abort_unless(\App\Models\Company::active()->whereKey($sourceId)->exists(), 422, 'Source company not found.');
             $companyId = $sourceId;
         }

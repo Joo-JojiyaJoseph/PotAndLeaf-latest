@@ -137,6 +137,25 @@ class LoyaltyController extends Controller
         return $this->ok($this->engine->rulesForCompany($this->listCompanyId($request)));
     }
 
+    /** Pickers for the "Add rule" form: products, categories and the tiers customers actually have. */
+    public function ruleFormData(Request $request): JsonResponse
+    {
+        $this->allow($request, 'loyalty.manage');
+        $company = $this->company($request);
+
+        $tiers = Customer::forCompany($company->id)->whereNotNull('loyalty_tier')->where('loyalty_tier', '!=', '')
+            ->distinct()->orderBy('loyalty_tier')->pluck('loyalty_tier')->all();
+
+        return $this->ok([
+            'products' => \App\Models\Product::forCompany($company->id)->where('status', 'active')->orderBy('name')
+                ->get(['id', 'sku', 'name'])->map(fn ($p) => ['id' => $p->id, 'name' => $p->name, 'sku' => $p->sku]),
+            'categories' => \App\Models\ProductCategory::query()->where('company_id', $company->id)->where('status', 'active')
+                ->orderBy('name')->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name]),
+            // Customer type (retail / wholesale / dealer) or a loyalty tier set on the customer.
+            'tiers' => array_values(array_unique(array_merge(['retail', 'wholesale', 'dealer'], $tiers))),
+        ]);
+    }
+
     public function storeRule(Request $request): JsonResponse
     {
         $this->allow($request, 'loyalty.manage');
@@ -144,8 +163,8 @@ class LoyaltyController extends Controller
         $data = $request->validate([
             'name'                       => ['required', 'string', 'max:120'],
             'rule_type'                  => ['required', Rule::in(['spend', 'product', 'category', 'customer_tier'])],
-            'product_id'                 => ['nullable', 'uuid'],
-            'category_id'                => ['nullable', 'uuid'],
+            'product_id'                 => ['nullable', 'required_if:rule_type,product', 'uuid', Rule::exists('products', 'id')->where('company_id', $company->id)],
+            'category_id'                => ['nullable', 'required_if:rule_type,category', 'uuid', Rule::exists('product_categories', 'id')->where('company_id', $company->id)],
             'customer_tier'              => ['nullable', 'string', 'max:30'],
             'earn_rupees'                => ['nullable', 'numeric', 'min:1'],
             'earn_points'                => ['nullable', 'integer', 'min:1'],
@@ -154,10 +173,17 @@ class LoyaltyController extends Controller
             'min_purchase'               => ['nullable', 'numeric', 'min:0'],
             'max_points_per_transaction' => ['nullable', 'integer', 'min:1'],
             'effective_from'             => ['nullable', 'date'],
-            'effective_to'               => ['nullable', 'date'],
+            'effective_to'               => ['nullable', 'date', 'after_or_equal:effective_from'],
             'priority'                   => ['nullable', 'integer', 'min:0'],
             'is_active'                  => ['boolean'],
         ]);
+
+        // A product bonus must actually give something.
+        if ($data['rule_type'] === 'product' && (int) ($data['bonus_points_per_unit'] ?? 0) <= 0 && (float) ($data['points_multiplier'] ?? 1) <= 1) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'bonus_points_per_unit' => 'Enter bonus points per piece, or a multiplier above 1.',
+            ]);
+        }
 
         $rule = LoyaltyRule::create(array_merge($data, ['company_id' => $company->id]));
 

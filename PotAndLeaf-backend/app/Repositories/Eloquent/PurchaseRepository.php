@@ -50,9 +50,15 @@ class PurchaseRepository implements PurchaseRepositoryInterface
 
     public function nextPurchaseNo(int|string $companyId): string
     {
+        // Purchase bills (GRN) are numbered GRN-…; purchase orders keep PO-…,
+        // so the two documents can no longer share a number. Older bills keep
+        // their PO-… numbers; the next free GRN number is used.
         $count = Purchase::withTrashed()->forCompany($companyId)->count();
+        do {
+            $no = 'GRN-'.str_pad((string) (++$count), 6, '0', STR_PAD_LEFT);
+        } while (Purchase::withTrashed()->forCompany($companyId)->where('purchase_no', $no)->exists());
 
-        return 'PO-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return $no;
     }
 
     public function nextInvoiceNo(int|string $companyId): string

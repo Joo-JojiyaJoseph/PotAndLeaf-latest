@@ -25,6 +25,35 @@ class Company extends Model
         ];
     }
 
+    /**
+     * Each company has exactly one location (its shop / godown). It is created
+     * with the company, so nobody has to set up locations separately.
+     */
+    protected static function booted(): void
+    {
+        static::created(fn (Company $company) => $company->ensureMainLocation());
+        static::restored(fn (Company $company) => $company->ensureMainLocation());
+    }
+
+    public function ensureMainLocation(): Location
+    {
+        $main = Location::query()->where('company_id', $this->id)
+            ->orderByDesc('is_default')->orderByDesc('is_active')->orderBy('created_at')->first();
+
+        if (! $main) {
+            return Location::create([
+                'company_id' => $this->id, 'name' => $this->name, 'code' => 'MAIN',
+                'type' => 'shop', 'is_default' => true, 'is_active' => true,
+            ]);
+        }
+
+        if (! $main->is_default || ! $main->is_active) {
+            $main->forceFill(['is_default' => true, 'is_active' => true])->save();
+        }
+
+        return $main;
+    }
+
     public function locations(): HasMany
     {
         return $this->hasMany(Location::class);

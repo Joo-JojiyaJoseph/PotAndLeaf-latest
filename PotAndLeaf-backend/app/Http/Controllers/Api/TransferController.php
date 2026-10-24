@@ -190,6 +190,8 @@ class TransferController extends Controller
         if (! filled($sourceId) || (string) $sourceId === (string) $current->id) {
             return $current;
         }
+        // Company users always transfer from their own company (issue 26).
+        abort_unless($request->user()->is_super_admin, 403, 'You can only transfer stock from your own company.');
 
         $source = Company::active()->whereKey($sourceId)->first();
         abort_unless($source, 422, 'Source company not found.');

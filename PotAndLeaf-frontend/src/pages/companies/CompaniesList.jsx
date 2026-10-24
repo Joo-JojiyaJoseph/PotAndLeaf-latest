@@ -20,13 +20,13 @@ import { useToast } from '../../lib/toast';
 
 const empty = {
   name: '', code: '', gst_number: '', legal_name: '', state: '', state_code: '',
-  phone: '', email: '', address: '', locations: '', description: '', logo: null, is_active: true,
+  phone: '', email: '', address: '', description: '', logo: null, is_active: true,
 };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 
 const COMPANY_FIELDS = [
   'name', 'code', 'gst_number', 'legal_name', 'state', 'state_code',
-  'phone', 'email', 'address', 'locations', 'description', 'logo', 'is_active',
+  'phone', 'email', 'address', 'description', 'logo', 'is_active',
 ];
 
 function buildCompanyPayload(form, id) {
@@ -98,7 +98,7 @@ export default function CompaniesList() {
       setDeleting(null);
       toast.success('Company deleted.');
     },
-    onError: (err) => toast.error(err.response?.data?.message ?? 'Could not delete company.'),
+    onError: (err) => { setDeleting(null); toast.error(err.response?.data?.message ?? 'Could not delete company.'); },
   });
 
   useEffect(() => {
@@ -231,7 +231,7 @@ export default function CompaniesList() {
                   <p className="mt-0.5 text-xs text-muted">{c.users_count ?? 0} users</p>
                 </div>
               </div>
-              <p className="mt-3 line-clamp-2 text-xs text-muted">{c.description || c.locations || c.address || 'No description'}</p>
+              <p className="mt-3 line-clamp-2 text-xs text-muted">{c.description || c.address || 'No description'}</p>
               <div className="mt-3 flex items-center justify-between border-t border-line pt-3" onClick={(e) => e.stopPropagation()}>
                 <StatusToggle active={Boolean(c.is_active)} onToggle={(next) => onToggle(c, next)} />
                 <div className="flex items-center gap-1">
@@ -302,17 +302,6 @@ export default function CompaniesList() {
             <Field label="Address" error={err('address')}><Input value={form.address || ''} onChange={set('address')} /></Field>
           </div>
           <div className="sm:col-span-2">
-            <Field label="Locations" error={err('locations')}>
-              <textarea
-                value={form.locations || ''}
-                onChange={set('locations')}
-                rows={2}
-                placeholder="Godowns, shops, branches — one per line"
-                className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25"
-              />
-            </Field>
-          </div>
-          <div className="sm:col-span-2">
             <Field label="Description" error={err('description')}>
               <textarea
                 value={form.description || ''}
@@ -344,6 +333,10 @@ export default function CompaniesList() {
       >
         <p className="text-sm text-muted">
           Delete <span className="font-medium text-ink">{deleting?.name}</span>?
+        </p>
+        <p className="mt-2 text-xs text-muted">
+          Only an empty company can be deleted. If it has any products, bills, customers, suppliers or users,
+          it will not be deleted — make it <b>Inactive</b> instead so nothing is lost.
         </p>
       </Modal>
     </div>

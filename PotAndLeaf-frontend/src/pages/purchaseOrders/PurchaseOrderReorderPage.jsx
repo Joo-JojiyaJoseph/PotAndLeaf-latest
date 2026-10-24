@@ -326,7 +326,7 @@ export default function PurchaseOrderReorderPage() {
                             <div className="text-xs text-muted">{row.sku}</div>
                           </td>
                           <td className="px-4 py-2 text-muted">{row.category || '—'}</td>
-                          <td className="tnum px-4 py-2 text-right text-muted">{row.current_stock}</td>
+                          <td className="tnum px-4 py-2 text-right text-muted">{row.current_stock}{row.on_order > 0 && <div className="text-xs text-leaf">+{row.on_order} on order ({row.open_po_nos?.join(", ")})</div>}</td>
                           <td className="tnum px-4 py-2 text-right text-muted">{row.reorder_level}</td>
                           <td className="tnum px-4 py-2 text-right text-muted">{row.required_qty ?? row.shortfall}</td>
                           <td className="px-4 py-2 text-right">

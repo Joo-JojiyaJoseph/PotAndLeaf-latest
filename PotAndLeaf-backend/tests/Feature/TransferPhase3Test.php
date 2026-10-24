@@ -24,31 +24,19 @@ beforeEach(function () {
     ]);
 });
 
-it('creates and completes an intra-company location transfer', function () {
-    $godown = $this->createLocation(['name' => 'Main Godown', 'type' => 'godown']);
-    $shop = $this->createLocation(['name' => 'Front Shop', 'type' => 'shop']);
+it('refuses a location-to-location transfer inside one company (one location per company)', function () {
     $product = $this->createProduct(['current_stock' => 100]);
+    $main = $this->company->ensureMainLocation();
 
-    app(LocationStockService::class)->adjust($this->company->id, $godown->id, $product->id, 'in', 50);
-
-    $response = $this->postJson('/api/transfers', [
+    $this->postJson('/api/transfers', [
         'transfer_type'    => 'intra_company',
-        'from_location_id' => $godown->id,
-        'to_location_id'   => $shop->id,
+        'from_location_id' => $main->id,
+        'to_location_id'   => $main->id,
         'transfer_date'    => now()->toDateString(),
         'items'            => [['product_id' => $product->id, 'qty' => 10]],
-    ], $this->apiHeaders())->assertCreated();
-
-    $transfer = StockTransfer::find($response->json('data.id'));
-    expect($transfer->isIntraCompany())->toBeTrue();
-
-    app(TransferService::class)->dispatch($transfer, $this->user->id);
-    expect((float) LocationStock::where('location_id', $godown->id)->where('product_id', $product->id)->value('qty'))->toBe(40.0);
-
-    app(TransferService::class)->receive($transfer->fresh(), [$transfer->items[0]->id => 10], $this->user->id);
-    expect($transfer->fresh()->status)->toBe('received');
-    expect((float) LocationStock::where('location_id', $shop->id)->where('product_id', $product->id)->value('qty'))->toBe(10.0);
-    expect((float) $product->fresh()->current_stock)->toBe(100.0);
+    ], $this->apiHeaders())
+        ->assertStatus(422)
+        ->assertJsonPath('errors.transfer_type.0', 'Each company has one location. Transfer stock to another company instead.');
 });
 
 it('approves transfer lines partially', function () {
@@ -324,10 +312,18 @@ it('lists every other active company as a transfer destination for a shop user',
     expect($sourceIds)->toContain($this->company->id)->toContain($other->id);
 });
 
-it('loads stock from a selected source company the user does not belong to', function () {
+it('loads stock from another company only for an HO super admin', function () {
     $other = Company::create(['name' => 'Agro Supplies', 'code' => 'AG'.Str::upper(Str::random(3)), 'is_active' => true]);
     $product = $this->createProduct(['company_id' => $other->id, 'name' => 'Neem cake', 'current_stock' => 310]);
 
+    // Issue 26: a company user cannot pick another company as the source…
+    $this->getJson('/api/transfers/form-data?source_company_id='.$other->id, $this->apiHeaders())
+        ->assertForbidden()
+        ->assertJsonPath('message', 'You can only transfer stock from your own company.');
+
+    // …an HO super admin can.
+    $this->user->forceFill(['is_super_admin' => true])->save();
+    app('auth')->forgetGuards();
     $res = $this->getJson('/api/transfers/form-data?source_company_id='.$other->id, $this->apiHeaders())
         ->assertOk()
         ->assertJsonPath('data.from_company.id', $other->id);

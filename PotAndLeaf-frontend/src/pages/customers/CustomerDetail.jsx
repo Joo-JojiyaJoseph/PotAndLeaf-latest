@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { mediaUrl } from '../../components/media';
-import { formatCurrency } from '../../lib/format';
+import { formatCurrency, formatDateTime } from '../../lib/format';
 
 const typeTone = { retail: 'info', wholesale: 'active', dealer: 'pending' };
 const statusTone = { active: 'active', inactive: 'inactive', blocked: 'blocked' };
@@ -160,7 +160,7 @@ export default function CustomerDetail() {
                 <tbody>
                   {loyalty.ledger.map((e) => (
                     <tr key={e.id} className="border-b border-line/60 last:border-0">
-                      <td className="tnum px-4 py-2.5 text-xs text-muted">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                      <td className="tnum px-4 py-2.5 text-xs text-muted">{e.created_at ? formatDateTime(e.created_at) : '—'}</td>
                       <td className="px-4 py-2.5"><Badge tone={ledgerTone[e.type] ?? 'default'}>{e.type}</Badge></td>
                       <td className="tnum px-4 py-2.5 text-right font-medium">{e.points > 0 ? `+${e.points}` : e.points}</td>
                       <td className="tnum px-4 py-2.5 text-right text-muted">{e.balance_after}</td>

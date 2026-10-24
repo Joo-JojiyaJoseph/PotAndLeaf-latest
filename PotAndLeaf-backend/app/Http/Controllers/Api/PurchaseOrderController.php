@@ -37,9 +37,9 @@ class PurchaseOrderController extends Controller
         $company = $this->company($request);
         $this->allow($request, 'po.create');
 
-        $suppliers = Supplier::forCompany($company->id)->orderBy('name')->get(['id', 'name'])
+        $suppliers = Supplier::forCompany($company->id)->where('status', 'active')->orderBy('name')->get(['id', 'name'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name]);
-        $products = Product::forCompany($company->id)->orderBy('name')
+        $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')
             ->get(['id', 'sku', 'name', 'cost_price', 'gst_rate', 'length_cm', 'width_cm', 'height_cm'])
             ->map(fn ($p) => [
                 'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'cost_price' => (float) $p->cost_price, 'gst_rate' => (float) $p->gst_rate,

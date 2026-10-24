@@ -33,7 +33,7 @@ class ProductionController extends Controller
         $company = $this->company($request);
         $this->allow($request, 'production.view');
 
-        $products = Product::forCompany($company->id)->orderBy('name')->get(['id', 'sku', 'name', 'current_stock', 'cost_price'])
+        $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')->get(['id', 'sku', 'name', 'current_stock', 'cost_price'])
             ->map(fn ($p) => [
                 'id'            => $p->id,
                 'sku'           => $p->sku,

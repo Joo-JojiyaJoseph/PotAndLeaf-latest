@@ -27,11 +27,13 @@ export default function UserDetail() {
     <div className="space-y-5 p-4 sm:p-6">
       <DetailHeader
         title={u.name}
-        subtitle={u.is_super_admin ? 'HO super admin' : `User at ${u.companies?.find((c) => String(c.id) === String(headerCompanyId))?.name ?? activeCompany?.name}`}
+        subtitle={u.is_super_admin ? 'HO super admin' : !u.companies?.length ? 'Removed from all companies — restore from Users → Removed' : `User at ${u.companies?.find((c) => String(c.id) === String(headerCompanyId))?.name ?? activeCompany?.name}`}
         backTo="/users"
         actions={
           <>
-            <Badge tone={u.is_active ? 'active' : 'inactive'}>{u.is_active ? 'active' : 'inactive'}</Badge>
+            {!u.is_super_admin && !u.companies?.length
+              ? <Badge tone="blocked">removed</Badge>
+              : <Badge tone={u.is_active ? 'active' : 'inactive'}>{u.is_active ? 'active' : 'inactive'}</Badge>}
             {/* {can('users.update') && <Button variant="outline" size="sm" onClick={() => navigate('/users')}><PencilSquareIcon className="size-4" /> Edit</Button>} */}
           </>
         }

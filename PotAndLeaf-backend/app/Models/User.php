@@ -48,8 +48,14 @@ class User extends Authenticatable
     /** Company members for lists — active, inactive, or all. */
     public function scopeCompanyMembers($query, int|string|null $companyId = null, string $status = 'active')
     {
-        $query->where('is_super_admin', false)
-            ->whereHas('companies', fn ($q) => $companyId !== null ? $q->whereKey($companyId) : $q);
+        $query->where('is_super_admin', false);
+
+        // Removed = taken out of every company by "Delete user" (row kept for history).
+        if ($status === 'removed') {
+            return $query->where('is_active', false)->whereDoesntHave('companies');
+        }
+
+        $query->whereHas('companies', fn ($q) => $companyId !== null ? $q->whereKey($companyId) : $q);
 
         return match ($status) {
             'inactive' => $query->where('is_active', false),

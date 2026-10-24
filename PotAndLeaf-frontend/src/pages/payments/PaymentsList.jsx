@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate, todayISO as today } from '../../lib/format';
+import { useConfirm } from '../../lib/confirm';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
@@ -96,7 +97,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   const grns = (() => {
     const list = [...(payables ?? [])].filter((p) => p.balance > 0);
     if (form.purchase_id && !list.some((p) => String(p.id) === String(form.purchase_id))) {
-      list.unshift({ id: form.purchase_id, purchase_no: prefill?.purchase_no || 'Selected GRN', balance: Number(prefill?.balance ?? form.amount) || 0 });
+      list.unshift({ id: form.purchase_id, purchase_no: prefill?.purchase_no || 'Selected bill', balance: Number(prefill?.balance ?? form.amount) || 0 });
     }
     return list;
   })();
@@ -139,7 +140,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
           </Select>
           {supplier && <span className="mt-1 block text-xs text-muted">Outstanding: {formatCurrency(supplier.outstanding)} · Advance: {formatCurrency(supplier.advance_balance ?? 0)}</span>}
         </Field>
-        <Field label="Against GRN (optional)" error={err('purchase_id')}>
+        <Field label="Purchase bill being paid (optional)" error={err('purchase_id')}>
           <Select value={form.purchase_id} onChange={set('purchase_id')} className={selectCls} disabled={!form.supplier_id || form.is_advance}>
             <option value="">On account</option>
             {grns.map((p) => <option key={p.id} value={p.id}>{p.purchase_no} · bal {formatCurrency(p.balance)}</option>)}
@@ -156,7 +157,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
         <div className="sm:col-span-2"><Field label="Notes" error={err('notes')}><Input value={form.notes} onChange={set('notes')} /></Field></div>
         <label className="sm:col-span-2 flex items-start gap-2 text-sm">
           <input type="checkbox" className="mt-0.5 size-4 rounded border-line text-leaf" checked={form.is_advance} onChange={(e) => setForm((f) => ({ ...f, is_advance: e.target.checked, purchase_id: e.target.checked ? '' : f.purchase_id }))} />
-          <span>Record as supplier advance (does not reduce outstanding until applied to a GRN)</span>
+          <span>This is an <b>advance</b> (paid before the bill). It is kept as the supplier's advance balance and does not reduce what you owe until you use <b>Apply advance</b> on a bill.</span>
         </label>
       </div>
     </Modal>
@@ -221,7 +222,7 @@ function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyPar
   const grns = (() => {
     const list = [...(payables ?? [])].filter((p) => p.balance > 0);
     if (form.purchase_id && !list.some((p) => String(p.id) === String(form.purchase_id))) {
-      list.unshift({ id: form.purchase_id, purchase_no: prefill?.purchase_no || 'Selected GRN', balance: Number(prefill?.balance ?? 0) });
+      list.unshift({ id: form.purchase_id, purchase_no: prefill?.purchase_no || 'Selected bill', balance: Number(prefill?.balance ?? 0) });
     }
     return list;
   })();
@@ -244,9 +245,9 @@ function ApplyAdvanceModal({ open, onClose, prefill, filterCompanyId, companyPar
           </Select>
           {supplier && <span className="mt-1 block text-xs text-muted">Available advance: {formatCurrency(availableAdvance)}</span>}
         </Field>
-        <Field label="Against GRN" required error={err('purchase_id')}>
+        <Field label="Purchase bill" required error={err('purchase_id')}>
           <Select value={form.purchase_id} onChange={(e) => setForm((f) => ({ ...f, purchase_id: e.target.value }))} className={selectCls} disabled={!form.supplier_id}>
-            <option value="">Select GRN…</option>
+            <option value="">Select bill…</option>
             {grns.map((p) => <option key={p.id} value={p.id}>{p.purchase_no} · bal {formatCurrency(p.balance)}</option>)}
           </Select>
         </Field>
@@ -289,6 +290,7 @@ export default function PaymentsList() {
     queryFn: () => api.get('/supplier-payments', { params: companyParams }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'history',
   });
+  const confirm = useConfirm();
   const voidM = useMutation({
     mutationFn: (id) => api.delete(`/supplier-payments/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['supplier-payments'] }); queryClient.invalidateQueries({ queryKey: ['payables'] }); },
@@ -314,7 +316,10 @@ export default function PaymentsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Supplier payments</h1>
-          <p className="text-sm text-muted">Track what's owed per GRN and record payments against suppliers{companyHint}.</p>
+          <p className="text-sm text-muted">What you owe each supplier, bill by bill{companyHint}.</p>
+          <p className="mt-1 text-xs text-muted">
+            <b>Record payment</b> = money paid now (for a bill, or as an advance). <b>Apply advance</b> = use money already paid in advance to settle a bill — no new money goes out.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
@@ -340,7 +345,7 @@ export default function PaymentsList() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-line text-left text-faint">
-                    <th className="microlabel px-4 py-2.5 font-semibold">GRN</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Purchase bill</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Supplier</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Invoice</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Paid</th>
@@ -389,7 +394,7 @@ export default function PaymentsList() {
                     <th className="microlabel px-4 py-2.5 font-semibold">No.</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Supplier</th>
-                    <th className="microlabel px-4 py-2.5 font-semibold">GRN</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Purchase bill</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Mode</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Reference</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Amount</th>
@@ -405,7 +410,7 @@ export default function PaymentsList() {
                         <td className="px-4 py-2.5"><Badge tone={p.is_advance ? 'warning' : p.applied_from_advance ? 'info' : 'info'}>{p.is_advance ? 'advance' : p.applied_from_advance ? 'applied' : p.mode}</Badge></td>
                         <td className="px-4 py-2.5 text-muted">{p.reference || '—'}</td>
                         <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(p.amount)}</td>
-                        <td className="px-4 py-2.5 text-right">{can('payments.delete') && <button onClick={() => voidM.mutate(p.id)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Void"><TrashIcon className="size-4" /></button>}</td>
+                        <td className="px-4 py-2.5 text-right">{can('payments.delete') && <button onClick={async () => { if (await confirm({ title: 'Void payment', message: `Void this ${formatCurrency(p.amount)} payment? The amount goes back onto what you owe ${p.supplier_name ?? 'the supplier'}.`, confirmLabel: 'Void' })) voidM.mutate(p.id); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Void"><TrashIcon className="size-4" /></button>}</td>
                       </tr>
                     ))}
                   </tbody>

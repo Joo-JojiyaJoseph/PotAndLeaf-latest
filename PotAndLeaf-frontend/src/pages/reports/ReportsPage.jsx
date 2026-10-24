@@ -459,7 +459,8 @@ export default function ReportsPage() {
 
   const ActiveIcon = activeMeta.icon;
 
-  const branchFilter = (show) => show && filterCompanyId !== 'all' && locations.length > 0 ? (
+  // Each company has one location, so the branch filter only appears if old data still has several.
+  const branchFilter = (show) => show && filterCompanyId !== 'all' && locations.length > 1 ? (
     <Select value={locationId} onChange={(e) => setLocationId(e.target.value)} className={selectCls}>
       <option value="">All branches</option>
       {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -1280,7 +1281,6 @@ export default function ReportsPage() {
                 <StatCard label="In transit" value={transferSummaryQ.data.data.summary?.in_transit ?? 0} />
                 <StatCard label="Requested" value={transferSummaryQ.data.data.summary?.requested ?? 0} />
                 <StatCard label="Inter-company" value={transferSummaryQ.data.data.summary?.inter_company ?? 0} />
-                <StatCard label="Location moves" value={transferSummaryQ.data.data.summary?.intra_company ?? 0} />
               </div>
               <Card className="mt-4 overflow-hidden">
                 {(transferSummaryQ.data.data.data?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No transfers in this range.</div>

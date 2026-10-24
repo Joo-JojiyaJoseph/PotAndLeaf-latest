@@ -56,6 +56,7 @@ class UpdateProduct
                     $userId,
                 );
                 $updated->save();
+                $this->inventory->adjustOpeningBatch($updated, $adjustment);
             }
 
             return $updated->load('suppliers');

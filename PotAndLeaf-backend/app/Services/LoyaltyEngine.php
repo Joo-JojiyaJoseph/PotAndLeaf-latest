@@ -76,6 +76,17 @@ class LoyaltyEngine
             return ['points' => $points, 'rules' => []];
         }
 
+        // Product / category bonuses come on top of the normal points for the
+        // bill. With no Spend-based or Customer-tier rule for this customer,
+        // the normal points are the standard rate from Settings.
+        if (! $spendApplied) {
+            $normal = $this->fallbackPoints($sale->company_id, $billBase);
+            if ($normal > 0) {
+                $total += $normal;
+                $applied[] = ['rule_id' => null, 'name' => 'Standard points (Settings)', 'points' => $normal];
+            }
+        }
+
         return ['points' => $total, 'rules' => $applied];
     }
 

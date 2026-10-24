@@ -19,6 +19,8 @@ class StockVerificationItemResource extends JsonResource
             'counted_qty'  => (float) $this->counted_qty,
             'variance'     => (float) $this->variance,
             'unit_cost'    => (float) $this->unit_cost,
+            // [{batch_id, batch_no, qty}] — negative qty = taken off that batch.
+            'batch_adjustments' => $this->batch_adjustments ?? [],
         ];
     }
 }

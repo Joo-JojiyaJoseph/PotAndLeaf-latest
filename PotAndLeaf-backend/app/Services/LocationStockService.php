@@ -39,6 +39,15 @@ class LocationStockService
     /** Per-location balances for a company (optionally one location), joined to product + location names. */
     public function balances(int|string|null $companyId, ?string $locationId = null): Collection
     {
+        // Average purchase cost of the batches still in stock (falls back to product cost price).
+        $batchCost = \App\Models\ProductBatch::query()
+            ->when($companyId !== null, fn ($q) => $q->where('company_id', $companyId))
+            ->where('remaining_qty', '>', 0)
+            ->selectRaw('product_id, SUM(remaining_qty * cost_price) / SUM(remaining_qty) as avg_cost')
+            ->groupBy('product_id')
+            ->pluck('avg_cost', 'product_id');
+        $unitCost = fn ($r) => (float) ($batchCost[$r->product_id] ?? $r->product?->cost_price ?? 0);
+
         return LocationStock::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
@@ -53,8 +62,8 @@ class LocationStockService
                 'product_name'  => $r->product?->name,
                 'qty'           => (float) $r->qty,
                 'reorder_level' => (float) ($r->product?->reorder_level ?? 0),
-                'cost_price'    => (float) ($r->product?->cost_price ?? 0),
-                'stock_value'   => round((float) $r->qty * (float) ($r->product?->cost_price ?? 0), 2),
+                'cost_price'    => round($unitCost($r), 4),
+                'stock_value'   => round((float) $r->qty * $unitCost($r), 2),
             ]);
     }
 }

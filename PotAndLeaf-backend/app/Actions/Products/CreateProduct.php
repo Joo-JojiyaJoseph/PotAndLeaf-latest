@@ -48,6 +48,7 @@ class CreateProduct
                     $userId,
                 );
                 $product->save();
+                $this->inventory->adjustOpeningBatch($product, $opening);
             }
 
             return $product->load('suppliers');

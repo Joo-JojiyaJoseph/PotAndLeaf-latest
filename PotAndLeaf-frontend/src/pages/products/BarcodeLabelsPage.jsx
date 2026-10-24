@@ -18,36 +18,51 @@ export default function BarcodeLabelsPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ['products-for-labels', activeCompany?.id],
-    queryFn: () => api.get('/products', { params: { per_page: 200 } }).then((r) => r.data),
+    queryFn: () => api.get('/products', { params: { per_page: 500, company_id: activeCompany?.id } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
   });
   const { data: batchData } = useQuery({
     queryKey: ['inventory-batches', activeCompany?.id, 'labels'],
-    queryFn: () => api.get('/inventory/batches', { params: { status: 'all' } }).then((r) => r.data.data),
+    queryFn: () => api.get('/inventory/batches', { params: { status: 'all', company_id: activeCompany?.id } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany),
   });
   const products = data?.data ?? [];
-  const remainingByProduct = useMemo(() => {
-    const totals = {};
-    (batchData?.batches ?? []).forEach((b) => {
-      if (!b.product_id) return;
-      totals[b.product_id] = (totals[b.product_id] ?? 0) + Number(b.remaining_qty || 0);
-    });
-    return totals;
-  }, [batchData]);
 
-  const rows = useMemo(() => products.map((p) => ({
-    id: p.id, name: p.name, sku: p.sku, barcode: p.barcode,
-    price: p.retail_price || p.mrp || 0,
-    stock: remainingByProduct[p.id] ?? p.current_stock,
-    poolRole: p.pool_role, linkedSkus: p.linked_skus ?? [],
-    copies: copies[p.id] ?? '',
-  })), [products, copies, remainingByProduct]);
+  // Issue 21: purchases, splits and opening stock put the barcode on the
+  // batch, so list one row per batch barcode still in stock. A product's own
+  // barcode (set on the product form) gets its own row too.
+  const rows = useMemo(() => {
+    const batchesByProduct = {};
+    (batchData?.batches ?? []).forEach((b) => {
+      if (!b.product_id || !b.barcode || Number(b.remaining_qty || 0) <= 0) return;
+      (batchesByProduct[b.product_id] ??= []).push(b);
+    });
+    const out = [];
+    products.forEach((p) => {
+      const base = {
+        name: p.name, sku: p.sku, price: p.retail_price || p.mrp || 0,
+        poolRole: p.pool_role, linkedSkus: p.linked_skus ?? [],
+      };
+      const batches = batchesByProduct[p.id] ?? [];
+      batches.forEach((b) => out.push({
+        ...base, id: `b:${b.id}`, barcode: b.barcode, batchNo: b.batch_no, stock: Number(b.remaining_qty || 0),
+      }));
+      if (p.barcode || batches.length === 0) {
+        out.push({ ...base, id: `p:${p.id}`, barcode: p.barcode, batchNo: null, stock: Number(p.current_stock || 0) });
+      }
+    });
+    // Printable rows first; hide products with nothing to print and nothing in stock.
+    return out
+      .filter((r) => r.barcode || r.stock > 0)
+      .sort((a, b) => Number(Boolean(b.barcode)) - Number(Boolean(a.barcode)))
+      .map((r) => ({ ...r, copies: copies[r.id] ?? '' }));
+  }, [products, batchData, copies]);
 
   const totalLabels = rows.reduce((n, r) => n + (Math.max(0, Math.floor(Number(r.copies) || 0))), 0);
   const setCopy = (id, v) => setCopies((c) => ({ ...c, [id]: v }));
-  const fillFromStock = () => setCopies(Object.fromEntries(products.map((p) => [p.id, String(Math.max(0, Math.floor(remainingByProduct[p.id] ?? p.current_stock)))])));
-  const setAllOne = () => setCopies(Object.fromEntries(products.map((p) => [p.id, '1'])));
+  const withCode = rows.filter((r) => r.barcode);
+  const fillFromStock = () => setCopies(Object.fromEntries(withCode.map((r) => [r.id, String(Math.max(0, Math.floor(r.stock)))])));
+  const setAllOne = () => setCopies(Object.fromEntries(withCode.map((r) => [r.id, '1'])));
   const clearAll = () => setCopies({});
 
   function print() {
@@ -62,7 +77,7 @@ export default function BarcodeLabelsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="page-title">Barcode labels</h1>
-          <p className="text-sm text-muted">Set how many labels to print per product, then print the sheet.</p>
+          <p className="text-sm text-muted">One row per barcode (each purchase batch has its own). Set how many labels to print, then print the sheet.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => navigate('/products')}><ArrowLeftIcon className="size-4" /> Back</Button>
@@ -95,7 +110,7 @@ export default function BarcodeLabelsPage() {
               <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                 <td className="px-4 py-2 font-medium">
                   {r.name}
-                  <div className="text-xs text-muted">{r.sku}</div>
+                  <div className="text-xs text-muted">{r.sku}{r.batchNo ? ` · batch ${r.batchNo}` : ''}</div>
                   {r.poolRole && (
                     <div className="mt-0.5 text-[11px] text-leaf-hover">
                       {r.poolRole === 'set' ? 'Set' : 'Unit'} SKU
@@ -103,7 +118,7 @@ export default function BarcodeLabelsPage() {
                     </div>
                   )}
                 </td>
-                <td className="tnum px-4 py-2 text-xs text-muted">{r.barcode || <span className="text-danger">none</span>}</td>
+                <td className="tnum px-4 py-2 text-xs text-muted">{r.barcode || <span className="text-danger">no barcode yet — buy stock or use “Generate opening barcodes”</span>}</td>
                 <td className="tnum px-4 py-2 text-right text-muted">{formatCurrency(r.price)}</td>
                 <td className="tnum px-4 py-2 text-right text-muted">{r.stock}</td>
                 <td className="px-4 py-2 text-right">
