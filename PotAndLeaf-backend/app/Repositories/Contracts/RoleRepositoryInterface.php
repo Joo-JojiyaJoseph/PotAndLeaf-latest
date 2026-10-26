@@ -20,7 +20,6 @@ interface RoleRepositoryInterface
 
     public function delete(Role $role): void;
 
-    public function restore(string $id): ?Role;
 
     public function slugExists(string $slug, ?string $ignoreId = null): bool;
 }

@@ -19,7 +19,7 @@ uses(RefreshDatabase::class, CreatesErpFixtures::class);
 
 beforeEach(function () {
     $this->createCompanyWithUser([
-        'customers.view',
+        'customers.view', 'customers.view_all',
         'customers.create',
         'customers.update',
         'customers.delete',
@@ -167,7 +167,7 @@ describe('Customer module — API', function () {
             ->and($customer->fresh()->type->value ?? $customer->fresh()->type)->toBe('wholesale');
     })->group('customer', 'CUSTOMER-011');
 
-    it('CUSTOMER-012 delete customer soft deletes record', function () {
+    it('CUSTOMER-012 delete customer removes it permanently', function () {
         $customer = $this->createCustomer(['name' => 'To Delete']);
 
         $this->deleteJson("/api/customers/{$customer->id}", [], customerHeaders($this))
@@ -175,7 +175,7 @@ describe('Customer module — API', function () {
             ->assertJsonPath('message', 'Customer deleted.');
 
         expect(Customer::find($customer->id))->toBeNull();
-        expect(Customer::withTrashed()->find($customer->id))->not->toBeNull();
+        $this->assertDatabaseMissing('customers', ['id' => $customer->id]);
     })->group('customer', 'CUSTOMER-012');
 
     it('CUSTOMER-014 API validation error returns 422 with field errors', function () {

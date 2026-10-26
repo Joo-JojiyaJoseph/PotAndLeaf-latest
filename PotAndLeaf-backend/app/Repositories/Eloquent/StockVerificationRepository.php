@@ -16,7 +16,7 @@ class StockVerificationRepository implements StockVerificationRepositoryInterfac
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
-            ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('count_no', 'like', "%{$filters['search']}%"))
+            ->listFilters($filters, 'count_date', ['count_no'])
             ->orderByDesc('count_date')
             ->orderByDesc('created_at')
             ->paginate($perPage)
@@ -39,8 +39,6 @@ class StockVerificationRepository implements StockVerificationRepositoryInterfac
 
     public function nextCountNo(int|string $companyId): string
     {
-        $count = StockVerification::withTrashed()->forCompany($companyId)->count();
-
-        return 'SV-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(StockVerification::query()->where('company_id', $companyId), 'count_no', 'SV-', 6);
     }
 }

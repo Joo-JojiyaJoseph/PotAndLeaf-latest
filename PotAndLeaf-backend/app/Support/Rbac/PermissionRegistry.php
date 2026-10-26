@@ -139,6 +139,7 @@ class PermissionRegistry
             ],
             'Sales'      => [
                 'sales.view'           => 'View sales',
+                'sales.view_all'       => 'See every staff member\'s sales (off = only their own bills)',
                 'sales.create'         => 'Create sales',
                 'sales.confirm'        => 'Confirm sales',
                 'sales.delete'         => 'Cancel draft sales',
@@ -152,7 +153,9 @@ class PermissionRegistry
                 'sales_returns.confirm' => 'Confirm sales returns',
                 'sales_returns.delete'  => 'Cancel sales returns',
             ],
-            'Customers'  => $crud('customers', 'customers'),
+            'Customers'  => $crud('customers', 'customers') + [
+                'customers.view_all' => 'See every customer (off = only customers they added)',
+            ],
             'Supplier Payments' => [
                 'payments.view'   => 'View supplier payments',
                 'payments.create' => 'Record supplier payments',

@@ -20,7 +20,7 @@ class StoreCustomerReceiptRequest extends FormRequest
         return [
             'customer_id'  => ['required', 'uuid', Rule::exists('customers', 'id')->where('company_id', $companyId)],
             'sale_id'      => ['nullable', 'uuid', Rule::exists('sales', 'id')->where('company_id', $companyId)],
-            'receipt_date' => ['required', 'date'],
+            'receipt_date' => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Receipt date')],
             'amount'       => ['required', 'numeric', 'gt:0'],
             'mode'         => ['required', 'in:cash,bank,upi,cheque,card'],
             'reference'    => ['nullable', 'string', 'max:100'],

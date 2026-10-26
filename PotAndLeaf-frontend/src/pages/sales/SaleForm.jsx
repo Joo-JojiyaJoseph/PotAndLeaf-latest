@@ -98,6 +98,8 @@ export default function SaleForm() {
   const productsById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
   const customer = customers.find((c) => c.id === header.customer_id);
   const customerType = customer?.type ?? 'retail';
+  // A retail customer always buys at the retail tier — the tier box is locked.
+  const tierLocked = customer?.type === 'retail';
 
   useEffect(() => { setHeader((h) => ({ ...h, customer_id: '', loyalty_points_redeemed: '' })); setLines([emptyLine()]); setErrors({}); }, [activeCompany?.id]);
 
@@ -292,7 +294,7 @@ export default function SaleForm() {
                       {line.barcode && <span className="mt-1 block text-[11px] text-muted">Batch {line.batch_no} · {line.barcode}</span>}
                     </td>
                     <td className="px-1 py-1.5">
-                      <Select icon={TagIcon} value={line.price_level || 'retail'} onChange={(e) => applyPriceLevel(i, e.target.value)} className={selectCls + ' min-w-[110px]'}>
+                      <Select icon={TagIcon} value={tierLocked ? 'retail' : (line.price_level || 'retail')} onChange={(e) => applyPriceLevel(i, e.target.value)} disabled={tierLocked} className={selectCls + ' min-w-[110px]'}>
                         {PRICE_LEVELS.map((pl) => <option key={pl.value} value={pl.value}>{pl.label}</option>)}
                       </Select>
                     </td>

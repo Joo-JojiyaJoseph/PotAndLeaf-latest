@@ -165,6 +165,8 @@ class ConfirmSale
             $this->receipts->consumeAdvanceOrderAdvance($sale->fresh());
 
             $this->receipts->recordFromConfirmedSale($sale->fresh(), $userId);
+            // Walk-in sale money goes straight to the cash / bank book.
+            app(\App\Services\AccountingEngine::class)->postWalkInSale($sale->fresh());
 
             $this->commissionEngine->accrueOnSaleConfirm($sale->fresh(['items']));
 

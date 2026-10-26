@@ -23,7 +23,7 @@ class StoreProductRequest extends FormRequest
         return array_merge($this->baseRules($companyId, null), [
             'sku' => [
                 'nullable', 'string', 'max:50',
-                Rule::unique('products', 'sku')->where('company_id', $companyId)->whereNull('deleted_at'),
+                Rule::unique('products', 'sku')->where('company_id', $companyId),
             ],
         ]);
     }
@@ -41,13 +41,28 @@ class StoreProductRequest extends FormRequest
         ];
     }
 
+    /** GST rates in use in India (%). */
+    public const GST_RATES = [0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 14, 18, 28, 40];
+
+    /** A selling price may not be more than the printed MRP (when an MRP is given). */
+    protected function notAboveMrp(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) {
+            $mrp = (float) $this->input('mrp');
+            if ($mrp > 0 && is_numeric($value) && (float) $value > $mrp + 0.001) {
+                $label = ucfirst(str_replace('_', ' ', $attribute));
+                $fail("{$label} (₹{$value}) cannot be more than the MRP (₹{$mrp}).");
+            }
+        };
+    }
+
     /** Shared field rules, reused by the update request. */
     protected function baseRules(int|string $companyId, ?string $ignoreId): array
     {
         return [
             'name'            => [
                 'required', 'string', 'max:191',
-                Rule::unique('products', 'name')->where('company_id', $companyId)->whereNull('deleted_at')->ignore($ignoreId),
+                Rule::unique('products', 'name')->where('company_id', $companyId)->ignore($ignoreId),
             ],
             'barcode'         => ['nullable', 'string', 'max:100'],
             'hsn_code'        => ['nullable', 'string', 'max:20'],
@@ -60,12 +75,16 @@ class StoreProductRequest extends FormRequest
             ],
             'brand_id'        => ['nullable', 'uuid', Rule::exists('product_brands', 'id')->where('company_id', $companyId)],
             'unit_id'         => ['nullable', 'uuid', Rule::exists('product_units', 'id')->where('company_id', $companyId)],
-            'gst_rate'        => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'gst_rate'        => ['nullable', 'numeric', function (string $a, mixed $v, \Closure $fail) {
+                if (is_numeric($v) && ! collect(self::GST_RATES)->contains(fn ($r) => abs($r - (float) $v) < 0.001)) {
+                    $fail('GST % must be one of: '.implode(', ', self::GST_RATES).'.');
+                }
+            }],
             'mrp'             => ['nullable', 'numeric', 'min:0'],
             'cost_price'      => ['required', 'numeric', 'min:0'],
-            'dealer_price'    => ['nullable', 'numeric', 'min:0'],
-            'wholesale_price' => ['nullable', 'numeric', 'min:0'],
-            'retail_price'    => ['nullable', 'numeric', 'min:0'],
+            'dealer_price'    => ['nullable', 'numeric', 'min:0', $this->notAboveMrp()],
+            'wholesale_price' => ['nullable', 'numeric', 'min:0', $this->notAboveMrp()],
+            'retail_price'    => ['nullable', 'numeric', 'min:0', $this->notAboveMrp()],
             'length_cm'       => ['nullable', 'numeric', 'min:0'],
             'width_cm'        => ['nullable', 'numeric', 'min:0'],
             'height_cm'       => ['nullable', 'numeric', 'min:0'],

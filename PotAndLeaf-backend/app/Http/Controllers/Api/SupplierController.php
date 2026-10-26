@@ -62,9 +62,10 @@ class SupplierController extends Controller
     {
         $this->allow($request, 'suppliers.delete');
         $this->assertRecordCompany($request, $supplier, writable: true);
+        \App\Support\Deletion\InUseGuard::assertUnused('supplier "'.$supplier->name.'"', 'suppliers', (string) $supplier->id, fn ($c) => str_ends_with($c, 'supplier_id'), ['product_supplier']);
         $this->suppliers->delete($supplier);
 
-        return $this->message('Supplier moved to trash.');
+        return $this->message('Supplier deleted.');
     }
 
     public function purchaseHistory(Request $request, Supplier $supplier): JsonResponse

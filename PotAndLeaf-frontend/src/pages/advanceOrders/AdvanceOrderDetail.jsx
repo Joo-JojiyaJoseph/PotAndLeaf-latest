@@ -8,6 +8,7 @@ import { recordDetailPath } from '../../lib/recordCompany';
 import { Badge, Button } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { useConfirm } from '../../lib/confirm';
 
 const tone = { booked: 'submitted', fulfilled: 'active', cancelled: 'blocked' };
 
@@ -33,6 +34,7 @@ export default function AdvanceOrderDetail() {
     queryClient.invalidateQueries({ queryKey: ['advance-order', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['advance-orders'] });
   };
+  const confirm = useConfirm();
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/advance-orders/${id}`, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Advance order cancelled — advance returned to the customer.'); },
@@ -70,7 +72,7 @@ export default function AdvanceOrderDetail() {
               <ChatBubbleLeftRightIcon className="size-4" /> Tell customer it's ready
             </Button>
           )}
-          {o.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
+          {o.can?.cancel && <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this booking', message: 'Cancel this advance booking? Any advance the customer paid is returned to their balance.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {o.can?.fulfill && <Button size="sm" onClick={() => fulfillM.mutate()} disabled={fulfillM.isPending}><CheckCircleIcon className="size-4" /> Fulfil → sale</Button>}
           {o.sale_id && <Button variant="outline" size="sm" onClick={() => navigate(recordDetailPath('/sales', { id: o.sale_id, company_id: recordCompanyId }, recordCtx))}>View sale</Button>}
         </>}

@@ -109,6 +109,73 @@ class SupervisorCommissionService
         return $entries;
     }
 
+    /**
+     * Bonus for making: when a production is completed, the person who made
+     * it earns their "₹ for each piece made" × pieces made. Paid once per
+     * production (safe to call again).
+     */
+    public function accrueOnProduction(ProductionOrder $order): ?SupervisorCommissionEntry
+    {
+        if (! $order->supervisor_id || ! $order->output_product_id || (float) $order->output_quantity <= 0) {
+            return null;
+        }
+        $key = 'production:'.$order->id;
+        if (SupervisorCommissionEntry::where('idempotency_key', $key)->exists()) {
+            return null;
+        }
+        $rule = CommissionRule::forCompany($order->company_id)
+            ->where('user_id', $order->supervisor_id)
+            ->where('is_active', true)
+            ->first();
+        $perPiece = (float) ($rule->production_per_unit ?? 0);
+        if ($perPiece <= 0) {
+            return null;
+        }
+        $qty = (float) $order->output_quantity;
+
+        return SupervisorCommissionEntry::create([
+            'company_id'          => $order->company_id,
+            'user_id'             => $order->supervisor_id,
+            'product_id'          => $order->output_product_id,
+            'production_order_id' => $order->id,
+            'trigger_event'       => 'production',
+            'reference_type'      => 'production_order',
+            'reference_id'        => $order->id,
+            'qty'                 => $qty,
+            'unit_value'          => $perPiece,
+            'amount'              => round($qty * $perPiece, 2),
+            'accrued_date'        => now()->toDateString(),
+            'status'              => 'accrued',
+            'idempotency_key'     => $key,
+        ]);
+    }
+
+    /** A completed production was cancelled: take back its making bonus. */
+    public function reverseProduction(ProductionOrder $order): void
+    {
+        $entry = SupervisorCommissionEntry::where('idempotency_key', 'production:'.$order->id)
+            ->where('status', 'accrued')->first();
+        if (! $entry) {
+            return;
+        }
+        SupervisorCommissionEntry::create([
+            'company_id'          => $entry->company_id,
+            'user_id'             => $entry->user_id,
+            'product_id'          => $entry->product_id,
+            'production_order_id' => $entry->production_order_id,
+            'trigger_event'       => 'reversal',
+            'reference_type'      => 'production_order',
+            'reference_id'        => $order->id,
+            'qty'                 => $entry->qty,
+            'unit_value'          => $entry->unit_value,
+            'amount'              => -1 * (float) $entry->amount,
+            'accrued_date'        => now()->toDateString(),
+            'status'              => 'accrued',
+            'reversal_of_id'      => $entry->id,
+        ]);
+        $entry->update(['status' => 'reversed']);
+    }
+
     /** Reverse supervisor accruals when a sale is cancelled; restore pending production qty. */
     public function reverseForSale(Sale $sale): void
     {

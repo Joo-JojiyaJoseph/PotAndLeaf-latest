@@ -61,8 +61,18 @@ class CommissionController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        // Only people with a manager role can get a manager share.
+        $managers = User::query()
+            ->activeMembers($company->id)
+            ->whereHas('roles', fn ($q) => $q->where('role_user.company_id', $company->id)
+                ->where(fn ($r) => $r->where('roles.slug', 'like', '%manager%')->orWhere('roles.name', 'like', '%manager%')))
+            ->orderBy('name')
+            ->get(['users.id', 'users.name'])
+            ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name]);
+
         return $this->ok([
             'staff' => $staff,
+            'managers' => $managers,
             'locations' => $locations,
             'products' => $products,
             'categories' => $categories,
@@ -79,6 +89,12 @@ class CommissionController extends Controller
     public function upsertRule(UpsertCommissionRuleRequest $request): JsonResponse
     {
         $company = $this->company($request);
+        // "Set staff rate" never silently replaces someone's existing rate; editing sends update_existing.
+        if (! $request->boolean('update_existing')
+            && CommissionRule::forCompany($company->id)->where('user_id', $request->validated()['user_id'])->exists()) {
+            $name = User::whereKey($request->validated()['user_id'])->value('name');
+            abort(422, "{$name} already has a staff rate. Use “Change” on their row to edit it.");
+        }
         $rule = $this->commission->upsertRule($company->id, $request->validated());
 
         return $this->ok(new CommissionRuleResource($rule), 'Commission rule saved.');
@@ -146,9 +162,41 @@ class CommissionController extends Controller
     public function storePayout(StoreCommissionPayoutRequest $request): JsonResponse
     {
         $company = $this->company($request);
-        $payout = $this->commission->recordPayout($company->id, $request->validated());
+        $data = $request->validated();
+        $name = User::whereKey($data['user_id'])->value('name');
+
+        // Only staff who have a commission set up can be paid commission.
+        $hasSetup = CommissionRule::forCompany($company->id)->where('user_id', $data['user_id'])->exists()
+            || ManagerCommissionRule::forCompany($company->id)->where('user_id', $data['user_id'])->exists();
+        abort_unless($hasSetup, 422, "{$name} has no commission set. Set a staff rate first.");
+
+        // One payment record per person per month — change the existing one instead of overwriting it.
+        abort_if(CommissionPayout::forCompany($company->id)->where('user_id', $data['user_id'])->where('period', $data['period'])->exists(),
+            422, "A commission payment for {$name} for {$data['period']} already exists. Use “Change” on that row.");
+
+        $payout = $this->commission->recordPayout($company->id, $data);
 
         return $this->created(new CommissionPayoutResource($payout), 'Commission payout recorded.');
+    }
+
+    public function updatePayout(Request $request, CommissionPayout $commissionPayout): JsonResponse
+    {
+        $this->allow($request, 'commission.pay');
+        abort_unless((string) $commissionPayout->company_id === (string) $this->company($request)->id, 404);
+        $data = $request->validate([
+            'amount'       => ['required', 'numeric', 'min:0'],
+            'mode'         => ['required', 'in:cash,bank,upi'],
+            'payment_date' => ['nullable', 'date'],
+            'reference'    => ['nullable', 'string', 'max:100'],
+            'notes'        => ['nullable', 'string', 'max:1000'],
+            'status'       => ['required', 'in:draft,paid'],
+        ]);
+
+        $payout = $this->commission->recordPayout($commissionPayout->company_id, $data + [
+            'user_id' => $commissionPayout->user_id, 'period' => $commissionPayout->period, 'sales_total' => $commissionPayout->sales_total,
+        ]);
+
+        return $this->ok(new CommissionPayoutResource($payout), 'Payment updated.');
     }
 
     public function destroyPayout(Request $request, CommissionPayout $commissionPayout): JsonResponse
@@ -463,17 +511,44 @@ class CommissionController extends Controller
             'is_active'      => ['boolean'],
         ]);
 
-        $rule = ManagerCommissionRule::updateOrCreate(
-            ['company_id' => $company->id, 'user_id' => $data['user_id'], 'location_id' => $data['location_id'] ?? null],
-            [
-                'percent'        => $data['percent'],
-                'effective_from' => $data['effective_from'] ?? null,
-                'effective_to'   => $data['effective_to'] ?? null,
-                'is_active'      => $data['is_active'] ?? true,
-            ],
-        );
+        abort_if(ManagerCommissionRule::forCompany($company->id)->where('user_id', $data['user_id'])->exists(), 422,
+            User::whereKey($data['user_id'])->value('name').' already has a manager share. Use “Change” on their row.');
+
+        $rule = ManagerCommissionRule::create([
+            'company_id'     => $company->id,
+            'user_id'        => $data['user_id'],
+            'location_id'    => $data['location_id'] ?? null,
+            'percent'        => $data['percent'],
+            'effective_from' => $data['effective_from'] ?? null,
+            'effective_to'   => $data['effective_to'] ?? null,
+            'is_active'      => $data['is_active'] ?? true,
+        ]);
 
         return $this->created($rule->load('user:id,name', 'location:id,name'), 'Manager rule saved.');
+    }
+
+    public function updateManagerRule(Request $request, ManagerCommissionRule $managerCommissionRule): JsonResponse
+    {
+        $this->allow($request, 'commission.manage');
+        abort_unless((string) $managerCommissionRule->company_id === (string) $this->company($request)->id, 404);
+        $data = $request->validate([
+            'percent'        => ['required', 'numeric', 'min:0', 'max:100'],
+            'effective_from' => ['nullable', 'date'],
+            'effective_to'   => ['nullable', 'date', 'after_or_equal:effective_from'],
+            'is_active'      => ['boolean'],
+        ]);
+        $managerCommissionRule->update($data);
+
+        return $this->ok($managerCommissionRule->load('user:id,name', 'location:id,name'), 'Manager share updated.');
+    }
+
+    public function destroyManagerRule(Request $request, ManagerCommissionRule $managerCommissionRule): JsonResponse
+    {
+        $this->allow($request, 'commission.manage');
+        abort_unless((string) $managerCommissionRule->company_id === (string) $this->company($request)->id, 404);
+        $managerCommissionRule->delete();
+
+        return $this->message('Manager share removed.');
     }
 
     private function company(Request $request)

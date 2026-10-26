@@ -122,7 +122,7 @@ export default function LoyaltyPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Loyalty points</h1>
-          <p className="text-sm text-muted">Customer balances, earn/redeem rules and recent activity{companyHint}.</p>
+          <p className="text-sm text-muted">Points customers earn on bills and use as a discount later{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />

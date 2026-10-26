@@ -94,7 +94,6 @@ class PurchaseOrderService
             ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
             ->where('purchase_orders.company_id', $companyId)
             ->whereIn('purchase_orders.status', ['draft', 'sent'])
-            ->whereNull('purchase_orders.deleted_at')
             ->when($exceptOrderId, fn ($q) => $q->where('purchase_orders.id', '!=', $exceptOrderId))
             ->whereIn('purchase_order_items.product_id', $productIds)
             ->get(['purchase_order_items.product_id', 'purchase_order_items.qty', 'purchase_orders.po_no'])
@@ -118,7 +117,6 @@ class PurchaseOrderService
             ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
             ->where('purchases.company_id', $companyId)
             ->where('purchases.status', 'confirmed')
-            ->whereNull('purchases.deleted_at')
             ->whereIn('purchase_items.product_id', $productIds)
             ->orderByDesc('purchases.purchase_date')
             ->orderByDesc('purchase_items.id')
@@ -225,7 +223,7 @@ class PurchaseOrderService
             ->with('supplier:id,name')
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
-            ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('po_no', 'like', "%{$filters['search']}%"))
+            ->listFilters($filters, 'po_date', ['po_no'], ['supplier' => 'name'])
             ->orderByDesc('po_date')->orderByDesc('created_at')
             ->paginate(min((int) ($filters['per_page'] ?? 15), 100))
             ->withQueryString();
@@ -353,8 +351,6 @@ class PurchaseOrderService
 
     private function nextPoNo(int|string $companyId): string
     {
-        $count = PurchaseOrder::withTrashed()->forCompany($companyId)->count();
-
-        return 'PO-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(PurchaseOrder::query()->where('company_id', $companyId), 'po_no', 'PO-', 6);
     }
 }

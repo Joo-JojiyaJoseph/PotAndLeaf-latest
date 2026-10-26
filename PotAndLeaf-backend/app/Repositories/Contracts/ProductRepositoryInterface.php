@@ -20,7 +20,6 @@ interface ProductRepositoryInterface
 
     public function delete(Product $product): void;
 
-    public function restore(int|string $companyId, string $id): ?Product;
 
     public function skuExists(int|string $companyId, string $sku, ?string $ignoreId = null): bool;
 }

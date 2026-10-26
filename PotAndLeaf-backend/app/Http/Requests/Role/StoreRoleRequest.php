@@ -24,14 +24,19 @@ class StoreRoleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:100'],
+            'name' => ['required', 'string', 'max:100', Rule::unique('roles', 'name')],
             'slug' => [
                 'required', 'string', 'max:100',
-                Rule::unique('roles', 'slug')->whereNull('deleted_at'),
+                Rule::unique('roles', 'slug'),
             ],
             'description'   => ['nullable', 'string', 'max:500'],
             'permissions'   => ['nullable', 'array'],
             'permissions.*' => ['string', Rule::exists('permissions', 'name')],
         ];
+    }
+
+    public function messages(): array
+    {
+        return ['name.unique' => 'A role with this name already exists.', 'slug.unique' => 'A role with this name already exists.'];
     }
 }

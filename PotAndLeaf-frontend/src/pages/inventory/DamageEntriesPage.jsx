@@ -242,7 +242,7 @@ export default function DamageEntriesPage() {
         <div>
           <h1 className="page-title">Damage Entry</h1>
           <p className="text-sm text-muted">
-            Write off damaged stock{companyHint} — posts a Damage movement to the ledger.
+            Record broken or dead items{companyHint}. They are taken out of stock and can be returned to the supplier.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -283,7 +283,7 @@ export default function DamageEntriesPage() {
           ) : ledgerRows.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted">No damage ledger movements yet.</div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-faint">
                   <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
@@ -304,7 +304,7 @@ export default function DamageEntriesPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </Card>
       ) : (
@@ -314,7 +314,7 @@ export default function DamageEntriesPage() {
           ) : rows.length === 0 ? (
             <div className="px-4 py-16 text-center text-sm text-muted">No damage entries yet.</div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-faint">
                   <th className="microlabel px-4 py-2.5 font-semibold">Entry</th>
@@ -337,7 +337,7 @@ export default function DamageEntriesPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
           {!listQ.isLoading && rows.length > 0 && (
             <div className="border-t border-line px-3">

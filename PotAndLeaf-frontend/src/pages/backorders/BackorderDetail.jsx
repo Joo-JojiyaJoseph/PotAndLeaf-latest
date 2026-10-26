@@ -9,6 +9,7 @@ import { Badge, Button, Field, Input, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { useToast } from '../../lib/toast';
+import { useConfirm } from '../../lib/confirm';
 
 const tone = { open: 'submitted', partial: 'warning', fulfilled: 'active', cancelled: 'blocked' };
 
@@ -35,6 +36,7 @@ export default function BackorderDetail() {
     queryClient.invalidateQueries({ queryKey: ['backorder', headerCompanyId, id] });
     queryClient.invalidateQueries({ queryKey: ['backorders'] });
   };
+  const confirm = useConfirm();
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/backorders/${id}`, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Backorder cancelled.'); },
@@ -95,7 +97,7 @@ export default function BackorderDetail() {
               <ChatBubbleLeftRightIcon className="size-4" /> Tell customer stock is in
             </Button>
           )}
-          {o.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
+          {o.can?.cancel && <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this backorder', message: 'Cancel this backorder? The customer will no longer be waiting for these items.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {o.can?.fulfill && (
             <>
               <Button variant="outline" size="sm" onClick={fulfillAllPending} disabled={fulfillM.isPending}>Fulfill available stock</Button>

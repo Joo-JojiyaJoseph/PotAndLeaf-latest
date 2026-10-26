@@ -28,7 +28,7 @@ class TransferController extends Controller
     {
         $this->allow($request, 'transfers.view');
 
-        return $this->ok(StockTransferResource::collection($this->transfers->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))));
+        return $this->ok(StockTransferResource::collection($this->transfers->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page', 'from', 'to']))));
     }
 
     public function formData(Request $request): JsonResponse

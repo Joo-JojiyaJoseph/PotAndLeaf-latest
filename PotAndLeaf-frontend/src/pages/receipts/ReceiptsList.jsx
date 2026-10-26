@@ -10,6 +10,10 @@ import { formatCurrency, formatDate, todayISO as today } from '../../lib/format'
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
+import { useConfirm } from '../../lib/confirm';
+import { ListToolbar, useListFilters } from '../../components/ListToolbar';
+import { exportList } from '../../lib/exportList';
+import Pagination from '../../components/Pagination';
 
 const TABS = [{ value: 'receivables', label: 'Receivables' }, { value: 'history', label: 'Receipt history' }];
 const statusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -256,11 +260,13 @@ export default function ReceiptsList() {
     queryFn: () => api.get('/customer-receipts/receivables', { params: companyParams }).then((r) => r.data.data.receivables),
     enabled: Boolean(activeCompany) && tab === 'receivables',
   });
+  const lf = useListFilters();
   const historyQ = useQuery({
-    queryKey: ['customer-receipts', activeCompany?.id, filterCompanyId],
-    queryFn: () => api.get('/customer-receipts', { params: companyParams }).then((r) => r.data),
+    queryKey: ['customer-receipts', activeCompany?.id, filterCompanyId, lf.key],
+    queryFn: () => api.get('/customer-receipts', { params: { ...companyParams, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'history',
   });
+  const confirm = useConfirm();
   const voidM = useMutation({
     mutationFn: (id) => api.delete(`/customer-receipts/${id}`),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customer-receipts'] }); queryClient.invalidateQueries({ queryKey: ['receivables'] }); },
@@ -286,7 +292,7 @@ export default function ReceiptsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Customer receipts</h1>
-          <p className="text-sm text-muted">Track credit sales outstanding and record collections{companyHint}.</p>
+          <p className="text-sm text-muted">Money customers still owe you, and payments you receive from them{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
@@ -295,7 +301,7 @@ export default function ReceiptsList() {
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-line">
+      <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map((t) => (
           <button key={t.value} onClick={() => setTab(t.value)}
             className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (tab === t.value ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
@@ -351,9 +357,13 @@ export default function ReceiptsList() {
       )}
 
       {tab === 'history' && (
+        <ListToolbar lf={lf} placeholder={'Search receipt no., reference or customer…'}
+          onExport={() => exportList({ url: '/customer-receipts', params: { ...companyParams, ...lf.filters }, filename: 'customer-receipts', columns: [['Receipt no', (r) => r.receipt_no], ['Date', (r) => r.receipt_date], ['Customer', (r) => r.customer_name], ['Bill no', (r) => r.sale_no], ['Amount', (r) => r.amount], ['Mode', (r) => r.mode], ['Reference', (r) => r.reference], ['Advance', (r) => r.is_advance ? "yes" : "no"]] })} />
+      )}
+      {tab === 'history' && (
         <Card className="overflow-hidden">
           {historyQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
-            : history.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No receipts recorded yet.</div>
+            : history.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">{lf.active ? 'Nothing matches these filters.' : 'No receipts recorded yet.'}</div>
             : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -377,13 +387,14 @@ export default function ReceiptsList() {
                         <td className="px-4 py-2.5"><Badge tone={r.is_advance ? 'warning' : r.applied_from_advance ? 'info' : 'info'}>{r.is_advance ? 'advance' : r.applied_from_advance ? 'applied' : r.mode}</Badge></td>
                         <td className="px-4 py-2.5 text-muted">{r.reference || '—'}</td>
                         <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.amount)}</td>
-                        <td className="px-4 py-2.5 text-right">{can('receipts.delete') && <button onClick={() => voidM.mutate(r.id)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Void"><TrashIcon className="size-4" /></button>}</td>
+                        <td className="px-4 py-2.5 text-right">{can('receipts.delete') && <button onClick={async () => { if (await confirm({ title: 'Void receipt', message: `Void this ${formatCurrency(r.amount)} receipt? The amount goes back onto what the customer owes.`, confirmLabel: 'Void' })) voidM.mutate(r.id); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Void"><TrashIcon className="size-4" /></button>}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
+        {!historyQ.isLoading && <div className="border-t border-line px-3"><Pagination meta={historyQ.data?.meta} onPage={lf.setPage} /></div>}
         </Card>
       )}
 

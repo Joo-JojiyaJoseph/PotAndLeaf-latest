@@ -77,7 +77,7 @@ export default function BatchesPage() {
       <PageHeader
         icon={QrCodeIcon}
         title="Batches & barcodes"
-        subtitle="Every batch in stock and its scannable barcode."
+        subtitle="Each purchase lot in stock with its own barcode, so you can see what is left from each."
         actions={
           <Button variant="outline" size="sm" onClick={printAll} disabled={batches.length === 0}>
             <PrinterIcon className="size-4" /> Print all

@@ -25,6 +25,8 @@ class PaymentService
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['supplier:id,name', 'purchase:id,purchase_no', 'allocations.purchase:id,purchase_no'])
             ->when(filled($filters['supplier_id'] ?? null), fn ($q) => $q->where('supplier_id', $filters['supplier_id']))
+            ->when(filled($filters['mode'] ?? null), fn ($q) => $q->where('mode', $filters['mode']))
+            ->listFilters($filters, 'payment_date', ['payment_no', 'reference'], ['supplier' => 'name'])
             ->orderByDesc('payment_date')
             ->orderByDesc('created_at')
             ->paginate($perPage)
@@ -344,8 +346,6 @@ class PaymentService
 
     private function nextPaymentNo(int|string $companyId): string
     {
-        $count = SupplierPayment::withTrashed()->forCompany($companyId)->count();
-
-        return 'PAY-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(SupplierPayment::query()->where('company_id', $companyId), 'payment_no', 'PAY-', 6);
     }
 }

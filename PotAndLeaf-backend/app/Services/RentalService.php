@@ -27,7 +27,7 @@ class RentalService
             ->with('customer:id,name')
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
-            ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('rental_no', 'like', "%{$filters['search']}%"))
+            ->listFilters($filters, 'start_date', ['rental_no'], ['customer' => 'name'])
             ->orderByDesc('start_date')->orderByDesc('created_at')
             ->paginate(min((int) ($filters['per_page'] ?? 15), 100))
             ->withQueryString();
@@ -551,9 +551,7 @@ class RentalService
 
     private function nextRentalNo(int|string $companyId): string
     {
-        $count = Rental::withTrashed()->forCompany($companyId)->count();
-
-        return 'RNT-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(Rental::query()->where('company_id', $companyId), 'rental_no', 'RNT-', 6);
     }
 
     private function nextInvoiceNo(int|string $companyId): string

@@ -5,9 +5,10 @@ import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
-import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
+import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { useToast } from '../../lib/toast';
+import { useConfirm } from '../../lib/confirm';
 
 const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked' };
 
@@ -37,6 +38,7 @@ export default function PurchaseReturnDetail() {
     onSuccess: () => { invalidate(); toast.success('Return confirmed.'); },
     onError: (e) => toast.error(e.response?.data?.message ?? Object.values(e.response?.data?.errors ?? {})?.[0]?.[0] ?? 'Confirm failed.'),
   });
+  const confirm = useConfirm();
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/purchase-returns/${id}`, withCompany(recordCompanyId)),
     onSuccess: () => { invalidate(); toast.success('Return cancelled.'); },
@@ -56,11 +58,12 @@ export default function PurchaseReturnDetail() {
         actions={
           <>
             <Badge tone={statusTone[r.status] ?? 'default'}>{r.status}</Badge>
-            {r.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
+            {r.can?.cancel && <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this return', message: 'Cancel this draft purchase return? Nothing has been sent back yet.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
             {r.can?.confirm && <Button size="sm" onClick={() => confirmM.mutate()} disabled={confirmM.isPending}><CheckCircleIcon className="size-4" /> Confirm</Button>}
           </>
         }
       />
+      <NextStep>{(r.status === 'draft' ? 'Not final yet. Click “Confirm” — the items leave your stock and the amount you owe the supplier goes down.' : null)}</NextStep>
 
       <Section title="Details">
         <InfoGrid cols={4}>

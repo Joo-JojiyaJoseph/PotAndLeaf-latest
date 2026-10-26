@@ -271,7 +271,7 @@ describe('Product module — API', function () {
             ->and((float) $product->fresh()->cost_price)->toBe(150.0);
     })->group('product', 'PRODUCT-016');
 
-    it('PRODUCT-017 delete product soft deletes record', function () {
+    it('PRODUCT-017 delete product removes it permanently', function () {
         $category = createProductCategory($this);
         $product = $this->createProduct(['name' => 'To Delete', 'category_id' => $category->id]);
 
@@ -280,7 +280,7 @@ describe('Product module — API', function () {
             ->assertJsonPath('message', 'Product deleted.');
 
         expect(Product::find($product->id))->toBeNull();
-        expect(Product::withTrashed()->find($product->id))->not->toBeNull();
+        $this->assertDatabaseMissing('products', ['id' => $product->id]);
     })->group('product', 'PRODUCT-017');
 
     it('PRODUCT-019 product details returns single product', function () {

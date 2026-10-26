@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Purchase;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Support\Validation\BusinessRules;
 use Illuminate\Validation\Rule;
 
 class StorePurchaseRequest extends FormRequest
@@ -20,6 +21,9 @@ class StorePurchaseRequest extends FormRequest
     public function rules(): array
     {
         $companyId = $this->teamId();
+        // A super admin may enter the bill for another company.
+        $billCompanyId = ($this->user()->is_super_admin && $this->filled('company_id')) ? $this->input('company_id') : $companyId;
+        $purchaseId = $this->route('purchase')?->id;
 
         return [
             'supplier_id'   => [
@@ -28,9 +32,15 @@ class StorePurchaseRequest extends FormRequest
                     ->where('company_id', $companyId)
                     ->where('status', 'active'),
             ],
-            'purchase_date' => ['required', 'date'],
-            'invoice_no'    => ['nullable', 'string', 'max:100'],
-            'invoice_date'  => ['nullable', 'date'],
+            'purchase_date' => ['required', 'date', BusinessRules::notFuture('Purchase date')],
+            // The same supplier bill must not be entered twice.
+            'invoice_no'    => ['nullable', 'string', 'max:100',
+                Rule::unique('purchases', 'invoice_no')
+                    ->where('company_id', $billCompanyId)
+                    ->where('supplier_id', $this->input('supplier_id'))
+                    ->where(fn ($q) => $q->where('status', '!=', 'cancelled'))
+                    ->ignore($purchaseId)],
+            'invoice_date'  => ['nullable', 'date', BusinessRules::notFuture('Invoice date')],
             'is_interstate' => ['boolean'],
             'landed_cost_total' => ['nullable', 'numeric', 'min:0'],
             'notes'         => ['nullable', 'string', 'max:2000'],
@@ -43,7 +53,7 @@ class StorePurchaseRequest extends FormRequest
             'items.*.product_id'   => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],
             'items.*.qty'          => ['required', 'numeric', 'gt:0'],
             'items.*.rate'         => ['required', 'numeric', 'min:0'],
-            'items.*.discount'     => ['nullable', 'numeric', 'min:0'],
+            'items.*.discount'     => ['nullable', 'numeric', 'min:0', BusinessRules::discountNotAboveLine(fn ($k) => $this->input($k))],
             'items.*.gst_rate'     => ['nullable', 'numeric', 'min:0', 'max:100'],
 
             'items.*.is_bulk'            => ['sometimes', 'boolean'],
@@ -71,6 +81,7 @@ class StorePurchaseRequest extends FormRequest
             'items.*.qty.required'        => 'Quantity is required.',
             'items.*.qty.gt'              => 'Quantity is required.',
             'items.*.rate.required'       => 'Rate is required.',
+            'invoice_no.unique'           => 'This supplier invoice number is already entered for this supplier. Check you are not entering the same bill twice.',
         ];
     }
 }

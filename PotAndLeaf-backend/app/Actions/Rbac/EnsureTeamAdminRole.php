@@ -20,14 +20,10 @@ class EnsureTeamAdminRole
     public function handle(Team $team, ?User $assignTo = null): Role
     {
         return DB::transaction(function () use ($team, $assignTo) {
-            $role = Role::withTrashed()->firstOrCreate(
+            $role = Role::firstOrCreate(
                 ['team_id' => $team->id, 'slug' => 'administrator'],
                 ['name' => 'Administrator', 'description' => 'Full access to every module.', 'is_system' => true],
             );
-
-            if ($role->trashed()) {
-                $role->restore();
-            }
 
             $wildcard = Permission::where('name', '*')->first();
             if ($wildcard) {

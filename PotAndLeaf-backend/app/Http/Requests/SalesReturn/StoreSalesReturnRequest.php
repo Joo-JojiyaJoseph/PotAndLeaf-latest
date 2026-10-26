@@ -18,7 +18,7 @@ class StoreSalesReturnRequest extends FormRequest
 
         return [
             'sale_id'     => ['required', 'uuid', Rule::exists('sales', 'id')->where('company_id', $companyId)],
-            'return_date' => ['required', 'date'],
+            'return_date' => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Return date')],
             'reason'      => ['nullable', 'string', 'max:255'],
             'notes'       => ['nullable', 'string', 'max:2000'],
             'items'                 => ['required', 'array', 'min:1'],

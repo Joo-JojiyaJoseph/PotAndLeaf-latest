@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useIsFetching } from '@tanstack/react-query';
 import {
   ArrowPathIcon,
@@ -20,7 +20,6 @@ const iconBtn =
 
 export default function Topbar({ onMenu }) {
   const { user, activeCompany, logout } = useAuth();
-  const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -29,7 +28,6 @@ export default function Topbar({ onMenu }) {
   const menuBtnRef = useRef(null);
   const notesBtnRef = useRef(null);
   const fetching = useIsFetching();
-  const pathLabel = `${typeof window !== 'undefined' ? window.location.host : ''}${location.pathname}`;
 
   const initials = (user?.name ?? '?')
     .split(' ')
@@ -72,12 +70,7 @@ export default function Topbar({ onMenu }) {
         <Bars3Icon className="size-5" />
       </button>
 
-      <div className="hidden min-w-0 flex-1 justify-center sm:flex">
-        <div className="flex max-w-lg items-center gap-2 truncate rounded-full border border-line bg-white px-4 py-1.5 text-[12px] text-ink shadow-soft">
-          <span className="size-1.5 shrink-0 rounded-full bg-leaf" aria-hidden />
-          <span className="truncate">{pathLabel}</span>
-        </div>
-      </div>
+      <div className="min-w-0 flex-1" />
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <button

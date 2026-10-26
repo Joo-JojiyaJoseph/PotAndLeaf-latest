@@ -23,7 +23,7 @@ export function Button({ variant = 'primary', size = 'md', className, children, 
   return (
     <button
       className={classNames(
-        'inline-flex items-center justify-center gap-1.5 rounded-[12px] font-medium transition-all duration-150',
+        'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[12px] font-medium transition-all duration-150',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf/40 disabled:opacity-60',
         'active:scale-[0.98]',
         variants[variant],
@@ -98,10 +98,12 @@ const badgeTones = {
 };
 
 export function Badge({ tone = 'default', children, className }) {
+  // Show status codes as words: "in_transit" → "in transit".
+  if (typeof children === 'string') children = children.replace(/_/g, ' ');
   return (
     <span
       className={classNames(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize',
+        'inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize',
         badgeTones[tone] ?? badgeTones.default,
         className,
       )}
@@ -129,7 +131,9 @@ export function StatCard({ label, value, sub, tone = 'default', icon: Icon }) {
       </div>
       {/* Never break a figure in the middle ("₹2,832." / "00"): keep it on one
           line and let very long values scroll inside the card instead. */}
-      <div title={typeof value === 'string' ? value : undefined} className="tnum mt-1.5 overflow-x-auto whitespace-nowrap pl-2 text-lg font-semibold leading-tight text-ink sm:mt-2 sm:text-xl xl:text-[24px] xl:leading-none">{value}</div>
+      <div title={typeof value === 'string' ? value : undefined} className={classNames('tnum mt-1.5 overflow-x-auto whitespace-nowrap pl-2 font-semibold leading-tight text-ink sm:mt-2 xl:leading-none',
+        // Long figures (₹12,34,567.00) get a smaller size so they fit instead of being cut off.
+        String(value ?? '').length > 12 ? 'text-base sm:text-lg xl:text-[20px]' : 'text-lg sm:text-xl xl:text-[24px]')}>{value}</div>
       {sub && <div className="mt-1 pl-2 text-[11px] leading-snug text-muted sm:mt-1.5">{sub}</div>}
     </div>
   );

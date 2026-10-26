@@ -23,6 +23,8 @@ class ReceiptService
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['customer:id,name', 'sale:id,sale_no', 'allocations.sale:id,sale_no'])
             ->when(filled($filters['customer_id'] ?? null), fn ($q) => $q->where('customer_id', $filters['customer_id']))
+            ->when(filled($filters['mode'] ?? null), fn ($q) => $q->where('mode', $filters['mode']))
+            ->listFilters($filters, 'receipt_date', ['receipt_no', 'reference'], ['customer' => 'name'])
             ->orderByDesc('receipt_date')
             ->orderByDesc('created_at')
             ->paginate($perPage)
@@ -417,9 +419,7 @@ class ReceiptService
 
     private function nextReceiptNo(int|string $companyId): string
     {
-        $count = CustomerReceipt::withTrashed()->forCompany($companyId)->count();
-
-        return 'RCP-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(CustomerReceipt::query()->where('company_id', $companyId), 'receipt_no', 'RCP-', 6);
     }
 
     private function syncSalePaid(string $saleId): void

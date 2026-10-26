@@ -25,7 +25,7 @@ class CustomerReceiptController extends Controller
         $this->allow($request, 'receipts.view');
 
         return $this->ok(CustomerReceiptResource::collection(
-            $this->receipts->list($this->listCompanyId($request), $request->only(['customer_id', 'per_page']))
+            $this->receipts->list($this->listCompanyId($request), $request->only(['customer_id', 'per_page', 'from', 'to', 'search', 'mode']))
         ));
     }
 

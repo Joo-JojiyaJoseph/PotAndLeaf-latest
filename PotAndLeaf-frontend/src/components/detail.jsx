@@ -73,3 +73,17 @@ export function DetailError({ backTo, message }) {
     </div>
   );
 }
+
+/**
+ * One plain sentence telling the user what to do next with this document
+ * (e.g. "Not final yet — click Confirm to …"). Renders nothing when empty.
+ */
+export function NextStep({ children }) {
+  if (!children) return null;
+  return (
+    <div className="flex items-start gap-2 rounded-xl border border-leaf/25 bg-leaf-soft/50 px-3 py-2.5 text-sm text-ink">
+      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-leaf text-[11px] font-bold text-white">→</span>
+      <span>{children}</span>
+    </div>
+  );
+}

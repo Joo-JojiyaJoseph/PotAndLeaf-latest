@@ -8,6 +8,9 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { ListToolbar, useListFilters } from '../../components/ListToolbar';
+import { exportList } from '../../lib/exportList';
+import Pagination from '../../components/Pagination';
 
 const STATUS_TABS = [
   { value: '', label: 'All' },
@@ -24,10 +27,11 @@ export default function SalesReturnsList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
+  const lf = useListFilters();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['sales-returns', activeCompany?.id, filterCompanyId, status],
-    queryFn: () => api.get('/sales-returns', { params: { ...companyParams, status } }).then((r) => r.data),
+    queryKey: ['sales-returns', activeCompany?.id, filterCompanyId, status, lf.key],
+    queryFn: () => api.get('/sales-returns', { params: { ...companyParams, status, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -48,7 +52,7 @@ export default function SalesReturnsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Sales returns</h1>
-          <p className="text-sm text-muted">Credit notes to customers. Confirming restores stock and reduces receivables{companyHint}.</p>
+          <p className="text-sm text-muted">Items customers bring back. When confirmed, the stock comes back and the customer owes less{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
@@ -60,7 +64,10 @@ export default function SalesReturnsList() {
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-line">
+      <ListToolbar lf={lf} placeholder={'Search return no. or customer…'} withSearch={true}
+        onExport={() => exportList({ url: '/sales-returns', params: { ...companyParams, status, ...lf.filters }, filename: 'sales-returns', columns: [['Return no', (r) => r.return_no], ['Date', (r) => r.return_date], ['Bill no', (r) => r.sale?.sale_no], ['Customer', (r) => r.customer?.name], ['Reason', (r) => r.reason], ['Total', (r) => r.grand_total], ['Status', (r) => r.status]] })} />
+
+      <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
@@ -80,7 +87,7 @@ export default function SalesReturnsList() {
         ) : rows.length === 0 ? (
           <div className="px-4 py-16 text-center">
             <p className="text-sm font-medium">No returns here</p>
-            <p className="mt-1 text-sm text-muted">Create a return against a confirmed sale.</p>
+            <p className="mt-1 text-sm text-muted">Create a return against a confirmed sale.</p>{can('sales_returns.create') && <Link to="/sales-returns/new" className="mt-4 inline-flex items-center gap-1 rounded-xl bg-leaf px-4 py-2 text-sm font-medium text-white hover:brightness-105">+ New sales return</Link>}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -124,7 +131,8 @@ export default function SalesReturnsList() {
             </table>
           </div>
         )}
-      </Card>
+      {!isLoading && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={lf.setPage} /></div>}
+        </Card>
     </div>
   );
 }

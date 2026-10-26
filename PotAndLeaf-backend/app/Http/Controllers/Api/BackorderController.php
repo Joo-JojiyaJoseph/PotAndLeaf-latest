@@ -31,7 +31,7 @@ class BackorderController extends Controller
         abort_unless($request->user()->hasPermission('backorder.view', $this->company($request)->id), 403);
 
         return $this->ok(BackorderResource::collection(
-            $this->backorders->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))
+            $this->backorders->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page', 'from', 'to']))
         ));
     }
 

@@ -7,12 +7,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 /** Application-wide role; assignments are scoped per company on role_user.company_id. */
 class Role extends Model
 {
-    use HasAuditColumns, HasFactory, HasUuids, SoftDeletes;
+    use HasAuditColumns, HasFactory, HasUuids;
 
     protected $fillable = ['name', 'slug', 'description', 'is_system'];
 

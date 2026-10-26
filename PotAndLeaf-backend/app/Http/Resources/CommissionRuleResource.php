@@ -19,6 +19,7 @@ class CommissionRuleResource extends JsonResource
             'rate_type'      => $this->rate_type ?? 'percent',
             'base_percent'   => (float) $this->base_percent,
             'per_unit_amount'=> (float) ($this->per_unit_amount ?? 0),
+            'production_per_unit' => (float) ($this->production_per_unit ?? 0),
             'monthly_target' => (float) $this->monthly_target,
             'target_bonus'   => (float) $this->target_bonus,
             'notes'          => $this->notes,

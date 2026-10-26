@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { useToast } from '../../lib/toast';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
@@ -37,12 +38,14 @@ export default function RolesList() {
     onError: (err) => setErrors(err.response?.data?.errors ?? {}),
   });
 
+  const toast = useToast();
   const deleteM = useMutation({
     mutationFn: (id) => api.delete(`/roles/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roles'] });
       setDeleting(null);
     },
+    onError: (e) => { setDeleting(null); toast.error(e.response?.data?.message ?? 'Could not delete role.'); },
   });
 
   const groups = formData?.permission_groups ?? {};

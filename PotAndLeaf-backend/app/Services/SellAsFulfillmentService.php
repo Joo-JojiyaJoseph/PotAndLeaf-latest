@@ -193,7 +193,7 @@ class SellAsFulfillmentService
     {
         $sku = $base;
         $n = 1;
-        while (Product::withTrashed()->where('company_id', $companyId)->where('sku', $sku)->exists()) {
+        while (Product::query()->where('company_id', $companyId)->where('sku', $sku)->exists()) {
             $n++;
             $sku = "{$base}-{$n}";
         }

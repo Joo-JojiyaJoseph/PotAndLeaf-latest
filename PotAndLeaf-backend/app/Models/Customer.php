@@ -8,11 +8,10 @@ use App\Models\Concerns\HasAuditColumns;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
 {
-    use HasAuditColumns, HasFactory, HasUuids, SoftDeletes;
+    use HasAuditColumns, HasFactory, HasUuids;
 
     protected $fillable = [
         'company_id', 'customer_code', 'name', 'type', 'email', 'phone', 'whatsapp',

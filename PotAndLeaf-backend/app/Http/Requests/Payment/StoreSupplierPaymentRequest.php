@@ -25,7 +25,7 @@ class StoreSupplierPaymentRequest extends FormRequest
         return [
             'supplier_id'  => ['required', 'uuid', Rule::exists('suppliers', 'id')->where('company_id', $companyId)],
             'purchase_id'  => ['nullable', 'uuid', Rule::exists('purchases', 'id')->where('company_id', $companyId)],
-            'payment_date' => ['required', 'date'],
+            'payment_date' => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Payment date')],
             'amount'       => ['required', 'numeric', 'gt:0'],
             'mode'         => ['required', 'in:cash,bank,upi,cheque'],
             'reference'    => ['nullable', 'string', 'max:100'],

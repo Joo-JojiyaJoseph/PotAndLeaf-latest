@@ -205,7 +205,7 @@ class ConfirmBulkSplit
         $base = $parentSku ? preg_replace('/-S\d+$/', '', $parentSku) : 'SKU';
         $candidate = $base.'-S'.str_pad((string) $sequence, 3, '0', STR_PAD_LEFT);
         $n = $sequence;
-        while (Product::withTrashed()->forCompany($companyId)->where('sku', $candidate)->exists()) {
+        while (Product::forCompany($companyId)->where('sku', $candidate)->exists()) {
             $n++;
             $candidate = $base.'-S'.str_pad((string) $n, 3, '0', STR_PAD_LEFT);
         }

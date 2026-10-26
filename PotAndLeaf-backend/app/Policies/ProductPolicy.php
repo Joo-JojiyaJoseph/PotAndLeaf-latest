@@ -32,13 +32,5 @@ class ProductPolicy
         return $user->hasPermission('products.delete');
     }
 
-    public function restore(User $user, Product $product): bool
-    {
-        return $user->hasPermission('products.delete');
-    }
 
-    public function forceDelete(User $user, Product $product): bool
-    {
-        return $user->hasPermission('products.force-delete');
-    }
 }

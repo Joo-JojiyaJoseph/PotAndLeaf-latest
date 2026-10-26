@@ -117,7 +117,7 @@ export default function ProductionOrderDetail() {
           <InfoItem label="Output quantity" value={o.output_quantity} />
           <InfoItem label="Unit cost" value={o.status === 'completed' ? formatCurrency(o.output_unit_cost) : (estimateQ.data ? formatCurrency(estimateQ.data.unit_cost) : '—')} mono />
           <InfoItem label="Material cost" value={o.status === 'completed' ? formatCurrency(o.total_input_cost) : (estimateQ.data ? formatCurrency(estimateQ.data.total_material_cost) : '—')} mono />
-          <InfoItem label="Supervisor" value={o.supervisor || '—'} />
+          <InfoItem label="Made by" value={o.supervisor || '—'} />
           <InfoItem label="Completed" value={o.completed_at ? formatDate(o.completed_at) : null} />
           <InfoItem label="Notes" value={o.notes} />
         </InfoGrid>

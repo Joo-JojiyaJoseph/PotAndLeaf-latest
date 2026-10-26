@@ -13,14 +13,16 @@ import { addCalendarDays, formatCurrency, formatDate, todayISO } from '../lib/fo
 
 const daysAgo = (n) => addCalendarDays(todayISO(), -n);
 
+// Daily tasks first, then setup.
 const QUICK = [
-  { label: 'New sale', desc: 'Ring up a bill', to: '/sales/new', icon: BanknotesIcon },
-  { label: 'New purchase', desc: 'Record a GRN', to: '/purchases/new', icon: ShoppingCartIcon },
-  { label: 'Add product', desc: 'Create a catalogue item', to: '/products/new', icon: PlusCircleIcon },
+  { label: 'New sale', desc: 'Make a customer bill', to: '/sales/new', icon: BanknotesIcon },
+  { label: 'Receive money', desc: 'Customer pays what they owe', to: '/receipts', icon: ArrowTrendingUpIcon },
+  { label: 'New purchase', desc: 'Enter a supplier bill', to: '/purchases/new', icon: ShoppingCartIcon },
+  { label: 'Pay supplier', desc: 'Pay what you owe a supplier', to: '/payments', icon: TruckIcon },
+  { label: 'Stock levels', desc: 'What you have and what is low', to: '/inventory', icon: CubeIcon },
+  { label: 'Add product', desc: 'New item to buy or sell', to: '/products/new', icon: PlusCircleIcon },
   { label: 'Reports', desc: 'Sales, stock, GST and dues', to: '/reports', icon: ChartBarIcon },
-  { label: 'Masters', desc: 'Categories, units', to: '/masters', icon: TagIcon },
-  { label: 'Companies', desc: 'Manage companies', to: '/companies', icon: BuildingOffice2Icon },
-  { label: 'Suppliers', desc: 'Manage suppliers', to: '/suppliers', icon: TruckIcon },
+  { label: 'Companies', desc: 'Your shops / companies', to: '/companies', icon: BuildingOffice2Icon },
 ];
 
 export default function Dashboard() {
@@ -39,6 +41,9 @@ export default function Dashboard() {
     if (q.to === '/reports') return canReports;
     if (q.to === '/masters') return can('categories.view') || can('subcategories.view') || can('units.view');
     if (q.to === '/suppliers') return can('suppliers.view');
+    if (q.to === '/receipts') return can('receipts.create');
+    if (q.to === '/payments') return can('payments.create');
+    if (q.to === '/inventory') return can('inventory.view');
     return true;
   });
 
@@ -90,7 +95,7 @@ export default function Dashboard() {
           
           <div className="space-y-5 lg:col-span-8">
             {canReports && (
-              <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-4 2xl:grid-cols-4">
                 <StatCard
                   label="Sales (30 days)" value={rep ? formatCurrency(rep.sales.total) : '—'}
                   sub={rep ? `${rep.sales.count} invoices` : 'Loading…'}
@@ -141,7 +146,7 @@ export default function Dashboard() {
             {/* Quick actions */}
             <div>
               <h2 className="mb-3 text-sm font-semibold text-ink">Quick actions</h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                 {quickLinks.map((q) => {
                   const Icon = q.icon;
                   return (
@@ -152,7 +157,7 @@ export default function Dashboard() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold text-ink">{q.label}</span>
-                        <span className="block truncate text-xs text-muted">{q.desc}</span>
+                        <span className="block text-xs leading-snug text-muted">{q.desc}</span>
                       </span>
                       <ArrowRightIcon className="size-4 text-faint transition-transform group-hover:translate-x-0.5 group-hover:text-leaf" />
                     </Link>

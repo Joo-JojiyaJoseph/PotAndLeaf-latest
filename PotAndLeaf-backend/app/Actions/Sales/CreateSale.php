@@ -64,12 +64,24 @@ class CreateSale
             $loyaltyDiscount = $this->loyalty->discountForPoints($companyId, $redeemPoints);
         }
 
+        // Money taken cannot be more than the bill (after points). Change given
+        // back is not "paid" — over-paying would leave the customer owing a minus amount.
+        $payable = max(0, $billTotal - $loyaltyDiscount);
+        if (isset($data['amount_paid']) && $data['amount_paid'] !== '' && (float) $data['amount_paid'] > $payable + 0.005) {
+            throw ValidationException::withMessages([
+                'amount_paid' => sprintf('Amount paid (₹%.2f) cannot be more than the bill total (₹%.2f). Enter the bill amount and give the change back.', (float) $data['amount_paid'], $payable),
+            ]);
+        }
+
         $productMeta = Product::forCompany($companyId)
             ->whereIn('id', collect($data['items'])->pluck('product_id')->filter())
             ->get(['id', 'name', 'hsn_code'])
             ->keyBy('id');
 
-        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind, $userId) {
+        // A retail customer always gets the retail price tier (it cannot be changed on the bill).
+        $retailOnly = $customer && ($customer->type?->value ?? $customer->type) === 'retail';
+
+        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind, $userId, $retailOnly) {
             $t = $computed['totals'];
             $due = max(0, $billTotal - $loyaltyDiscount);
             $sale = $this->sales->create([
@@ -105,7 +117,7 @@ class CreateSale
                     'hsn_code'      => $meta->hsn_code ?? null,
                     'qty'           => $item['qty'],
                     'rate'          => $item['rate'],
-                    'price_level'   => $item['price_level'] ?? 'retail',
+                    'price_level'   => $retailOnly ? 'retail' : ($item['price_level'] ?? 'retail'),
                     'discount'      => $item['discount'] ?? 0,
                     'gst_rate'      => $item['gst_rate'] ?? 0,
                     'taxable_value' => $calc['taxable_value'],

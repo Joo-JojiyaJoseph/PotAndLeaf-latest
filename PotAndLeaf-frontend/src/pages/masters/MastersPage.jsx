@@ -8,6 +8,7 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { fieldError } from '../../lib/formErrors';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
+import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
 
 const TABS = [
@@ -164,14 +165,18 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
 
 export default function MastersPage() {
   const { activeCompany, can, companyId, isSuperAdmin } = useAuth();
+  const toast = useToast();
   const confirm = useConfirm();
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const queryClient = useQueryClient();
-  const visibleTabs = TABS.filter((t) => can(`${t.permission}.view`));
+  // Anyone who may see categories may also see subcategories (the server allows it too).
+  const canFor = (t, action) => can(`${t.permission}.${action}`) || (t.key === 'subcategories' && can(`categories.${action}`));
+  const visibleTabs = TABS.filter((t) => canFor(t, 'view'));
   const [tabKey, setTabKey] = useState(visibleTabs[0]?.key ?? 'categories');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const tab = visibleTabs.find((t) => t.key === tabKey) ?? visibleTabs[0] ?? TABS[0];
+  const canTab = (action) => canFor(tab, action);
 
   const { data, isLoading } = useQuery({
     queryKey: ['masters', tab.type, activeCompany?.id, filterCompanyId],
@@ -180,7 +185,8 @@ export default function MastersPage() {
   });
   const deleteM = useMutation({
     mutationFn: ({ id, company_id: rowCompanyId }) => api.delete(`/masters/${tab.type}/${id}`, withCompany(rowCompanyId ?? companyId)),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['masters', tab.type] }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['masters', tab.type] }); toast.success('Deleted.'); },
+    onError: (e) => toast.error(e.response?.data?.message ?? 'Could not delete.'),
   });
   const rows = (data ?? []).filter((r) => {
     if (tab.type !== 'categories') return true;
@@ -192,15 +198,15 @@ export default function MastersPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Master data</h1>
-          <p className="text-sm text-muted">Each company manages its own categories, subcategories and units{companyHint}.</p>
+          <p className="text-sm text-muted">Lists used when adding products: categories, sub-categories and units (kg, nos, …){companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
-          {can(`${tab.permission}.create`) && <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true); }}><PlusIcon className="size-4" /> New {tab.singular}</Button>}
+          {canTab('create') && <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true); }}><PlusIcon className="size-4" /> New {tab.singular}</Button>}
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-line">
+      <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {visibleTabs.map((t) => (
           <button key={t.key} onClick={() => setTabKey(t.key)}
             className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (tabKey === t.key ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
@@ -213,7 +219,7 @@ export default function MastersPage() {
         {isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
           : rows.length === 0 ? <div className="px-4 py-16 text-center"><p className="text-sm font-medium">No {tab.label.toLowerCase()} yet</p><p className="mt-1 text-sm text-muted">Add one to use it on products.</p></div>
           : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead><tr className="border-b border-line text-left text-faint">
                 <th className="microlabel px-4 py-2.5 font-semibold">Name</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Code</th>
@@ -234,9 +240,9 @@ export default function MastersPage() {
                     <td className="px-4 py-2.5"><Badge tone={r.status === 'active' ? 'active' : 'inactive'}>{r.status}</Badge></td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-1.5">
-                        {can(`${tab.permission}.update`) && <button onClick={() => { setEditing(r); setModalOpen(true); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink"><PencilSquareIcon className="size-4" /></button>}
-                        {can(`${tab.permission}.delete`) && <button onClick={async () => {
-                          const ok = await confirm({ title: `Delete ${tab.singular}`, message: `Delete "${r.name}"? Products already using it keep their reference, but it can't be selected again.`, confirmLabel: 'Delete', tone: 'danger' });
+                        {canTab('update') && <button onClick={() => { setEditing(r); setModalOpen(true); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink"><PencilSquareIcon className="size-4" /></button>}
+                        {canTab('delete') && <button onClick={async () => {
+                          const ok = await confirm({ title: `Delete ${tab.singular}`, message: `Delete "${r.name}" for good? This cannot be undone. If products use it, it cannot be deleted — make it Inactive instead.`, confirmLabel: 'Delete', tone: 'danger' });
                           if (ok) deleteM.mutate({ id: r.id, company_id: r.company_id });
                         }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>}
                       </div>
@@ -244,7 +250,7 @@ export default function MastersPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
       </Card>
 

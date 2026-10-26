@@ -24,7 +24,7 @@ class StoreDamageEntryRequest extends FormRequest
             'reason'      => ['required', 'string', 'max:120'],
             'notes'       => ['nullable', 'string', 'max:2000'],
             'photo'       => ['nullable', 'string', 'max:500'],
-            'entry_date'  => ['required', 'date'],
+            'entry_date'  => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Damage date')],
         ];
     }
 

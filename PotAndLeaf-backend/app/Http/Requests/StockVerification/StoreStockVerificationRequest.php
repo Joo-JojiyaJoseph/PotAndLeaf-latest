@@ -22,7 +22,7 @@ class StoreStockVerificationRequest extends FormRequest
         $companyId = $this->companyId();
 
         return [
-            'count_date'    => ['required', 'date'],
+            'count_date'    => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Count date')],
             'location_note' => ['nullable', 'string', 'max:120'],
             'notes'         => ['nullable', 'string', 'max:2000'],
             'items'                 => ['required', 'array', 'min:1'],

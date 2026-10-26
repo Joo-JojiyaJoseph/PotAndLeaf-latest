@@ -18,7 +18,7 @@ class SalesReturnRepository implements SalesReturnRepositoryInterface
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['customer:id,name,customer_code', 'sale:id,sale_no'])
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
-            ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('return_no', 'like', "%{$filters['search']}%"))
+            ->listFilters($filters, 'return_date', ['return_no'], ['customer' => 'name'])
             ->orderByDesc('return_date')
             ->orderByDesc('created_at')
             ->paginate($perPage)
@@ -41,9 +41,7 @@ class SalesReturnRepository implements SalesReturnRepositoryInterface
 
     public function nextReturnNo(int|string $companyId): string
     {
-        $count = SalesReturn::withTrashed()->forCompany($companyId)->count();
-
-        return 'SR-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(SalesReturn::query()->where('company_id', $companyId), 'return_no', 'SR-', 6);
     }
 
     public function returnedQtyBySaleItem(string $saleId, ?string $excludeReturnId = null): Collection

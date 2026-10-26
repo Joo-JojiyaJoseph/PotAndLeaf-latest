@@ -93,12 +93,4 @@ class SupplierController extends Controller
         return back()->with('success', 'Supplier moved to trash.');
     }
 
-    public function restore(Team $current_team, string $supplier): RedirectResponse
-    {
-        $restored = $this->suppliers->restore($current_team->id, $supplier);
-        abort_if($restored === null, 404);
-        $this->authorize('restore', $restored);
-
-        return back()->with('success', 'Supplier restored.');
-    }
 }

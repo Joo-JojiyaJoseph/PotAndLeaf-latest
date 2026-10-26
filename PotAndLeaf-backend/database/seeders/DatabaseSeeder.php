@@ -11,9 +11,9 @@ class DatabaseSeeder extends Seeder
         $this->call([
             PermissionSeeder::class,    // permission catalog (needed for roles)
             CompanySeeder::class,
-            UserSeeder::class,          // super-admin login
-            AdminRoleSeeder::class,     // Administrator role
-            StandardRolesSeeder::class, // Manager, Cashier, etc.
+            UserSeeder::class,
+            AdminRoleSeeder::class,
+            StandardRolesSeeder::class, 
             BranchUserSeeder::class,
             LookupSeeder::class,
             LocationSeeder::class,

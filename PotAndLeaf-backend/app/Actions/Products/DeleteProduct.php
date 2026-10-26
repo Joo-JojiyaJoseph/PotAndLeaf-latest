@@ -41,9 +41,9 @@ class DeleteProduct
             'batches' => DB::table('product_batches')->where('product_id', $id)->exists(),
             'purchase returns' => DB::table('purchase_return_items')->where('product_id', $id)->exists(),
             'sales returns' => DB::table('sales_return_items')->where('product_id', $id)->exists(),
-            'damage records' => DB::table('damage_entries')->where('product_id', $id)->whereNull('deleted_at')->exists(),
+            'damage records' => DB::table('damage_entries')->where('product_id', $id)->exists(),
             'transfers' => DB::table('stock_transfer_items')->where('product_id', $id)->exists(),
-            'bulk splits' => DB::table('bulk_splits')->where('source_product_id', $id)->whereNull('deleted_at')->exists(),
+            'bulk splits' => DB::table('bulk_splits')->where('source_product_id', $id)->exists(),
         ];
 
         return array_keys(array_filter($checks));

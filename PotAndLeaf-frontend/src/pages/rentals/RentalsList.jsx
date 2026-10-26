@@ -8,6 +8,9 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatDate } from '../../lib/format';
+import { ListToolbar, useListFilters } from '../../components/ListToolbar';
+import { exportList } from '../../lib/exportList';
+import Pagination from '../../components/Pagination';
 
 const STATUS_TABS = [
   { value: '', label: 'All' }, { value: 'draft', label: 'Draft' },
@@ -21,10 +24,11 @@ export default function RentalsList() {
   const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
   const [status, setStatus] = useState('');
+  const lf = useListFilters();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['rentals', activeCompany?.id, filterCompanyId, status],
-    queryFn: () => api.get('/rentals', { params: { ...companyParams, status } }).then((r) => r.data),
+    queryKey: ['rentals', activeCompany?.id, filterCompanyId, status, lf.key],
+    queryFn: () => api.get('/rentals', { params: { ...companyParams, status, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -39,7 +43,7 @@ export default function RentalsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Plant rentals</h1>
-          <p className="text-sm text-muted">Rent plants out on agreements. Activating issues stock; returns bring it back{companyHint}.</p>
+          <p className="text-sm text-muted">Plants you rent out. Activate when they leave, bill each period, and record the return{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
@@ -47,7 +51,10 @@ export default function RentalsList() {
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-line">
+      <ListToolbar lf={lf} placeholder={'Search rental no. or customer…'} withSearch={true}
+        onExport={() => exportList({ url: '/rentals', params: { ...companyParams, status, ...lf.filters }, filename: 'rentals', columns: [['Rental no', (r) => r.rental_no], ['Customer', (r) => r.customer_name], ['Start', (r) => r.start_date], ['Expected end', (r) => r.expected_end_date], ['Deposit', (r) => r.deposit], ['Balance due', (r) => r.balance_due], ['Status', (r) => r.display_status ?? r.status]] })} />
+
+      <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (
           <button key={tab.value} onClick={() => setStatus(tab.value)}
             className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (status === tab.value ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
@@ -59,7 +66,7 @@ export default function RentalsList() {
       <Card className="overflow-hidden">
         {isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
           : isError ? <div className="px-4 py-12 text-center text-sm text-muted">Couldn't load rentals.</div>
-          : rows.length === 0 ? <div className="px-4 py-16 text-center"><p className="text-sm font-medium">No rentals here</p><p className="mt-1 text-sm text-muted">Create one to rent plants out.</p></div>
+          : rows.length === 0 ? <div className="px-4 py-16 text-center"><p className="text-sm font-medium">No rentals here</p><p className="mt-1 text-sm text-muted">Create one to rent plants out.</p>{can('rental.create') && <Link to="/rentals/new" className="mt-4 inline-flex items-center gap-1 rounded-xl bg-leaf px-4 py-2 text-sm font-medium text-white hover:brightness-105">+ New rental</Link>}</div>
           : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -86,7 +93,8 @@ export default function RentalsList() {
               </table>
             </div>
           )}
-      </Card>
+      {!isLoading && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={lf.setPage} /></div>}
+        </Card>
     </div>
   );
 }

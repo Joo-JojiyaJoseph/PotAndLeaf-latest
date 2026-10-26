@@ -8,6 +8,9 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner, PageHeader } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { ListToolbar, useListFilters } from '../../components/ListToolbar';
+import { exportList } from '../../lib/exportList';
+import Pagination from '../../components/Pagination';
 
 const STATUS_TABS = [
   { value: '', label: 'All' }, { value: 'draft', label: 'Draft' },
@@ -23,10 +26,11 @@ export default function SalesList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
+  const lf = useListFilters();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['sales', activeCompany?.id, filterCompanyId, status],
-    queryFn: () => api.get('/sales', { params: { ...companyParams, status } }).then((r) => r.data),
+    queryKey: ['sales', activeCompany?.id, filterCompanyId, status, lf.key],
+    queryFn: () => api.get('/sales', { params: { ...companyParams, status, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -40,7 +44,7 @@ export default function SalesList() {
     <div className="space-y-5 p-4 sm:p-6">
       <PageHeader
         title="Sales"
-        subtitle={`POS invoices${companyHint}. Confirming posts stock out and updates the customer.`}
+        subtitle={`Customer bills${companyHint}. A bill takes stock out only after you click Confirm.`}
         actions={
           <>
             <Filter />
@@ -49,7 +53,10 @@ export default function SalesList() {
         }
       />
 
-      <div className="flex gap-1 border-b border-line">
+      <ListToolbar lf={lf} placeholder={'Search bill no. or customer…'} withSearch={true}
+        onExport={() => exportList({ url: '/sales', params: { ...companyParams, status, ...lf.filters }, filename: 'sales', columns: [['Bill no', (r) => r.sale_no], ['Date', (r) => r.sale_date], ['Customer', (r) => r.customer_name], ['Payment', (r) => r.payment_mode], ['Before GST', (r) => r.subtotal], ['GST', (r) => r.tax_total], ['Total', (r) => r.grand_total], ['Paid', (r) => r.amount_paid], ['Balance', (r) => r.balance], ['Status', (r) => r.status]] })} />
+
+      <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (
           <button key={tab.value} onClick={() => setStatus(tab.value)}
             className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (status === tab.value ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
@@ -64,7 +71,7 @@ export default function SalesList() {
           : rows.length === 0 ? (
             <div className="px-4 py-16 text-center">
               <p className="text-sm font-semibold text-ink">No sales here</p>
-              <p className="mt-1 text-sm text-muted">Create your first bill.</p>
+              <p className="mt-1 text-sm text-muted">Create your first bill.</p>{can('sales.create') && <Link to="/sales/new" className="mt-4 inline-flex items-center gap-1 rounded-xl bg-leaf px-4 py-2 text-sm font-medium text-white hover:brightness-105">+ New sale</Link>}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -101,7 +108,8 @@ export default function SalesList() {
               </table>
             </div>
           )}
-      </Card>
+      {!isLoading && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={lf.setPage} /></div>}
+        </Card>
     </div>
   );
 }

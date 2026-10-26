@@ -387,7 +387,7 @@ class InventoryService
 
         return $this->ledgerQuery($companyId, $filters)
             ->with([
-                'product' => fn ($q) => $q->withTrashed()->select('id', 'sku', 'name', 'company_id'),
+                'product' => fn ($q) => $q->select('id', 'sku', 'name', 'company_id'),
                 'company:id,name',
             ])
             ->latest('occurred_at')
@@ -400,7 +400,7 @@ class InventoryService
     {
         return $this->ledgerQuery($companyId, $filters)
             ->with([
-                'product' => fn ($q) => $q->withTrashed()->select('id', 'sku', 'name', 'company_id'),
+                'product' => fn ($q) => $q->select('id', 'sku', 'name', 'company_id'),
                 'company:id,name',
             ])
             ->latest('occurred_at')

@@ -59,17 +59,6 @@ class CompanyController extends Controller
         // `locations` is a column on the companies table — keep it in $data so
         // it persists with the row. (Do NOT strip it out.)
 
-        // A code from a soft-deleted company still occupies the unique index.
-        // Re-adding that code should reactivate the old record (with the new
-        // details) rather than crash on a duplicate key.
-        $trashed = Company::onlyTrashed()->where('code', $data['code'])->first();
-        if ($trashed) {
-            $trashed->restore();
-            $trashed->fill($data)->save();
-
-            return $this->created(new CompanyResource($trashed), 'Company created.');
-        }
-
         $company = Company::create($data);
 
         return $this->created(new CompanyResource($company), 'Company created.');
@@ -189,8 +178,6 @@ class CompanyController extends Controller
 
     private function nextCompanyCode(): string
     {
-        $count = Company::withTrashed()->count();
-
-        return 'CMP-'.str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(Company::query(), 'code', 'CMP-', 4);
     }
 }

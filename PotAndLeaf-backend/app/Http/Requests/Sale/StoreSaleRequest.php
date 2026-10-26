@@ -30,7 +30,7 @@ class StoreSaleRequest extends FormRequest
             'customer_id'   => ['nullable', 'uuid', Rule::exists('customers', 'id')->where('company_id', $companyId)],
             'location_id'   => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)],
             'customer_name' => ['nullable', 'string', 'max:150'],
-            'sale_date'     => ['required', 'date'],
+            'sale_date'     => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Sale date')],
             'is_interstate' => ['boolean'],
             'payment_mode'  => ['required', 'in:cash,card,upi,credit'],
             'bill_kind'     => ['nullable', 'in:tax_invoice,proforma,complimentary'],
@@ -43,8 +43,8 @@ class StoreSaleRequest extends FormRequest
             'items.*.qty'          => ['required', 'numeric', 'gt:0'],
             'items.*.rate'         => ['required', 'numeric', 'min:0'],
             'items.*.price_level'  => ['nullable', 'in:retail,wholesale,dealer'],
-            'items.*.discount'     => ['nullable', 'numeric', 'min:0'],
-            'items.*.gst_rate'     => ['nullable', 'numeric', 'min:0'],
+            'items.*.discount'     => ['nullable', 'numeric', 'min:0', \App\Support\Validation\BusinessRules::discountNotAboveLine(fn ($k) => $this->input($k))],
+            'items.*.gst_rate'     => ['nullable', 'numeric', 'min:0', 'max:100'],
         ];
     }
 }

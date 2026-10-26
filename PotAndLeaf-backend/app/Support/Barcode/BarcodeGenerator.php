@@ -13,9 +13,7 @@ class BarcodeGenerator
 {
     public function forProduct(int|string $companyId): string
     {
-        $seq = Product::withTrashed()->where('company_id', $companyId)->count() + 1;
-
-        return sprintf('PL%s-%06d', $companyId, $seq);
+        return \App\Support\Numbering\DocumentNumber::next(Product::query()->where('company_id', $companyId), 'barcode', "PL{$companyId}-", 6);
     }
 
     /**

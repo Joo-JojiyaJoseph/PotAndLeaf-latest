@@ -26,7 +26,7 @@ class PurchaseController extends Controller
     {
         abort_unless($request->user()->hasPermission('purchases.view', $this->company($request)->id), 403);
 
-        $filters = $request->only(['search', 'status', 'supplier_id', 'per_page']);
+        $filters = $request->only(['search', 'status', 'supplier_id', 'per_page', 'from', 'to']);
 
         return $this->ok(PurchaseResource::collection($this->purchases->list($this->listCompanyId($request), $filters)));
     }

@@ -4,7 +4,7 @@ import { CheckCircleIcon, XCircleIcon, PrinterIcon } from '@heroicons/react/24/o
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
-import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
+import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatCurrency, formatDate, formatDateTime } from '../../lib/format';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 import { printBarcodeSheet } from '../../lib/barcodeSheet';
@@ -136,6 +136,7 @@ export default function BulkSplitDetail() {
           </>
         }
       />
+      <NextStep>{(s.status === 'draft' ? 'Not final yet. Click “Confirm split” — the bulk stock is used up and the new items are added with their barcodes.' : null)}</NextStep>
 
       <Card className="border-leaf/20 bg-leaf-soft/30 p-4">
         <div className="flex flex-wrap gap-6 text-sm tabular-nums">

@@ -7,6 +7,9 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { ListToolbar, useListFilters } from '../../components/ListToolbar';
+import { exportList } from '../../lib/exportList';
+import Pagination from '../../components/Pagination';
 
 const STATUS_TABS = [
   { value: '', label: 'All' },
@@ -23,10 +26,11 @@ export default function PurchasesList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
+  const lf = useListFilters();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['purchases', activeCompany?.id, filterCompanyId, status],
-    queryFn: () => api.get('/purchases', { params: { ...companyParams, status } }).then((r) => r.data),
+    queryKey: ['purchases', activeCompany?.id, filterCompanyId, status, lf.key],
+    queryFn: () => api.get('/purchases', { params: { ...companyParams, status, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -63,7 +67,7 @@ export default function PurchasesList() {
         <div>
           <h1 className="page-title">Purchases</h1>
           <p className="text-sm text-muted">
-            GST purchase entries{companyHint}. Confirming a draft posts stock to the ledger.
+            Bills from suppliers{companyHint}. The stock is added only after you click Confirm.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -78,7 +82,10 @@ export default function PurchasesList() {
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-line">
+      <ListToolbar lf={lf} placeholder={'Search bill no., supplier invoice or supplier…'} withSearch={true}
+        onExport={() => exportList({ url: '/purchases', params: { ...companyParams, status, ...lf.filters }, filename: 'purchases', columns: [['Purchase no', (r) => r.purchase_no], ['Supplier invoice', (r) => r.invoice_no], ['Date', (r) => r.purchase_date], ['Supplier', (r) => r.supplier?.name], ['Before GST', (r) => r.subtotal], ['GST', (r) => r.tax_total], ['Total', (r) => r.grand_total], ['Paid', (r) => r.amount_paid], ['Balance', (r) => r.balance], ['Status', (r) => r.status]] })} />
+
+      <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (
           <button
             key={tab.value}
@@ -105,7 +112,7 @@ export default function PurchasesList() {
         ) : rows.length === 0 ? (
           <div className="px-4 py-16 text-center">
             <p className="text-sm font-medium">No purchases here</p>
-            <p className="mt-1 text-sm text-muted">Record a purchase to bring stock into the godown.</p>
+            <p className="mt-1 text-sm text-muted">Record a purchase to bring stock into the godown.</p>{can('purchases.create') && <Link to="/purchases/new" className="mt-4 inline-flex items-center gap-1 rounded-xl bg-leaf px-4 py-2 text-sm font-medium text-white hover:brightness-105">+ New purchase</Link>}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -164,7 +171,8 @@ export default function PurchasesList() {
             </table>
           </div>
         )}
-      </Card>
+      {!isLoading && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={lf.setPage} /></div>}
+        </Card>
     </div>
   );
 }

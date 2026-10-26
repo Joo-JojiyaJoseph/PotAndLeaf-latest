@@ -5,12 +5,13 @@ import { CheckCircleIcon, XCircleIcon, PrinterIcon, BanknotesIcon, ChatBubbleLef
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Textarea } from '../../components/ui';
-import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
+import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { printInvoice } from '../../lib/invoicePrint';
 import { downloadPdf } from '../../lib/pdfDownload';
 import { useToast } from '../../lib/toast';
 import { parseShortageResponse, shortageNavigatePath } from '../../lib/shortageResult';
+import { useConfirm } from '../../lib/confirm';
 
 const statusTone = { draft: 'inactive', proforma: 'info', confirmed: 'active', cancelled: 'blocked' };
 const billKindLabel = { tax_invoice: 'Tax invoice', proforma: 'Proforma', complimentary: 'Complimentary' };
@@ -53,6 +54,7 @@ export default function SaleDetail() {
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Could not confirm sale.'),
   });
+  const confirm = useConfirm();
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/sales/${id}`, withCompany(recordCompanyId)),
     onSuccess: (res) => { invalidate(); toast.success(res?.data?.message || 'Sale cancelled.'); },
@@ -142,7 +144,7 @@ export default function SaleDetail() {
             </Button>
           )}
           {s.can?.cancel && (
-            <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}>
+            <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this bill', message: 'Cancel this draft bill? It has not been confirmed, so no stock or money has moved.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}>
               <XCircleIcon className="size-4" /> Cancel
             </Button>
           )}
@@ -153,7 +155,7 @@ export default function SaleDetail() {
           )}
           {s.can?.cancel_approve && (
             <>
-              <Button variant="ghost" size="sm" onClick={() => cancelApproveM.mutate()} disabled={cancelApproveM.isPending}>
+              <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Approve cancellation', message: 'Cancel this confirmed bill? Stock comes back, the customer balance, loyalty points and commission are reversed. This cannot be undone.', confirmLabel: 'Approve cancel', cancelLabel: 'Keep bill' })) cancelApproveM.mutate(); }} disabled={cancelApproveM.isPending}>
                 <CheckCircleIcon className="size-4" /> Approve cancel
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setRejectModal(true)}>
@@ -168,6 +170,11 @@ export default function SaleDetail() {
           )}
         </>}
       />
+      <NextStep>{{
+        draft: 'This bill is not final yet. Check the items, then click “Confirm” — stock is taken out and the payment is recorded.',
+        proforma: 'This is a quotation (proforma). No stock moves. When the customer agrees, click “Convert to tax invoice” to make it a real bill.',
+        cancel_requested: 'Cancellation is waiting for head office approval.',
+      }[s.status] ?? (s.status === 'confirmed' && s.customer_id && ['unpaid', 'partial'].includes(s.payment_status) ? 'The customer still owes money on this bill. Click “Record receipt” when they pay.' : null)}</NextStep>
 
       {s.cancel_requested_at && s.status === 'confirmed' && (
         <Card className="border-warning/40 bg-warning-soft/30 p-4 text-sm">

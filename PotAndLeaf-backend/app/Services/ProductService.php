@@ -41,8 +41,4 @@ class ProductService
         $this->deleteProduct->handle($product);
     }
 
-    public function restore(int|string $companyId, string $id): ?Product
-    {
-        return $this->products->restore($companyId, $id);
-    }
 }

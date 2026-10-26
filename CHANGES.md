@@ -1,24 +1,108 @@
-# Pot & Leaf ERP — all fixes (24 Oct 2026, update 2)
+# Pot & Leaf ERP — all fixes (26 Oct 2026, update 12)
 
-This package holds **every file changed** from the uploaded project (117 files + this note).
+This package holds **every file changed** from the uploaded project (276 files + this note).
 It replaces all earlier packages; install only this one.
 
 ## Install
 
 1. Copy each file over the same path in your project.
-2. Backend: `php artisan migrate` (5 new migrations).
+2. Backend: **back up the database first**, then `php artisan migrate` (9 new migrations — update 12 adds 3, one of them removes soft delete for good).
 3. Frontend: `npm run build`.
 
 ## Verified
 
 | Check | Result |
 |---|---|
-| Backend test suite (Pest, PHP 8.4) | 420 passed, 0 failed, 16 skipped (before: 379 passed) |
-| Frontend build (Vite) + unit tests (Vitest) | builds · 21 passed |
+| Backend test suite (Pest, PHP 8.4) | 437 passed, 0 failed, 16 skipped (before: 379 passed) |
+| Frontend build (Vite) + unit tests (Vitest) | builds · 23 passed |
 | Browser check of every changed screen | no script errors, no failed API calls |
 | API run-through: purchase → batch/barcode → damage → purchase return; sale (cash/UPI/credit/walk-in) → confirm; transfer between companies → receive; bulk split | all OK; batch totals = stock |
 
 ## 00. Update 2 — one location per company, simpler commission
+
+**Update 12 — dropdowns, subcategories, no soft delete, making bonus** (3 new migrations — back up the database before migrating)
+
+*Design*
+- The dropdown in a pop-up window no longer runs off the top of the screen. When its box is half hidden it scrolls into view first; if the window content is scrolled so the box goes out of sight, the menu closes instead of floating over the page.
+- "Select company first…" style prompts are no longer shown as a highlighted choice in the list (they stay available as "clear" once something is picked). The highlight starts on the current choice.
+- Full layout check: 84 screens + detail pages at phone (390), tablet (768) and laptop (1366) — 252 page views, 51 pop-up windows and 48 dropdowns opened — no sideways scrolling, nothing sticking out, no cut-off tables or broken buttons.
+
+*Subcategories for company logins*
+- Roles were given category permissions but never subcategory ones, so only the super admin saw the Subcategories tab. Migration `2026_10_27_000001` gives every role with categories.X the matching subcategories.X; the Master data screen also treats category access as subcategory access (the server already did).
+
+*Soft delete removed (deleting is now permanent)*
+- Removed from all 25 tables; migration `2026_10_27_000002` drops the `deleted_at` columns.
+- Rows that were already "deleted": bills/documents are removed; customers, suppliers, products, categories, units, brands, roles and companies are removed if nothing uses them, otherwise kept and set **Inactive** so no bill or stock history is lost.
+- A record that is used anywhere can no longer be deleted (the database would otherwise wipe linked history, e.g. a customer's rentals). The message says where it is used, e.g. *Cannot delete customer "City Garden Dealers": it is used in 3 receipts, 3 points entries, 1 rental, 3 sales. Make it Inactive instead.* Unused records are deleted for good.
+- Bill numbers, codes and barcodes now come from the highest number used (not a count), so a number is never given twice after a delete.
+- Restore/trash code and wording removed ("It can be restored later", "soft delete"); delete confirmations now say it cannot be undone. Master data and Roles now show the reason when a delete is refused.
+- Not changed: a *user* removed from a company is only taken off that company (they keep their login history) and can still be added back from Users → Removed.
+
+*Commission for the person who makes items*
+- New on a staff rate: **₹ for each piece made**, paid when the production is completed (once per production; taken back if that production is cancelled). The existing bonus when the piece is sold or sent to another company is unchanged; both can be used together.
+- Set it in Commission → Set staff rate → "Grows / makes items" (step 2, box 1), or for a salesperson who also makes items under More options. The monthly statement shows "Bonus for pieces they made" and "Bonus for their pieces sold / sent" separately.
+- Production form: "Supervisor" is now "Made by (supervisor or staff)" — any active staff member can be chosen (as before).
+- Migration `2026_10_27_000003` adds `production_per_unit` to commission rules. No existing calculation changed.
+
+**Duplicates and wrong values refused (update 11)** — no new migration, no calculation changed
+
+| Where | Now refused |
+|---|---|
+| Companies | Same name as another company; same GST number; GST not 15 characters in the right pattern (e.g. 123456789); GST state digits that don't match the state code; state code that isn't 2 digits. Applies on Add **and** Edit. |
+| Customers | Same GST number as another customer of the company; wrong GST pattern; PIN code that isn't 6 digits (a PIN code box was added to the customer form). |
+| Suppliers | Same GST number as another supplier (works even though supplier GST is stored encrypted); wrong GST; wrong PAN (e.g. ABCDE1234F); wrong PIN code. |
+| Products | Retail / wholesale / dealer price above the MRP; a GST % that isn't a real rate (allowed: 0, 0.1, 0.25, 1, 1.5, 3, 5, 6, 7.5, 12, 14, 18, 28, 40). |
+| Roles | Two roles with the same name. |
+| Purchases | The same supplier invoice number entered twice for the same supplier (cancelled bills don't count); a line discount bigger than the line value; a purchase or invoice date in the future. |
+| Sales | Amount paid more than the bill (would leave the customer owing a minus amount); line discount bigger than the line; a future date. |
+| Other dates | Returns, receipts, supplier payments, damage, stock count, bulk split and transfer dates cannot be in the future (India time). Expected dates on backorders and purchase orders cannot be before the order date. |
+
+- GST, PAN and IFSC are saved in capitals with spaces removed, so `32abcde1234f1z5` is stored as `32ABCDE1234F1Z5`.
+- Already in place and re-checked: same name for customers, suppliers, products, categories and units; same SKU; same user email; same-name-different-capitals (MySQL treats them as equal).
+- Saved values: every field of companies, customers, suppliers, products, users and purchase bills was saved, read back and edited, then read back again — all matched what was typed.
+- New test `tests/Feature/DuplicateAndValidationTest.php` (65 checks) keeps all of this working.
+- Note: an existing record with an old wrong GST number (such as the test company with 123456789) will ask for a correct one the next time it is edited.
+
+**Dropdown opening far from its box (update 10)**
+- Fixed: when a dropdown sat low on the screen it opened upward but floated far above its box (e.g. Status in *Add company* opened 204 px too high, over the Phone field). It now always opens touching its box. One shared component, so all 39 screens with dropdowns are fixed.
+- Checked: every dropdown on 33 screens and pop-up windows was pushed to the bottom of the screen and opened — 70 dropdowns, 17 opened upward, 0 out of place.
+
+**Filters, Export and Import (update 9)** — no calculation changed, no new migration
+- **Same filter bar on every list** (sales, purchases, both returns, purchase orders, transfers, rentals, advance orders, backorders, bulk splits, stock counts, money received, supplier payments): a search box plus a date choice — All dates, Today, Yesterday, Last 7 days, This month, Last month or Pick dates. "Clear filters" resets it. Long lists now have pages.
+- **Export** button on all those lists and on Products, Customers and Suppliers: downloads *everything that matches the filters* (not only the page on screen) as a CSV file that opens in Excel.
+- **Import** for Products, Customers and Suppliers (only for people allowed to add them):
+  1. Download the template, fill it in Excel, Save As "CSV UTF-8".
+  2. Choose the file and click **Check** — nothing is saved yet; every row is tested with the same rules as the Add form and problems are listed by row number (e.g. "Row 3 — phone format is invalid").
+  3. Click **Import good rows**. Bad rows are skipped so you can fix and import them later.
+  - Products: category and unit are typed by name; new ones are added automatically (the Check step lists them). Opening stock creates the batch and barcode, same as adding by hand.
+  - An exported Products/Customers/Suppliers file uses the same columns, so it can be edited and imported into another company.
+  - Up to 2,000 rows per file. A name repeated in the same file, or one that already exists, is refused.
+
+**Easier everyday screens (update 8)** — wording and screens only, no calculation changed
+- **What to do next:** draft bills, purchases, returns, transfers, splits, stock counts, rentals and purchase orders show one plain sentence, e.g. "Not final yet. Check quantities and rates, then click Confirm — the stock is added and the amount you owe the supplier is updated."
+- **Ask before cancelling / deleting:** Cancel on sale, purchase, returns, purchase order, backorder, booking, rental and transfer; approving a bill cancellation; deleting a rent bill; voiding a customer receipt — each asks first and says what will happen.
+- **Plain words:** page descriptions rewritten (no "GRN", "debit note", "posts to the ledger"); menu: Sales / Billing, Purchases (Bills), Money from Customers, Pay Suppliers, Stock Levels, Backorders (Waiting), Journal (Corrections); reports: Customer dues / Supplier dues / Old dues; "Convert to GRN" → "Convert to purchase"; status badges read "in transit", not "in_transit".
+- **Empty lists** show a "+ New …" button (only for people allowed to create).
+- **Dashboard:** shortcuts for daily jobs first (New sale, Receive money, New purchase, Pay supplier, Stock levels, Add product, Reports); figures no longer cut off on laptops; shortcut descriptions shown in full.
+
+**Tester list 26 Oct (update 7)**
+
+| Issue | Status | What was done |
+|---|---|---|
+| Retail customer can change the price tier on a sale | **Fixed** | Tier box locked to Retail when a retail customer is chosen; the server also saves Retail for them. |
+| Commission payout can be saved without a rule | **Fixed** | Payment is refused (and the button disabled) for staff with no staff rate / manager share; the screen says why. |
+| Salesman sees other salesmen's customers and sales | **Fixed** | New permissions "See every customer" and "See every staff member's sales". Without them a user sees only customers they added and bills they made (list, detail, invoice PDF, sale form picker). Migration gives them to every existing role except Salesman. |
+| No edit on payouts; adding again overwrites (same in commission) | **Fixed** | Payouts: **Change** button; a second payment for the same person+month is refused with a message (and re-adding after removing no longer crashes). Staff rate: "Set staff rate" never replaces an existing one — people who already have a rate are not listed; use Change. Manager share: no overwrite, plus **Change / Remove**. |
+| Manager share lists all users | **Fixed** | Only users with a Manager role are listed. |
+| Some bank transactions missing in Bank Book | **Fixed** | Money from **walk-in sales** (no customer) was never posted: UPI/card now go to the Bank Book, cash to the Cash Book; cancelled sales are taken out; older walk-in sales are added automatically the next time a book is opened. |
+| Company with data can be deleted | Already fixed (update 5) | Blocked with a list of what it holds; make it Inactive instead. |
+
+**Screens fit every size (update 6)**
+- The web-address pill at the top of every page is removed.
+- Checked every screen (and every Commission tab and report) at 1440, 1280, 1093 (1366 laptop at 125% zoom), 1024, 768 and 390 px: nothing sticks out and no button label breaks onto two lines.
+- Buttons and badges never break their text; page-header buttons move to the next line instead of squashing (fixes "Resend day's WhatsApp").
+- Table cells stay on one line; on small screens tables scroll sideways (4 tables that were cut off now scroll).
+- Status filter rows (All / Draft / … / Cancelled) scroll sideways on phones; report buttons fit as many per row as the screen allows; company box wide enough for "All Companies".
 
 **Company delete is safe (update 5)**
 - A company that has any products, customers, suppliers, bills, payments, stock records, categories or users cannot be deleted; the message lists what it has and says to make it Inactive instead. Only an empty company can be deleted.

@@ -20,7 +20,7 @@ class StoreBackorderRequest extends FormRequest
             'customer_id'   => ['required', 'uuid', Rule::exists('customers', 'id')->where('company_id', $companyId)],
             'location_id'   => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)],
             'order_date'    => ['required', 'date'],
-            'expected_date' => ['nullable', 'date'],
+            'expected_date' => ['nullable', 'date', 'after_or_equal:order_date'],
             'notes'         => ['nullable', 'string', 'max:2000'],
             'items'         => ['required', 'array', 'min:1'],
             'items.*.product_id'   => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],

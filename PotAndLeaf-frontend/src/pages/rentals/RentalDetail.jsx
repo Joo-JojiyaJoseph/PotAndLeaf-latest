@@ -5,11 +5,12 @@ import { CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, PlusIcon, TrashIcon, 
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
-import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
+import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatCurrency, formatDate, todayISO as today } from '../../lib/format';
 import { printRentalInvoice } from '../../lib/invoicePrint';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
+import { useConfirm } from '../../lib/confirm';
 
 const tone = { draft: 'inactive', active: 'active', returned: 'approved', cancelled: 'blocked' };
 
@@ -143,6 +144,7 @@ export default function RentalDetail() {
     onSuccess: () => { invalidate(); toast.success('Rental activated — stock issued.'); },
     onError: fail('Not enough stock to activate this rental.'),
   });
+  const confirm = useConfirm();
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/rentals/${id}`, withCompany(recordCompanyId)),
     onSuccess: invalidate,
@@ -224,13 +226,17 @@ export default function RentalDetail() {
         backTo="/rentals"
         actions={<>
           <Badge tone={tone[r.status] ?? 'default'}>{r.status}</Badge>
-          {r.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
+          {r.can?.cancel && <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this rental', message: 'Cancel this draft rental? No plants have been issued yet.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {r.can?.bill && <Button variant="outline" size="sm" onClick={openBill}><PlusIcon className="size-4" /> Generate invoice</Button>}
           {r.can?.return && <Button variant="outline" size="sm" onClick={openReturn}><ArrowUturnLeftIcon className="size-4" /> Return</Button>}
           {r.can?.settle && <Button size="sm" onClick={openSettle}><CheckCircleIcon className="size-4" /> Return &amp; settle</Button>}
           {r.can?.activate && <Button size="sm" onClick={() => activateM.mutate()} disabled={activateM.isPending}><CheckCircleIcon className="size-4" /> {activateM.isPending ? 'Activating…' : 'Activate'}</Button>}
         </>}
       />
+      <NextStep>{{
+        draft: 'Not started yet. Click “Activate” when the plants leave — stock is issued and the deposit is recorded.',
+        active: 'Plants are with the customer. Use “Generate invoice” each billing period and “Return” when they come back.',
+      }[r.status] ?? null}</NextStep>
 
       {activateM.isError && (
         <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
@@ -329,7 +335,7 @@ export default function RentalDetail() {
                             <ChatBubbleLeftRightIcon className="size-4" />
                           </button>
                         )}
-                        {r.can?.bill && <button onClick={() => delInvM.mutate(inv.id)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>}
+                        {r.can?.bill && <button onClick={async () => { if (await confirm({ title: 'Delete rent bill', message: `Delete rent bill ${inv.invoice_no ?? ''}? The customer will no longer owe this amount.`, confirmLabel: 'Delete' })) delInvM.mutate(inv.id); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>}
                       </div>
                     </td>
                   </tr>

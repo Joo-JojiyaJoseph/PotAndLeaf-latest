@@ -18,7 +18,7 @@ const BOOKS = {
     slug: 'cash-book',
     title: 'Cash Book',
     endpoint: '/accounting/cash-book',
-    subtitle: 'Cash receipts, payments and contra. Add or edit manual entries here.',
+    subtitle: 'All cash coming in and going out. Bills and payments appear here by themselves; add other cash entries here.',
     icon: BanknotesIcon,
   },
   bank: {
@@ -26,7 +26,7 @@ const BOOKS = {
     slug: 'bank-book',
     title: 'Bank Book',
     endpoint: '/accounting/bank-book',
-    subtitle: 'Bank, UPI, card and cheque movements. Add or edit manual entries here.',
+    subtitle: 'All money through the bank — UPI, card, cheque and transfers. Bills and payments appear by themselves.',
     icon: BuildingLibraryIcon,
   },
   journal: {
@@ -34,7 +34,7 @@ const BOOKS = {
     slug: 'journal',
     title: 'Journal',
     endpoint: '/accounting/journal',
-    subtitle: 'Non-cash adjustments. Debit must equal credit on every voucher.',
+    subtitle: 'Corrections that do not involve cash or bank. The two sides of each entry must be equal.',
     icon: BookOpenIcon,
   },
 };

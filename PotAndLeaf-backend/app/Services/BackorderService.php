@@ -25,7 +25,7 @@ class BackorderService
             ->with('customer:id,name')
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
-            ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('order_no', 'like', "%{$filters['search']}%"))
+            ->listFilters($filters, 'order_date', ['order_no'], ['customer' => 'name'])
             ->orderByDesc('order_date')->orderByDesc('created_at')
             ->paginate(min((int) ($filters['per_page'] ?? 15), 100))
             ->withQueryString();
@@ -305,8 +305,6 @@ class BackorderService
 
     private function nextOrderNo(int|string $companyId): string
     {
-        $count = Backorder::withTrashed()->forCompany($companyId)->count();
-
-        return 'BO-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(Backorder::query()->where('company_id', $companyId), 'order_no', 'BO-', 6);
     }
 }

@@ -20,6 +20,8 @@ import { ImageUpload, mediaUrl } from '../../components/media';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
 import StatusToggle from '../../components/StatusToggle';
+import ImportExportButtons from '../../components/ImportExportButtons';
+import { SUPPLIER_COLUMNS, supplierExport } from '../../lib/importColumns';
 import { formatCurrency } from '../../lib/format';
 
 const STATUS = [
@@ -169,7 +171,7 @@ export default function SuppliersList() {
   }
 
   async function confirmDelete(row) {
-    const ok = await confirm({ title: 'Delete supplier', message: `Delete ${row.name}? It can be restored later.`, confirmLabel: 'Delete', tone: 'danger' });
+    const ok = await confirm({ title: 'Delete supplier', message: `Delete ${row.name} for good? This cannot be undone. A supplier used on bills cannot be deleted — make it Inactive instead.`, confirmLabel: 'Delete', tone: 'danger' });
     if (!ok) return;
     try {
       await api.delete(`/suppliers/${row.id}`, withCompany(row.company_id ?? companyId));
@@ -194,10 +196,13 @@ export default function SuppliersList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Suppliers</h1>
-          <p className="text-sm text-muted">Vendor master — GST, terms and outstanding balances{companyHint}.</p>
+          <p className="text-sm text-muted">Everyone you buy from — GST number, credit days and what you owe them{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
+          <ImportExportButtons entity="suppliers" title="Import suppliers from a spreadsheet" columns={SUPPLIER_COLUMNS} exportColumns={supplierExport}
+            exportParams={{ ...companyParams, search: debounced || undefined }}
+            canImport={can('suppliers.create')} onDone={() => queryClient.invalidateQueries({ queryKey: ['suppliers'] })} />
           {can('suppliers.create') && (
             <Button size="sm" onClick={openCreate}>
               <PlusIcon className="size-4" /> New supplier

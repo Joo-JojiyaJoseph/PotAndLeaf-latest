@@ -62,6 +62,7 @@ class RoleController extends Controller
     {
         $this->ensureSuperAdmin($request);
         abort_if($role->is_system, 403, 'System roles cannot be deleted.');
+        \App\Support\Deletion\InUseGuard::assertUnused('role "'.$role->name.'"', 'roles', (string) $role->id, fn ($c) => $c === 'role_id', ['permission_role']);
         $this->roles->delete($role);
 
         return $this->message('Role deleted.');

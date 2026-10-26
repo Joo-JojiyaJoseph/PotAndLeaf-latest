@@ -26,27 +26,54 @@ export default function SearchSelect({
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
   const searchRef = useRef(null);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 240, maxHeight: 240 });
+  const [pos, setPos] = useState({ top: 0, bottom: undefined, left: 0, width: 240, maxHeight: 240 });
 
-  const showSearch = searchable ?? options.length > 7;
+  const showSearch = searchable ?? options.length > 8;
   const selected = options.find((o) => String(o.value) === String(value));
+  // An empty option whose text is a prompt ("Select company…") is not a real
+  // choice: show it as the box's placeholder, not as a pickable row.
+  const prompt = options.find((o) => String(o.value) === '' && /^select\b/i.test(String(o.label)));
+  // Nothing picked yet → hide it. Something picked → keep it, so an optional box can be cleared.
+  const hidePrompt = Boolean(prompt) && String(value ?? '') === '';
+  const choices = useMemo(() => (hidePrompt ? options.filter((o) => o !== prompt) : options), [options, prompt, hidePrompt]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options;
-    return options.filter((o) => `${o.label} ${o.sublabel ?? ''}`.toLowerCase().includes(q));
-  }, [options, query]);
+    if (!q) return choices;
+    return choices.filter((o) => `${o.label} ${o.sublabel ?? ''}`.toLowerCase().includes(q));
+  }, [choices, query]);
+
+  /** Is the box still visible, inside every scrolling area around it (e.g. a modal body)? */
+  function triggerVisible(el) {
+    const r = el.getBoundingClientRect();
+    if (r.bottom <= 0 || r.top >= window.innerHeight) return false;
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowY;
+      if (o === 'auto' || o === 'scroll' || o === 'hidden') {
+        const pr = p.getBoundingClientRect();
+        if (r.bottom <= pr.top + 4 || r.top >= pr.bottom - 4) return false;
+      }
+    }
+    return true;
+  }
 
   function place() {
     const el = triggerRef.current;
     if (!el) return;
+    // The box scrolled out of sight (e.g. up under a modal's title): close the
+    // menu instead of letting it float over the page edge.
+    if (!triggerVisible(el)) { setOpen(false); return; }
     const r = el.getBoundingClientRect();
     const spaceBelow = window.innerHeight - r.bottom;
     const menuH = 280;
     const openUp = spaceBelow < 180 && r.top > spaceBelow;
     const maxHeight = Math.max(140, openUp ? Math.min(menuH, r.top - 12) : Math.min(menuH, spaceBelow - 12));
     const width = Math.min(Math.max(r.width, 200), window.innerWidth - 16);
+    // Opening upward: pin the menu's BOTTOM edge just above the box. Using
+    // top = box top − maxHeight left a short list (e.g. Active / Inactive)
+    // floating far above the box, because the menu is shorter than maxHeight.
     setPos({
-      top: openUp ? Math.max(8, r.top - maxHeight - 6) : r.bottom + 6,
+      top: openUp ? undefined : r.bottom + 6,
+      bottom: openUp ? window.innerHeight - r.top + 6 : undefined,
       left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
       width,
       maxHeight,
@@ -55,6 +82,8 @@ export default function SearchSelect({
 
   useEffect(() => {
     if (!open) return;
+    // Bring a half-hidden box fully into view first, so the menu opens next to it.
+    triggerRef.current?.scrollIntoView({ block: 'nearest' });
     place();
     setQuery('');
     const id = requestAnimationFrame(() => (showSearch ? searchRef.current?.focus() : triggerRef.current?.focus()));
@@ -93,7 +122,13 @@ export default function SearchSelect({
     triggerRef.current?.focus();
   }
 
-  useEffect(() => { setHi(0); }, [query, open]);
+  // Start the keyboard highlight on the current choice (or the first row).
+  useEffect(() => {
+    const usable = filtered.filter((o) => !o.disabled);
+    const at = query ? -1 : usable.findIndex((o) => String(o.value) === String(value));
+    setHi(at >= 0 ? at : 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, open]);
 
   function onListKey(e) {
     const usable = filtered.filter((o) => !o.disabled);
@@ -130,7 +165,7 @@ export default function SearchSelect({
               {selected.label}
               {selected.sublabel ? <span className="text-muted"> · {selected.sublabel}</span> : null}
             </>
-          ) : placeholder}
+          ) : (prompt?.label ?? placeholder)}
         </span>
         <ChevronDownIcon className={classNames('size-4 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
       </button>
@@ -139,7 +174,7 @@ export default function SearchSelect({
         <div
           ref={menuRef}
           role="listbox"
-          style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxHeight }}
+          style={{ top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width, maxHeight: pos.maxHeight }}
           className="dialog-in glass-menu fixed z-[80] flex flex-col overflow-hidden rounded-2xl"
         >
           {showSearch && (
@@ -159,7 +194,7 @@ export default function SearchSelect({
           )}
           <div className="min-h-0 flex-1 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-muted">{options.length === 0 ? emptyLabel : 'No matches'}</p>
+              <p className="px-3 py-6 text-center text-sm text-muted">{choices.length === 0 ? emptyLabel : 'No matches'}</p>
             ) : filtered.map((opt) => {
               const active = String(opt.value) === String(value);
               const highlighted = !opt.disabled && filtered.filter((o) => !o.disabled).indexOf(opt) === hi;

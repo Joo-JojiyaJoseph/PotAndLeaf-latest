@@ -43,13 +43,5 @@ class SupplierPolicy
         return $user->hasPermission('suppliers.delete');
     }
 
-    public function restore(User $user, Supplier $supplier): bool
-    {
-        return $user->hasPermission('suppliers.delete');
-    }
 
-    public function forceDelete(User $user, Supplier $supplier): bool
-    {
-        return $user->hasPermission('suppliers.force-delete');
-    }
 }

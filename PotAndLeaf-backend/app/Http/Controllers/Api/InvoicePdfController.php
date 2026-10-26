@@ -18,6 +18,7 @@ class InvoicePdfController extends Controller
         $company = $request->attributes->get('company');
         abort_unless($request->user()->hasPermission('sales.view', $company->id), 403);
         $this->assertRecordCompany($request, (string) $sale->company_id);
+        abort_if($request->user()->seesOnlyOwn('sales', $sale->company_id) && (int) $sale->created_by !== (int) $request->user()->id, 403, 'You can only see the bills you made.');
 
         $sale->load([
             'items',

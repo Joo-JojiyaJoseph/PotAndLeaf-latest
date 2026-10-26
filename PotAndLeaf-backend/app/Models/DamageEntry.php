@@ -7,11 +7,10 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class DamageEntry extends Model
 {
-    use HasAuditColumns, HasFactory, HasUuids, SoftDeletes;
+    use HasAuditColumns, HasFactory, HasUuids;
 
     protected $fillable = [
         'company_id', 'product_id', 'product_batch_id', 'location_id', 'entry_no', 'entry_date',

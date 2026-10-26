@@ -5,7 +5,7 @@ import { CheckCircleIcon, PaperAirplaneIcon, XCircleIcon } from '@heroicons/reac
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Field, Input, Modal } from '../../components/ui';
-import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
+import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatDate, classNames } from '../../lib/format';
 
 const statusTone = { draft: 'inactive', submitted: 'submitted', approved: 'approved', rejected: 'rejected', cancelled: 'blocked' };
@@ -65,6 +65,10 @@ export default function StockVerificationDetail() {
           </>
         }
       />
+      <NextStep>{{
+        draft: 'Count saved. When the count is finished, click “Submit” to send it for approval.',
+        submitted: 'Waiting for approval. When approved, stock is changed to the counted figures.',
+      }[v.status] ?? null}</NextStep>
 
       <Section title="Details">
         <InfoGrid cols={4}>

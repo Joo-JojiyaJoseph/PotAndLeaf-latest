@@ -6,11 +6,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Company extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
 
     protected $fillable = [
         'name', 'code', 'legal_name', 'gst_number', 'state', 'state_code','locations',
@@ -32,7 +31,6 @@ class Company extends Model
     protected static function booted(): void
     {
         static::created(fn (Company $company) => $company->ensureMainLocation());
-        static::restored(fn (Company $company) => $company->ensureMainLocation());
     }
 
     public function ensureMainLocation(): Location

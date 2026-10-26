@@ -16,6 +16,7 @@ class CustomerRepository implements CustomerRepositoryInterface
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
             ->when(filled($filters['type'] ?? null), fn ($q) => $q->where('type', $filters['type']))
+            ->when(filled($filters['created_by'] ?? null), fn ($q) => $q->where('created_by', $filters['created_by']))
             ->when(filled($filters['search'] ?? null), fn ($q) => $q->search($filters['search']))
             ->orderBy('name')
             ->paginate($perPage)
@@ -41,8 +42,6 @@ class CustomerRepository implements CustomerRepositoryInterface
 
     public function nextCustomerCode(int|string $companyId): string
     {
-        $count = Customer::withTrashed()->forCompany($companyId)->count();
-
-        return 'CUST-'.str_pad((string) ($count + 1), 5, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(Customer::query()->where('company_id', $companyId), 'customer_code', 'CUST-', 5);
     }
 }

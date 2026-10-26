@@ -24,7 +24,7 @@ class BulkSplitController extends Controller
     {
         $this->allow($request, 'bulk_splits.view');
 
-        return $this->ok(BulkSplitResource::collection($this->splits->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))));
+        return $this->ok(BulkSplitResource::collection($this->splits->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page', 'from', 'to']))));
     }
 
     public function formData(Request $request): JsonResponse

@@ -33,7 +33,7 @@ class ProductBrandController extends LookupController
             'code' => [
                 'required', 'string', 'max:50',
                 Rule::unique('product_brands', 'code')
-                    ->where('company_id', $companyId)->whereNull('deleted_at')->ignore($id),
+                    ->where('company_id', $companyId)->ignore($id),
             ],
             'name'        => ['required', 'string', 'max:191'],
             'description' => ['nullable', 'string', 'max:1000'],

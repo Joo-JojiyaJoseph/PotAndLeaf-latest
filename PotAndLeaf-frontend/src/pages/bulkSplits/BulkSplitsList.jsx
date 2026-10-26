@@ -8,6 +8,9 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, resolveRecordCompany } from '../../lib/recordCompany';
 import { Badge, Button, Card, Input, Spinner } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
+import { ListToolbar, useListFilters } from '../../components/ListToolbar';
+import { exportList } from '../../lib/exportList';
+import Pagination from '../../components/Pagination';
 
 const STATUS_TABS = [
   { value: '', label: 'All' },
@@ -24,6 +27,7 @@ export default function BulkSplitsList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
+  const lf = useListFilters();
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
 
@@ -33,8 +37,8 @@ export default function BulkSplitsList() {
   }, [search]);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['bulk-splits', activeCompany?.id, filterCompanyId, status, debounced],
-    queryFn: () => api.get('/bulk-splits', { params: { ...companyParams, status, search: debounced } }).then((r) => r.data),
+    queryKey: ['bulk-splits', activeCompany?.id, filterCompanyId, status, debounced, lf.key],
+    queryFn: () => api.get('/bulk-splits', { params: { ...companyParams, status, search: debounced, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -54,7 +58,7 @@ export default function BulkSplitsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Bulk splitting</h1>
-          <p className="text-sm text-muted">Convert bulk stock into sellable units. Confirming posts the stock movements{companyHint}.</p>
+          <p className="text-sm text-muted">Turn one big lot (e.g. a sack or a tray) into smaller items you sell. Stock changes when you confirm{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
@@ -69,7 +73,10 @@ export default function BulkSplitsList() {
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search split no…" className="pl-9" />
       </div>
 
-      <div className="flex gap-1 border-b border-line">
+      <ListToolbar lf={lf} placeholder={''} withSearch={false}
+        onExport={() => exportList({ url: '/bulk-splits', params: { ...companyParams, status, ...lf.filters, search: debounced }, filename: 'bulk-splits', columns: [['Split no', (r) => r.split_no], ['Date', (r) => r.split_date], ['Bulk item', (r) => r.source_product_name], ['Qty used', (r) => r.source_qty], ['Pieces made', (r) => r.split_total_qty], ['Cost', (r) => r.total_cost], ['Status', (r) => r.status]] })} />
+
+      <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (
           <button key={tab.value} onClick={() => setStatus(tab.value)}
             className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (status === tab.value ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
@@ -86,7 +93,7 @@ export default function BulkSplitsList() {
         ) : rows.length === 0 ? (
           <div className="px-4 py-16 text-center">
             <p className="text-sm font-medium">No splits here</p>
-            <p className="mt-1 text-sm text-muted">Split a bulk product into smaller units.</p>
+            <p className="mt-1 text-sm text-muted">Split a bulk product into smaller units.</p>{can('bulk_splits.create') && <Link to="/bulk-splits/new" className="mt-4 inline-flex items-center gap-1 rounded-xl bg-leaf px-4 py-2 text-sm font-medium text-white hover:brightness-105">+ New bulk split</Link>}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -126,7 +133,8 @@ export default function BulkSplitsList() {
             </table>
           </div>
         )}
-      </Card>
+      {!isLoading && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={lf.setPage} /></div>}
+        </Card>
     </div>
   );
 }

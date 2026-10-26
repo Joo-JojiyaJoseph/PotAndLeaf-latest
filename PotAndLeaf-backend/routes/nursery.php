@@ -23,18 +23,12 @@ Route::prefix('{current_team}')
     ->group(function () {
         // Suppliers (rich module)
         Route::resource('suppliers', SupplierController::class);
-        Route::put('suppliers/{supplier}/restore', [SupplierController::class, 'restore'])
-            ->withTrashed()->name('suppliers.restore');
 
         // Products (rich module)
         Route::resource('products', ProductController::class);
-        Route::put('products/{product}/restore', [ProductController::class, 'restore'])
-            ->withTrashed()->name('products.restore');
 
         // Roles (rich module) + permission catalog
         Route::resource('roles', RoleController::class)->except(['show']);
-        Route::put('roles/{role}/restore', [RoleController::class, 'restore'])
-            ->withTrashed()->name('roles.restore');
         Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');
 
         // Users: list team members + assign ERP roles
@@ -51,6 +45,5 @@ Route::prefix('{current_team}')
             Route::post($slug, [$controller, 'store'])->name("{$slug}.store");
             Route::put("{$slug}/{record}", [$controller, 'update'])->name("{$slug}.update");
             Route::delete("{$slug}/{record}", [$controller, 'destroy'])->name("{$slug}.destroy");
-            Route::put("{$slug}/{record}/restore", [$controller, 'restore'])->name("{$slug}.restore");
         }
     });

@@ -19,7 +19,7 @@ export default function ReportNavGrid({ tabs, activeTab, onSelect, search, onSea
           className="h-10 w-full rounded-xl border border-line bg-paper pl-9 pr-3 text-sm focus:border-leaf/40 focus:outline-none focus:ring-2 focus:ring-leaf/15"
         />
       </div>
-      <div className="-mx-1 flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-11">
+      <div className="-mx-1 flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] sm:overflow-visible sm:px-0">
         {visible.map((t) => {
           const Icon = t.icon;
           const active = t.value === activeTab;
@@ -37,7 +37,7 @@ export default function ReportNavGrid({ tabs, activeTab, onSelect, search, onSea
               )}
             >
               <Icon className={classNames('size-5 shrink-0 sm:size-6', active ? 'text-leaf' : 'text-muted group-hover:text-leaf/70')} strokeWidth={1.5} />
-              <span className={classNames('line-clamp-2 text-[10px] leading-tight sm:text-[11px]', active ? 'font-semibold text-leaf-hover' : 'font-medium')}>
+              <span className={classNames('whitespace-nowrap text-[10px] leading-tight sm:text-[11px]', active ? 'font-semibold text-leaf-hover' : 'font-medium')}>
                 {t.shortLabel ?? t.label}
               </span>
               {active && <span className="h-0.5 w-6 rounded-full bg-leaf sm:w-8" />}

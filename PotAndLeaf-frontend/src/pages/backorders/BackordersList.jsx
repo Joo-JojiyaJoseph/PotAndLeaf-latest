@@ -8,6 +8,9 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatDate } from '../../lib/format';
+import { ListToolbar, useListFilters } from '../../components/ListToolbar';
+import { exportList } from '../../lib/exportList';
+import Pagination from '../../components/Pagination';
 
 const STATUS_TABS = [
   { value: '', label: 'All' }, { value: 'open', label: 'Open' },
@@ -21,10 +24,11 @@ export default function BackordersList() {
   const recordCtx = { filterCompanyId, companyId };
   const navigate = useNavigate();
   const [status, setStatus] = useState('');
+  const lf = useListFilters();
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['backorders', activeCompany?.id, filterCompanyId, status],
-    queryFn: () => api.get('/backorders', { params: { ...companyParams, status } }).then((r) => r.data),
+    queryKey: ['backorders', activeCompany?.id, filterCompanyId, status, lf.key],
+    queryFn: () => api.get('/backorders', { params: { ...companyParams, status, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -40,7 +44,7 @@ export default function BackordersList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Backorders</h1>
-          <p className="text-sm text-muted">Track shortages when stock is unavailable. Fulfill partially as stock arrives{companyHint}.</p>
+          <p className="text-sm text-muted">Items a customer wanted that were out of stock. Give them as stock arrives — part by part if needed{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Filter />
@@ -48,7 +52,10 @@ export default function BackordersList() {
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-line">
+      <ListToolbar lf={lf} placeholder={'Search backorder no. or customer…'} withSearch={true}
+        onExport={() => exportList({ url: '/backorders', params: { ...companyParams, status, ...lf.filters }, filename: 'backorders', columns: [['Backorder no', (r) => r.order_no], ['Date', (r) => r.order_date], ['Expected', (r) => r.expected_date], ['Customer', (r) => r.customer_name], ['Items', (r) => r.items_count], ['Status', (r) => r.status]] })} />
+
+      <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (
           <button key={tab.value} onClick={() => setStatus(tab.value)}
             className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (status === tab.value ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
@@ -85,7 +92,8 @@ export default function BackordersList() {
               </table>
             </div>
           )}
-      </Card>
+      {!isLoading && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={lf.setPage} /></div>}
+        </Card>
     </div>
   );
 }

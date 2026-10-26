@@ -33,7 +33,7 @@ class ProductCategoryController extends LookupController
             'code' => [
                 'required', 'string', 'max:50',
                 Rule::unique('product_categories', 'code')
-                    ->where('company_id', $companyId)->whereNull('deleted_at')->ignore($id),
+                    ->where('company_id', $companyId)->ignore($id),
             ],
             'name'        => ['required', 'string', 'max:191'],
             'parent_id'   => ['nullable', 'uuid'],

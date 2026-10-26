@@ -76,12 +76,4 @@ class RoleController extends Controller
         return back()->with('success', 'Role moved to trash.');
     }
 
-    public function restore(Team $current_team, string $role): RedirectResponse
-    {
-        $restored = $this->roles->restore($role);
-        abort_if($restored === null, 404);
-        $this->authorize('restore', $restored);
-
-        return back()->with('success', 'Role restored.');
-    }
 }

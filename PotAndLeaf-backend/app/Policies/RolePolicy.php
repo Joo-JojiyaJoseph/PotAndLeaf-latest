@@ -32,8 +32,4 @@ class RolePolicy
         return $user->is_super_admin && ! $role->is_system;
     }
 
-    public function restore(User $user, Role $role): bool
-    {
-        return $user->is_super_admin;
-    }
 }

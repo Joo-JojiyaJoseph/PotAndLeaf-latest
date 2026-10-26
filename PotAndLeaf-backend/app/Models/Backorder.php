@@ -8,11 +8,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Backorder extends Model
 {
-    use HasAuditColumns, HasFactory, HasUuids, SoftDeletes;
+    use HasAuditColumns, HasFactory, HasUuids;
 
     protected $fillable = [
         'company_id', 'customer_id', 'sale_id', 'location_id', 'order_no', 'order_date',

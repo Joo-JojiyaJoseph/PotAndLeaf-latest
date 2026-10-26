@@ -50,13 +50,6 @@ class RoleRepository implements RoleRepositoryInterface
         $role->delete();
     }
 
-    public function restore(string $id): ?Role
-    {
-        $role = Role::onlyTrashed()->whereKey($id)->first();
-        $role?->restore();
-
-        return $role;
-    }
 
     public function slugExists(string $slug, ?string $ignoreId = null): bool
     {

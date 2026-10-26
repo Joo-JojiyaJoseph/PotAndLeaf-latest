@@ -16,7 +16,7 @@ class BulkSplitRepository implements BulkSplitRepositoryInterface
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
-            ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('split_no', 'like', "%{$filters['search']}%"))
+            ->listFilters($filters, 'split_date', ['split_no'])
             ->orderByDesc('split_date')
             ->orderByDesc('created_at')
             ->paginate($perPage)
@@ -39,8 +39,6 @@ class BulkSplitRepository implements BulkSplitRepositoryInterface
 
     public function nextSplitNo(int|string $companyId): string
     {
-        $count = BulkSplit::withTrashed()->forCompany($companyId)->count();
-
-        return 'BS-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(BulkSplit::query()->where('company_id', $companyId), 'split_no', 'BS-', 6);
     }
 }

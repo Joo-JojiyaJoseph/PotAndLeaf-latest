@@ -500,7 +500,6 @@ class SalesAnalyticsService
             ->join('roles', 'roles.id', '=', 'role_user.role_id')
             ->whereIn('role_user.user_id', $userIds)
             ->when($companyId !== null, fn ($q) => $q->where('role_user.company_id', $companyId))
-            ->whereNull('roles.deleted_at')
             ->get(['role_user.user_id', 'roles.name']);
 
         return $rows->groupBy('user_id')->map(

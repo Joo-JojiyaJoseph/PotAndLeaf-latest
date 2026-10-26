@@ -8,11 +8,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class StockTransfer extends Model
 {
-    use HasAuditColumns, HasFactory, HasUuids, SoftDeletes;
+    use HasAuditColumns, HasFactory, HasUuids;
 
     protected $fillable = [
         'company_id', 'to_company_id', 'transfer_type', 'from_location_id', 'to_location_id', 'transfer_no',

@@ -76,14 +76,6 @@ class LookupRepository
         $model->delete();
     }
 
-    public function restore(int|string $companyId, string $id): ?Model
-    {
-        $model = ($this->modelClass)::onlyTrashed()
-            ->where('company_id', $companyId)->whereKey($id)->first();
-        $model?->restore();
-
-        return $model;
-    }
 
     public function codeExists(int|string $companyId, string $code, ?string $ignoreId = null): bool
     {

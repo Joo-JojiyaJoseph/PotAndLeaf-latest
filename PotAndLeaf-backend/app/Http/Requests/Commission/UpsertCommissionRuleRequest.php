@@ -19,6 +19,7 @@ class UpsertCommissionRuleRequest extends FormRequest
             'rate_type'       => ['nullable', Rule::in(['percent', 'per_unit'])],
             'base_percent'    => ['nullable', 'numeric', 'min:0', 'max:100'],
             'per_unit_amount' => ['nullable', 'numeric', 'min:0'],
+            'production_per_unit' => ['nullable', 'numeric', 'min:0'],
             'monthly_target'  => ['nullable', 'numeric', 'min:0'],
             'target_bonus'    => ['nullable', 'numeric', 'min:0'],
             'notes'           => ['nullable', 'string', 'max:1000'],

@@ -97,7 +97,7 @@ export default function BarcodeLabelsPage() {
       </Card>
 
       <Card className="overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead><tr className="border-b border-line text-left text-faint">
             <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
             <th className="microlabel px-4 py-2.5 font-semibold">Barcode</th>
@@ -127,7 +127,7 @@ export default function BarcodeLabelsPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Card>
     </div>
   );

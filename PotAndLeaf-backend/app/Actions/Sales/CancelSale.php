@@ -80,6 +80,7 @@ class CancelSale
                 }
 
                 $this->receipts->voidForSale($sale);
+                app(\App\Services\AccountingEngine::class)->cancelBySource('sale_payment', $sale->id);
                 $this->commissionEngine->reverseOnSaleCancel($sale);
             }
 

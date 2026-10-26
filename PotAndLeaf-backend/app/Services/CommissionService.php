@@ -38,6 +38,7 @@ class CommissionService
                 'rate_type'           => $data['rate_type'] ?? $existing?->rate_type ?? 'percent',
                 'base_percent'        => $data['base_percent'] ?? $existing?->base_percent ?? 0,
                 'per_unit_amount'     => $data['per_unit_amount'] ?? $existing?->per_unit_amount ?? 0,
+                'production_per_unit' => $data['production_per_unit'] ?? $existing?->production_per_unit ?? 0,
                 'monthly_target'      => $data['monthly_target'] ?? $existing?->monthly_target ?? 0,
                 'target_bonus'        => $data['target_bonus'] ?? $existing?->target_bonus ?? 0,
                 'notes'               => array_key_exists('notes', $data) ? $data['notes'] : $existing?->notes,
@@ -119,6 +120,7 @@ class CommissionService
         $supervisorTotal = round((float) $supervisorEntries->sum('amount'), 2);
         $fromSales = round((float) $supervisorEntries->where('trigger_event', 'sale')->sum('amount'), 2);
         $fromTransfers = round((float) $supervisorEntries->where('trigger_event', 'transfer')->sum('amount'), 2);
+        $fromProduction = round((float) $supervisorEntries->where('trigger_event', 'production')->sum('amount'), 2);
 
         $incentiveTotal = round($base + $bonus + $promotionBonus + $ledgerManager + $ledgerReversals + $supervisorTotal, 2);
 
@@ -140,6 +142,7 @@ class CommissionService
             'supervisor_commission' => $supervisorTotal,
             'supervisor_from_sales' => $fromSales,
             'supervisor_from_transfers' => $fromTransfers,
+            'supervisor_from_production' => $fromProduction,
             'commission'            => $incentiveTotal,
             'has_rule'              => (bool) $rule,
             'has_ledger'            => $hasLedger,
@@ -216,18 +219,19 @@ class CommissionService
 
     public function recordPayout(int|string $companyId, array $data): CommissionPayout
     {
-        $payout = CommissionPayout::updateOrCreate(
+        $payout = CommissionPayout::firstOrNew(
             ['company_id' => $companyId, 'user_id' => $data['user_id'], 'period' => $data['period']],
-            [
-                'sales_total'  => $data['sales_total'] ?? 0,
-                'amount'       => $data['amount'],
-                'mode'         => $data['mode'] ?? 'cash',
-                'payment_date' => $data['payment_date'] ?? null,
-                'reference'    => $data['reference'] ?? null,
-                'notes'        => $data['notes'] ?? null,
-                'status'       => $data['status'] ?? 'paid',
-            ],
-        )->load('user:id,name');
+        );
+        $payout->fill([
+            'sales_total'  => $data['sales_total'] ?? 0,
+            'amount'       => $data['amount'],
+            'mode'         => $data['mode'] ?? 'cash',
+            'payment_date' => $data['payment_date'] ?? null,
+            'reference'    => $data['reference'] ?? null,
+            'notes'        => $data['notes'] ?? null,
+            'status'       => $data['status'] ?? 'paid',
+        ])->save();
+        $payout->load('user:id,name');
 
         if ($payout->status === 'paid') {
             app(AccountingEngine::class)->postCommission($payout);

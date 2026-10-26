@@ -43,7 +43,7 @@ class UpsertBomRequest extends FormRequest
             'new_product' => ['required_without:product_id', 'nullable', 'array'],
             'new_product.sku' => [
                 'required_with:new_product', 'string', 'max:50',
-                Rule::unique('products', 'sku')->where('company_id', $companyId)->whereNull('deleted_at'),
+                Rule::unique('products', 'sku')->where('company_id', $companyId),
             ],
             'new_product.name' => ['required_with:new_product', 'string', 'max:191'],
             'new_product.unit_id' => ['nullable', 'uuid', Rule::exists('product_units', 'id')->where('company_id', $companyId)],

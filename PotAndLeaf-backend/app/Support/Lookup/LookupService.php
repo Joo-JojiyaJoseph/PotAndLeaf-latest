@@ -38,8 +38,4 @@ class LookupService
         DB::transaction(fn () => $this->repository->delete($model));
     }
 
-    public function restore(int|string $companyId, string $id): ?Model
-    {
-        return $this->repository->restore($companyId, $id);
-    }
 }

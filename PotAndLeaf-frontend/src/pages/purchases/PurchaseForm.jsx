@@ -305,7 +305,7 @@ export default function PurchaseForm() {
               className={fieldErrors.purchase_date ? 'border-danger' : undefined}
             />
           </Field>
-          <Field label="Invoice no.">
+          <Field label="Invoice no." error={fieldErrors.invoice_no}>
             <Input
               value={isEdit ? (header.invoice_no || '') : ''}
               readOnly
@@ -313,7 +313,7 @@ export default function PurchaseForm() {
               className="bg-paper text-muted"
             />
           </Field>
-          <Field label="Invoice date">
+          <Field label="Invoice date" error={fieldErrors.invoice_date}>
             <Input
               type="date"
               value={header.invoice_date}

@@ -22,8 +22,7 @@ class CreateProduct
             $data = $this->normalizeDecimals($data);
 
             if (empty($data['sku'])) {
-                $count = Product::withTrashed()->forCompany($companyId)->count();
-                $data['sku'] = 'SKU-'.str_pad((string) ($count + 1), 5, '0', STR_PAD_LEFT);
+                $data['sku'] = \App\Support\Numbering\DocumentNumber::next(Product::query()->where('company_id', $companyId), 'sku', 'SKU-', 5);
             }
 
             $opening = (float) ($data['opening_stock'] ?? 0);

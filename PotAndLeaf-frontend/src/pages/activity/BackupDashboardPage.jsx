@@ -78,7 +78,7 @@ export default function BackupDashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Backup Monitoring</h1>
-          <p className="text-sm text-muted">Automatic nightly SQLite exports plus on-demand backups. Restore takes a safety copy first.</p>
+          <p className="text-sm text-muted">Copies of your data, made every night and whenever you click Back up. Restoring first saves a safety copy.</p>
         </div>
         {(isSuperAdmin || can('backup.run') || can('*')) && (
           <Button size="sm" disabled={runM.isPending} onClick={() => runM.mutate()}>

@@ -246,7 +246,7 @@ export default function InventoryList() {
         <div className="min-w-0">
           <h1 className="page-title">Inventory</h1>
           <p className="text-sm text-muted break-words">
-            Live stock, movement ledger, valuation, and analysis{companyHint}.
+            How much of each item you have now, every stock movement, and what your stock is worth{companyHint}.
           </p>
         </div>
         <div className="w-full min-w-0 sm:w-auto">

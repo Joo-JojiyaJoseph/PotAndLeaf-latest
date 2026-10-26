@@ -151,15 +151,15 @@ describe('Supplier module — API', function () {
             ->and($supplier->fresh()->address)->toBe('New Address Line');
     })->group('supplier', 'SUPPLIER-009');
 
-    it('SUPPLIER-010 delete supplier soft deletes record', function () {
+    it('SUPPLIER-010 delete supplier removes it permanently', function () {
         $supplier = $this->createSupplier(['name' => 'To Delete']);
 
         $this->deleteJson("/api/suppliers/{$supplier->id}", [], supplierHeaders($this))
             ->assertOk()
-            ->assertJsonPath('message', 'Supplier moved to trash.');
+            ->assertJsonPath('message', 'Supplier deleted.');
 
         expect(Supplier::find($supplier->id))->toBeNull();
-        expect(Supplier::withTrashed()->find($supplier->id))->not->toBeNull();
+        $this->assertDatabaseMissing('suppliers', ['id' => $supplier->id]);
     })->group('supplier', 'SUPPLIER-010');
 
     it('SUPPLIER-012 API validation error returns 422 with field errors', function () {

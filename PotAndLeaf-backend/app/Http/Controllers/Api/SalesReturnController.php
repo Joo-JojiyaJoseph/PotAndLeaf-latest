@@ -29,7 +29,7 @@ class SalesReturnController extends Controller
         $this->allow($request, 'sales_returns.view');
 
         return $this->ok(SalesReturnResource::collection(
-            $this->returns->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))
+            $this->returns->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page', 'from', 'to']))
         ));
     }
 

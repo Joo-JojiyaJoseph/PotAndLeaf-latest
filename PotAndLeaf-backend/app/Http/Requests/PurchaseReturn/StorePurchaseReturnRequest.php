@@ -23,7 +23,7 @@ class StorePurchaseReturnRequest extends FormRequest
 
         return [
             'purchase_id' => ['required', 'uuid', Rule::exists('purchases', 'id')->where('company_id', $companyId)],
-            'return_date' => ['required', 'date'],
+            'return_date' => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Return date')],
             'reason'      => ['nullable', 'string', 'max:255'],
             'notes'       => ['nullable', 'string', 'max:2000'],
 

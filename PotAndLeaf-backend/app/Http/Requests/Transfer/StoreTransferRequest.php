@@ -35,7 +35,7 @@ class StoreTransferRequest extends FormRequest
             'to_company_id'        => ['nullable', 'integer', Rule::exists('companies', 'id')->where('is_active', true), Rule::notIn([$sourceId])],
             'from_location_id'     => [$isIntra ? 'required' : 'nullable', 'uuid', $loc()],
             'to_location_id'       => [$isIntra ? 'required' : 'nullable', 'uuid', $loc(), Rule::notIn([$this->input('from_location_id')])],
-            'transfer_date'        => ['required', 'date'],
+            'transfer_date'        => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Transfer date')],
             'notes'                => ['nullable', 'string', 'max:1000'],
             'confirm'              => ['nullable', 'boolean'],
             'items'                => ['required', 'array', 'min:1'],

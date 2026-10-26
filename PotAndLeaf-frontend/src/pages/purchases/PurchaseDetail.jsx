@@ -4,13 +4,14 @@ import { CheckCircleIcon, PencilSquareIcon, XCircleIcon, PrinterIcon, BanknotesI
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
-import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
+import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { printGRN } from '../../lib/invoicePrint';
 import { downloadPdf } from '../../lib/pdfDownload';
 import { useToast } from '../../lib/toast';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 import { printBarcodeSheet } from '../../lib/barcodeSheet';
+import { useConfirm } from '../../lib/confirm';
 
 const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked' };
 
@@ -61,6 +62,7 @@ export default function PurchaseDetail() {
     onSuccess: () => { invalidate(); toast.success('Purchase confirmed. Batches and barcodes are ready.'); },
     onError: (err) => toast.error(err.response?.data?.message ?? 'Could not confirm this purchase.'),
   });
+  const confirm = useConfirm();
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/purchases/${id}`, withCompany(purchaseCompanyId)),
     onSuccess: invalidate,
@@ -69,7 +71,7 @@ export default function PurchaseDetail() {
   async function downloadGrnPdf() {
     try {
       await downloadPdf(`/purchases/${id}/invoice.pdf`, `grn-${data?.purchase_no ?? id}.pdf`, purchaseCompanyId);
-      toast.success('GRN PDF downloaded.');
+      toast.success('Purchase bill PDF downloaded.');
     } catch (e) {
       toast.error(e?.message || 'Could not download PDF.');
     }
@@ -103,11 +105,12 @@ export default function PurchaseDetail() {
                 <PencilSquareIcon className="size-4" /> Edit
               </Button>
             )}
-            {p.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
+            {p.can?.cancel && <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this purchase', message: 'Cancel this draft purchase bill? It has not been confirmed, so stock and the supplier balance stay as they are.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
             {p.can?.confirm && <Button size="sm" onClick={() => confirmM.mutate()} disabled={confirmM.isPending}><CheckCircleIcon className="size-4" /> Confirm</Button>}
           </>
         }
       />
+      <NextStep>{(p.status === 'draft' ? 'Not final yet. Check quantities and rates, then click “Confirm” — the stock is added and the amount you owe the supplier is updated.' : null)}</NextStep>
 
       {p.status === 'draft' && (
         <div className="rounded-xl border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800">

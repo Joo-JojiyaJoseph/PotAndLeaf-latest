@@ -26,7 +26,7 @@ class StockVerificationController extends Controller
         $this->allow($request, 'stock_verifications.view');
 
         return $this->ok(StockVerificationResource::collection(
-            $this->verifications->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))
+            $this->verifications->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page', 'from', 'to']))
         ));
     }
 

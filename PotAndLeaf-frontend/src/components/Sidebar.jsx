@@ -56,13 +56,13 @@ const GROUPS = [
   {
     label: 'Selling',
     items: [
-      { key: 'sales', label: 'Sales (POS)', to: '/sales', icon: CalculatorIcon, permission: 'sales.view' },
+      { key: 'sales', label: 'Sales / Billing', to: '/sales', icon: CalculatorIcon, permission: 'sales.view' },
       { key: 'sales-returns', label: 'Sales Returns', to: '/sales-returns', icon: ArrowUturnLeftIcon, permission: 'sales_returns.view' },
       { key: 'advance-orders', label: 'Advance Orders', to: '/advance-orders', icon: CalendarDaysIcon, permission: 'advance.view' },
-      { key: 'backorders', label: 'Backorders', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
+      { key: 'backorders', label: 'Backorders (Waiting)', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
       { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon, permission: 'rental.view' },
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon, permission: 'customers.view' },
-      { key: 'receipts', label: 'Customer Receipts', to: '/receipts', icon: ReceiptRefundIcon, permission: 'receipts.view' },
+      { key: 'receipts', label: 'Money from Customers', to: '/receipts', icon: ReceiptRefundIcon, permission: 'receipts.view' },
       { key: 'loyalty', label: 'Loyalty Points', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
       { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
     ],
@@ -70,17 +70,17 @@ const GROUPS = [
   {
     label: 'Buying',
     items: [
-      { key: 'purchase', label: 'Purchases (GRN)', to: '/purchases', icon: ShoppingCartIcon, permission: 'purchases.view' },
+      { key: 'purchase', label: 'Purchases (Bills)', to: '/purchases', icon: ShoppingCartIcon, permission: 'purchases.view' },
       { key: 'purchase-orders', label: 'Purchase Orders', to: '/purchase-orders', icon: ClipboardDocumentListIcon, permission: 'po.view' },
       { key: 'purchase-returns', label: 'Purchase Returns', to: '/purchase-returns', icon: ArrowUturnRightIcon, permission: 'purchase_returns.view' },
       { key: 'suppliers', label: 'Suppliers', to: '/suppliers', icon: TruckIcon, permission: 'suppliers.view' },
-      { key: 'payments', label: 'Supplier Payments', to: '/payments', icon: BanknotesIcon, permission: 'payments.view' },
+      { key: 'payments', label: 'Pay Suppliers', to: '/payments', icon: BanknotesIcon, permission: 'payments.view' },
     ],
   },
   {
     label: 'Stock',
     items: [
-      { key: 'inventory', label: 'Inventory', to: '/inventory', icon: CubeIcon, end: true, permission: 'inventory.view' },
+      { key: 'inventory', label: 'Stock Levels', to: '/inventory', icon: CubeIcon, end: true, permission: 'inventory.view' },
       { key: 'batches', label: 'Batches & Barcodes', to: '/inventory/batches', icon: QrCodeIcon, permission: 'inventory.view' },
       { key: 'transfers', label: 'Stock Transfers', to: '/transfers', icon: ArrowsRightLeftIcon, permission: 'transfers.view' },
       { key: 'stock-verifications', label: 'Stock Count', to: '/stock-verifications', icon: ClipboardDocumentCheckIcon, permission: 'stock_verifications.view' },
@@ -94,7 +94,7 @@ const GROUPS = [
     items: [
       { key: 'cash-book', label: 'Cash Book', to: '/accounting/cash-book', icon: BanknotesIcon, permission: 'accounts.view' },
       { key: 'bank-book', label: 'Bank Book', to: '/accounting/bank-book', icon: BuildingLibraryIcon, permission: 'accounts.view' },
-      { key: 'journal', label: 'Journal', to: '/accounting/journal', icon: BookOpenIcon, permission: 'accounts.view' },
+      { key: 'journal', label: 'Journal (Corrections)', to: '/accounting/journal', icon: BookOpenIcon, permission: 'accounts.view' },
     ],
   },
   {

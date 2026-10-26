@@ -25,7 +25,7 @@ class SupplierPaymentController extends Controller
         $this->allow($request, 'payments.view');
 
         return $this->ok(SupplierPaymentResource::collection(
-            $this->payments->list($this->listCompanyId($request), $request->only(['supplier_id', 'per_page']))
+            $this->payments->list($this->listCompanyId($request), $request->only(['supplier_id', 'per_page', 'from', 'to', 'search', 'mode']))
         ));
     }
 

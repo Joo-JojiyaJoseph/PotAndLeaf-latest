@@ -95,6 +95,7 @@ class ProductController extends Controller
     {
         $this->allow($request, 'products.delete');
         $this->assertRecordCompany($request, $product, writable: true);
+        \App\Support\Deletion\InUseGuard::assertUnused('product "'.$product->name.'"', 'products', (string) $product->id, fn ($c) => (bool) preg_match('/(^|_)product_id$/', $c), ['product_supplier', 'location_stock']);
         $this->products->delete($product);
 
         return $this->message('Product deleted.');

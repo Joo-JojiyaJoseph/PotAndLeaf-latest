@@ -29,7 +29,7 @@ class PurchaseOrderController extends Controller
     {
         $this->allow($request, 'po.view');
 
-        return $this->ok(PurchaseOrderResource::collection($this->orders->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))));
+        return $this->ok(PurchaseOrderResource::collection($this->orders->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page', 'from', 'to']))));
     }
 
     public function formData(Request $request): JsonResponse

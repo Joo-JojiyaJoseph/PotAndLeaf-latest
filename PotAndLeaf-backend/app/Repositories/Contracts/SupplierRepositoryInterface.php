@@ -25,9 +25,7 @@ interface SupplierRepositoryInterface
 
     public function delete(Supplier $supplier): void;
 
-    public function restore(int|string $companyId, string $id): ?Supplier;
 
-    public function forceDelete(int|string $companyId, string $id): void;
 
     /** True when a supplier_code is already taken in the team (excluding $ignoreId). */
     public function codeExists(int|string $companyId, string $code, ?string $ignoreId = null): bool;

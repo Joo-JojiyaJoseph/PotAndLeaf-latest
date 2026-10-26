@@ -100,8 +100,6 @@ class DamageEntryService
 
     private function nextEntryNo(int|string $companyId): string
     {
-        $count = DamageEntry::withTrashed()->forCompany($companyId)->count();
-
-        return 'DMG-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(DamageEntry::query()->where('company_id', $companyId), 'entry_no', 'DMG-', 6);
     }
 }

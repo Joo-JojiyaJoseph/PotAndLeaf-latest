@@ -123,6 +123,9 @@ class MasterDataController extends Controller
             $this->allow($request, "{$type}.delete", $companyId);
         }
 
+        $label = match ($type) { 'categories' => $row->parent_id ? 'subcategory' : 'category', 'units' => 'unit', default => 'brand' };
+        $links = match ($type) { 'categories' => ['category_id', 'subcategory_id'], 'units' => ['unit_id', 'base_unit_id'], default => ['brand_id'] };
+        \App\Support\Deletion\InUseGuard::assertUnused($label.' "'.$row->name.'"', $row->getTable(), (string) $row->id, fn ($c) => in_array($c, $links, true), [], $type === 'categories' ? ['parent_id'] : []);
         $row->delete();
 
         return $this->message('Deleted.');
@@ -140,11 +143,11 @@ class MasterDataController extends Controller
         $rules = [
             'name'        => [
                 'required', 'string', 'max:150',
-                Rule::unique($table, 'name')->where('company_id', $companyId)->whereNull('deleted_at')->ignore($id),
+                Rule::unique($table, 'name')->where('company_id', $companyId)->ignore($id),
             ],
             'code'        => [
                 'nullable', 'string', 'max:50',
-                Rule::unique($table, 'code')->where('company_id', $companyId)->whereNull('deleted_at')->ignore($id),
+                Rule::unique($table, 'code')->where('company_id', $companyId)->ignore($id),
             ],
             'description' => ['nullable', 'string', 'max:1000'],
             'status'      => ['nullable', 'in:active,inactive'],
@@ -208,9 +211,7 @@ class MasterDataController extends Controller
             'brands'     => 'BRD',
             default      => 'MST',
         };
-        $count = $modelClass::withTrashed()->where('company_id', $companyId)->count();
-
-        return $prefix.'-'.str_pad((string) ($count + 1), 4, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next($modelClass::query()->where('company_id', $companyId), 'code', $prefix.'-', 4);
     }
 
     private function present($r, string $type, $parents): array

@@ -78,6 +78,20 @@ class AccountingEngine
             ->orderBy('payment_date')
             ->get()
             ->each(fn (CommissionPayout $p) => $this->postCommission($p));
+
+        // Walk-in counter sales recorded before they were posted to the books.
+        $postedWalkIn = AccountingTransaction::forCompany($companyId)
+            ->where('source_type', 'sale_payment')
+            ->pluck('source_id');
+        \App\Models\Sale::forCompany($companyId)
+            ->whereNull('customer_id')
+            ->where('status', 'confirmed')
+            ->where('payment_mode', '!=', 'credit')
+            ->where('amount_paid', '>', 0)
+            ->when($postedWalkIn->isNotEmpty(), fn ($q) => $q->whereNotIn('id', $postedWalkIn))
+            ->orderBy('sale_date')
+            ->get()
+            ->each(fn ($s) => $this->postWalkInSale($s));
     }
 
     public function post(int|string $companyId, array $data, ?int $userId = null): AccountingTransaction
@@ -204,6 +218,33 @@ class AccountingEngine
             $isCash ? 'cash' : 'bank',
             ($receipt->is_advance || $receipt->advance_order_id) ? 'customer_advance' : 'ar',
             $receipt->notes ?: "Receipt {$receipt->receipt_no}",
+        );
+    }
+
+    /**
+     * Money taken at the counter for a walk-in sale (no customer chosen):
+     * cash goes to the cash book, UPI/card to the bank book. Sales with a
+     * customer are already posted through their receipt.
+     */
+    public function postWalkInSale(\App\Models\Sale $sale): ?AccountingTransaction
+    {
+        if (! $this->ready() || $sale->customer_id || $sale->status !== 'confirmed'
+            || $sale->payment_mode === 'credit' || (float) $sale->amount_paid <= 0) {
+            return null;
+        }
+
+        $isCash = $sale->payment_mode === 'cash';
+
+        return $this->postFromSource(
+            $sale->company_id,
+            'sale_payment',
+            $sale->id,
+            $isCash ? 'cash_receipt' : 'bank_receipt',
+            optional($sale->sale_date)->toDateString() ?? now()->toDateString(),
+            (float) $sale->amount_paid,
+            $isCash ? 'cash' : 'bank',
+            'sales',
+            "Walk-in sale {$sale->sale_no} ({$sale->payment_mode})",
         );
     }
 
@@ -612,11 +653,6 @@ class AccountingEngine
 
     private function nextVoucherNo(int|string $companyId, string $prefix): string
     {
-        $count = AccountingTransaction::withTrashed()
-            ->forCompany($companyId)
-            ->where('voucher_no', 'like', $prefix.'%')
-            ->count();
-
-        return $prefix.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(AccountingTransaction::query()->where('company_id', $companyId), 'voucher_no', $prefix, 6);
     }
 }

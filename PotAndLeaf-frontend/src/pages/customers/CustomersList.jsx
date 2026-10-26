@@ -15,9 +15,11 @@ import { ImageUpload } from '../../components/media';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
 import Pagination from '../../components/Pagination';
+import ImportExportButtons from '../../components/ImportExportButtons';
+import { CUSTOMER_COLUMNS, customerExport } from '../../lib/importColumns';
 import StatusToggle from '../../components/StatusToggle';
 
-const empty = { customer_code: '', name: '', type: 'retail', phone: '', whatsapp: '', email: '', gst_number: '', city: '', state: '', credit_days: '', credit_limit: '', opening_balance: '', address_line1: '', notes: '', status: 'active', photo: null };
+const empty = { customer_code: '', name: '', type: 'retail', phone: '', whatsapp: '', email: '', gst_number: '', city: '', state: '', pincode: '', credit_days: '', credit_limit: '', opening_balance: '', address_line1: '', notes: '', status: 'active', photo: null };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const typeTone = { retail: 'info', wholesale: 'active', dealer: 'pending' };
 const TYPES = [{ v: '', l: 'All types' }, { v: 'retail', l: 'Retail' }, { v: 'wholesale', l: 'Wholesale' }, { v: 'dealer', l: 'Dealer' }];
@@ -76,7 +78,7 @@ export default function CustomersList() {
     invalidate();
   }
   async function onDelete(c) {
-    const ok = await confirm({ title: 'Delete customer', message: `Delete ${c.name}? This is a soft delete.`, confirmLabel: 'Delete', tone: 'danger' });
+    const ok = await confirm({ title: 'Delete customer', message: `Delete ${c.name} for good? This cannot be undone. A customer with bills cannot be deleted — make them Inactive instead.`, confirmLabel: 'Delete', tone: 'danger' });
     if (!ok) return;
     try { await api.delete(`/customers/${c.id}`, withCompany(c.company_id ?? companyId)); toast.success(`${c.name} deleted`); invalidate(); }
     catch (e) { toast.error(e.response?.data?.message ?? 'Could not delete customer.'); }
@@ -109,10 +111,13 @@ export default function CustomersList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Customers</h1>
-          <p className="text-sm text-muted">Customer master — types, GST, credit terms and balances{companyHint}.</p>
+          <p className="text-sm text-muted">Everyone who buys from you — their type (retail, wholesale, dealer), credit limit and what they owe{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
+          <ImportExportButtons entity="customers" title="Import customers from a spreadsheet" columns={CUSTOMER_COLUMNS} exportColumns={customerExport}
+            exportParams={{ ...companyParams, search: debounced || undefined, type: type || undefined }}
+            canImport={can('customers.create')} onDone={() => queryClient.invalidateQueries({ queryKey: ['customers'] })} />
           {can('customers.create') && <Button size="sm" onClick={openNew}><PlusIcon className="size-4" /> New customer</Button>}
         </div>
       </div>
@@ -234,6 +239,7 @@ export default function CustomersList() {
               <Field label="Email" error={err('email')}><Input value={form.email || ''} onChange={set('email')} /></Field>
               <Field label="City" error={err('city')}><Input value={form.city || ''} onChange={set('city')} /></Field>
               <Field label="State" error={err('state')}><Input value={form.state || ''} onChange={set('state')} /></Field>
+              <Field label="PIN code" error={err('pincode')}><Input inputMode="numeric" maxLength={6} value={form.pincode || ''} onChange={set('pincode')} placeholder="e.g. 682001" /></Field>
               <Field label="Credit days" error={err('credit_days')}><Input type="number" value={form.credit_days ?? ''} onChange={set('credit_days')} /></Field>
               <Field label="Credit limit" error={err('credit_limit')}><Input type="number" step="0.01" value={form.credit_limit ?? ''} onChange={set('credit_limit')} /></Field>
               <Field label="Opening balance" error={err('opening_balance')}><Input type="number" step="0.01" value={form.opening_balance ?? ''} onChange={set('opening_balance')} /></Field>

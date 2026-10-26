@@ -44,7 +44,7 @@ class CreateSupplier
     /** Next sequential code per company — avoids collisions from count-based gaps. */
     public static function nextSupplierCode(int|string $companyId): string
     {
-        $max = Supplier::withTrashed()
+        $max = Supplier::query()
             ->forCompany($companyId)
             ->pluck('supplier_code')
             ->map(function ($code) {

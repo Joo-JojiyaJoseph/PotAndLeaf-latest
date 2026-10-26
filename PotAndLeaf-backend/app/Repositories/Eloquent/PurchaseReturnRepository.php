@@ -18,7 +18,7 @@ class PurchaseReturnRepository implements PurchaseReturnRepositoryInterface
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['supplier:id,name,supplier_code', 'purchase:id,purchase_no'])
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
-            ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('return_no', 'like', "%{$filters['search']}%"))
+            ->listFilters($filters, 'return_date', ['return_no'], ['supplier' => 'name'])
             ->orderByDesc('return_date')
             ->orderByDesc('created_at')
             ->paginate($perPage)
@@ -41,9 +41,7 @@ class PurchaseReturnRepository implements PurchaseReturnRepositoryInterface
 
     public function nextReturnNo(int|string $companyId): string
     {
-        $count = PurchaseReturn::withTrashed()->forCompany($companyId)->count();
-
-        return 'PR-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(PurchaseReturn::query()->where('company_id', $companyId), 'return_no', 'PR-', 6);
     }
 
     public function returnedQtyByPurchaseItem(string $purchaseId, ?string $excludeReturnId = null): Collection

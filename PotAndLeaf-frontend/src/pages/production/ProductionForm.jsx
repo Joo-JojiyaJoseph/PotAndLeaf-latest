@@ -362,9 +362,9 @@ export default function ProductionForm() {
           <Field label="Output quantity" required error={err('output_quantity')}>
             <Input type="number" step="0.001" min="0" value={outputQty} onChange={(e) => setOutputQty(e.target.value)} disabled={!canEdit} />
           </Field>
-          <Field label="Supervisor" required error={err('supervisor_id')}>
+          <Field label="Made by (supervisor or staff)" required error={err('supervisor_id')}>
             <Select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className={selectCls} disabled={!canEdit}>
-              <option value="">Select supervisor…</option>
+              <option value="">Select who made it…</option>
               {supervisors.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </Select>
           </Field>

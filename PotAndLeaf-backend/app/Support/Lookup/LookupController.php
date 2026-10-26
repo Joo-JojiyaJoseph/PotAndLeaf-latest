@@ -97,13 +97,6 @@ abstract class LookupController extends Controller
         return back()->with('success', 'Moved to trash.');
     }
 
-    public function restore(Team $current_team, string $record): RedirectResponse
-    {
-        $this->allow('delete');
-        $this->service()->restore($current_team->id, $record);
-
-        return back()->with('success', 'Restored.');
-    }
 
     private function allow(string $ability): void
     {

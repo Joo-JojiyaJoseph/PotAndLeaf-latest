@@ -128,7 +128,7 @@ export default function ProductionList() {
                   <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Qty</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Unit cost</th>
-                  <th className="microlabel px-4 py-2.5 font-semibold">Supervisor</th>
+                  <th className="microlabel px-4 py-2.5 font-semibold">Made by</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                   <th className="microlabel px-4 py-2.5" />
                 </tr></thead>

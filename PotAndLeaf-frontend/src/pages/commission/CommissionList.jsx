@@ -34,7 +34,7 @@ const HELP = {
   payouts: 'Step 3 — At month end, click “Pay commission”, choose the person and the month. The app shows how much to pay. Pay them and click “Mark as paid”.',
   promotions: 'Want a product to sell faster? Give staff extra money for every piece they sell, for a few days. Example: ₹10 extra for each Areca Palm sold this month.',
   managers: 'The shop manager gets a small share of everything the shop sells. Example: 1% of ₹5,00,000 = ₹5,000.',
-  supervisor: 'People who grow or make items get paid when those items are sold or sent to another company — only once for each piece.',
+  supervisor: 'People who grow or make items can be paid twice: a fixed ₹ for each piece when the production is completed, and a bonus when that piece is sold or sent to another company (once per piece). Set both in “Set staff rate” → “Grows / makes items”.',
   templates: 'The WhatsApp message staff receive at the end of the day showing what they earned.',
   seasonal: 'WhatsApp care tips sent to customers a few days after they buy a plant.',
 };
@@ -70,12 +70,14 @@ function Example({ children }) {
 
 /** What a staff rate pays, in simple sentences (follows the existing calculation). */
 function describeRule(r) {
+  const made = n(r.production_per_unit) > 0 ? [`Gets ${rupees(r.production_per_unit)} for every piece they make, when the production is completed`] : [];
   if (r.is_supervisor) {
-    return r.rate_type === 'per_unit'
-      ? [`Gets ${rupees(r.per_unit_amount)} for every piece they produced that is sold or sent to another company`]
-      : [`Gets ${r.base_percent}% of the price of every piece they produced that is sold or sent to another company`];
+    const sold = r.rate_type === 'per_unit'
+      ? (n(r.per_unit_amount) > 0 ? [`Gets ${rupees(r.per_unit_amount)} for every piece they made that is sold or sent to another company`] : [])
+      : (n(r.base_percent) > 0 ? [`Gets ${r.base_percent}% of the price of every piece they made that is sold or sent to another company`] : []);
+    return [...made, ...sold];
   }
-  const parts = [];
+  const parts = [...made];
   if (r.tiers?.length) {
     const flat = r.tier_mode === 'flat';
     const per = r.tier_period === 'daily' ? 'day' : 'month';
@@ -95,11 +97,11 @@ function describeRule(r) {
   return parts;
 }
 
-function RuleModal({ open, onClose, staff, editing }) {
+function RuleModal({ open, onClose, staff, editing, takenIds = [] }) {
   const queryClient = useQueryClient();
   const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const blank = {
-    user_id: '', kind: 'sales', rate_type: 'percent', base_percent: '', per_unit_amount: '',
+    user_id: '', kind: 'sales', rate_type: 'percent', base_percent: '', per_unit_amount: '', production_per_unit: '',
     monthly_target: '', target_bonus: '', max_commission: '', is_active: true, notes: '',
     day_min: '', day_bonus: '',
   };
@@ -121,6 +123,7 @@ function RuleModal({ open, onClose, staff, editing }) {
       rate_type: editing.rate_type || 'percent',
       base_percent: String(editing.base_percent ?? ''),
       per_unit_amount: String(editing.per_unit_amount ?? ''),
+      production_per_unit: n(editing.production_per_unit) ? String(editing.production_per_unit) : '',
       monthly_target: n(editing.monthly_target) ? String(editing.monthly_target) : '',
       target_bonus: n(editing.target_bonus) ? String(editing.target_bonus) : '',
       max_commission: editing.max_commission != null ? String(editing.max_commission) : '',
@@ -138,12 +141,14 @@ function RuleModal({ open, onClose, staff, editing }) {
   const saveM = useMutation({
     mutationFn: async () => {
       const res = await api.post('/commission/rules', {
+        update_existing: Boolean(editing),
         user_id: Number(form.user_id),
         is_supervisor: isSupervisor,
         // Same fields as before; fields hidden for this kind of staff keep their saved values.
         rate_type: form.rate_type,
         base_percent: n(form.base_percent),
         per_unit_amount: n(form.per_unit_amount),
+        production_per_unit: n(form.production_per_unit),
         monthly_target: n(form.monthly_target),
         target_bonus: n(form.target_bonus),
         max_commission: form.max_commission === '' ? null : n(form.max_commission),
@@ -199,8 +204,9 @@ function RuleModal({ open, onClose, staff, editing }) {
           <Field label="Which staff member?" required error={err('user_id')}>
             <Select value={form.user_id} onChange={set('user_id')} className={selectCls} disabled={Boolean(editing)}>
               <option value="">Select…</option>
-              {staff.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              {(editing ? staff : staff.filter((u) => !takenIds.includes(String(u.id)))).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </Select>
+            {!editing && <p className="mt-1 text-xs text-muted">People who already have a rate are not listed — use “Change” on their row.</p>}
           </Field>
           <Field label="What do they do?">
             <Select value={form.kind} onChange={set('kind')} className={selectCls}>
@@ -213,7 +219,16 @@ function RuleModal({ open, onClose, staff, editing }) {
 
       {step === 2 && isSupervisor && (
         <div className="space-y-4">
-          <Field label={`How is ${personName} paid?`}>
+          <p className="text-sm text-muted">{personName} can be paid at two moments. Fill one or both.</p>
+          <Field label="1. When they make it — ₹ for each piece made" error={err('production_per_unit')}>
+            <Input type="number" min="0" step="0.01" value={form.production_per_unit} onChange={set('production_per_unit')} placeholder="e.g. 3 (leave empty for none)" />
+          </Field>
+          <Example>
+            Paid once when the production is completed.
+            {n(form.production_per_unit) > 0 && <> Making 100 pieces → <b className="text-ink">{rupees(100 * n(form.production_per_unit))}</b>.</>}
+            {' '}Taken back if that production is cancelled.
+          </Example>
+          <Field label={`2. When it is sold or sent — how is ${personName} paid?`}>
             <Select value={form.rate_type} onChange={set('rate_type')} className={selectCls}>
               <option value="per_unit">A fixed ₹ for each piece</option>
               <option value="percent">A % of each piece’s price</option>
@@ -223,7 +238,7 @@ function RuleModal({ open, onClose, staff, editing }) {
             ? <Field label="₹ for each piece" error={err('per_unit_amount')}><Input type="number" min="0" step="0.01" value={form.per_unit_amount} onChange={set('per_unit_amount')} placeholder="e.g. 5" /></Field>
             : <Field label="% of the price" error={err('base_percent')}><Input type="number" min="0" step="0.01" value={form.base_percent} onChange={set('base_percent')} placeholder="e.g. 2" /></Field>}
           <Example>
-            Paid when a piece they made is sold or sent to another company — only once per piece.
+            Paid when a piece they made is sold or sent to another company — only once per piece. Leave 0 for none.
             {form.rate_type === 'per_unit' && n(form.per_unit_amount) > 0 && <> 100 pieces → <b className="text-ink">{rupees(100 * n(form.per_unit_amount))}</b>.</>}
           </Example>
         </div>
@@ -250,6 +265,9 @@ function RuleModal({ open, onClose, staff, editing }) {
             <div className="grid grid-cols-1 gap-4 rounded-xl border border-line p-3 sm:grid-cols-2">
               <Field label="Highest commission in a month (₹)" error={err('max_commission')}>
                 <Input type="number" min="0" step="0.01" value={form.max_commission} onChange={set('max_commission')} placeholder="no limit" />
+              </Field>
+              <Field label="Also makes items? ₹ for each piece they make" error={err('production_per_unit')}>
+                <Input type="number" min="0" step="0.01" value={form.production_per_unit} onChange={set('production_per_unit')} placeholder="none" />
               </Field>
               <Field label="Status">
                 <Select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}>
@@ -291,7 +309,8 @@ function RuleModal({ open, onClose, staff, editing }) {
           <div className="rounded-xl bg-sidebar/60 p-3 text-sm">
             <b>Summary:</b> {personName} gets <b>{form.base_percent || 0}%</b> of what they sell
             {n(form.max_commission) > 0 && <> (up to {rupees(form.max_commission)} a month)</>}
-            {dayEditable && n(form.day_min) > 0 && n(form.day_bonus) > 0 && <>, plus <b>{rupees(form.day_bonus)}</b> on any {rupees(form.day_min)} day</>}.
+            {dayEditable && n(form.day_min) > 0 && n(form.day_bonus) > 0 && <>, plus <b>{rupees(form.day_bonus)}</b> on any {rupees(form.day_min)} day</>}
+            {n(form.production_per_unit) > 0 && <>, plus <b>{rupees(form.production_per_unit)}</b> for each piece they make</>}.
             {!form.is_active && <> Currently <b>paused</b>.</>}
           </div>
         </div>
@@ -546,44 +565,64 @@ function TemplateModal({ open, onClose }) {
   );
 }
 
-function ManagerModal({ open, onClose, staff }) {
+function ManagerModal({ open, onClose, managers, editing, takenIds }) {
   const queryClient = useQueryClient();
   const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
-  const [form, setForm] = useState({ user_id: '', percent: '1', effective_from: '', effective_to: '' });
+  const blank = { user_id: '', percent: '1', effective_from: '', effective_to: '' };
+  const [form, setForm] = useState(blank);
+  const [applied, setApplied] = useState(null);
+  const [error, setError] = useState('');
+  if (open && editing && applied !== editing.id) {
+    setForm({
+      user_id: String(editing.user_id), percent: String(editing.percent),
+      effective_from: editing.effective_from ? String(editing.effective_from).slice(0, 10) : '',
+      effective_to: editing.effective_to ? String(editing.effective_to).slice(0, 10) : '',
+    });
+    setApplied(editing.id);
+  }
+  const close = () => { setForm(blank); setApplied(null); setError(''); onClose(); };
   const saveM = useMutation({
-    mutationFn: () => api.post('/commission/manager-rules', {
-      user_id: Number(form.user_id),
-      location_id: null, // one location per company: the share is of the whole shop
-      percent: n(form.percent),
-      effective_from: form.effective_from || null,
-      effective_to: form.effective_to || null,
-      is_active: true,
-    }, companyRequest()),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-manager-rules'] }); onClose(); },
+    mutationFn: () => editing
+      ? api.put(`/commission/manager-rules/${editing.id}`, {
+        percent: n(form.percent), effective_from: form.effective_from || null, effective_to: form.effective_to || null, is_active: true,
+      }, withCompany(editing.company_id))
+      : api.post('/commission/manager-rules', {
+        user_id: Number(form.user_id),
+        location_id: null, // one location per company: the share is of the whole shop
+        percent: n(form.percent),
+        effective_from: form.effective_from || null,
+        effective_to: form.effective_to || null,
+        is_active: true,
+      }, companyRequest()),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-manager-rules'] }); close(); },
+    onError: (e) => setError(e.response?.data?.message ?? 'Could not save.'),
   });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const choices = editing ? managers : managers.filter((m) => !takenIds.includes(String(m.id)));
 
   return (
-    <Modal open={open} onClose={onClose} title="Manager share of shop sales"
-      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending || !form.user_id} onClick={() => saveM.mutate()}>Save</Button></>}>
+    <Modal open={open} onClose={close} title={editing ? `Change manager share — ${editing.user?.name ?? ''}` : 'Manager share of shop sales'}
+      footer={<><Button variant="ghost" size="sm" onClick={close}>Cancel</Button><Button size="sm" disabled={saveM.isPending || !form.user_id} onClick={() => saveM.mutate()}>Save</Button></>}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
+        {!editing && <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />}
         <Field label="Manager">
-          <Select value={form.user_id} onChange={set('user_id')} className={selectCls}>
+          <Select value={form.user_id} onChange={set('user_id')} className={selectCls} disabled={Boolean(editing)}>
             <option value="">Select…</option>
-            {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {(editing ? [{ id: editing.user_id, name: editing.user?.name ?? 'Manager' }] : choices).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
+          {!editing && choices.length === 0 && <p className="mt-1 text-xs text-muted">No manager left without a share. Only users with a Manager role are listed.</p>}
         </Field>
         <Field label="% of the shop’s sales"><Input type="number" min="0" step="0.01" value={form.percent} onChange={set('percent')} /></Field>
         <Field label="From (optional)"><Input type="date" value={form.effective_from} onChange={set('effective_from')} /></Field>
         <Field label="To (optional)"><Input type="date" value={form.effective_to} onChange={set('effective_to')} /></Field>
         <Example>Example: shop sells {rupees(500000)} in a month (after returns and loyalty discounts) → manager gets <b className="text-ink">{rupees(500000 * n(form.percent) / 100)}</b>.</Example>
+        {error && <p className="text-sm text-danger sm:col-span-2">{error}</p>}
       </div>
     </Modal>
   );
 }
 
-function PayoutModal({ open, onClose, staff }) {
+function PayoutModal({ open, onClose, staff, editing }) {
   const queryClient = useQueryClient();
   const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const [userId, setUserId] = useState('');
@@ -594,26 +633,37 @@ function PayoutModal({ open, onClose, staff }) {
   const [reference, setReference] = useState('');
   const [status, setStatus] = useState('paid');
   const [errors, setErrors] = useState({});
+  const [applied, setApplied] = useState(null);
+  if (open && editing && applied !== editing.id) {
+    setUserId(String(editing.user_id)); setPeriod(editing.period); setAmount(String(editing.amount));
+    setMode(editing.mode || 'cash'); setPaymentDate(editing.payment_date ? String(editing.payment_date).slice(0, 10) : today());
+    setReference(editing.reference ?? ''); setStatus(editing.status || 'paid'); setApplied(editing.id);
+  }
 
   const computeQ = useQuery({
     queryKey: ['commission-compute', userId, period, formCompanyId],
-    queryFn: () => api.get('/commission/compute', { params: { user_id: userId, period }, ...companyRequest() }).then((r) => r.data.data),
+    queryFn: () => api.get('/commission/compute', { params: { user_id: userId, period }, ...(editing ? withCompany(editing.company_id) : companyRequest()) }).then((r) => r.data.data),
     enabled: open && Boolean(userId) && /^\d{4}-\d{2}$/.test(period),
   });
   const c = computeQ.data;
 
+  // Only staff with a commission set up (staff rate or manager share) can be paid.
+  const hasSetup = Boolean(c && (c.has_rule || n(c.manager_commission) !== 0 || n(c.supervisor_commission) !== 0));
   const saveM = useMutation({
-    mutationFn: () => api.post('/commission/payouts', {
-      user_id: Number(userId), period,
-      sales_total: c?.sales_total ?? 0,
-      amount: amount === '' ? (c?.commission ?? 0) : Number(amount),
-      mode, payment_date: paymentDate, reference: reference || null, status,
-    }, companyRequest()),
+    mutationFn: () => {
+      const body = {
+        amount: amount === '' ? (c?.commission ?? 0) : Number(amount),
+        mode, payment_date: paymentDate, reference: reference || null, status,
+      };
+      return editing
+        ? api.put(`/commission/payouts/${editing.id}`, body, withCompany(editing.company_id))
+        : api.post('/commission/payouts', { ...body, user_id: Number(userId), period, sales_total: c?.sales_total ?? 0 }, companyRequest());
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-payouts'] }); handleClose(); },
-    onError: (err) => setErrors(err.response?.data?.errors ?? {}),
+    onError: (err) => setErrors(err.response?.data?.errors ?? { user_id: [err.response?.data?.message ?? 'Could not save.'] }),
   });
 
-  function handleClose() { setUserId(''); setPeriod(thisMonth()); setAmount(''); setMode('cash'); setReference(''); setStatus('paid'); setErrors({}); onClose(); }
+  function handleClose() { setUserId(''); setPeriod(thisMonth()); setAmount(''); setMode('cash'); setReference(''); setStatus('paid'); setErrors({}); setApplied(null); onClose(); }
   const err = (k) => errors[k]?.[0];
 
   const Line = ({ label, value, muted }) => (
@@ -621,28 +671,28 @@ function PayoutModal({ open, onClose, staff }) {
   );
 
   return (
-    <Modal open={open} onClose={handleClose} title="Pay commission"
+    <Modal open={open} onClose={handleClose} title={editing ? `Change payment — ${editing.user_name} (${editing.period})` : 'Pay commission'}
       footer={<>
         <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-        <Button size="sm" disabled={saveM.isPending || !userId} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : (status === 'paid' ? 'Mark as paid' : 'Save for later')}</Button>
+        <Button size="sm" disabled={saveM.isPending || !userId || !c || (!editing && !hasSetup)} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : (status === 'paid' ? 'Mark as paid' : 'Save for later')}</Button>
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
+        {!editing && <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />}
         <Field label="Staff member" required error={err('user_id')}>
-          <Select value={userId} onChange={(e) => setUserId(e.target.value)} className={selectCls}>
+          <Select value={userId} onChange={(e) => setUserId(e.target.value)} className={selectCls} disabled={Boolean(editing)}>
             <option value="">Select…</option>
             {staff.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </Select>
         </Field>
-        <Field label="For the month" required error={err('period')}><Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} /></Field>
+        <Field label="For the month" required error={err('period')}><Input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} disabled={Boolean(editing)} /></Field>
       </div>
 
       {computeQ.isFetching ? (
         <div className="mt-4 flex justify-center py-4"><Spinner className="size-5" /></div>
       ) : c ? (
         <div className="mt-4 space-y-1 rounded-xl bg-sidebar/60 p-4 text-sm">
-          {!c.has_rule && <p className="mb-2 text-xs text-amber">No rate set for this staff member yet — set one under “Staff rates”.</p>}
+          {!hasSetup && <p className="mb-2 text-sm font-medium text-danger">This person has no commission set. Set a staff rate (step 1) before paying commission.</p>}
           <Line label="What they sold this month (without GST, returns taken off)" value={c.sales_total} muted />
           <div className="my-1 border-t border-line" />
           <Line label={c.has_ledger ? 'Commission on their sales' : `Commission (${c.base_percent}% of sales)`} value={c.base_amount} />
@@ -651,7 +701,8 @@ function PayoutModal({ open, onClose, staff }) {
             : n(c.target) > 0 && <Line label={`Monthly target ${rupees(c.target)} ${c.target_met ? '— reached ✓' : '— not reached'}`} value={c.bonus} muted={!c.target_met} />}
           {n(c.promotion_bonus) > 0 && <Line label="Product offer bonuses" value={c.promotion_bonus} />}
           {n(c.manager_commission) > 0 && <Line label="Manager share of shop sales" value={c.manager_commission} />}
-          {n(c.supervisor_commission) > 0 && <Line label="Production bonus" value={c.supervisor_commission} />}
+          {n(c.supervisor_from_production) !== 0 && <Line label="Bonus for pieces they made" value={c.supervisor_from_production} />}
+          {n(c.supervisor_commission) - n(c.supervisor_from_production) !== 0 && <Line label="Bonus for their pieces sold / sent" value={n(c.supervisor_commission) - n(c.supervisor_from_production)} />}
           {n(c.ledger_reversals) !== 0 && <Line label="Taken back for returned / cancelled bills" value={c.ledger_reversals} />}
           <div className="mt-1 flex justify-between border-t border-line pt-1 font-semibold"><span>To pay</span><span className="tnum">{rupees(c.commission)}</span></div>
           {c.has_ledger && n(c.target) > 0 && (
@@ -734,6 +785,16 @@ export default function CommissionList() {
   }
 
   const staff = formData?.staff ?? [];
+  const managers = formData?.managers ?? [];
+  const [editingPayout, setEditingPayout] = useState(null);
+  const [editingManager, setEditingManager] = useState(null);
+  const delManagerM = useMutation({
+    mutationFn: (r) => api.delete(`/commission/manager-rules/${r.id}`, withCompany(r.company_id)),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['commission-manager-rules'] }),
+  });
+  async function removeManager(r) {
+    if (await confirm({ title: 'Remove manager share', message: `Stop ${r.user?.name ?? 'this manager'}’s share of shop sales? Amounts already earned stay.`, confirmLabel: 'Remove' })) delManagerM.mutate(r);
+  }
   const products = formData?.products ?? [];
   const categories = formData?.categories ?? [];
   const rules = rulesQ.data?.data ?? [];
@@ -795,7 +856,7 @@ export default function CommissionList() {
           const inMore = MORE_TABS.some((t) => t.value === tab);
           if (showMore || inMore) { setShowMore(false); if (inMore) setTab('rules'); } else setShowMore(true);
         }} className="text-xs font-medium text-leaf hover:underline">
-          {showMore || MORE_TABS.some((t) => t.value === tab) ? 'Hide extras' : 'Extras: product offers, manager share, production bonus, messages…'}
+          {showMore || MORE_TABS.some((t) => t.value === tab) ? 'Hide extras' : '+ Extras (offers, manager, production, messages)'}
         </button>
         {(showMore || MORE_TABS.some((t) => t.value === tab)) && (
           <div className="mt-2 flex flex-wrap gap-2">
@@ -831,7 +892,12 @@ export default function CommissionList() {
                       <td className="px-4 py-2.5 uppercase text-muted">{p.mode}</td>
                       <td className="px-4 py-2.5 text-muted">{p.payment_date ? formatDate(p.payment_date) : '—'}</td>
                       <td className="px-4 py-2.5"><Badge tone={p.status === 'paid' ? 'active' : 'inactive'}>{p.status === 'paid' ? 'paid' : 'not paid yet'}</Badge></td>
-                      <td className="px-4 py-2.5 text-right">{can('commission.pay') && <button onClick={() => removePayout(p)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Remove"><TrashIcon className="size-4" /></button>}</td>
+                      <td className="px-4 py-2.5 text-right">{can('commission.pay') && (
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => { setEditingPayout(p); setPayoutModal(true); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="Change"><PencilSquareIcon className="size-4" /></button>
+                          <button onClick={() => removePayout(p)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Remove"><TrashIcon className="size-4" /></button>
+                        </div>
+                      )}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -883,6 +949,12 @@ export default function CommissionList() {
                     {r.percent}% of the shop’s sales
                     {(r.effective_from || r.effective_to) && ` · ${r.effective_from ? formatDate(r.effective_from) : 'start'} to ${r.effective_to ? formatDate(r.effective_to) : 'no end'}`}
                   </span>
+                  {can('commission.manage') && (
+                    <span className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => { setEditingManager(r); setManagerModal(true); }}><PencilSquareIcon className="size-4" /> Change</Button>
+                      <Button variant="ghost" size="sm" onClick={() => removeManager(r)}>Remove</Button>
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
@@ -1012,14 +1084,16 @@ export default function CommissionList() {
         </Card>
       )}
 
-      <RuleModal open={ruleModal} onClose={() => { setRuleModal(false); setEditingRule(null); }} staff={staff} editing={editingRule} />
+      <RuleModal open={ruleModal} onClose={() => { setRuleModal(false); setEditingRule(null); }} staff={staff} editing={editingRule}
+        takenIds={rules.filter((x) => filterCompanyId === 'all' || !filterCompanyId || String(x.company_id) === String(filterCompanyId) || String(x.company_id) === String(activeCompany?.id)).map((x) => String(x.user_id))} />
       {slabRule && <SlabModal key={slabRule.id} open onClose={() => setSlabRule(null)} rule={slabRule} />}
       {dailyRule && <DailyBonusModal key={dailyRule.id} open onClose={() => setDailyRule(null)} rule={dailyRule} />}
       <PromotionModal open={promoModal} onClose={() => setPromoModal(false)} products={products} categories={categories} />
       <SeasonalModal open={seasonalModal} onClose={() => setSeasonalModal(false)} products={products} categories={categories} />
       <TemplateModal open={templateModal} onClose={() => setTemplateModal(false)} />
-      <PayoutModal open={payoutModal} onClose={() => setPayoutModal(false)} staff={staff} />
-      <ManagerModal open={managerModal} onClose={() => setManagerModal(false)} staff={staff} />
+      <PayoutModal open={payoutModal} onClose={() => { setPayoutModal(false); setEditingPayout(null); }} staff={staff} editing={editingPayout} />
+      <ManagerModal open={managerModal} onClose={() => { setManagerModal(false); setEditingManager(null); }} managers={managers} editing={editingManager}
+        takenIds={managerRules.map((x) => String(x.user_id))} />
     </div>
   );
 }

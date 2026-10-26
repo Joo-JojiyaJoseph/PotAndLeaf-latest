@@ -24,9 +24,13 @@ class CustomerController extends Controller
     {
         $this->allow($request, 'customers.view');
 
-        return $this->ok(CustomerResource::collection(
-            $this->customers->list($this->listCompanyId($request), $request->only(['search', 'status', 'type', 'per_page']))
-        ));
+        $filters = $request->only(['search', 'status', 'type', 'per_page']);
+        // Salesmen see only the customers they added.
+        if ($request->user()->seesOnlyOwn('customers', $this->company($request)->id)) {
+            $filters['created_by'] = $request->user()->id;
+        }
+
+        return $this->ok(CustomerResource::collection($this->customers->list($this->listCompanyId($request), $filters)));
     }
 
     public function store(StoreCustomerRequest $request): JsonResponse
@@ -41,6 +45,7 @@ class CustomerController extends Controller
     {
         $this->allow($request, 'customers.view');
         $this->assertRecordCompany($request, $customer);
+        abort_if($request->user()->seesOnlyOwn('customers', $customer->company_id) && (int) $customer->created_by !== (int) $request->user()->id, 403, 'You can only see the customers you added.');
 
         return $this->ok(new CustomerResource($customer));
     }
@@ -56,6 +61,7 @@ class CustomerController extends Controller
     {
         $this->allow($request, 'customers.delete');
         $this->assertRecordCompany($request, $customer, writable: true);
+        \App\Support\Deletion\InUseGuard::assertUnused('customer "'.$customer->name.'"', 'customers', (string) $customer->id, fn ($c) => $c === 'customer_id');
         $this->customers->delete($customer);
 
         return $this->message('Customer deleted.');
@@ -65,6 +71,7 @@ class CustomerController extends Controller
     {
         $this->allow($request, 'customers.view');
         $this->assertRecordCompany($request, $customer);
+        abort_if($request->user()->seesOnlyOwn('customers', $customer->company_id) && (int) $customer->created_by !== (int) $request->user()->id, 403, 'You can only see the customers you added.');
 
         $perPage = min(50, max(1, (int) $request->input('per_page', 15)));
         $paginated = \App\Models\Sale::forCompany($customer->company_id)

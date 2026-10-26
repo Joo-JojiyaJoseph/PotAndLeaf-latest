@@ -61,7 +61,7 @@ export function CompanySelectMenu({
         aria-haspopup="listbox"
         aria-expanded={open}
         className={classNames(
-          'inline-flex h-10 w-full min-w-0 max-w-full items-center gap-2 rounded-xl glass-control px-3 text-left shadow-soft transition-all sm:min-w-[200px] sm:max-w-xs',
+          'inline-flex h-10 w-full min-w-0 max-w-full items-center gap-2 rounded-xl glass-control px-3 text-left shadow-soft transition-all sm:min-w-[236px] sm:max-w-xs',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-leaf/30',
           open ? 'border-leaf/40 ring-2 ring-leaf/15' : 'hover:border-leaf/30 hover:bg-white/90',
           disabled && 'pointer-events-none opacity-60',

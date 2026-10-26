@@ -28,7 +28,7 @@ class PurchaseReturnController extends Controller
     {
         $this->allow($request, 'purchase_returns.view');
 
-        $filters = $request->only(['search', 'status', 'per_page']);
+        $filters = $request->only(['search', 'status', 'per_page', 'from', 'to']);
 
         return $this->ok(PurchaseReturnResource::collection($this->returns->list($this->listCompanyId($request), $filters)));
     }

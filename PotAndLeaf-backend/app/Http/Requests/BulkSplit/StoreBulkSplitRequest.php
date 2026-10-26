@@ -22,7 +22,7 @@ class StoreBulkSplitRequest extends FormRequest
             'source_product_id'     => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],
             'source_batch_id'       => ['required', 'uuid', Rule::exists('product_batches', 'id')->where('company_id', $companyId)],
             'source_qty'            => ['required', 'numeric', 'gt:0'],
-            'split_date'            => ['required', 'date'],
+            'split_date'            => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Split date')],
             'notes'                 => ['nullable', 'string', 'max:2000'],
             'split_mode'            => ['nullable', 'in:qty_per_split,num_splits,manual'],
             'split_param'           => ['nullable', 'numeric', 'gt:0'],

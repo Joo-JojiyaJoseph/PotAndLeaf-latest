@@ -46,6 +46,16 @@ trait HasRolesAndPermissions
         return $names->contains($permission) || $names->contains("{$module}.*");
     }
 
+    /**
+     * True when this user may see only their own records of a module
+     * (e.g. a salesman: own bills, customers they added). Anyone with
+     * "<module>.view_all" — or full access — sees everyone's.
+     */
+    public function seesOnlyOwn(string $module, int|string|null $companyId = null): bool
+    {
+        return ! $this->hasPermission("{$module}.view_all", $companyId);
+    }
+
     /** @param array<int,string> $permissions */
     public function hasAnyPermission(array $permissions, int|string|null $companyId = null): bool
     {

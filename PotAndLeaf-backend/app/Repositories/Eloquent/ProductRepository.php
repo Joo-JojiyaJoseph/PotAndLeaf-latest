@@ -54,13 +54,6 @@ class ProductRepository implements ProductRepositoryInterface
         $product->delete();
     }
 
-    public function restore(int|string $companyId, string $id): ?Product
-    {
-        $product = Product::onlyTrashed()->forCompany($companyId)->whereKey($id)->first();
-        $product?->restore();
-
-        return $product;
-    }
 
     public function skuExists(int|string $companyId, string $sku, ?string $ignoreId = null): bool
     {

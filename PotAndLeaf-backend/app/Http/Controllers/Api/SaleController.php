@@ -29,7 +29,13 @@ class SaleController extends Controller
     {
         abort_unless($request->user()->hasPermission('sales.view', $this->company($request)->id), 403);
 
-        return $this->ok(SaleResource::collection($this->sales->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))));
+        $filters = $request->only(['search', 'status', 'per_page', 'from', 'to', 'customer_id', 'payment_mode']);
+        // Salesmen see only the bills they made.
+        if ($request->user()->seesOnlyOwn('sales', $this->company($request)->id)) {
+            $filters['created_by'] = $request->user()->id;
+        }
+
+        return $this->ok(SaleResource::collection($this->sales->list($this->listCompanyId($request), $filters)));
     }
 
     public function formData(Request $request): JsonResponse
@@ -37,7 +43,9 @@ class SaleController extends Controller
         $company = $this->company($request);
         $this->allow($request, 'sales.create');
 
-        $customers = Customer::forCompany($company->id)->where('status', 'active')->orderBy('name')
+        $customers = Customer::forCompany($company->id)->where('status', 'active')
+            ->when($request->user()->seesOnlyOwn('customers', $company->id), fn ($q) => $q->where('created_by', $request->user()->id))
+            ->orderBy('name')
             ->get(['id', 'name', 'type', 'loyalty_points'])
             ->map(fn ($c) => [
                 'id' => $c->id, 'name' => $c->name, 'type' => $c->type?->value,
@@ -86,6 +94,7 @@ class SaleController extends Controller
     {
         $this->allow($request, 'sales.view');
         $this->assertRecordCompany($request, $sale);
+        $this->assertOwnSale($request, $sale);
 
         return $this->ok(new SaleResource($sale->load([
             'items', 'customer:id,name,type', 'createdBy:id,name',
@@ -178,5 +187,12 @@ class SaleController extends Controller
     private function allow(Request $request, string $permission): void
     {
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
+    }
+
+    /** Salesmen may open only the bills they made. */
+    private function assertOwnSale(Request $request, Sale $sale): void
+    {
+        $user = $request->user();
+        abort_if($user->seesOnlyOwn('sales', $sale->company_id) && (int) $sale->created_by !== (int) $user->id, 403, 'You can only see the bills you made.');
     }
 }

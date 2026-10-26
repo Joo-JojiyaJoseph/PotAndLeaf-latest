@@ -142,7 +142,7 @@ export default function UsersList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Users &amp; roles</h1>
-          <p className="text-sm text-muted">Branch-level access. Each user signs in with their own login{companyHint}.</p>
+          <p className="text-sm text-muted">Staff who can log in. Each person has their own login and a role that decides what they can do{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />

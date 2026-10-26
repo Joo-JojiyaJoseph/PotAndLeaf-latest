@@ -117,6 +117,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('commission/supervisor-entries', [CommissionController::class, 'supervisorEntries']);
         Route::get('commission/payouts', [CommissionController::class, 'payouts']);
         Route::post('commission/payouts', [CommissionController::class, 'storePayout']);
+        Route::put('commission/payouts/{commissionPayout}', [CommissionController::class, 'updatePayout']);
         Route::delete('commission/payouts/{commissionPayout}', [CommissionController::class, 'destroyPayout']);
         Route::get('commission/transactions', [CommissionController::class, 'transactions']);
         Route::get('commission/daily-summary', [CommissionController::class, 'dailySummary']);
@@ -134,6 +135,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('commission/whatsapp-templates', [CommissionController::class, 'whatsappTemplates']);
         Route::post('commission/whatsapp-templates', [CommissionController::class, 'storeWhatsAppTemplate']);
         Route::post('commission/manager-rules', [CommissionController::class, 'storeManagerRule']);
+        Route::put('commission/manager-rules/{managerCommissionRule}', [CommissionController::class, 'updateManagerRule']);
+        Route::delete('commission/manager-rules/{managerCommissionRule}', [CommissionController::class, 'destroyManagerRule']);
         Route::get('commission/manager-rules', [CommissionController::class, 'managerRules']);
 
         // Module 08 — Customer receipts
@@ -199,6 +202,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::delete('customers/{customer}', [CustomerController::class, 'destroy']);
 
         // Products master (CRUD)
+        // Import products / customers / suppliers from a spreadsheet (check first with dry_run).
+        Route::post('import/{entity}', [\App\Http\Controllers\Api\ImportController::class, 'import'])->whereIn('entity', ['products', 'customers', 'suppliers']);
         Route::get('products/form-data', [ProductController::class, 'formData']);
         Route::get('products', [ProductController::class, 'index']);
         Route::patch('products/{product}/status', [ProductController::class, 'toggleStatus']);

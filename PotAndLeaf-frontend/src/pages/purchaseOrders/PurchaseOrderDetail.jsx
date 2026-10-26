@@ -5,10 +5,11 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { recordDetailPath } from '../../lib/recordCompany';
 import { Badge, Button } from '../../components/ui';
-import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
+import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadPdf } from '../../lib/pdfDownload';
 import { useToast } from '../../lib/toast';
+import { useConfirm } from '../../lib/confirm';
 
 const tone = { draft: 'inactive', sent: 'submitted', received: 'active', cancelled: 'blocked' };
 
@@ -35,6 +36,7 @@ export default function PurchaseOrderDetail() {
     queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
   };
   const sendM = useMutation({ mutationFn: () => api.post(`/purchase-orders/${id}/send`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
+  const confirm = useConfirm();
   const cancelM = useMutation({ mutationFn: () => api.delete(`/purchase-orders/${id}`, withCompany(recordCompanyId)), onSuccess: invalidate });
   const convertM = useMutation({
     mutationFn: () => api.post(`/purchase-orders/${id}/convert`, {}, withCompany(recordCompanyId)),
@@ -60,10 +62,10 @@ export default function PurchaseOrderDetail() {
         backTo="/purchase-orders"
         actions={<>
           <Badge tone={tone[po.status] ?? 'default'}>{po.status}</Badge>
-          {po.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
+          {po.can?.cancel && <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this purchase order', message: 'Cancel this purchase order? The supplier will not be expecting it any more.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {po.can?.send && <Button variant="outline" size="sm" onClick={() => sendM.mutate()} disabled={sendM.isPending}><PaperAirplaneIcon className="size-4" /> Mark sent</Button>}
-          {po.can?.convert && <Button size="sm" onClick={() => convertM.mutate()} disabled={convertM.isPending}><ArrowRightCircleIcon className="size-4" /> Convert to GRN</Button>}
-          {po.purchase_id && <Button variant="outline" size="sm" onClick={() => navigate(recordDetailPath('/purchases', { id: po.purchase_id, company_id: recordCompanyId }, recordCtx))}>View GRN</Button>}
+          {po.can?.convert && <Button size="sm" onClick={() => convertM.mutate()} disabled={convertM.isPending}><ArrowRightCircleIcon className="size-4" /> Convert to purchase</Button>}
+          {po.purchase_id && <Button variant="outline" size="sm" onClick={() => navigate(recordDetailPath('/purchases', { id: po.purchase_id, company_id: recordCompanyId }, recordCtx))}>View bill</Button>}
           <Button variant="outline" size="sm" onClick={async () => {
             try {
               await downloadPdf(`/purchase-orders/${id}/pdf`, `po-${po.po_no}.pdf`, recordCompanyId);
@@ -76,6 +78,10 @@ export default function PurchaseOrderDetail() {
           </Button>
         </>}
       />
+      <NextStep>{{
+        draft: 'Not sent yet. Send the PDF to the supplier, then click “Mark sent”.',
+        sent: 'Waiting for the goods. When they arrive, click “Convert to purchase” to record the bill and add the stock.',
+      }[po.status] ?? null}</NextStep>
 
       <Section title="Details">
         <InfoGrid cols={4}>

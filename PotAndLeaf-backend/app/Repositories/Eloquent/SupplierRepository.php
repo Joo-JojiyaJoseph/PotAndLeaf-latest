@@ -54,18 +54,7 @@ class SupplierRepository implements SupplierRepositoryInterface
         $supplier->delete();
     }
 
-    public function restore(int|string $companyId, string $id): ?Supplier
-    {
-        $supplier = Supplier::onlyTrashed()->forCompany($companyId)->whereKey($id)->first();
-        $supplier?->restore();
 
-        return $supplier;
-    }
-
-    public function forceDelete(int|string $companyId, string $id): void
-    {
-        Supplier::withTrashed()->forCompany($companyId)->whereKey($id)->first()?->forceDelete();
-    }
 
     public function codeExists(int|string $companyId, string $code, ?string $ignoreId = null): bool
     {

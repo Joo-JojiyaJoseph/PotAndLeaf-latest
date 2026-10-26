@@ -31,7 +31,7 @@ class TransferService
             ->with(['fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name'])
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
-            ->when(filled($filters['search'] ?? null), fn ($q) => $q->where('transfer_no', 'like', "%{$filters['search']}%"))
+            ->listFilters($filters, 'transfer_date', ['transfer_no'])
             ->orderByDesc('transfer_date')->orderByDesc('created_at')
             ->paginate(min((int) ($filters['per_page'] ?? 15), 100))
             ->withQueryString();
@@ -587,15 +587,6 @@ class TransferService
             return $destProduct;
         }
 
-        if (filled($sku)) {
-            $trashed = Product::onlyTrashed()->forCompany($destCompanyId)->whereRaw('LOWER(sku) = ?', [mb_strtolower($sku)])->first();
-            if ($trashed) {
-                $trashed->restore();
-
-                return $this->findDestinationProduct($destCompanyId, $sku, $name, $sourceProduct) ?? $trashed;
-            }
-        }
-
         try {
             return $this->copyProductToCompany($destCompanyId, $sourceProduct, $sku, $name);
         } catch (\Illuminate\Database\QueryException $e) {
@@ -736,9 +727,7 @@ class TransferService
 
     private function nextDestinationSku(int|string $companyId): string
     {
-        $count = Product::withTrashed()->forCompany($companyId)->count();
-
-        return 'SKU-'.str_pad((string) ($count + 1), 5, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(Product::query()->where('company_id', $companyId), 'sku', 'SKU-', 5);
     }
 
     private function logTransfer(int|string $companyId, ?int $userId, string $action, StockTransfer $transfer, string $description, ?array $meta = null): void
@@ -765,8 +754,6 @@ class TransferService
 
     private function nextTransferNo(int|string $companyId): string
     {
-        $count = StockTransfer::withTrashed()->where('company_id', $companyId)->count();
-
-        return 'TRF-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(StockTransfer::query()->where('company_id', $companyId), 'transfer_no', 'TRF-', 6);
     }
 }

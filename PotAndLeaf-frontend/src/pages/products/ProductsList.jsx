@@ -17,6 +17,8 @@ import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
 import { Badge, Button, Card, Input, Spinner, Select } from '../../components/ui';
 import Pagination from '../../components/Pagination';
+import ImportExportButtons from '../../components/ImportExportButtons';
+import { PRODUCT_COLUMNS, productExport } from '../../lib/importColumns';
 import StatusToggle from '../../components/StatusToggle';
 import { MediaImg } from '../../components/media';
 import { formatCurrency } from '../../lib/format';
@@ -86,7 +88,7 @@ export default function ProductsList() {
   async function onDelete(p) {
     const ok = await confirm({
       title: 'Delete product',
-      message: `Delete ${p.name}? This is a soft delete — stock history is preserved.`,
+      message: `Delete ${p.name} for good? This cannot be undone. A product that has stock, bills or history cannot be deleted — make it Inactive instead.`,
       confirmLabel: 'Delete',
       tone: 'danger',
     });
@@ -111,10 +113,13 @@ export default function ProductsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Products</h1>
-          <p className="text-sm text-muted">Product master with live stock levels and barcodes{companyHint}.</p>
+          <p className="text-sm text-muted">Everything you buy and sell, with current stock and prices{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
+          <ImportExportButtons entity="products" title="Import products from a spreadsheet" columns={PRODUCT_COLUMNS} exportColumns={productExport}
+            exportParams={{ ...companyParams, search: debounced || undefined, status: status || undefined, category_id: categoryId || undefined, low_only: lowOnly ? 1 : undefined }}
+            canImport={can('products.create')} onDone={() => queryClient.invalidateQueries({ queryKey: ['products'] })} />
           {can('products.create') && (
             <>
               <Link to="/products/labels"><Button variant="outline" size="sm"><QrCodeIcon className="size-4" /> Labels</Button></Link>

@@ -90,14 +90,6 @@ class ProductController extends Controller
         return back()->with('success', 'Product moved to trash.');
     }
 
-    public function restore(Team $current_team, string $product): RedirectResponse
-    {
-        $restored = $this->products->restore($current_team->id, $product);
-        abort_if($restored === null, 404);
-        $this->authorize('restore', $restored);
-
-        return back()->with('success', 'Product restored.');
-    }
 
     /** Shared props for the create/edit form. */
     private function formData(Team $team): array

@@ -12,6 +12,9 @@ import { FormCompanyField, useFormCompany } from '../../components/FormCompanyFi
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
 import { executePaymentSubmit } from '../../lib/paymentValidation';
+import { ListToolbar, useListFilters } from '../../components/ListToolbar';
+import { exportList } from '../../lib/exportList';
+import Pagination from '../../components/Pagination';
 
 const TABS = [{ value: 'payables', label: 'Payables' }, { value: 'history', label: 'Payment history' }];
 const payStatusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -285,9 +288,10 @@ export default function PaymentsList() {
     queryFn: () => api.get('/supplier-payments/payables', { params: companyParams }).then((r) => r.data.data.payables),
     enabled: Boolean(activeCompany) && tab === 'payables',
   });
+  const lf = useListFilters();
   const historyQ = useQuery({
-    queryKey: ['supplier-payments', activeCompany?.id, filterCompanyId],
-    queryFn: () => api.get('/supplier-payments', { params: companyParams }).then((r) => r.data),
+    queryKey: ['supplier-payments', activeCompany?.id, filterCompanyId, lf.key],
+    queryFn: () => api.get('/supplier-payments', { params: { ...companyParams, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'history',
   });
   const confirm = useConfirm();
@@ -328,7 +332,7 @@ export default function PaymentsList() {
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-line">
+      <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {TABS.map((t) => (
           <button key={t.value} onClick={() => setTab(t.value)}
             className={'border-b-2 px-3 py-2 text-sm transition-colors ' + (tab === t.value ? 'border-leaf font-medium text-leaf' : 'border-transparent text-muted hover:text-ink')}>
@@ -384,9 +388,13 @@ export default function PaymentsList() {
       )}
 
       {tab === 'history' && (
+        <ListToolbar lf={lf} placeholder={'Search payment no., reference or supplier…'}
+          onExport={() => exportList({ url: '/supplier-payments', params: { ...companyParams, ...lf.filters }, filename: 'supplier-payments', columns: [['Payment no', (r) => r.payment_no], ['Date', (r) => r.payment_date], ['Supplier', (r) => r.supplier_name], ['Purchase no', (r) => r.purchase_no], ['Amount', (r) => r.amount], ['Mode', (r) => r.mode], ['Reference', (r) => r.reference], ['Advance', (r) => r.is_advance ? "yes" : "no"]] })} />
+      )}
+      {tab === 'history' && (
         <Card className="overflow-hidden">
           {historyQ.isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
-            : history.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No payments recorded yet.</div>
+            : history.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">{lf.active ? 'Nothing matches these filters.' : 'No payments recorded yet.'}</div>
             : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -417,6 +425,7 @@ export default function PaymentsList() {
                 </table>
               </div>
             )}
+        {!historyQ.isLoading && <div className="border-t border-line px-3"><Pagination meta={historyQ.data?.meta} onPage={lf.setPage} /></div>}
         </Card>
       )}
 

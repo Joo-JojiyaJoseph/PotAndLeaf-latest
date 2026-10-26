@@ -7,11 +7,10 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AccountingTransaction extends Model
 {
-    use HasAuditColumns, HasUuids, SoftDeletes;
+    use HasAuditColumns, HasUuids;
 
     protected $fillable = [
         'company_id', 'location_id', 'voucher_no', 'voucher_date', 'voucher_type',

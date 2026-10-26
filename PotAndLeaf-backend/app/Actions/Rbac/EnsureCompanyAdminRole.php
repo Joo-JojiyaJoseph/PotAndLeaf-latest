@@ -17,14 +17,10 @@ class EnsureCompanyAdminRole
     public function handle(Company $company, ?User $assignTo = null): Role
     {
         return DB::transaction(function () use ($company, $assignTo) {
-            $role = Role::withTrashed()->firstOrCreate(
+            $role = Role::firstOrCreate(
                 ['slug' => 'administrator'],
                 ['name' => 'Administrator', 'description' => 'Full access to every module.', 'is_system' => true],
             );
-
-            if ($role->trashed()) {
-                $role->restore();
-            }
 
             $wildcard = Permission::where('name', '*')->first();
             if ($wildcard) {

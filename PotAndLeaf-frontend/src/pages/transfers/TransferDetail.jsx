@@ -5,10 +5,11 @@ import { CheckCircleIcon, PaperAirplaneIcon, XCircleIcon, ArrowsRightLeftIcon } 
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Modal, Select, Spinner } from '../../components/ui';
-import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
+import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatDate } from '../../lib/format';
 import { apiMessage } from '../../lib/formErrors';
 import { useToast } from '../../lib/toast';
+import { useConfirm } from '../../lib/confirm';
 
 const tone = { requested: 'warning', draft: 'inactive', in_transit: 'warning', received: 'active', rejected: 'blocked', cancelled: 'blocked' };
 
@@ -66,6 +67,7 @@ export default function TransferDetail() {
     onSuccess: invalidate,
     onError: fail('Could not dispatch this transfer.'),
   });
+  const confirm = useConfirm();
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/transfers/${id}`, withCompany(sourceCompanyId)),
     onSuccess: invalidate,
@@ -124,12 +126,17 @@ export default function TransferDetail() {
           <Badge tone={tone[t.status] ?? 'default'}>{t.status.replace('_', ' ')}</Badge>
           {t.can?.approve && <Button size="sm" onClick={openApprove} disabled={approveM.isPending}><CheckCircleIcon className="size-4" /> Approve</Button>}
           {t.can?.reject && <Button variant="ghost" size="sm" onClick={() => setRejecting(true)}><XCircleIcon className="size-4" /> Reject</Button>}
-          {t.can?.cancel && <Button variant="ghost" size="sm" onClick={() => cancelM.mutate()} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
+          {t.can?.cancel && <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this transfer', message: 'Cancel this stock transfer? Any stock already sent comes back to the sending company.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {t.can?.dispatch && <Button variant="outline" size="sm" onClick={() => dispatchM.mutate()} disabled={dispatchM.isPending}><PaperAirplaneIcon className="size-4" /> Dispatch</Button>}
           {t.can?.redirect && <Button variant="outline" size="sm" onClick={() => setRedirecting(true)}><ArrowsRightLeftIcon className="size-4" /> Redirect</Button>}
           {t.can?.receive && <Button size="sm" onClick={openReceive}><CheckCircleIcon className="size-4" /> Receive</Button>}
         </>}
       />
+      <NextStep>{{
+        requested: 'Waiting for head office to approve this request.',
+        draft: 'Approved. Pack the items and click “Dispatch” to send them.',
+        in_transit: 'On the way. The receiving company clicks “Receive” when the stock arrives.',
+      }[t.status] ?? null}</NextStep>
 
       {t.status === 'requested' && (
         <div className="rounded-xl border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -156,7 +163,7 @@ export default function TransferDetail() {
       </Section>
 
       <Section title="Items">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead><tr className="border-b border-line text-left text-faint">
             <th className="microlabel py-2 pr-3 font-semibold">Product</th>
             <th className="microlabel px-3 py-2 text-right font-semibold">Requested</th>
@@ -185,7 +192,7 @@ export default function TransferDetail() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </Section>
 
       <Modal open={approving} onClose={() => setApproving(false)} title={`Approve ${t.transfer_no}`}

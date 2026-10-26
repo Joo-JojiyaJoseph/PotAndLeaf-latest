@@ -46,13 +46,5 @@ class SupplierService
         $this->deleteSupplier->handle($supplier);
     }
 
-    public function restore(int|string $companyId, string $id): ?Supplier
-    {
-        return $this->suppliers->restore($companyId, $id);
-    }
 
-    public function forceDelete(int|string $companyId, string $id): void
-    {
-        $this->suppliers->forceDelete($companyId, $id);
-    }
 }

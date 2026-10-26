@@ -8,6 +8,9 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, resolveRecordCompany, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
 import { formatDate } from '../../lib/format';
+import { ListToolbar, useListFilters } from '../../components/ListToolbar';
+import { exportList } from '../../lib/exportList';
+import Pagination from '../../components/Pagination';
 
 const STATUS_TABS = [
   { value: '', label: 'All' },
@@ -23,6 +26,7 @@ export default function StockVerificationsList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
+  const lf = useListFilters();
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [rejecting, setRejecting] = useState(null); // verification being rejected
@@ -41,8 +45,8 @@ export default function StockVerificationsList() {
   const recordCtx = { filterCompanyId, companyId };
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['stock-verifications', activeCompany?.id, filterCompanyId, status, debounced],
-    queryFn: () => api.get('/stock-verifications', { params: { ...companyParams, status, search: debounced } }).then((r) => r.data),
+    queryKey: ['stock-verifications', activeCompany?.id, filterCompanyId, status, debounced, lf.key],
+    queryFn: () => api.get('/stock-verifications', { params: { ...companyParams, status, search: debounced, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -75,7 +79,7 @@ export default function StockVerificationsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Stock verification</h1>
-          <p className="text-sm text-muted">Physical counts. HO approval adjusts system stock to the counted figures{companyHint}.</p>
+          <p className="text-sm text-muted">Count what is really on the shelf. After approval, the system stock is set to your count{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
@@ -94,8 +98,11 @@ export default function StockVerificationsList() {
         <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search count no…" className="pl-9" />
       </div>
 
+      <ListToolbar lf={lf} placeholder={''} withSearch={false}
+        onExport={() => exportList({ url: '/stock-verifications', params: { ...companyParams, status, ...lf.filters, search: debounced }, filename: 'stock-counts', columns: [['Count no', (r) => r.count_no], ['Date', (r) => r.count_date], ['Note', (r) => r.location_note], ['Items', (r) => r.items_count], ['Status', (r) => r.status]] })} />
+
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line">
-        <div className="flex gap-1">
+        <div className="no-scrollbar flex min-w-0 gap-1 overflow-x-auto">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.value}
@@ -121,7 +128,7 @@ export default function StockVerificationsList() {
         ) : rows.length === 0 ? (
           <div className="px-4 py-16 text-center">
             <p className="text-sm font-medium">No counts here</p>
-            <p className="mt-1 text-sm text-muted">Start a physical count to reconcile stock.</p>
+            <p className="mt-1 text-sm text-muted">Start a physical count to reconcile stock.</p>{can('stock_verifications.create') && <Link to="/stock-verifications/new" className="mt-4 inline-flex items-center gap-1 rounded-xl bg-leaf px-4 py-2 text-sm font-medium text-white hover:brightness-105">+ Start a stock count</Link>}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -171,7 +178,8 @@ export default function StockVerificationsList() {
             </table>
           </div>
         )}
-      </Card>
+      {!isLoading && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={lf.setPage} /></div>}
+        </Card>
 
       <Modal
         open={Boolean(rejecting)}

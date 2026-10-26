@@ -26,7 +26,7 @@ class AdvanceOrderController extends Controller
     {
         $this->allow($request, 'advance.view');
 
-        return $this->ok(AdvanceOrderResource::collection($this->orders->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page']))));
+        return $this->ok(AdvanceOrderResource::collection($this->orders->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page', 'from', 'to']))));
     }
 
     public function formData(Request $request): JsonResponse

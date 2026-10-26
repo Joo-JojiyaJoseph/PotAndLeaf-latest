@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Customer;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Support\Validation\IndianFormats;
 use Illuminate\Validation\Rule;
 
 class StoreCustomerRequest extends FormRequest
@@ -22,19 +23,20 @@ class StoreCustomerRequest extends FormRequest
                 Rule::unique('customers', 'customer_code')->where('company_id', $companyId)->ignore($customerId)],
             'name'            => [
                 'required', 'string', 'max:150',
-                Rule::unique('customers', 'name')->where('company_id', $companyId)->whereNull('deleted_at')->ignore($customerId),
+                Rule::unique('customers', 'name')->where('company_id', $companyId)->ignore($customerId),
             ],
             'type'            => ['required', 'in:retail,wholesale,dealer'],
             'email'           => ['nullable', 'email', 'max:150'],
             'phone'           => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'whatsapp'        =>['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'whatsapp_opt_in' => ['sometimes', 'boolean'],
-            'gst_number'      => ['nullable', 'string', 'max:20'],
+            'gst_number'      => ['nullable', 'string', 'max:15', 'regex:'.IndianFormats::GSTIN,
+                Rule::unique('customers', 'gst_number')->where('company_id', $companyId)->ignore($customerId)],
             'address_line1'   => ['nullable', 'string', 'max:200'],
             'address_line2'   => ['nullable', 'string', 'max:200'],
             'city'            => ['nullable', 'string', 'max:80'],
             'state'           => ['nullable', 'string', 'max:80'],
-            'pincode'         => ['nullable', 'string', 'max:12'],
+            'pincode'         => ['nullable', 'string', 'regex:'.IndianFormats::PINCODE],
             'credit_days'     => ['nullable', 'integer', 'min:0'],
             'credit_limit'    => ['nullable', 'numeric', 'min:0'],
             'opening_balance' => ['nullable', 'numeric'],
@@ -49,6 +51,12 @@ class StoreCustomerRequest extends FormRequest
         return [
             'customer_code.unique' => 'This customer code is already used by another customer in this company.',
             'name.unique'          => 'A customer with this name already exists in this company.',
-        ];
+            'gst_number.unique'    => 'Another customer in this company already has this GST number.',
+        ] + IndianFormats::MESSAGES;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge(IndianFormats::normalise($this->all()));
     }
 }

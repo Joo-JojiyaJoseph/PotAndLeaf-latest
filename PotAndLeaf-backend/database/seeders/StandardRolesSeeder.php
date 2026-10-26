@@ -16,7 +16,7 @@ class StandardRolesSeeder extends Seeder
     public const FINANCE = [
         'payments.', 'receipts.', 'accounts.', 'reports.', 'commission.view',
         'suppliers.view', 'customers.view', 'products.view', 'inventory.view',
-        'purchases.view', 'purchase_returns.view', 'sales.view', 'sales_returns.view',
+        'purchases.view', 'purchase_returns.view', 'sales.view', 'sales.view_all', 'sales_returns.view', 'customers.view_all',
         'po.view', 'rental.view', 'loyalty.view', 'backup.view',
     ];
 
@@ -25,8 +25,8 @@ class StandardRolesSeeder extends Seeder
         $all = Permission::pluck('id', 'name');
 
         $roles = [
-            'Manager'      => ['suppliers.', 'products.', 'purchases.', 'inventory.', 'damage.', 'purchase_returns.', 'sales_returns.', 'stock_verifications.', 'bulk_splits.', 'sales.', 'customers.', 'payments.', 'receipts.', 'accounts.', 'commission.', 'loyalty.', 'whatsapp.', 'api.', 'transfers.', 'locations.', 'production.', 'rental.', 'reports.', 'activity.', 'backup.', 'po.', 'advance.', 'backorder.', 'categories.', 'brands.', 'units.', 'users.view', 'roles.view'],
-            'Cashier'      => ['products.view', 'inventory.view', 'sales.view', 'sales.create', 'sales.confirm', 'sales_returns.view', 'sales_returns.create', 'sales_returns.confirm', 'customers.view', 'customers.create', 'loyalty.view', 'receipts.view', 'receipts.create', 'accounts.view', 'accounts.create', 'backorder.view'],
+            'Manager'      => ['suppliers.', 'products.', 'purchases.', 'inventory.', 'damage.', 'purchase_returns.', 'sales_returns.', 'stock_verifications.', 'bulk_splits.', 'sales.', 'customers.', 'payments.', 'receipts.', 'accounts.', 'commission.', 'loyalty.', 'whatsapp.', 'api.', 'transfers.', 'locations.', 'production.', 'rental.', 'reports.', 'activity.', 'backup.', 'po.', 'advance.', 'backorder.', 'categories.', 'subcategories.', 'brands.', 'units.', 'users.view', 'roles.view'],
+            'Cashier'      => ['products.view', 'inventory.view', 'sales.view', 'sales.view_all', 'customers.view_all', 'sales.create', 'sales.confirm', 'sales_returns.view', 'sales_returns.create', 'sales_returns.confirm', 'customers.view', 'customers.create', 'loyalty.view', 'receipts.view', 'receipts.create', 'accounts.view', 'accounts.create', 'backorder.view'],
             // HO accounts team: money, books, GST and reports; can view (not change) stock and bills.
             'Finance'      => self::FINANCE,
             'Godown Staff' => ['inventory.', 'damage.', 'stock_verifications.', 'transfers.', 'locations.view', 'products.view', 'purchases.view'],

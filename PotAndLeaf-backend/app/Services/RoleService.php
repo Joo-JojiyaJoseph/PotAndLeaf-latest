@@ -41,8 +41,4 @@ class RoleService
         $this->deleteRole->handle($role);
     }
 
-    public function restore(string $id): ?Role
-    {
-        return $this->roles->restore($id);
-    }
 }

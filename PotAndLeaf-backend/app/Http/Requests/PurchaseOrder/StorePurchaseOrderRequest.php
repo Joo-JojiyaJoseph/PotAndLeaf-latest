@@ -26,7 +26,7 @@ class StorePurchaseOrderRequest extends FormRequest
             'items.*.product_id'   => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],
             'items.*.qty'          => ['required', 'numeric', 'gt:0'],
             'items.*.rate'         => ['required', 'numeric', 'min:0'],
-            'items.*.gst_rate'     => ['nullable', 'numeric', 'min:0'],
+            'items.*.gst_rate'     => ['nullable', 'numeric', 'min:0', 'max:100'],
         ];
     }
 }

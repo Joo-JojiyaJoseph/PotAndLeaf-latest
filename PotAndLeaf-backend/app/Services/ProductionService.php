@@ -594,6 +594,9 @@ class ProductionService
             'completed_at'           => now(),
         ]);
 
+        // Bonus for the person who made it (₹ per piece made), if their rate has one.
+        app(\App\Services\SupervisorCommissionService::class)->accrueOnProduction($order->refresh());
+
         $this->activity->log(
             $order->company_id,
             $userId,
@@ -643,6 +646,7 @@ class ProductionService
         return DB::transaction(function () use ($order, $userId) {
             if ($order->isCompleted()) {
                 $order->loadMissing('items');
+                app(\App\Services\SupervisorCommissionService::class)->reverseProduction($order);
 
                 $output = Product::forCompany($order->company_id)->lockForUpdate()->find($order->output_product_id);
                 if ($output) {
@@ -794,8 +798,6 @@ class ProductionService
 
     private function nextOrderNo(int|string $companyId): string
     {
-        $count = ProductionOrder::withTrashed()->forCompany($companyId)->count();
-
-        return 'PRD-'.str_pad((string) ($count + 1), 6, '0', STR_PAD_LEFT);
+        return \App\Support\Numbering\DocumentNumber::next(ProductionOrder::query()->where('company_id', $companyId), 'order_no', 'PRD-', 6);
     }
 }

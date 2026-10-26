@@ -18,7 +18,7 @@ class BatchPurchaseOrderRequest extends FormRequest
 
         return [
             'po_date'       => ['required', 'date'],
-            'expected_date' => ['nullable', 'date'],
+            'expected_date' => ['nullable', 'date', 'after_or_equal:po_date'],
             'notes'         => ['nullable', 'string', 'max:2000'],
             'orders'        => ['required', 'array', 'min:1'],
             'orders.*.supplier_id' => ['required', 'uuid', Rule::exists('suppliers', 'id')->where('company_id', $companyId)],
