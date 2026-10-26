@@ -40,6 +40,12 @@ class Purchase extends Model
         return $this->belongsTo(Supplier::class);
     }
 
+    /** The purchase order this bill was made from (if any). */
+    public function purchaseOrder(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PurchaseOrder::class, 'purchase_id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(PurchaseItem::class);

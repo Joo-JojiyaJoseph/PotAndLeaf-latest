@@ -32,6 +32,8 @@ class PurchaseResource extends JsonResource
             'payment_status'    => $this->paymentStatus(),
             'status'            => $this->status,
             'notes'             => $this->notes,
+            // Made from a purchase order: the supplier is fixed by that order.
+            'purchase_order'    => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? ['id' => $this->purchaseOrder->id, 'po_no' => $this->purchaseOrder->po_no] : null),
             'confirmed_at'      => optional($this->confirmed_at)->toIso8601String(),
             'entered_by'        => $this->whenLoaded('createdBy', fn () => $this->createdBy?->name),
             'created_by'        => $this->created_by,

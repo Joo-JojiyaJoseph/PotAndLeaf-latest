@@ -1,6 +1,6 @@
-# Pot & Leaf ERP — all fixes (26 Oct 2026, update 12)
+# Pot & Leaf ERP — all fixes (26 Oct 2026, update 13)
 
-This package holds **every file changed** from the uploaded project (276 files + this note).
+This package holds **every file changed** from the uploaded project (277 files + this note).
 It replaces all earlier packages; install only this one.
 
 ## Install
@@ -13,12 +13,17 @@ It replaces all earlier packages; install only this one.
 
 | Check | Result |
 |---|---|
-| Backend test suite (Pest, PHP 8.4) | 437 passed, 0 failed, 16 skipped (before: 379 passed) |
+| Backend test suite (Pest, PHP 8.4) | 439 passed, 0 failed, 16 skipped (before: 379 passed) |
 | Frontend build (Vite) + unit tests (Vitest) | builds · 23 passed |
 | Browser check of every changed screen | no script errors, no failed API calls |
 | API run-through: purchase → batch/barcode → damage → purchase return; sale (cash/UPI/credit/walk-in) → confirm; transfer between companies → receive; bulk split | all OK; batch totals = stock |
 
 ## 00. Update 2 — one location per company, simpler commission
+
+**Supplier on purchases (update 13)** — no new migration
+- A purchase made from a purchase order (Convert to purchase) keeps that order's supplier. The edit form shows the supplier as fixed with "From purchase order PO-…"; the server also refuses a different supplier for it.
+- A direct purchase (Purchases → New purchase) picks from the suppliers that already exist ("Select an existing supplier…", searchable when the list is long) and can still be changed while it is a draft. A supplier that doesn't exist is refused.
+- New test `tests/Feature/PurchaseFromOrderSupplierTest.php`.
 
 **Update 12 — dropdowns, subcategories, no soft delete, making bonus** (3 new migrations — back up the database before migrating)
 

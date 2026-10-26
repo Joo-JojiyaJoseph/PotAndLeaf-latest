@@ -81,12 +81,19 @@ class PurchaseController extends Controller
         $this->allow($request, 'purchases.view');
         $this->assertRecordCompany($request, $purchase);
 
-        return $this->ok(new PurchaseResource($purchase->load(['supplier', 'items', 'createdBy:id,name', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
+        return $this->ok(new PurchaseResource($purchase->load(['supplier', 'items', 'purchaseOrder:id,purchase_id,po_no', 'createdBy:id,name', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
     }
 
     public function update(UpdatePurchaseRequest $request, Purchase $purchase): JsonResponse
     {
         $this->assertRecordCompany($request, $purchase, writable: true, writableMessage: 'Switch to the purchase company to edit or confirm this purchase.');
+        // A bill made from a purchase order keeps that order's supplier.
+        $po = $purchase->purchaseOrder()->first(['id', 'po_no', 'supplier_id']);
+        if ($po && (string) $request->input('supplier_id') !== (string) $po->supplier_id) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'supplier_id' => "This purchase was made from purchase order {$po->po_no}, so its supplier cannot be changed.",
+            ]);
+        }
         $updated = $this->purchases->update($purchase, $request->validated(), $request->user()->id);
 
         return $this->ok(new PurchaseResource($updated), 'Purchase updated.');

@@ -283,13 +283,21 @@ export default function PurchaseForm() {
           </div>
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {existing?.purchase_order ? (
+            <Field label="Supplier" required error={fieldErrors.supplier_id}>
+              <div className="flex h-9 w-full items-center rounded-[10px] border border-line bg-paper px-3 text-sm text-ink" title="Fixed by the purchase order">
+                <span className="truncate">{existing.supplier?.name ?? '—'}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted">From purchase order {existing.purchase_order.po_no} — the supplier is fixed.</p>
+            </Field>
+          ) : (
           <Field label="Supplier" required error={fieldErrors.supplier_id}>
             <Select
               value={header.supplier_id}
               onChange={(e) => setHeader((h) => ({ ...h, supplier_id: e.target.value }))}
               className={`h-9 w-full rounded-[10px] border bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30 ${fieldErrors.supplier_id ? 'border-danger' : 'border-line'}`}
             >
-              <option value="">Select supplier…</option>
+              <option value="">Select an existing supplier…</option>
               {(formData?.suppliers ?? []).map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -297,6 +305,7 @@ export default function PurchaseForm() {
               ))}
             </Select>
           </Field>
+          )}
           <Field label="Purchase date" required error={fieldErrors.purchase_date}>
             <Input
               type="date"
