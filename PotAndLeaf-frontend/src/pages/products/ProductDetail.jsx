@@ -39,7 +39,7 @@ export default function ProductDetail() {
     <div className="space-y-5 p-4 sm:p-6">
       <DetailHeader
         title={p.name}
-        subtitle={`${p.sku}${p.category ? ` · ${p.category}` : ''}`}
+        subtitle={`${p.sku}${(p.main_category ?? p.category) ? ` · ${p.main_category ?? p.category}${p.subcategory ? ` › ${p.subcategory}` : ''}` : ''}`}
         backTo="/products"
         actions={<>
           <Badge tone={p.status === 'active' ? 'active' : 'inactive'}>{p.status}</Badge>
@@ -55,9 +55,9 @@ export default function ProductDetail() {
       <Section title="Overview">
         <InfoGrid cols={4}>
           <InfoItem label="SKU" value={p.sku} mono />
-          <InfoItem label="Category" value={p.category || '—'} />
+          <InfoItem label="Category" value={p.main_category || p.category || '—'} />
+          <InfoItem label="Subcategory" value={p.subcategory || '—'} />
           <InfoItem label="Unit" value={p.unit || '—'} />
-          <InfoItem label="HSN code" value={p.hsn_code || '—'} />
           <InfoItem label="GST %" value={`${p.gst_rate ?? 0}%`} />
           <InfoItem label="Status" value={p.status} />
           {p.is_rental && <InfoItem label="Daily rental rate" value={formatCurrency(p.rental_daily_rate ?? 0)} mono />}
@@ -87,8 +87,8 @@ export default function ProductDetail() {
       {(p.suppliers?.length ?? 0) > 0 && (
         <Section title="Suppliers">
           <div className="flex flex-wrap gap-2">
-            {p.suppliers.map((s) => (
-              <span key={s.id} className="rounded-xl border border-line px-3 py-1.5 text-sm">
+            {p.suppliers.map((s, i) => (
+              <span key={`${s.id ?? 'sup'}-${i}`} className="rounded-xl border border-line px-3 py-1.5 text-sm">
                 {s.name} · {formatCurrency(s.supplier_price ?? 0)}
               </span>
             ))}
@@ -110,8 +110,8 @@ export default function ProductDetail() {
         )}
         {activeBatches.length > 0 ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {activeBatches.map((b) => (
-              <Card key={b.id} className="flex flex-col gap-2 p-3">
+            {activeBatches.map((b, i) => (
+              <Card key={b.id ?? b.batch_id ?? `${b.batch_no}-${b.barcode}-${i}`} className="flex flex-col gap-2 p-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-ink">Batch {b.batch_no}</span>
                   <span className="text-muted">Qty {b.remaining_qty}</span>

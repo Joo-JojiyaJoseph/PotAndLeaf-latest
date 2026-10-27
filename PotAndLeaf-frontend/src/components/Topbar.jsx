@@ -8,6 +8,7 @@ import {
   Bars3Icon,
   BellIcon,
   MoonIcon,
+  QuestionMarkCircleIcon,
   SunIcon,
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
@@ -100,6 +101,10 @@ export default function Topbar({ onMenu }) {
         >
           <BellIcon className="size-[18px]" />
         </button>
+
+        <Link to="/help" className={iconBtn} aria-label="Help and user guide" title="Help & user guide">
+          <QuestionMarkCircleIcon className="size-[18px]" />
+        </Link>
 
         <button
           onClick={toggleDark}

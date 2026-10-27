@@ -6,6 +6,7 @@ use App\Actions\Purchases\CreatePurchase;
 use App\Models\Product;
 use App\Models\PurchaseItem;
 use App\Models\PurchaseOrder;
+use App\Models\Supplier;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -29,13 +30,14 @@ class PurchaseOrderService
             ->get();
 
         $lastRates = $this->lastPurchaseRates($companyId, $products->pluck('id')->all());
+        $lastSuppliers = $this->lastPurchaseSuppliers($companyId, $products->pluck('id')->all());
         $onOrder = $this->openOrderQty($companyId, $products->pluck('id')->all());
 
         // Stock already on an open (draft/sent) PO counts as coming in, so a
         // product is not suggested again once enough is on order (issue 3).
         $products = $products->filter(fn (Product $p) => (float) $p->current_stock + (float) ($onOrder[$p->id]['qty'] ?? 0) <= (float) $p->reorder_level)->values();
 
-        return $products->map(function (Product $p) use ($lastRates, $onOrder) {
+        return $products->map(function (Product $p) use ($lastRates, $onOrder, $lastSuppliers) {
             $ordered = (float) ($onOrder[$p->id]['qty'] ?? 0);
             $target = (float) $p->reorder_level * 2;
             $suggested = max(0.0, round($target - (float) $p->current_stock - $ordered, 3));
@@ -54,6 +56,16 @@ class PurchaseOrderService
                 'supplier_price' => $s->pivot->supplier_price !== null ? (float) $s->pivot->supplier_price : null,
             ])->values()->all();
 
+            // No supplier linked to the product: use the one it was last bought from.
+            $supplierId = $primary?->id;
+            $supplierName = $primary?->name;
+            $supplierSource = $primary ? 'product' : null;
+            if (! $primary && isset($lastSuppliers[$p->id])) {
+                [$supplierId, $supplierName] = $lastSuppliers[$p->id];
+                $supplierSource = 'last_purchase';
+                $suppliers[] = ['id' => $supplierId, 'name' => $supplierName, 'is_primary' => false, 'supplier_price' => null];
+            }
+
             return [
                 'product_id'          => $p->id,
                 'name'                => $p->name,
@@ -71,8 +83,9 @@ class PurchaseOrderService
                 'supplier_price'      => $supplierPrice,
                 'rate'                => $rate,
                 'gst_rate'            => (float) $p->gst_rate,
-                'supplier_id'         => $primary?->id,
-                'supplier_name'       => $primary?->name,
+                'supplier_id'         => $supplierId,
+                'supplier_name'       => $supplierName,
+                'supplier_source'     => $supplierSource,
                 'preferred_supplier'  => $primary?->name,
                 'suppliers'           => $suppliers,
             ];
@@ -106,6 +119,29 @@ class PurchaseOrderService
     }
 
     /** Latest confirmed purchase rate per product. */
+    /** Supplier of each product's latest confirmed purchase: product_id => [supplier_id, name]. */
+    private function lastPurchaseSuppliers(int|string $companyId, array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        return PurchaseItem::query()
+            ->select('purchase_items.product_id', 'purchases.supplier_id', 'suppliers.name')
+            ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
+            ->join('suppliers', 'suppliers.id', '=', 'purchases.supplier_id')
+            ->where('purchases.company_id', $companyId)
+            ->where('purchases.status', 'confirmed')
+            ->where('suppliers.status', 'active')
+            ->whereIn('purchase_items.product_id', $productIds)
+            ->orderByDesc('purchases.purchase_date')
+            ->orderByDesc('purchase_items.id')
+            ->get()
+            ->unique('product_id')
+            ->mapWithKeys(fn ($r) => [$r->product_id => [$r->supplier_id, $r->name]])
+            ->all();
+    }
+
     private function lastPurchaseRates(int|string $companyId, array $productIds): array
     {
         if ($productIds === []) {
@@ -138,9 +174,35 @@ class PurchaseOrderService
     }
 
     /** Reorder report grouped by preferred supplier for batch PO generation. */
-    public function reorderReport(int|string $companyId): array
+    /**
+     * @param  array<string, array{supplier_id?: ?string, qty?: float|string|null, include?: bool}>  $choices
+     *         What the person picked on the Reorder screen (supplier, order qty, include tick), by product id —
+     *         so the PDF shows exactly what is on screen.
+     */
+    public function reorderReport(int|string $companyId, array $choices = []): array
     {
         $lines = $this->reorderSuggestions($companyId);
+        if ($choices) {
+            $names = Supplier::forCompany($companyId)->pluck('name', 'id');
+            $lines = collect($lines)->map(function ($row) use ($choices, $names) {
+                $c = $choices[$row['product_id']] ?? null;
+                if (! is_array($c)) {
+                    return $row;
+                }
+                if (array_key_exists('include', $c) && ! $c['include']) {
+                    return null;
+                }
+                if (array_key_exists('supplier_id', $c)) {
+                    $sid = $c['supplier_id'] ?: null;
+                    $row['supplier_id'] = $sid && isset($names[$sid]) ? $sid : null;
+                    $row['supplier_name'] = $row['supplier_id'] ? $names[$sid] : null;
+                }
+                if (isset($c['qty']) && is_numeric($c['qty']) && (float) $c['qty'] >= 0) {
+                    $row['suggested_qty'] = (float) $c['qty'];
+                }
+                return $row;
+            })->filter()->values()->all();
+        }
         $groups = collect($lines)->groupBy(fn ($row) => $row['supplier_id'] ?? 'unassigned');
 
         $suppliers = [];

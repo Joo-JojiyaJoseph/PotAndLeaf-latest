@@ -17,6 +17,8 @@ import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../..
 import { ImageUpload, mediaUrl } from '../../components/media';
 import StatusToggle from '../../components/StatusToggle';
 import { useToast } from '../../lib/toast';
+import Pagination from '../../components/Pagination';
+import usePaged from '../../hooks/usePaged';
 
 const empty = {
   name: '', code: '', gst_number: '', legal_name: '', state: '', state_code: '',
@@ -156,6 +158,7 @@ export default function CompaniesList() {
     if (statusFilter === 'inactive') return !c.is_active;
     return true;
   });
+  const { pageRows, meta, setPage } = usePaged(rows, 24, statusFilter);
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -217,7 +220,7 @@ export default function CompaniesList() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {rows.map((c) => (
+          {pageRows.map((c) => (
             <Card key={c.id} className="flex flex-col overflow-hidden p-4 cursor-pointer hover:shadow-soft" onClick={() => navigate(`/companies/${c.id}`)}>
               <div className="flex items-start gap-3">
                 <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-leaf-soft">
@@ -257,6 +260,7 @@ export default function CompaniesList() {
           ))}
         </div>
       )}
+      <Pagination meta={meta} onPage={setPage} />
 
       <Modal
         open={editing !== null}

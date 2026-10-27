@@ -8,6 +8,8 @@ import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { mediaUrl } from '../../components/media';
 import { formatCurrency, formatDate } from '../../lib/format';
+import Pagination from '../../components/Pagination';
+import usePaged from '../../hooks/usePaged';
 
 const tone = { active: 'active', inactive: 'inactive', blocked: 'blocked' };
 const payTone = { paid: 'active', partial: 'pending', unpaid: 'blocked', 'n/a': 'default' };
@@ -26,9 +28,10 @@ export default function SupplierDetail() {
     enabled: Boolean(id && headerCompanyId),
   });
 
-  const { data: payments } = useQuery({
-    queryKey: ['supplier-payments', id, headerCompanyId],
-    queryFn: () => api.get('/supplier-payments', { params: { supplier_id: id, per_page: 50 }, ...withCompany(headerCompanyId) }).then((r) => r.data.data),
+  // Payments and advance come back as two separate lists (never mixed).
+  const { data: account } = useQuery({
+    queryKey: ['supplier-account', id, headerCompanyId],
+    queryFn: () => api.get(`/suppliers/${id}/account`, withCompany(headerCompanyId)).then((r) => r.data.data),
     enabled: Boolean(id && headerCompanyId),
   });
 
@@ -40,6 +43,9 @@ export default function SupplierDetail() {
     enabled: Boolean(id && headerCompanyId),
     placeholderData: keepPreviousData,
   });
+
+  const payPage = usePaged(account?.payments ?? [], 10);
+  const advPage = usePaged(account?.advance ?? [], 10);
 
   if (isLoading) return <DetailLoading />;
   if (isError || !data) return <DetailError backTo="/suppliers" />;
@@ -60,6 +66,14 @@ export default function SupplierDetail() {
           </>
         }
       />
+
+      {account && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <MoneyTile label="You owe this supplier" value={account.summary.you_owe} hint="Unpaid bills" tone={account.summary.you_owe > 0 ? 'warn' : 'ok'} />
+          <MoneyTile label="Advance with this supplier" value={account.summary.advance_available} hint="Can be used on future bills" tone="leaf" />
+          <MoneyTile label="Paid so far" value={account.summary.paid_total} hint={`${account.summary.payment_count} payment${account.summary.payment_count === 1 ? '' : 's'}`} />
+        </div>
+      )}
 
       {s.photo && (
         <div className="size-24 overflow-hidden rounded-2xl border border-line">
@@ -95,48 +109,87 @@ export default function SupplierDetail() {
         </InfoGrid>
       </Section>
 
-      <Section title="Terms & balances">
+      <Section title="Credit terms">
         <InfoGrid cols={3}>
           <InfoItem label="Credit limit" value={s.credit_limit != null ? formatCurrency(s.credit_limit) : null} mono />
           <InfoItem label="Credit days" value={s.credit_days != null ? `${s.credit_days} days` : null} mono />
           <InfoItem label="Opening balance" value={s.opening_balance != null ? formatCurrency(s.opening_balance) : null} mono />
-          <InfoItem label="Outstanding" value={s.outstanding != null ? formatCurrency(s.outstanding) : null} mono />
-          <InfoItem label="Advance balance" value={s.advance_balance != null ? formatCurrency(s.advance_balance) : null} mono />
         </InfoGrid>
         {s.notes && <div className="mt-4 border-t border-line pt-4"><InfoItem label="Notes" value={s.notes} /></div>}
       </Section>
 
-      <Section title="Advance and payments">
+
+      <Section title="Payments made" actions={<Button size="sm" variant="outline" onClick={() => navigate('/payments')}>Pay supplier</Button>}>
+        <p className="-mt-1 mb-3 text-xs text-muted">Money you paid to this supplier, and which bills each payment cleared.</p>
         <Card className="overflow-hidden">
-          {(payments ?? []).length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-muted">No supplier payments yet.</div>
+          {!account ? (
+            <div className="flex justify-center py-8"><Spinner className="size-5" /></div>
+          ) : account.payments.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-muted">No payments made to this supplier yet.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-faint">
-                    <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
-                    <th className="microlabel px-4 py-2.5 font-semibold">Reference</th>
-                    <th className="microlabel px-4 py-2.5 font-semibold">Method</th>
-                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Amount</th>
-                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Adjusted</th>
-                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Remaining advance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(payments ?? []).map((p) => (
-                    <tr key={p.id} className="border-b border-line/60 last:border-0">
-                      <td className="px-4 py-2.5">{formatDate(p.payment_date)}</td>
-                      <td className="px-4 py-2.5">{p.reference || p.payment_no}{p.is_advance ? ' · Advance' : ''}{p.applied_from_advance ? ' · Applied' : ''}</td>
-                      <td className="px-4 py-2.5 text-muted">{p.mode}</td>
-                      <td className="tnum px-4 py-2.5 text-right">{formatCurrency(p.amount)}</td>
-                      <td className="tnum px-4 py-2.5 text-right">{p.is_advance ? formatCurrency(p.adjusted_amount) : '—'}</td>
-                      <td className="tnum px-4 py-2.5 text-right">{p.remaining_advance != null ? formatCurrency(p.remaining_advance) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <><ul className="divide-y divide-line/60">
+              {payPage.pageRows.map((p) => (
+                <li key={p.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0 space-y-1.5">
+                    <p className="text-sm">
+                      <span className="font-medium">{p.payment_no}</span>
+                      <span className="text-muted"> · {formatDate(p.date)} · <span className="capitalize">{p.mode}</span>{p.reference ? ` · Ref ${p.reference}` : ''}</span>
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {p.bills.map((b) => (
+                        <button key={b.purchase_id} type="button" onClick={() => navigate(`/purchases/${b.purchase_id}`)}
+                          className="rounded-full bg-paper px-2 py-0.5 text-xs text-ink ring-1 ring-line hover:text-leaf">
+                          Paid bill {b.purchase_no} · {formatCurrency(b.amount)}
+                        </button>
+                      ))}
+                      {p.to_advance > 0 && (
+                        <span className="rounded-full bg-leaf-soft px-2 py-0.5 text-xs text-leaf-hover">
+                          {p.is_advance ? 'Paid as advance' : 'Extra kept as advance'} · {formatCurrency(p.to_advance)}
+                        </span>
+                      )}
+                      {p.bills.length === 0 && p.to_advance <= 0 && <span className="text-xs text-muted">Against what was owed</span>}
+                    </div>
+                  </div>
+                  <p className="tnum shrink-0 text-sm font-semibold">{formatCurrency(p.amount)}</p>
+                </li>
+              ))}
+            </ul>
+            <div className="border-t border-line px-3"><Pagination meta={payPage.meta} onPage={payPage.setPage} /></div>
+            </>
+          )}
+        </Card>
+      </Section>
+
+      <Section title="Advance" actions={account?.summary.advance_available > 0 ? <Button size="sm" variant="outline" onClick={() => navigate('/payments')}>Use advance on a bill</Button> : null}>
+        <p className="-mt-1 mb-3 text-xs text-muted">Money held with this supplier: where it came from, which bills it was used on, and what is left.</p>
+        <Card className="overflow-hidden">
+          {!account ? (
+            <div className="flex justify-center py-8"><Spinner className="size-5" /></div>
+          ) : account.advance.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-muted">No advance with this supplier.</div>
+          ) : (
+            <><ul className="divide-y divide-line/60">
+              {advPage.pageRows.map((m, i) => (
+                <li key={i} className="flex items-start justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {m.purchase_id
+                        ? <button type="button" onClick={() => navigate(`/purchases/${m.purchase_id}`)} className="text-left hover:text-leaf">{m.label}</button>
+                        : m.label}
+                    </p>
+                    <p className="text-xs text-muted">{[m.date ? formatDate(m.date) : null, m.reference].filter(Boolean).join(' · ') || '—'}</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className={`tnum text-sm font-semibold ${m.in > 0 ? 'text-leaf-hover' : 'text-danger'}`}>
+                      {m.in > 0 ? `+ ${formatCurrency(m.in)}` : `− ${formatCurrency(m.out)}`}
+                    </p>
+                    <p className="tnum text-xs text-muted">Left {formatCurrency(m.balance)}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="border-t border-line px-3"><Pagination meta={advPage.meta} onPage={advPage.setPage} /></div>
+            </>
           )}
         </Card>
       </Section>
@@ -177,17 +230,20 @@ export default function SupplierDetail() {
               </table>
             </div>
           )}
-          {meta && meta.last_page > 1 && (
-            <div className="flex items-center justify-between border-t border-line px-4 py-2 text-sm text-muted">
-              <span>{meta.from}–{meta.to} of {meta.total}</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={histPage <= 1} onClick={() => setHistPage((p) => p - 1)}>Previous</Button>
-                <Button variant="outline" size="sm" disabled={histPage >= meta.last_page} onClick={() => setHistPage((p) => p + 1)}>Next</Button>
-              </div>
-            </div>
-          )}
+          <div className="border-t border-line px-3"><Pagination meta={meta} onPage={setHistPage} /></div>
         </Card>
       </Section>
     </div>
+  );
+}
+
+function MoneyTile({ label, value, hint, tone }) {
+  const color = tone === 'warn' ? 'text-amber' : tone === 'leaf' ? 'text-leaf-hover' : 'text-ink';
+  return (
+    <Card className="p-4">
+      <p className="microlabel text-faint">{label}</p>
+      <p className={`tnum mt-1 text-2xl font-semibold ${color}`}>{formatCurrency(value ?? 0)}</p>
+      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
+    </Card>
   );
 }

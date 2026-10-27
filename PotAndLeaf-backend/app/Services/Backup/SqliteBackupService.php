@@ -115,6 +115,21 @@ class SqliteBackupService
     }
 
     /**
+     * Delete one backup file for good. Only files made by the backup screen
+     * (backup_…sqlite) can be deleted, and the last remaining backup is kept
+     * so there is always one copy to restore from.
+     */
+    public function delete(string $filename): void
+    {
+        $safe = basename($filename);
+        abort_unless(preg_match('/^backup_[\w\-]+\.sqlite$/', $safe) === 1, 422, 'This is not a backup file.');
+        $path = $this->absolutePath($safe);
+        abort_if(count($this->list()) <= 1, 422, 'This is the only backup left, so it cannot be deleted. Make a new backup first.');
+        @unlink($path);
+        abort_if(is_file($path), 500, 'Could not delete the backup file. Check the folder permissions.');
+    }
+
+    /**
      * Restore SQLite backup into the live MySQL connection.
      * Takes a pre-restore safety backup first.
      */

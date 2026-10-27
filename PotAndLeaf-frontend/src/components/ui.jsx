@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { Children, isValidElement, useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import { classNames } from '../lib/format';
@@ -253,7 +254,9 @@ export function Modal({ open, onClose, title, children, footer, dismissible = tr
 
   if (!open) return null;
 
-  return (
+  // Rendered at the end of <body> so the dimmed backdrop covers the whole
+  // screen (top bar included) and no page container can clip or overlap it.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/25 p-0 backdrop-blur-[6px] sm:items-center sm:p-4">
       <div className="absolute inset-0" onClick={dismissible ? onClose : undefined} aria-hidden />
       <div
@@ -278,5 +281,5 @@ export function Modal({ open, onClose, title, children, footer, dismissible = tr
         )}
       </div>
     </div>
-  );
+  , document.body);
 }

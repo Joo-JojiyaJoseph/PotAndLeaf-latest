@@ -25,6 +25,9 @@ class ProductResource extends JsonResource
             'brand_id'        => $this->brand_id,
             'unit_id'         => $this->unit_id,
             'category'        => $this->whenLoaded('category', fn () => $this->category?->name),
+            // A product can be saved under a subcategory; give the main category and subcategory separately.
+            'main_category'   => $this->whenLoaded('category', fn () => $this->category?->parent_id ? $this->category->parent?->name : $this->category?->name),
+            'subcategory'     => $this->whenLoaded('category', fn () => $this->category?->parent_id ? $this->category->name : null),
             'brand'           => $this->whenLoaded('brand', fn () => $this->brand?->name),
             'unit'            => $this->whenLoaded('unit', fn () => $this->unit?->short_name ?? $this->unit?->name),
             'gst_rate'        => (float) $this->gst_rate,

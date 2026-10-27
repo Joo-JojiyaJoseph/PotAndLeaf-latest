@@ -16,7 +16,7 @@ class PurchaseReturn extends Model
     protected $fillable = [
         'company_id', 'purchase_id', 'supplier_id', 'return_no', 'return_date',
         'is_interstate', 'reason', 'subtotal', 'tax_total', 'grand_total',
-        'status', 'notes', 'confirmed_at',
+        'status', 'notes', 'confirmed_at', 'advance_credit',
     ];
 
     protected function casts(): array

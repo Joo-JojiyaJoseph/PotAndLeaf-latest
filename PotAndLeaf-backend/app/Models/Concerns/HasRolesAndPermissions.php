@@ -71,7 +71,9 @@ trait HasRolesAndPermissions
     public function hasRole(string $slug, int|string|null $companyId = null): bool
     {
         return $this->roles()
-            ->when($companyId !== null, fn ($q) => $q->wherePivot('company_id', $companyId))
+            // `when` hands over the plain query builder, which has no wherePivot():
+            // name the pivot column directly.
+            ->when($companyId !== null, fn ($q) => $q->where('role_user.company_id', $companyId))
             ->where('slug', $slug)
             ->exists();
     }

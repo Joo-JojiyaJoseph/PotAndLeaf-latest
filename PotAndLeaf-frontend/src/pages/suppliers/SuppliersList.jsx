@@ -23,6 +23,7 @@ import StatusToggle from '../../components/StatusToggle';
 import ImportExportButtons from '../../components/ImportExportButtons';
 import { SUPPLIER_COLUMNS, supplierExport } from '../../lib/importColumns';
 import { formatCurrency } from '../../lib/format';
+import Pagination from '../../components/Pagination';
 
 const STATUS = [
   { value: 'active', label: 'Active' },
@@ -282,15 +283,7 @@ export default function SuppliersList() {
         </div>
       )}
 
-      {meta && meta.last_page > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted">
-          <span>{meta.from}–{meta.to} of {meta.total}</span>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <Button variant="outline" size="sm" disabled={page >= meta.last_page} onClick={() => setPage((p) => p + 1)}>Next</Button>
-          </div>
-        </div>
-      )}
+      <Pagination meta={meta} onPage={setPage} />
 
       <Modal
         open={modalOpen}

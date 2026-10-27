@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDownTrayIcon, ArrowPathIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ArrowPathIcon, CloudArrowUpIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../lib/toast';
@@ -7,6 +7,8 @@ import { useConfirm } from '../../lib/confirm';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { formatDate } from '../../lib/format';
 import { downloadWithParams } from '../../lib/pdfDownload';
+import Pagination from '../../components/Pagination';
+import usePaged from '../../hooks/usePaged';
 
 function formatBytes(n) {
   if (!n) return '0 B';
@@ -47,6 +49,26 @@ export default function BackupDashboardPage() {
     onError: (err) => toast.error(err.response?.data?.message || 'Restore failed.'),
   });
 
+  const deleteM = useMutation({
+    mutationFn: (filename) => api.delete(`/backups/${encodeURIComponent(filename)}`),
+    onSuccess: () => {
+      toast.success('Backup deleted.');
+      queryClient.invalidateQueries({ queryKey: ['backups'] });
+    },
+    onError: (err) => toast.error(err.response?.data?.message || 'Could not delete the backup.'),
+  });
+
+  async function onDelete(filename) {
+    const ok = await confirm({
+      title: 'Delete backup?',
+      message: `Delete ${filename} for good? This cannot be undone. Your current data is not affected — only this saved copy is removed.`,
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    deleteM.mutate(filename);
+  }
+
   async function onDownload(filename) {
     try {
       await downloadWithParams(`/backups/${encodeURIComponent(filename)}/download`, undefined, filename, 'application/x-sqlite3');
@@ -72,6 +94,7 @@ export default function BackupDashboardPage() {
   }
 
   const rows = listQ.data ?? [];
+  const { pageRows, meta, setPage } = usePaged(rows, 20);
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -102,7 +125,7 @@ export default function BackupDashboardPage() {
                   <th className="microlabel px-4 py-2.5" />
                 </tr></thead>
                 <tbody>
-                  {rows.map((b) => (
+                  {pageRows.map((b) => (
                     <tr key={b.filename} className="border-b border-line/60 last:border-0">
                       <td className="tnum px-4 py-2.5 text-xs">{b.filename}</td>
                       <td className="px-4 py-2.5">
@@ -120,6 +143,11 @@ export default function BackupDashboardPage() {
                               <ArrowPathIcon className="size-4" />
                             </button>
                           )}
+                          {(isSuperAdmin || can('backup.delete') || can('*')) && (
+                            <button type="button" onClick={() => onDelete(b.filename)} disabled={deleteM.isPending || rows.length <= 1} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger disabled:opacity-40" title={rows.length <= 1 ? 'The only backup cannot be deleted' : 'Delete'}>
+                              <TrashIcon className="size-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -128,6 +156,7 @@ export default function BackupDashboardPage() {
               </table>
             </div>
           )}
+        <div className="border-t border-line px-3"><Pagination meta={meta} onPage={setPage} /></div>
       </Card>
     </div>
   );

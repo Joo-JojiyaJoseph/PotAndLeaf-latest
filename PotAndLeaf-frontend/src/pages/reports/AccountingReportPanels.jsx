@@ -1,5 +1,6 @@
 import { Card, Spinner, StatCard } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
+import PagedTable from '../../components/PagedTable';
 
 function BookTable({ data, loading, failed }) {
   if (loading) return <div className="flex justify-center py-16"><Spinner className="size-6" /></div>;
@@ -21,7 +22,8 @@ function BookTable({ data, loading, failed }) {
       <Card className="mt-4 overflow-hidden">
         {(data.rows ?? []).length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No movements in this range.</div> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <PagedTable rows={data.rows}>{(pg) => (
+<table className="w-full text-sm">
               <thead><tr className="border-b border-line text-left text-faint">
                 <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Type</th>
@@ -33,7 +35,7 @@ function BookTable({ data, loading, failed }) {
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
               </tr></thead>
               <tbody>
-                {data.rows.map((r, i) => (
+                {pg.map((r, i) => (
                   <tr key={i} className="border-b border-line/60 last:border-0">
                     <td className="px-4 py-2.5 text-muted">{formatDate(r.date)}</td>
                     <td className="px-4 py-2.5">{r.type === 'in' ? 'In' : 'Out'}</td>
@@ -47,6 +49,7 @@ function BookTable({ data, loading, failed }) {
                 ))}
               </tbody>
             </table>
+)}</PagedTable>
           </div>
         )}
       </Card>
@@ -68,7 +71,8 @@ function LedgerTable({ data, loading, partyLabel }) {
       <Card className="mt-4 overflow-hidden">
         {(data.rows ?? []).length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No entries in this range.</div> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <PagedTable rows={data.rows}>{(pg) => (
+<table className="w-full text-sm">
               <thead><tr className="border-b border-line text-left text-faint">
                 <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Reference</th>
@@ -79,7 +83,7 @@ function LedgerTable({ data, loading, partyLabel }) {
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
               </tr></thead>
               <tbody>
-                {data.rows.map((r, i) => (
+                {pg.map((r, i) => (
                   <tr key={i} className="border-b border-line/60 last:border-0">
                     <td className="px-4 py-2.5 text-muted">{formatDate(r.date)}</td>
                     <td className="px-4 py-2.5 font-medium">{r.reference}</td>
@@ -92,6 +96,7 @@ function LedgerTable({ data, loading, partyLabel }) {
                 ))}
               </tbody>
             </table>
+)}</PagedTable>
           </div>
         )}
       </Card>
@@ -113,7 +118,8 @@ function AgeingPanel({ data, loading, title }) {
         <div className="border-b border-line px-4 py-3 text-sm font-medium">{title} · {formatCurrency(data.total)} outstanding</div>
         {(data.lines ?? []).length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">Nothing overdue.</div> : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <PagedTable rows={data.lines}>{(pg) => (
+<table className="w-full text-sm">
               <thead><tr className="border-b border-line text-left text-faint">
                 <th className="microlabel px-4 py-2.5 font-semibold">Party</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Doc</th>
@@ -121,7 +127,7 @@ function AgeingPanel({ data, loading, title }) {
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
               </tr></thead>
               <tbody>
-                {data.lines.map((r, i) => (
+                {pg.map((r, i) => (
                   <tr key={i} className="border-b border-line/60 last:border-0">
                     <td className="px-4 py-2.5 font-medium">{r.customer_name || r.supplier_name}</td>
                     <td className="px-4 py-2.5 text-muted">{r.sale_no || r.purchase_no}</td>
@@ -131,6 +137,7 @@ function AgeingPanel({ data, loading, title }) {
                 ))}
               </tbody>
             </table>
+)}</PagedTable>
           </div>
         )}
       </Card>

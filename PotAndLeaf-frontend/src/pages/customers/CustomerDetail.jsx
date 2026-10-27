@@ -8,6 +8,7 @@ import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { mediaUrl } from '../../components/media';
 import { formatCurrency, formatDateTime } from '../../lib/format';
+import Pagination from '../../components/Pagination';
 
 const typeTone = { retail: 'info', wholesale: 'active', dealer: 'pending' };
 const statusTone = { active: 'active', inactive: 'inactive', blocked: 'blocked' };
@@ -129,15 +130,7 @@ export default function CustomerDetail() {
               </table>
             </div>
           )}
-          {meta && meta.last_page > 1 && (
-            <div className="flex items-center justify-between border-t border-line px-4 py-2 text-sm text-muted">
-              <span>{meta.from}–{meta.to} of {meta.total}</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={histPage <= 1} onClick={() => setHistPage((p) => p - 1)}>Previous</Button>
-                <Button variant="outline" size="sm" disabled={histPage >= meta.last_page} onClick={() => setHistPage((p) => p + 1)}>Next</Button>
-              </div>
-            </div>
-          )}
+          <div className="border-t border-line px-3"><Pagination meta={meta} onPage={setHistPage} /></div>
         </Card>
       </Section>
 

@@ -124,17 +124,35 @@ class InventoryService
         if (abs($delta) < 0.0005) {
             return;
         }
-        if ($delta < 0) {
-            $this->consumeBatchesFifo($product->id, abs($delta));
-
-            return;
-        }
-
         $batch = ProductBatch::query()
             ->where('product_id', $product->id)
             ->where('batch_no', 'OPEN-'.$product->sku)
             ->lockForUpdate()
             ->first();
+
+        // Lowering opening stock is a CORRECTION of the opening batch, so it
+        // comes off that batch's "received" count too (150 → 0 → 150 must show
+        // "150 of 150", not "150 of 450"). Only what the opening batch no
+        // longer holds comes off other batches, oldest first.
+        if ($delta < 0) {
+            $left = abs($delta);
+            if ($batch) {
+                $take = min($left, (float) $batch->remaining_qty);
+                $batch->qty = round(max(0, (float) $batch->qty - $take), 3);
+                $batch->remaining_qty = round((float) $batch->remaining_qty - $take, 3);
+                if ($batch->remaining_qty <= 0.0005) {
+                    $batch->remaining_qty = 0;
+                    $batch->status = 'depleted';
+                }
+                $batch->save();
+                $left = round($left - $take, 3);
+            }
+            if ($left > 0.0005) {
+                $this->consumeBatchesFifo($product->id, $left);
+            }
+
+            return;
+        }
 
         if ($batch) {
             $batch->qty = round((float) $batch->qty + $delta, 3);

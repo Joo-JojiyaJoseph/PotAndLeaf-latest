@@ -13,6 +13,7 @@ class StockTransferItem extends Model
     protected $fillable = [
         'stock_transfer_id', 'product_id', 'product_batch_id', 'product_name',
         'qty', 'approved_qty', 'rejected_qty', 'rejection_reason', 'received_qty',
+        'received_batch_id', 'received_product_id',
     ];
 
     protected function casts(): array
@@ -43,6 +44,12 @@ class StockTransferItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /** The batch (with its barcode) made at the receiving company. */
+    public function receivedBatch(): BelongsTo
+    {
+        return $this->belongsTo(ProductBatch::class, 'received_batch_id');
     }
 
     public function batch(): BelongsTo

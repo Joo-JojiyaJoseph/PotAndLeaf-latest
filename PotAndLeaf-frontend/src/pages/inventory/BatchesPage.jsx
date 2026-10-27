@@ -9,6 +9,8 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Spinner, PageHeader } from '../../components/ui';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
 import { printBarcodeSheet } from '../../lib/barcodeSheet';
+import Pagination from '../../components/Pagination';
+import usePaged from '../../hooks/usePaged';
 
 function SafeBarcode({ value, height = 40 }) {
   if (!value) {
@@ -53,6 +55,7 @@ export default function BatchesPage() {
     return [b.product, b.sku, b.barcode, b.batch_no, b.source].some((v) => String(v ?? '').toLowerCase().includes(q));
   });
   const untracked = data?.untracked ?? [];
+  const { pageRows, meta, setPage } = usePaged(batches, 25, `${filter}|${batchNo}|${barcode}|${status}|${JSON.stringify(companyParams)}`);
 
   function printAll() {
     const labels = [];
@@ -142,13 +145,13 @@ export default function BatchesPage() {
                   <th className="microlabel px-4 py-2 font-semibold">Product</th>
                   <th className="microlabel px-4 py-2 font-semibold">Batch</th>
                   <th className="microlabel px-4 py-2 font-semibold">Source</th>
-                  <th className="microlabel px-4 py-2 text-right font-semibold">Remaining</th>
+                  <th className="microlabel px-4 py-2 text-right font-semibold" title="How many from this batch are still in stock">Left in batch</th>
                   <th className="microlabel px-4 py-2 font-semibold">Barcode</th>
                   <th className="px-4 py-2" />
                 </tr>
               </thead>
               <tbody>
-                {batches.map((b) => (
+                {pageRows.map((b) => (
                   <tr key={b.id ?? `${b.batch_no}-${b.barcode}`} className="border-b border-line/60 last:border-0">
                     <td className="px-4 py-2.5 text-muted">{b.company_name || '—'}</td>
                     <td className="px-4 py-2.5">
@@ -163,7 +166,9 @@ export default function BatchesPage() {
                     <td className="tnum px-4 py-2.5 text-right font-medium">
                       {b.remaining_qty ?? 0}
                       {Number(b.qty) > Number(b.remaining_qty ?? 0) + 0.001 && (
-                        <div className="text-xs font-normal text-muted">of {b.qty} received</div>
+                        <div className="text-xs font-normal text-muted">
+                          of {b.qty} received · {Math.round((Number(b.qty) - Number(b.remaining_qty ?? 0)) * 1000) / 1000} gone out
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-2.5"><div className="w-40"><SafeBarcode value={b.barcode} height={40} /></div></td>
@@ -179,6 +184,7 @@ export default function BatchesPage() {
               </tbody>
             </table>
           </div>
+          <div className="border-t border-line px-3"><Pagination meta={meta} onPage={setPage} /></div>
         </Card>
       )}
     </div>

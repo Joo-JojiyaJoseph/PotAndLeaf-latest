@@ -121,7 +121,7 @@ class ProductionController extends Controller
     {
         $this->allow($request, 'production.view');
 
-        return $this->ok(ProductionOrderResource::collection($this->production->orders($this->listCompanyId($request), $request->only(['status', 'per_page']))));
+        return $this->ok(ProductionOrderResource::collection($this->production->orders($this->listCompanyId($request), $request->only(['status', 'per_page', 'search']))));
     }
 
     public function storeOrder(StoreProductionOrderRequest $request): JsonResponse

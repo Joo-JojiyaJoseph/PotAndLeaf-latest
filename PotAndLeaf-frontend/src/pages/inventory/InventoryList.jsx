@@ -8,6 +8,8 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Input, Spinner, StatCard } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
+import Pagination from '../../components/Pagination';
+import usePaged from '../../hooks/usePaged';
 
 const TABS = [
   { value: 'levels', label: 'Stock levels' },
@@ -23,6 +25,9 @@ function LevelsTab({ onViewLedger, companyParams }) {
   const [debounced, setDebounced] = useState('');
   const [lowOnly, setLowOnly] = useState(false);
   const [stockStatus, setStockStatus] = useState('active');
+  const [page, setPage] = useState(1);
+  const companyKey = JSON.stringify(companyParams);
+  useEffect(() => { setPage(1); }, [debounced, lowOnly, stockStatus, companyKey]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 300);
@@ -30,9 +35,9 @@ function LevelsTab({ onViewLedger, companyParams }) {
   }, [search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', 'stock', activeCompany?.id, companyParams, debounced, lowOnly, stockStatus],
-    queryFn: () => api.get('/inventory/stock', { params: { ...companyParams, search: debounced, low_only: lowOnly ? 1 : 0, status: stockStatus } }).then((r) => r.data),
-    keepPreviousData: true,
+    queryKey: ['inventory', 'stock', activeCompany?.id, companyParams, debounced, lowOnly, stockStatus, page],
+    queryFn: () => api.get('/inventory/stock', { params: { ...companyParams, search: debounced, low_only: lowOnly ? 1 : 0, status: stockStatus, page, per_page: 25 } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   });
   const { data: alerts } = useQuery({
     queryKey: ['inventory', 'alerts', activeCompany?.id, companyParams],
@@ -110,6 +115,7 @@ function LevelsTab({ onViewLedger, companyParams }) {
             </table>
             </div>
           )}
+        <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={setPage} /></div>
       </Card>
     </div>
   );
@@ -122,10 +128,11 @@ function ValuationTab({ companyParams }) {
     queryKey: ['inventory', 'valuation', activeCompany?.id, companyParams],
     queryFn: () => api.get('/inventory/valuation', { params: companyParams }).then((r) => r.data.data),
   });
-  if (isLoading) return <div className="flex justify-center py-16"><Spinner className="size-6" /></div>;
   const all = data?.items ?? [];
   const q = search.trim().toLowerCase();
   const rows = q ? all.filter((p) => `${p.name} ${p.sku}`.toLowerCase().includes(q)) : all;
+  const paged = usePaged(rows, 25, q);
+  if (isLoading) return <div className="flex justify-center py-16"><Spinner className="size-6" /></div>;
   const t = data?.totals ?? {};
   return (
     <div className="space-y-4">
@@ -148,7 +155,7 @@ function ValuationTab({ companyParams }) {
             <th className="microlabel px-4 py-2.5 text-right font-semibold">Value</th>
           </tr></thead>
           <tbody>
-            {rows.map((p) => (
+            {paged.pageRows.map((p) => (
               <tr key={p.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                 <td className="tnum px-4 py-2.5 text-xs">{p.sku}</td>
                 <td className="px-4 py-2.5 font-medium">{p.name}</td>
@@ -159,6 +166,7 @@ function ValuationTab({ companyParams }) {
             ))}
           </tbody>
         </table>
+        <div className="border-t border-line px-3"><Pagination meta={paged.meta} onPage={paged.setPage} /></div>
       </Card>
     </div>
   );
@@ -175,6 +183,7 @@ function MovementTab({ companyParams }) {
   const all = data?.items ?? [];
   const q = search.trim().toLowerCase();
   const rows = q ? all.filter((p) => `${p.name} ${p.sku}`.toLowerCase().includes(q)) : all;
+  const paged = usePaged(rows, 25, `${q}|${days}`);
   const s = data?.summary ?? {};
   return (
     <div className="space-y-4">
@@ -208,7 +217,7 @@ function MovementTab({ companyParams }) {
                 <th className="microlabel px-4 py-2.5 font-semibold">Class</th>
               </tr></thead>
               <tbody>
-                {rows.map((p) => (
+                {paged.pageRows.map((p) => (
                   <tr key={p.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                     <td className="tnum px-4 py-2.5 text-xs">{p.sku}</td>
                     <td className="px-4 py-2.5 font-medium">{p.name}</td>
@@ -221,6 +230,7 @@ function MovementTab({ companyParams }) {
               </tbody>
             </table>
           )}
+        <div className="border-t border-line px-3"><Pagination meta={paged.meta} onPage={paged.setPage} /></div>
       </Card>
     </div>
   );

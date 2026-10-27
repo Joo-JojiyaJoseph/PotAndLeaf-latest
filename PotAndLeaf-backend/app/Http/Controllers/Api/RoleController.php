@@ -28,9 +28,10 @@ class RoleController extends Controller
     }
 
     /** Permission matrix for role forms — super admin only. */
+    /** Permission names and labels: anyone who may see roles may read them (to view a role). */
     public function formData(Request $request): JsonResponse
     {
-        $this->ensureSuperAdmin($request);
+        $this->allowView($request);
 
         return $this->ok(['permission_groups' => PermissionRegistry::groups()]);
     }

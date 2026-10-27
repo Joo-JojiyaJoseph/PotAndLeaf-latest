@@ -96,6 +96,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('suppliers', [SupplierController::class, 'index']);
         Route::post('suppliers', [SupplierController::class, 'store']);
         Route::get('suppliers/{supplier}/purchase-history', [SupplierController::class, 'purchaseHistory']);
+        Route::get('suppliers/{supplier}/account', [SupplierController::class, 'account']);
         Route::get('suppliers/{supplier}', [SupplierController::class, 'show']);
         Route::put('suppliers/{supplier}', [SupplierController::class, 'update']);
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy']);
@@ -339,6 +340,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('backups/run', [BackupController::class, 'run']);
         Route::get('backups/{filename}/download', [BackupController::class, 'download'])->where('filename', '[\w\-.]+');
         Route::post('backups/{filename}/restore', [BackupController::class, 'restore'])->where('filename', '[\w\-.]+');
+        Route::delete('backups/{filename}', [BackupController::class, 'destroy'])->where('filename', '[\w\-.]+');
 
         // Module 02 — Production / BOM
         Route::get('production/form-data', [ProductionController::class, 'formData']);
@@ -365,6 +367,9 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::put('locations/{location}', [LocationController::class, 'update']);
         Route::delete('locations/{location}', [LocationController::class, 'destroy']);
         Route::get('transfers/form-data', [TransferController::class, 'formData']);
+        Route::get('transfers/request-data', [TransferController::class, 'requestData']);
+        Route::post('transfers/request', [TransferController::class, 'storeRequest']);
+        Route::get('transfers/{stockTransfer}/sources', [TransferController::class, 'sources']);
         Route::get('transfers', [TransferController::class, 'index']);
         Route::post('transfers', [TransferController::class, 'store']);
         Route::get('transfers/{stockTransfer}', [TransferController::class, 'show']);

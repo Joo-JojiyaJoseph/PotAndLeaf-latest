@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { CheckIcon, EyeIcon, PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { useToast } from '../../lib/toast';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import Pagination from '../../components/Pagination';
+import usePaged from '../../hooks/usePaged';
 
 const permName = (p) => (typeof p === 'string' ? p : p.name);
 
@@ -16,6 +18,7 @@ export default function RolesList() {
   const [selected, setSelected] = useState(new Set());
   const [errors, setErrors] = useState({});
   const [deleting, setDeleting] = useState(null);
+  const [viewing, setViewing] = useState(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['roles'],
@@ -26,7 +29,7 @@ export default function RolesList() {
   const { data: formData } = useQuery({
     queryKey: ['roles-form-data'],
     queryFn: () => api.get('/roles/form-data').then((r) => r.data.data),
-    enabled: Boolean(activeCompany) && isSuperAdmin,
+    enabled: Boolean(activeCompany),
   });
 
   const saveM = useMutation({
@@ -50,6 +53,7 @@ export default function RolesList() {
 
   const groups = formData?.permission_groups ?? {};
   const rows = data?.data ?? [];
+  const { pageRows, meta, setPage } = usePaged(rows, 25);
 
   const openNew = () => { setForm({ name: '', description: '' }); setSelected(new Set()); setErrors({}); setEditing({}); };
   const openEdit = (r) => {
@@ -99,14 +103,14 @@ export default function RolesList() {
                   <th className="microlabel px-4 py-2.5 font-semibold">Description</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Permissions</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Users</th>
-                  {isSuperAdmin && <th className="microlabel px-4 py-2.5" />}
+                  <th className="microlabel px-4 py-2.5" />
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                     <td className="px-4 py-2.5 font-medium">
-                      {r.name}
+                      <button type="button" onClick={() => setViewing(r)} className="text-left text-ink hover:text-leaf">{r.name}</button>
                       {r.is_system && <span className="ml-2 rounded bg-paper px-1.5 py-0.5 text-[10px] text-muted">system</span>}
                     </td>
                     <td className="px-4 py-2.5 text-muted">{r.description || '—'}</td>
@@ -114,23 +118,65 @@ export default function RolesList() {
                       {(r.permissions ?? []).map(permName).includes('*') ? 'Full' : (r.permissions?.length ?? 0)}
                     </td>
                     <td className="tnum px-4 py-2.5 text-right text-muted">{r.users_count ?? '—'}</td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button onClick={() => setViewing(r)} className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-muted hover:bg-paper hover:text-ink" aria-label={`See permissions of ${r.name}`}><EyeIcon className="size-4" /> Permissions</button>
                     {isSuperAdmin && (
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <>
                           <button onClick={() => openEdit(r)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" aria-label="Edit"><PencilSquareIcon className="size-4" /></button>
                           {!r.is_system && (
                             <button onClick={() => setDeleting(r)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Delete"><TrashIcon className="size-4" /></button>
                           )}
-                        </div>
-                      </td>
+                        </>
                     )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
+        <div className="border-t border-line px-3"><Pagination meta={meta} onPage={setPage} /></div>
       </Card>
+
+      <Modal
+        open={viewing !== null}
+        onClose={() => setViewing(null)}
+        title={viewing ? `${viewing.name} — what this role can do` : ''}
+        size="lg"
+        footer={<>
+          {isSuperAdmin && viewing && <Button variant="outline" size="sm" onClick={() => { const r = viewing; setViewing(null); openEdit(r); }}><PencilSquareIcon className="size-4" /> Change permissions</Button>}
+          <Button size="sm" onClick={() => setViewing(null)}>Close</Button>
+        </>}
+      >
+        {viewing && (() => {
+          const granted = new Set((viewing.permissions ?? []).map(permName));
+          if (granted.has('*')) return <p className="text-sm">This role has <b>full access</b> to every screen and action, in every company where it is given.</p>;
+          const list = Object.entries(groups)
+            .map(([module, perms]) => [module, Object.entries(perms).filter(([name]) => granted.has(name) || granted.has(`${name.split('.')[0]}.*`))])
+            .filter(([, perms]) => perms.length);
+          if (!Object.keys(groups).length) return <div className="flex justify-center py-8"><Spinner className="size-5" /></div>;
+          if (!list.length) return <p className="text-sm text-muted">This role has no permissions yet.</p>;
+          return (
+            <>
+              <p className="mb-3 text-sm text-muted">{granted.size} permission{granted.size === 1 ? '' : 's'} in {list.length} area{list.length === 1 ? '' : 's'}. People with this role can do only what is listed here.</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {list.map(([module, perms]) => (
+                  <div key={module} className="rounded-xl border border-line p-3">
+                    <div className="mb-1.5 text-xs font-semibold text-ink">{module}</div>
+                    <ul className="space-y-1">
+                      {perms.map(([name, label]) => (
+                        <li key={name} className="flex items-start gap-1.5 text-sm text-muted"><CheckIcon className="mt-0.5 size-4 shrink-0 text-leaf" />{label}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </>
+          );
+        })()}
+      </Modal>
 
       {isSuperAdmin && (
         <Modal

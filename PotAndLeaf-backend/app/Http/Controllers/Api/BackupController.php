@@ -48,6 +48,14 @@ class BackupController extends Controller
         return $this->ok($result, 'Database restored. A pre-restore safety backup was created.');
     }
 
+    public function destroy(Request $request, string $filename): JsonResponse
+    {
+        $this->allow($request, 'backup.delete');
+        $this->backups->delete($filename);
+
+        return $this->message('Backup deleted.');
+    }
+
     private function allow(Request $request, string $permission): void
     {
         $company = $request->attributes->get('company');

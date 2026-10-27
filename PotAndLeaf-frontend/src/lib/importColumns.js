@@ -9,7 +9,6 @@ export const PRODUCT_COLUMNS = [
   { key: 'sku', label: 'SKU', example: 'PLT-ARECA', help: 'Your item code. Leave empty to number it automatically' },
   { key: 'category', label: 'Category', required: true, example: 'Indoor Plants', help: 'Category name. A new one is added if it does not exist' },
   { key: 'unit', label: 'Unit', example: 'Nos', help: 'Unit name or short name (Nos, kg, bag). Added if new' },
-  { key: 'hsn_code', label: 'HSN code', example: '0602', help: 'HSN code for GST' },
   { key: 'gst_rate', label: 'GST %', example: '5', help: 'GST rate, e.g. 0, 5, 12, 18' },
   { key: 'cost_price', label: 'Cost price', required: true, example: '200', help: 'What you pay per piece' },
   { key: 'mrp', label: 'MRP', example: '450', help: 'Printed maximum price' },

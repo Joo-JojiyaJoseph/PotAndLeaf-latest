@@ -195,7 +195,7 @@ export default function ProductsList() {
                       {p.name}
                     </button>
                     <p className="tnum text-xs text-muted">{p.sku}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted">{p.category || 'Uncategorised'}</p>
+                    <p className="mt-0.5 truncate text-xs text-muted">{(p.main_category ?? p.category) ? `${p.main_category ?? p.category}${p.subcategory ? ` › ${p.subcategory}` : ''}` : 'Uncategorised'}</p>
                     {p.pool_role && (
                       <Badge tone="info" className="mt-1">
                         {p.pool_role === 'set' ? 'Set SKU' : 'Unit SKU'} · pooled

@@ -74,6 +74,67 @@ class TransferController extends Controller
         ]);
     }
 
+    /**
+     * For the "Request stock" screen: every other company's products with the
+     * stock they can give. An admin may pick which company is asking.
+     */
+    public function requestData(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $this->allow($request, 'transfers.create');
+        $user = $request->user();
+        $forId = $user->is_super_admin && filled($request->query('for_company_id')) ? $request->query('for_company_id') : $company->id;
+
+        return $this->ok([
+            'for_company' => Company::whereKey($forId)->first(['id', 'name']),
+            'companies'   => $user->is_super_admin
+                ? Company::active()->orderBy('name')->get(['id', 'name'])
+                : [['id' => $company->id, 'name' => $company->name]],
+            'stock'       => $this->transfers->availableStock($forId, $request->query('search')),
+        ]);
+    }
+
+    /** A company asks for stock from other companies (one request per giving company). */
+    public function storeRequest(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $this->allow($request, 'transfers.create');
+        $user = $request->user();
+        $data = $request->validate([
+            'to_company_id'           => ['nullable', 'integer', 'exists:companies,id'],
+            'transfer_date'           => ['required', 'date', 'before_or_equal:'.\App\Support\Validation\BusinessRules::today()],
+            'notes'                   => ['nullable', 'string', 'max:1000'],
+            'lines'                   => ['required', 'array', 'min:1', 'max:200'],
+            'lines.*.from_company_id' => ['required', 'integer', 'exists:companies,id'],
+            'lines.*.product_id'      => ['required', 'string'],
+            'lines.*.qty'             => ['required', 'numeric', 'gt:0', 'max:9999999'],
+        ], [
+            'transfer_date.before_or_equal' => 'The request date cannot be in the future.',
+            'lines.required'                => 'Add at least one product to request.',
+            'lines.*.qty.gt'                => 'Each quantity must be more than 0.',
+        ]);
+        // Company users always ask for their own company; an admin can ask for any.
+        $toId = $user->is_super_admin && filled($data['to_company_id'] ?? null) ? $data['to_company_id'] : $company->id;
+        $made = $this->transfers->requestStock($toId, $data, $user->id, (bool) $user->is_super_admin);
+        $count = count($made);
+
+        return $this->created(
+            StockTransferResource::collection($made),
+            $user->is_super_admin
+                ? ($count === 1 ? 'Request created and approved. The sending company can now dispatch it.' : "{$count} requests created and approved (one per sending company).")
+                : ($count === 1 ? 'Stock request sent. It waits for admin approval.' : "{$count} stock requests sent (one per sending company). They wait for admin approval."),
+        );
+    }
+
+    /** Companies that have the requested products, so the approver can choose who sends. */
+    public function sources(Request $request, StockTransfer $stockTransfer): JsonResponse
+    {
+        $this->allow($request, 'transfers.approve');
+        $this->canApprove($request, $stockTransfer);
+
+        return $this->ok($this->transfers->sources($stockTransfer));
+    }
+
     public function store(StoreTransferRequest $request): JsonResponse
     {
         $company = $this->company($request);
@@ -109,7 +170,11 @@ class TransferController extends Controller
 
     public function approve(ApproveTransferRequest $request, StockTransfer $stockTransfer): JsonResponse
     {
-        $this->sameCompanyOrDestination($request, $stockTransfer);
+        $this->canApprove($request, $stockTransfer);
+        $from = $request->input('from_company_id');
+        if (filled($from) && (string) $from !== (string) $stockTransfer->company_id && ! $request->user()->is_super_admin) {
+            abort(403, 'Only an admin can send this request to a different company.');
+        }
 
         return $this->ok(
             new StockTransferResource($this->transfers->approve(
@@ -117,15 +182,16 @@ class TransferController extends Controller
                 $request->validated()['approvals'] ?? [],
                 $request->user()->id,
                 $request->validated()['to_company_id'] ?? null,
-            )),
-            'Transfer approved.',
+                filled($from) ? $from : null,
+            )->load(['items', 'fromCompany:id,name', 'toCompany:id,name'])),
+            'Approved. The sending company can now dispatch the stock.',
         );
     }
 
     public function reject(Request $request, StockTransfer $stockTransfer): JsonResponse
     {
         $this->allow($request, 'transfers.approve');
-        $this->sameCompanyOrDestination($request, $stockTransfer);
+        $this->canApprove($request, $stockTransfer);
         $reason = $request->input('reason');
 
         return $this->ok(new StockTransferResource($this->transfers->reject($stockTransfer, $reason, $request->user()->id)), 'Transfer rejected.');
@@ -148,7 +214,7 @@ class TransferController extends Controller
         return $this->ok(new StockTransferResource($stockTransfer->load([
             'items.batch.purchase:id,purchase_no',
             'fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name',
-            'redirectedFromCompany:id,name',
+            'redirectedFromCompany:id,name', 'requester:id,name', 'items.receivedBatch:id,batch_no,barcode',
         ])));
     }
 
@@ -172,7 +238,12 @@ class TransferController extends Controller
     public function destroy(Request $request, StockTransfer $stockTransfer): JsonResponse
     {
         $this->allow($request, 'transfers.delete');
-        $this->sameSourceCompany($request, $stockTransfer);
+        // The company that asked may withdraw its own request before approval.
+        $ownRequest = $stockTransfer->status === 'requested' && ! $stockTransfer->isIntraCompany()
+            && (string) $stockTransfer->to_company_id === (string) $this->company($request)->id;
+        if (! $ownRequest) {
+            $this->sameSourceCompany($request, $stockTransfer);
+        }
         $this->transfers->cancel($stockTransfer, $request->user()->id);
 
         return $this->message('Transfer cancelled.');
@@ -230,6 +301,29 @@ class TransferController extends Controller
         }
 
         abort(404);
+    }
+
+    /**
+     * Approving: the admin, or the company that will GIVE the stock. The company
+     * that asked cannot approve its own request.
+     */
+    private function canApprove(Request $request, StockTransfer $transfer): void
+    {
+        if ($request->user()->is_super_admin) {
+            return;
+        }
+        if ($transfer->isIntraCompany()) {
+            $this->sameSourceCompany($request, $transfer);
+
+            return;
+        }
+        $headerId = (string) $this->company($request)->id;
+        if ((string) $transfer->to_company_id === $headerId) {
+            abort(403, 'Your request waits for the admin to approve it.');
+        }
+        if ((string) $transfer->company_id !== $headerId) {
+            abort(404);
+        }
     }
 
     /** @param  \Illuminate\Support\Collection<int, string>  $productIds */

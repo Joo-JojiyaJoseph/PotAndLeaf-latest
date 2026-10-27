@@ -4,6 +4,8 @@ import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Card, Spinner, StatCard, Select } from '../../components/ui';
 import { formatCurrency, formatDate, formatDateTime } from '../../lib/format';
+import Pagination from '../../components/Pagination';
+import usePaged from '../../hooks/usePaged';
 
 const selectCls = 'h-9 rounded-lg border border-line bg-surface px-2 text-sm';
 
@@ -24,6 +26,7 @@ export default function ActivityMonitoringPage() {
     enabled: Boolean(activeCompany) && allowed,
     refetchInterval: 60_000,
   });
+  const logPage = usePaged(data?.recent_logs ?? [], 25);
 
   if (!allowed) {
     return <div className="p-6 text-sm text-muted">HO Admin / Super Admin access required.</div>;
@@ -98,7 +101,7 @@ export default function ActivityMonitoringPage() {
                       <th className="microlabel px-4 py-2 font-semibold">Detail</th>
                     </tr></thead>
                     <tbody>
-                      {data.recent_logs.map((e) => (
+                      {logPage.pageRows.map((e) => (
                         <tr key={e.id} className="border-b border-line/60 last:border-0">
                           <td className="px-4 py-2 text-xs text-muted">{e.created_at ? formatDateTime(e.created_at) : '—'}</td>
                           <td className="px-4 py-2">{e.user_name || '—'}</td>
@@ -108,6 +111,7 @@ export default function ActivityMonitoringPage() {
                       ))}
                     </tbody>
                   </table>
+                  <div className="border-t border-line px-3"><Pagination meta={logPage.meta} onPage={logPage.setPage} /></div>
                 </div>
               )}
             </Card>

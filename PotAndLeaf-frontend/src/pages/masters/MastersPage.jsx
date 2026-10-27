@@ -10,6 +10,8 @@ import { fieldError } from '../../lib/formErrors';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
+import Pagination from '../../components/Pagination';
+import usePaged from '../../hooks/usePaged';
 
 const TABS = [
   { key: 'categories', type: 'categories', permission: 'categories', label: 'Categories', singular: 'category', mode: 'root' },
@@ -192,6 +194,7 @@ export default function MastersPage() {
     if (tab.type !== 'categories') return true;
     return tab.mode === 'child' ? Boolean(r.parent_id) : !r.parent_id;
   });
+  const { pageRows, meta, setPage } = usePaged(rows, 25, `${tab.type}|${tab.mode ?? ''}|${filterCompanyId ?? ''}`);
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -230,7 +233,7 @@ export default function MastersPage() {
                 <th className="microlabel px-4 py-2.5" />
               </tr></thead>
               <tbody>
-                {rows.map((r) => (
+                {pageRows.map((r) => (
                   <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                     <td className="px-4 py-2.5 font-medium">{r.name}</td>
                     <td className="px-4 py-2.5 text-muted">{r.code || '—'}</td>
@@ -252,6 +255,7 @@ export default function MastersPage() {
               </tbody>
             </table></div>
           )}
+        <div className="border-t border-line px-3"><Pagination meta={meta} onPage={setPage} /></div>
       </Card>
 
       <MasterModal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} tab={tab} editing={editing} filterCompanyId={filterCompanyId} companyParams={companyParams} />

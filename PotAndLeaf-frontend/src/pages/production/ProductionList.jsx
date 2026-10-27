@@ -8,10 +8,11 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, resolveRecordCompany, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Input, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
-import { downloadCsv } from '../../lib/csv';
 import { useConfirm } from '../../lib/confirm';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
+import Pagination from '../../components/Pagination';
+import { exportList } from '../../lib/exportList';
 
 const statusTone = { draft: 'inactive', in_progress: 'warning', completed: 'active', cancelled: 'blocked' };
 
@@ -27,15 +28,17 @@ export default function ProductionList() {
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(search.trim().toLowerCase()), 300);
+    const t = setTimeout(() => { setDebounced(search.trim()); setPage(1); }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
   const ordersQ = useQuery({
-    queryKey: ['production-orders', activeCompany?.id, filterCompanyId, status],
-    queryFn: () => api.get('/production/orders', { params: { ...companyParams, status: status || undefined, per_page: 100 } }).then((r) => r.data),
+    queryKey: ['production-orders', activeCompany?.id, filterCompanyId, status, debounced, page],
+    queryFn: () => api.get('/production/orders', { params: { ...companyParams, status: status || undefined, search: debounced || undefined, page, per_page: 25 } }).then((r) => r.data),
+    placeholderData: (prev) => prev,
     enabled: Boolean(activeCompany),
   });
 
@@ -48,10 +51,7 @@ export default function ProductionList() {
     onError: (err) => toast.error(apiMessage(err, 'Could not delete production.')),
   });
 
-  const orders = (ordersQ.data?.data ?? []).filter((o) => {
-    if (!debounced) return true;
-    return [o.order_no, o.output_product, o.supervisor].some((v) => String(v ?? '').toLowerCase().includes(debounced));
-  });
+  const orders = ordersQ.data?.data ?? [];
 
   const newPath = createCompanyId && isSuperAdmin ? `/production/new?company_id=${createCompanyId}` : '/production/new';
 
@@ -65,17 +65,19 @@ export default function ProductionList() {
   }
 
   function exportOrders() {
-    if (orders.length === 0) return;
-    downloadCsv('production', orders.map((o) => ({
-      'No': o.order_no,
-      'Date': o.order_date,
-      'Product': o.output_product,
-      'Quantity': o.output_quantity,
-      'Unit cost': o.status === 'completed' ? o.output_unit_cost : '',
-      'Total cost': o.status === 'completed' ? o.total_input_cost : '',
-      'Supervisor': o.supervisor || '',
-      'Status': o.status,
-    })));
+    // Every matching order, not only the page on screen.
+    exportList({
+      url: '/production/orders',
+      params: { ...companyParams, status: status || undefined, search: debounced || undefined },
+      filename: 'production',
+      columns: [
+        ['No', (o) => o.order_no], ['Date', (o) => o.order_date], ['Product', (o) => o.output_product],
+        ['Quantity', (o) => o.output_quantity],
+        ['Unit cost', (o) => (o.status === 'completed' ? o.output_unit_cost : '')],
+        ['Total cost', (o) => (o.status === 'completed' ? o.total_input_cost : '')],
+        ['Supervisor', (o) => o.supervisor || ''], ['Status', (o) => o.status],
+      ],
+    });
   }
 
   return (
@@ -100,7 +102,7 @@ export default function ProductionList() {
           <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search production…" className="pl-9" />
         </div>
-        <Select value={status} onChange={(e) => setStatus(e.target.value)} className="h-10 w-44 rounded-xl border border-line bg-surface px-3 text-sm">
+        <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="h-10 w-44 rounded-xl border border-line bg-surface px-3 text-sm">
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
           <option value="in_progress">In progress</option>
@@ -164,6 +166,7 @@ export default function ProductionList() {
               </table>
             </div>
           )}
+        <div className="border-t border-line px-3"><Pagination meta={ordersQ.data?.meta} onPage={setPage} /></div>
       </Card>
     </div>
   );

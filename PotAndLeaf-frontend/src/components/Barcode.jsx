@@ -17,6 +17,8 @@ export function Barcode({ value, height = 56, moduleWidth = 1.7, showText = true
         role="img"
         aria-label={`Barcode ${value}`}
       >
+        {/* White card behind the bars: barcodes must be dark-on-white to scan and to show in dark mode. */}
+        <rect x={0} y={0} width={w} height={height + textH} fill="#fff" rx={3} />
         {bars.map((b, i) => (
           <rect key={i} x={b.x * moduleWidth} y={0} width={b.width * moduleWidth} height={height} fill="#111" />
         ))}

@@ -1,24 +1,103 @@
-# Pot & Leaf ERP — all fixes (26 Oct 2026, update 13)
+# Pot & Leaf ERP — all fixes (27 Oct 2026, update 26)
 
-This package holds **every file changed** from the uploaded project (277 files + this note).
+This package holds **every file changed** from the uploaded project (362 files + this note).
 It replaces all earlier packages; install only this one.
 
 ## Install
 
 1. Copy each file over the same path in your project.
-2. Backend: **back up the database first**, then `php artisan migrate` (9 new migrations — update 12 adds 3, one of them removes soft delete for good).
+2. Backend: **back up the database first**, then `php artisan migrate` (13 new migrations — update 12 adds 3, one of them removes soft delete for good; updates 14, 18, 19 and 20 add 1 each).
 3. Frontend: `npm run build`.
 
 ## Verified
 
 | Check | Result |
 |---|---|
-| Backend test suite (Pest, PHP 8.4) | 439 passed, 0 failed, 16 skipped (before: 379 passed) |
+| Backend test suite (Pest, PHP 8.4) | 455 passed, 0 failed, 16 skipped (before: 379 passed) |
 | Frontend build (Vite) + unit tests (Vitest) | builds · 23 passed |
 | Browser check of every changed screen | no script errors, no failed API calls |
 | API run-through: purchase → batch/barcode → damage → purchase return; sale (cash/UPI/credit/walk-in) → confirm; transfer between companies → receive; bulk split | all OK; batch totals = stock |
 
 ## 00. Update 2 — one location per company, simpler commission
+
+**Pop-up windows cover the whole screen (update 26)** — frontend only
+- Pop-ups (New supplier, New customer, Import, Add user, Set staff rate, Approve, Receive…) were drawn inside the page area, so the top bar stayed bright and clickable above the dimmed page and the window could sit under it. Every pop-up is now drawn on top of the whole screen: the top bar is dimmed too and the window is always fully visible and centred. Same for the enlarged picture on the Help page.
+- Checked on 13 screens with pop-ups at 1920, 1366 and phone (390) widths: every window inside the screen, nothing on top of it; all 85 pages open without errors (a list warning on the product page was also fixed).
+
+**Help page smaller (update 25)** — frontend only
+- Guide text is a little smaller (13.5 px instead of 15 px) with tighter spacing; headings and tables smaller to match.
+- Pictures are shown at most 680 px wide and centred instead of filling the whole width. Click a picture to see it full size, as before.
+
+**Users list "Couldn't load users" fixed, role permissions can be seen (update 24)** — no migration
+- **Fixed:** for anyone except the super admin (or the super admin filtering one company), the users list asked the database for a column called "pivot" that does not exist. On MySQL this stopped the list with an error ("Couldn't load users"); on SQLite the list opened but every user's **Role** showed "—". Users now load and show their role in that company. The same mistake in the role check `hasRole()` is fixed too.
+- If the list ever fails again, the reason from the server is shown under "Couldn't load users".
+- **Roles & Permissions:** click a role's name or **Permissions** to see exactly what it can do, grouped by area (e.g. Sales: View sales, Create sales, Confirm sales). Roles with full access say so. Everyone who can see roles can open this; only the super admin sees **Change permissions** / edit / delete.
+- New test `tests/Feature/UserListRolesTest.php`.
+
+**Help menu with the user guide (update 23)** — frontend only, no migration
+- New **Help & User Guide** item at the bottom of the menu (every user sees it) and a **?** button in the top bar. It opens the full guide inside the app: chapter list, a search box that shows only the chapters with your word (highlighted), and pictures you can click to see bigger. Works in dark mode and on phones.
+- The guide is shipped with the app: `public/help/guide.md` and 55 screenshots in `public/help/img/` (about 5 MB). To update it later, replace those files — no code change needed.
+- The guide was brought up to date with updates 13–22: a "What's new — 27 October 2026" chapter, the new stock request steps (request → approve → dispatch → receive), "Left in batch" with a worked example, page numbers, dark mode, supplier page boxes, product category/subcategory, supplier rule on purchases, reorder PDF, and deleting backups. Every screenshot was taken again on the current screens.
+
+**Page numbers on every long list (update 22)** — no migration
+- Lists now show 25 rows at a time with page buttons ("26–50 of 59"): Stock levels, Valuation, Fast/slow/dead, Batches & barcodes, Production, Locations, Roles, Backups, Activity log, Companies, Master data, Request stock, Barcode labels, Commission payouts and WhatsApp log, supplier payments / advance, and the long report tables.
+- **Fixed: rows were missing.** Stock levels showed only the first 20 products, and some reports (rental, production, transfers, loyalty customers, WhatsApp) showed only their first 50 rows with no way to see more. All rows can now be reached.
+- Production search now searches every order, not only the ones loaded; Export still downloads every matching row.
+- Batches: the column is now "Left in batch", with "of 30 received · 11 gone out" under it. Batches made by receiving a stock transfer now say "Transfer TRF-…" instead of "Opening".
+- New test `tests/Feature/BatchSourceAndListSearchTest.php`.
+
+**Dark mode made readable (update 21)** — frontend only
+- Table headings no longer sit on a pale grey strip; labels are clearly visible. The top bar is dark instead of grey.
+- Barcodes always have a white background, so they show (and scan) in dark mode.
+- Yellow notices, warning tags, pop-ups (darker backdrop, solid panel), green buttons and coloured status text all have enough contrast. Light grey hint text is a little brighter.
+- Date pickers, dropdown lists and scrollbars use the dark style.
+- Checked: every screen opened in dark mode with an automatic contrast check.
+
+**Batches: "received" figure on the opening-stock batch (update 20)** — 1 new migration
+- Editing a product's opening stock down and back up (e.g. 150 → 0 → 150) used to count each raise as new stock received, so the batch showed "150 of 300 received" (or 450). Lowering opening stock now also lowers the opening batch's received figure, because it is a correction, not a sale. It shows "150 of 150".
+- If part of the opening batch is already sold, only what is left in it is taken off; the rest comes off other batches, oldest first.
+- Migration `2026_10_27_000007` repairs existing opening batches: received = the product's opening stock (never less than what is still left). Stock on hand is not changed. New test `tests/Feature/OpeningBatchCorrectionTest.php`.
+
+**Stock transfers are now stock REQUESTS (update 19)** — 1 new migration
+- **Request stock** (Stock transfers → *Request stock*): you see every other company's products and how many they can give. Type how many you need, click **Add**, then **Send request**. Asking two companies makes two requests (one each). You cannot ask for more than they have free.
+- Steps: **you request → admin approves → that company clicks Dispatch → you click Receive**. On Receive the stock is added to your company and a **new barcode batch** is made; the barcode shows on the transfer under "New barcode".
+- **Approve**: the admin can pick **which company sends** the stock — the approve window lists every company that has the product and whether it has enough. The company that asked cannot approve its own request; it can cancel it before approval.
+- **Fixed: "couldn't load" and missing Receive button for the receiving company.** The page used the *sending* company for the login check, which a branch user does not belong to. Branch users now always open transfers under their own company, so Receive shows for them, not only for the admin.
+- **Fixed: received stock landing on a different product.** Every company numbers its products SKU-00001, SKU-00002…, so matching by SKU picked the wrong product (e.g. Areca Palm stock added to Rose Pot). Products are now matched by **name**. If the receiving company doesn't have it, a new product is made with a new SKU (never one already used there).
+- List: clear statuses (Waiting approval, To dispatch, On the way, Received) and a "Coming to us" / "We send" tag. The old push form stays for the admin at *Send stock directly*.
+- Migration `2026_10_27_000006` adds who asked (`requested_by`) and the batch made on receipt. New APIs `GET /api/transfers/request-data`, `POST /api/transfers/request`, `GET /api/transfers/{id}/sources`; new test `tests/Feature/TransferStockRequestTest.php`. Checked in the browser with three different logins (requesting branch, admin, sending branch).
+
+**Supplier page: payments and advance shown separately (update 18)** — 1 new migration
+- The mixed "Advance and payments" table is replaced by:
+  - three boxes under the supplier's name: **You owe this supplier**, **Advance with this supplier**, **Paid so far**;
+  - **Payments made** — each payment with date, mode and reference, and what it was used for: "Paid bill GRN-… · ₹…", "Paid as advance", or "Extra kept as advance" (click a bill to open it). Using advance on a bill is not shown here, because no new money was paid;
+  - **Advance** — where the advance came from (advance paid, extra paid on a bill, goods returned beyond what you owed) and which bills it was used on, with "Left ₹…" after each line. The last line always equals the supplier's advance balance; advance from before this was recorded shows as one "Earlier advance" line.
+- Buttons: **Pay supplier** and **Use advance on a bill** open Pay Suppliers. The Outstanding / Advance lines were removed from "Credit terms" (now in the boxes).
+- Lists stack neatly on phones (no sideways scrolling).
+- Migration `2026_10_27_000005` adds `advance_credit` to purchase returns, so a return's credit beyond what was owed is recorded from now on.
+- New API `GET /api/suppliers/{id}/account`; new test `tests/Feature/SupplierAccountTest.php`.
+
+**Category on the product page (update 17)** — no migration
+- A product saved under a subcategory showed the subcategory's name as "Category", and the main category was missing. The product page now shows **Category** (main) and **Subcategory** separately, and the heading reads e.g. "SKU · Live Plants › Palms". Product cards in the list show the same.
+- Filtering the product list by a main category now also shows products saved under its subcategories (before they were left out).
+- New test `tests/Feature/ProductCategoryDetailTest.php`.
+
+**Reorder report PDF shows the right supplier (update 16)** — no migration
+- The PDF was built only from suppliers saved on the product, so a supplier picked on the Reorder screen showed as "Supplier Not Assigned". Export PDF / Supplier-wise PDF now send what is on screen — supplier, order qty and the Include tick — so the PDF matches the screen exactly.
+- A product with no supplier linked now uses the supplier it was last bought from (shown on screen as "From the last purchase of this product"). Only products never bought and never linked stay "Supplier not assigned".
+- The supplier box lists the product's own suppliers first, then every other supplier of the company. The "Suppliers" card now counts what is on screen (it said 0 before).
+- New test `tests/Feature/ReorderSupplierTest.php`.
+
+**HSN code hidden on products (update 15)** — no migration
+- The HSN code box is removed from Add product and Edit product, and from the product detail page. The product import template and export no longer have an HSN column.
+- HSN codes already saved are kept: the form no longer sends the field, so editing a product never wipes its code. Sale and purchase bills still print a product's HSN when it has one (GST invoices may need it).
+- New test `tests/Feature/ProductHsnHiddenTest.php`.
+
+**Delete backups (update 14)** — 1 new migration
+- Backups screen: a **Delete** (bin) button on each backup, after "Delete … for good? This cannot be undone. Your current data is not affected — only this saved copy is removed."
+- Only real backup files (`backup_….sqlite`) in the backups folder can be deleted. The last remaining backup cannot be deleted (button greyed out), so there is always one copy to restore from.
+- New permission "Delete database backups" (`backup.delete`); migration `2026_10_27_000004` gives it to every role that can already restore backups. Super admin always has it.
+- New test `tests/Feature/BackupDeleteTest.php`.
 
 **Supplier on purchases (update 13)** — no new migration
 - A purchase made from a purchase order (Convert to purchase) keeps that order's supplier. The edit form shows the supplier as fixed with "From purchase order PO-…"; the server also refuses a different supplier for it.

@@ -38,6 +38,8 @@ const ReceiptsList = lazy(() => import('./pages/receipts/ReceiptsList'));
 const CommissionList = lazy(() => import('./pages/commission/CommissionList'));
 const TransfersList = lazy(() => import('./pages/transfers/TransfersList'));
 const TransferForm = lazy(() => import('./pages/transfers/TransferForm'));
+const HelpPage = lazy(() => import('./pages/help/HelpPage'));
+const RequestStockForm = lazy(() => import('./pages/transfers/RequestStockForm'));
 const TransferDetail = lazy(() => import('./pages/transfers/TransferDetail'));
 const ProductionList = lazy(() => import('./pages/production/ProductionList'));
 const ProductionForm = lazy(() => import('./pages/production/ProductionForm'));
@@ -117,6 +119,7 @@ export default function App() {
             <Route path="roles" element={<PermissionRoute permission="roles.view"><RolesList /></PermissionRoute>} />
             <Route path="masters" element={<PermissionRoute anyOf={['categories.view', 'subcategories.view', 'units.view']}><MastersPage /></PermissionRoute>} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="help" element={<HelpPage />} />
             <Route path="bulk-splits" element={<PermissionRoute permission="bulk_splits.view"><BulkSplitsList /></PermissionRoute>} />
             <Route path="bulk-splits/new" element={<PermissionRoute permission="bulk_splits.create"><BulkSplitForm /></PermissionRoute>} />
             <Route path="bulk-splits/:id" element={<PermissionRoute permission="bulk_splits.view"><BulkSplitDetail /></PermissionRoute>} />
@@ -133,7 +136,8 @@ export default function App() {
             <Route path="receipts" element={<PermissionRoute permission="receipts.view"><ReceiptsList /></PermissionRoute>} />
             <Route path="commission" element={<PermissionRoute permission="commission.view"><CommissionList /></PermissionRoute>} />
             <Route path="transfers" element={<PermissionRoute permission="transfers.view"><TransfersList /></PermissionRoute>} />
-            <Route path="transfers/new" element={<PermissionRoute permission="transfers.create"><TransferForm /></PermissionRoute>} />
+            <Route path="transfers/new" element={<PermissionRoute permission="transfers.create"><RequestStockForm /></PermissionRoute>} />
+            <Route path="transfers/send" element={<PermissionRoute permission="transfers.create"><TransferForm /></PermissionRoute>} />
             <Route path="transfers/:id" element={<PermissionRoute permission="transfers.view"><TransferDetail /></PermissionRoute>} />
             {/* One location per company (created with the company) — no Locations screen. */}
             <Route path="locations" element={<Navigate to="/companies" replace />} />

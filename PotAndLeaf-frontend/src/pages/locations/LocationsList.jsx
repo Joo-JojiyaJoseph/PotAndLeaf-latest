@@ -6,6 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { FormCompanyField, useFormCompany, withCompany } from '../../components/FormCompanyField';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
+import Pagination from '../../components/Pagination';
+import usePaged from '../../hooks/usePaged';
 
 const empty = { name: '', code: '', type: 'godown', is_default: false, is_active: true };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
@@ -47,6 +49,7 @@ export default function LocationsList() {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const err = (k) => errors[k]?.[0];
   const rows = data?.data ?? [];
+  const { pageRows, meta, setPage } = usePaged(rows, 25);
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -77,7 +80,7 @@ export default function LocationsList() {
                   <th className="microlabel px-4 py-2.5" />
                 </tr></thead>
                 <tbody>
-                  {rows.map((l) => (
+                  {pageRows.map((l) => (
                     <tr key={l.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                       <td className="tnum px-4 py-2.5 text-xs">{l.code}</td>
                       <td className="px-4 py-2.5 font-medium">{l.name}</td>
@@ -96,6 +99,7 @@ export default function LocationsList() {
               </table>
             </div>
           )}
+        <div className="border-t border-line px-3"><Pagination meta={meta} onPage={setPage} /></div>
       </Card>
 
       <Modal open={editing !== null} onClose={() => setEditing(null)} title={editing?.id ? `Edit ${editing.name}` : 'New location'}

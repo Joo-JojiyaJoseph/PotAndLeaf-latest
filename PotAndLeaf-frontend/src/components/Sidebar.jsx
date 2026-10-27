@@ -37,6 +37,7 @@ import {
   Cog6ToothIcon,
   CircleStackIcon,
   EyeIcon,
+  QuestionMarkCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { classNames } from '../lib/format';
@@ -110,9 +111,16 @@ const GROUPS = [
       { key: 'activity', label: 'Activity Log', to: '/activity-monitoring', icon: EyeIcon, permission: 'activity.view' },
     ],
   },
+  {
+    label: 'Help',
+    items: [
+      { key: 'help', label: 'Help & User Guide', to: '/help', icon: QuestionMarkCircleIcon, everyone: true },
+    ],
+  },
 ];
 
 function itemVisible(item, { isSuperAdmin, showHo, can }) {
+  if (item.everyone) return true;
   if (item.superAdmin) return isSuperAdmin;
   if (item.hoOnly && !showHo) return false;
   if (item.anyOf?.length) return item.anyOf.some((p) => can(p));

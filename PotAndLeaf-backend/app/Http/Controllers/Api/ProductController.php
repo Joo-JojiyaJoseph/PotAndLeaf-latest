@@ -28,9 +28,9 @@ class ProductController extends Controller
         $this->allow($request, 'products.view');
 
         $products = $this->applyListCompanyScope(Product::query(), $request)
-            ->with(['unit:id,short_name,name', 'category:id,name'])
+            ->with(['unit:id,short_name,name', 'category:id,name,parent_id', 'category.parent:id,name'])
             ->when(filled($request->query('search')), fn ($q) => $q->search($request->query('search')))
-            ->when(filled($request->query('category_id')), fn ($q) => $q->where('category_id', $request->query('category_id')))
+            ->when(filled($request->query('category_id')), fn ($q) => $q->whereIn('category_id', \App\Models\ProductCategory::query()->where('id', $request->query('category_id'))->orWhere('parent_id', $request->query('category_id'))->pluck('id')))
             ->when(filled($request->query('status')), fn ($q) => $q->where('status', $request->query('status')))
             ->when($request->boolean('low_only'), fn ($q) => $q->where('reorder_level', '>', 0)->whereColumn('current_stock', '<=', 'reorder_level'))
             ->orderBy('name')
@@ -72,7 +72,7 @@ class ProductController extends Controller
         $company = $this->company($request);
         $product = $this->products->create($company->id, $request->validated(), $request->user()->id);
 
-        return $this->created(new ProductResource($product->load(['category', 'brand', 'unit'])), 'Product created.');
+        return $this->created(new ProductResource($product->load(['category.parent:id,name', 'brand', 'unit'])), 'Product created.');
     }
 
     public function show(Request $request, Product $product): JsonResponse
@@ -80,7 +80,7 @@ class ProductController extends Controller
         $this->allow($request, 'products.view');
         $this->assertRecordCompany($request, $product);
 
-        return $this->ok(new ProductResource($product->load(['category', 'brand', 'unit', 'suppliers'])));
+        return $this->ok(new ProductResource($product->load(['category.parent:id,name', 'brand', 'unit', 'suppliers'])));
     }
 
     public function update(UpdateProductRequest $request, Product $product): JsonResponse
@@ -88,7 +88,7 @@ class ProductController extends Controller
         $this->assertRecordCompany($request, $product, writable: true);
         $updated = $this->products->update($product, $request->validated(), $request->user()->id);
 
-        return $this->ok(new ProductResource($updated->load(['category', 'brand', 'unit'])), 'Product updated.');
+        return $this->ok(new ProductResource($updated->load(['category.parent:id,name', 'brand', 'unit'])), 'Product updated.');
     }
 
     public function destroy(Request $request, Product $product): JsonResponse
@@ -121,11 +121,24 @@ class ProductController extends Controller
             ->when(filled($request->query('barcode')), fn ($q) => $q->where('barcode', 'like', '%'.$request->query('barcode').'%'))
             ->with(['product:id,sku,name,company_id', 'company:id,name', 'purchase:id,purchase_no', 'bulkSplit:id,split_no,source_product_name'])
             ->orderBy('created_at')
+            ->get();
+        // Batches made when a stock transfer was received.
+        $fromTransfer = \App\Models\StockTransferItem::query()
+            ->whereIn('received_batch_id', $batches->pluck('id'))
+            ->with('stockTransfer:id,transfer_no')
             ->get()
-            ->map(function ($b) {
+            ->mapWithKeys(fn ($i) => [$i->received_batch_id => $i->stockTransfer?->transfer_no]);
+        $batches = $batches
+            ->map(function ($b) use ($fromTransfer) {
                 try {
+                    $transferNo = $fromTransfer[$b->id] ?? null;
+                    $looksTransfer = ! $b->purchase_id && ! $b->production_order_id && ! $b->bulk_split_id
+                        && ! str_starts_with((string) $b->batch_no, 'OPEN-')
+                        && str_starts_with((string) $b->barcode, 'PLT');
                     $source = $b->purchase?->purchase_no
                         ?? ($b->bulkSplit ? "Split {$b->bulkSplit->split_no}" : null)
+                        ?? ($transferNo ? "Transfer {$transferNo}" : null)
+                        ?? ($looksTransfer ? 'Transfer' : null)
                         ?? ($b->production_order_id ? 'Production' : ($b->purchase_id ? 'Purchase' : 'Opening'));
 
                     return [

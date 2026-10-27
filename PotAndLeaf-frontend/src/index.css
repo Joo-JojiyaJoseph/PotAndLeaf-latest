@@ -339,3 +339,55 @@ h1, h2, h3 { text-wrap: balance; }
 .app-main td { white-space: nowrap; }
 .app-main td.whitespace-normal,
 .app-main td .whitespace-normal { white-space: normal; }
+
+/* ===================== Dark mode: readable everywhere =====================
+   Screens use a few light-only utility colours (white glass, pale amber,
+   cream). In dark mode map them to dark surfaces with light text, so headers,
+   table heads, notices and badges stay readable. Plain `bg-white` is kept on
+   purpose: barcodes and toggle knobs need a white background. */
+html.dark { color-scheme: dark; --color-faint: #8d9c95; --color-muted: #a9b8b0; }
+
+/* Translucent white panels / bars → dark glass. */
+html.dark .bg-white\/25, html.dark .bg-white\/30 { background-color: rgba(255, 255, 255, 0.04); }
+html.dark .bg-white\/50, html.dark .bg-white\/55, html.dark .bg-white\/60,
+html.dark .bg-white\/70, html.dark .bg-white\/80, html.dark .bg-white\/90 { background-color: rgba(34, 43, 39, 0.82); }
+html.dark .hover\:bg-white:hover, html.dark .hover\:bg-white\/50:hover, html.dark .hover\:bg-white\/60:hover,
+html.dark .hover\:bg-white\/70:hover, html.dark .hover\:bg-white\/80:hover, html.dark .hover\:bg-white\/90:hover,
+html.dark .enabled\:hover\:bg-white\/90:enabled:hover { background-color: rgba(255, 255, 255, 0.08); }
+html.dark .border-white\/20, html.dark .border-white\/40, html.dark .border-white\/60 { border-color: rgba(255, 255, 255, 0.08); }
+
+/* Table heads: no pale strip, clear labels. */
+html.dark .app-main table thead tr { background: rgba(255, 255, 255, 0.035); }
+html.dark .app-main table thead th { color: #9fb0a7; }
+html.dark .app-main table tbody tr:hover { background: rgba(142, 165, 63, 0.10); }
+html.dark .bg-surface { background-color: rgba(42, 51, 47, 0.96); }
+
+/* Notices and tags in pale colours. */
+html.dark .bg-amber-50 { background-color: #3a3018; }
+html.dark .text-amber-600, html.dark .text-amber-700, html.dark .text-amber-800, html.dark .text-amber-900 { color: #f1c27a; }
+html.dark .border-amber-300, html.dark .border-amber-300\/50 { border-color: rgba(241, 194, 122, 0.35); }
+html.dark .bg-\[\#F7E9E6\] { background-color: #3a2420; }
+html.dark .bg-\[\#f4efdf\], html.dark .bg-\[\#FAFBFA\] { background-color: rgba(255, 255, 255, 0.04); }
+html.dark .text-\[\#8b8068\], html.dark .text-\[\#857e6d\], html.dark .text-\[\#6d532f\],
+html.dark .text-\[\#59602e\], html.dark .text-\[\#4d4a35\] { color: #d6cdb5; }
+html.dark .border-\[\#ded5c0\] { border-color: rgba(255, 255, 255, 0.12); }
+
+/* Accent text on dark tints needs to be lighter to be read. */
+html.dark .text-leaf-hover { color: #bdd66e; }
+html.dark .text-leaf { color: #a9c455; }
+html.dark .bg-leaf .text-leaf, html.dark .bg-leaf.text-leaf { color: #fff; }
+html.dark .text-info { color: #86b9e6; }
+html.dark .text-danger { color: #f08a8a; }
+html.dark .text-amber { color: #f1c27a; }
+html.dark .text-success { color: #6fd3a0; }
+html.dark ::selection { background: #4e6418; color: #fff; }
+html.dark input::placeholder, html.dark textarea::placeholder { color: #7f8f87; }
+
+/* Native select menus. */
+html.dark select option { background-color: #222b27; color: var(--color-ink); }
+/* Green buttons / active tabs: a deeper green so white text stands out. */
+html.dark .bg-leaf { background-color: #6f8a27; }
+html.dark .hover\:bg-leaf-hover:hover, html.dark .bg-leaf-hover { background-color: #5c7420; }
+/* Pop-ups: dark dimmed backdrop and a solid panel. */
+html.dark .bg-ink\/25, html.dark .bg-ink\/30 { background-color: rgba(0, 0, 0, 0.55); }
+html.dark .dialog-in.glass-card { background: #27312c; border-color: rgba(255, 255, 255, 0.10); }

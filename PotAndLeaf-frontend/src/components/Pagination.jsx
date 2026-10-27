@@ -2,7 +2,11 @@ import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 
 export default function Pagination({ meta, onPage }) {
   if (!meta || (meta.last_page ?? 1) <= 1) return null;
-  const { current_page: cur, last_page: last, from, to, total } = meta;
+  const { current_page: cur, last_page: last, total } = meta;
+  // Some lists only send per_page; work out "21–40" from it.
+  const per = Number(meta.per_page) || 0;
+  const from = meta.from ?? (per ? (cur - 1) * per + 1 : null);
+  const to = meta.to ?? (per ? Math.min(cur * per, total ?? cur * per) : null);
 
   const pages = [];
   const add = (p) => pages.push(p);
@@ -13,7 +17,7 @@ export default function Pagination({ meta, onPage }) {
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 px-1 py-3 text-sm">
-      <span className="text-muted">{from}–{to} of {total}</span>
+      <span className="text-muted">{from != null ? `${from}–${to} of ${total}` : `Page ${cur} of ${last}`}</span>
       <div className="flex items-center gap-1">
         <button disabled={cur <= 1} onClick={() => onPage(cur - 1)}
           className="flex size-8 items-center justify-center rounded-xl glass-control text-muted disabled:opacity-40 enabled:hover:bg-white/90"><ChevronLeftIcon className="size-4" /></button>

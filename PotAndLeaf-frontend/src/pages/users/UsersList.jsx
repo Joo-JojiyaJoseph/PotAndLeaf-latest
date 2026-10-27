@@ -9,7 +9,7 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
 import useSubmitLock from '../../hooks/useSubmitLock';
-import { fieldError } from '../../lib/formErrors';
+import { apiMessage, fieldError } from '../../lib/formErrors';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import Pagination from '../../components/Pagination';
 import StatusToggle from '../../components/StatusToggle';
@@ -39,7 +39,7 @@ export default function UsersList() {
 
   useEffect(() => { setPage(1); }, [filterCompanyId, statusFilter]);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['users', activeCompany?.id, filterCompanyId, statusFilter, page],
     queryFn: () => api.get('/users', { params: { ...companyParams, status: statusFilter, page, per_page: 25 } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
@@ -172,6 +172,8 @@ export default function UsersList() {
         ) : isError ? (
           <div className="px-4 py-12 text-center text-sm text-muted">
             <p>Couldn’t load users.</p>
+            {/* Show the server's reason (e.g. no permission) so the problem can be fixed. */}
+            <p className="mt-1 text-xs text-faint">{apiMessage(error, '')}</p>
             <Button size="sm" variant="outline" className="mt-3" onClick={() => refetch()}>Try again</Button>
           </div>
         ) : rows.length === 0 ? (

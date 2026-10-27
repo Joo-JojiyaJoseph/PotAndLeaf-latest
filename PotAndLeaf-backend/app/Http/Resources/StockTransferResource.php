@@ -20,6 +20,9 @@ class StockTransferResource extends JsonResource
         $isHo = (bool) $user?->is_super_admin;
         $canAct = $isHo || $isSource || $isDest;
         $approveCompanyId = $isHo ? $this->company_id : $currentCompanyId;
+        // The company that asked for stock never approves its own request.
+        $mayApprove = $this->isIntraCompany() ? ($isHo || $isSource) : ($isHo || ($isSource && ! $isDest));
+        $ownRequest = $this->status === 'requested' && ! $this->isIntraCompany() && $isDest && ! $isSource;
 
         return [
             'id'              => $this->id,
@@ -48,6 +51,8 @@ class StockTransferResource extends JsonResource
             'is_incoming'     => $isDest && ! $isSource,
             'is_intra_company'=> $this->isIntraCompany(),
             'notes'           => $this->notes,
+            'requested_by'    => $this->whenLoaded('requester', fn () => $this->requester?->name),
+            'is_stock_request'=> $this->requested_by !== null,
             'dispatched_at'   => optional($this->dispatched_at)->toIso8601String(),
             'received_at'     => optional($this->received_at)->toIso8601String(),
             'items_count'     => $this->when($this->items_count !== null, $this->items_count),
@@ -64,14 +69,18 @@ class StockTransferResource extends JsonResource
                 'batch_no'         => $i->batch?->batch_no,
                 'barcode'          => $i->batch?->barcode,
                 'source_purchase'  => $i->batch?->purchase?->purchase_no,
+                'received_batch_no'=> $i->relationLoaded('receivedBatch') ? $i->receivedBatch?->batch_no : null,
+                'received_barcode' => $i->relationLoaded('receivedBatch') ? $i->receivedBatch?->barcode : null,
             ])->values()),
             'can'             => [
-                'approve'  => $this->status === 'requested' && $canAct && $user?->hasPermission('transfers.approve', $approveCompanyId),
-                'reject'   => $this->status === 'requested' && $canAct && $user?->hasPermission('transfers.approve', $approveCompanyId),
+                'approve'  => $this->status === 'requested' && $mayApprove && $user?->hasPermission('transfers.approve', $approveCompanyId),
+                'reject'   => $this->status === 'requested' && $mayApprove && $user?->hasPermission('transfers.approve', $approveCompanyId),
                 'dispatch' => $this->status === 'draft' && ($isHo || $isSource) && $user?->hasPermission('transfers.dispatch', $this->company_id),
                 'redirect' => $this->status === 'in_transit' && ! $this->isIntraCompany() && ($isHo || $isSource) && $user?->hasPermission('transfers.approve', $approveCompanyId),
                 'receive'  => $this->status === 'in_transit' && ($isHo || $isDest) && $user?->hasPermission('transfers.receive', $isHo ? ($this->to_company_id ?? $this->company_id) : $currentCompanyId),
-                'cancel'   => in_array($this->status, ['draft', 'in_transit', 'requested'], true) && ($isHo || $isSource) && $user?->hasPermission('transfers.delete', $this->company_id),
+                'cancel'   => in_array($this->status, ['draft', 'in_transit', 'requested'], true) && ($isHo || $isSource || $ownRequest)
+                    && $user?->hasPermission('transfers.delete', $ownRequest ? $currentCompanyId : ($isHo ? $this->company_id : $currentCompanyId)),
+                'change_source' => $this->status === 'requested' && ! $this->isIntraCompany() && $isHo,
             ],
         ];
     }

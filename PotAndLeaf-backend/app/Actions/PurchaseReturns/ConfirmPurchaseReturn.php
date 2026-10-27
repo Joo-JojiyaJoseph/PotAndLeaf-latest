@@ -154,6 +154,7 @@ class ConfirmPurchaseReturn
         $excess = round($credit - $applied, 2);
         if ($excess > 0.005) {
             $supplier->advance_balance = round((float) $supplier->advance_balance + $excess, 2);
+            $return->update(['advance_credit' => $excess]);
         }
         $supplier->save();
     }

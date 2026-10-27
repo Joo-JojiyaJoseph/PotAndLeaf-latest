@@ -68,6 +68,15 @@ class SupplierController extends Controller
         return $this->message('Supplier deleted.');
     }
 
+    /** Payments and advance, shown separately on the supplier page. */
+    public function account(Request $request, Supplier $supplier): JsonResponse
+    {
+        $this->allow($request, 'suppliers.view');
+        $this->assertRecordCompany($request, $supplier);
+
+        return $this->ok(app(\App\Services\SupplierAccountService::class)->account($supplier));
+    }
+
     public function purchaseHistory(Request $request, Supplier $supplier): JsonResponse
     {
         $this->allow($request, 'suppliers.view');

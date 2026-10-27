@@ -11,6 +11,8 @@ import AccountingReportPanels from './AccountingReportPanels';
 import ReorderReportPanel from './ReorderReportPanel';
 import ReportsToolbar from './ReportsToolbar';
 import ReportNavGrid from './ReportNavGrid';
+import Pagination from '../../components/Pagination';
+import PagedTable from '../../components/PagedTable';
 import ReportEmptyState from './ReportEmptyState';
 import { REPORT_TABS, filterVisibleTabs, tabMeta } from './reportConfig';
 
@@ -51,6 +53,8 @@ export default function ReportsPage() {
   const { filterCompanyId, setFilterCompanyId, companyParams, viewingCompany } = useCompanyFilter();
   const toast = useToast();
   const [tab, setTab] = useState('dashboard');
+  // Page number for reports the server sends in pages (50 rows each).
+  const [rptPage, setRptPage] = useState(1);
   const [range, setRange] = useState({ from: daysAgo(29), to: todayISO() });
   const [showCustomDates, setShowCustomDates] = useState(false);
   const [reportSearch, setReportSearch] = useState('');
@@ -97,6 +101,8 @@ export default function ReportsPage() {
     queryFn: () => api.get('/reports/form-data', { params: companyParams }).then((r) => r.data.data),
     enabled: Boolean(activeCompany),
   });
+
+  useEffect(() => { setRptPage(1); }, [tab, range.from, range.to, filterCompanyId, locationId, customerId, waType]);
 
   useEffect(() => {
     setLocationId('');
@@ -146,8 +152,8 @@ export default function ReportsPage() {
   });
 
   const rentalDeliveryQ = useQuery({
-    queryKey: ['reports-rental-delivery', activeCompany?.id, range.from, range.to, locationId],
-    queryFn: () => api.get('/reports/rental/delivery', { params: { ...range, location_id: locationParam } }).then((r) => r.data),
+    queryKey: ['reports-rental-delivery', activeCompany?.id, range.from, range.to, locationId, rptPage],
+    queryFn: () => api.get('/reports/rental/delivery', { params: { ...range, location_id: locationParam, page: rptPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'rental_delivery' && canRentalReports,
     placeholderData: keepPreviousData,
   });
@@ -167,22 +173,22 @@ export default function ReportsPage() {
   });
 
   const rentalCurrentQ = useQuery({
-    queryKey: ['reports-rental-current', activeCompany?.id, locationId],
-    queryFn: () => api.get('/reports/rental/current', { params: { location_id: locationParam } }).then((r) => r.data),
+    queryKey: ['reports-rental-current', activeCompany?.id, locationId, rptPage],
+    queryFn: () => api.get('/reports/rental/current', { params: { location_id: locationParam, page: rptPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'rental_current' && canRentalReports,
     placeholderData: keepPreviousData,
   });
 
   const rentalCustomerQ = useQuery({
-    queryKey: ['reports-rental-customer', activeCompany?.id, customerId, range.from, range.to, locationId],
-    queryFn: () => api.get(`/reports/rental/customer/${customerId}`, { params: { ...range, location_id: locationParam } }).then((r) => r.data),
+    queryKey: ['reports-rental-customer', activeCompany?.id, customerId, range.from, range.to, locationId, rptPage],
+    queryFn: () => api.get(`/reports/rental/customer/${customerId}`, { params: { ...range, location_id: locationParam, page: rptPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'rental_customer' && canRentalReports && Boolean(customerId),
     placeholderData: keepPreviousData,
   });
 
   const productionSummaryQ = useQuery({
-    queryKey: ['reports-production-summary', activeCompany?.id, filterCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/production/summary', { params: { ...range, ...companyParams } }).then((r) => r.data),
+    queryKey: ['reports-production-summary', activeCompany?.id, filterCompanyId, range.from, range.to, rptPage],
+    queryFn: () => api.get('/reports/production/summary', { params: { ...range, ...companyParams, page: rptPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'production_summary' && canProductionReports,
     placeholderData: keepPreviousData,
   });
@@ -202,22 +208,22 @@ export default function ReportsPage() {
   });
 
   const productionBatchesQ = useQuery({
-    queryKey: ['reports-production-batches', activeCompany?.id, filterCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/production/batches', { params: { ...range, ...companyParams } }).then((r) => r.data),
+    queryKey: ['reports-production-batches', activeCompany?.id, filterCompanyId, range.from, range.to, rptPage],
+    queryFn: () => api.get('/reports/production/batches', { params: { ...range, ...companyParams, page: rptPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'production_batches' && canProductionReports,
     placeholderData: keepPreviousData,
   });
 
   const transferSummaryQ = useQuery({
-    queryKey: ['reports-transfer-summary', activeCompany?.id, filterCompanyId, range.from, range.to],
-    queryFn: () => api.get('/reports/transfers/summary', { params: { ...range, ...companyParams } }).then((r) => r.data),
+    queryKey: ['reports-transfer-summary', activeCompany?.id, filterCompanyId, range.from, range.to, rptPage],
+    queryFn: () => api.get('/reports/transfers/summary', { params: { ...range, ...companyParams, page: rptPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'transfer_summary' && canTransferReports,
     placeholderData: keepPreviousData,
   });
 
   const transferInTransitQ = useQuery({
-    queryKey: ['reports-transfer-in-transit', activeCompany?.id, filterCompanyId],
-    queryFn: () => api.get('/reports/transfers/in-transit', { params: { ...companyParams } }).then((r) => r.data),
+    queryKey: ['reports-transfer-in-transit', activeCompany?.id, filterCompanyId, rptPage],
+    queryFn: () => api.get('/reports/transfers/in-transit', { params: { ...companyParams, page: rptPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'transfer_in_transit' && canTransferReports,
     placeholderData: keepPreviousData,
   });
@@ -307,16 +313,16 @@ export default function ReportsPage() {
   });
 
   const loyaltyReportQ = useQuery({
-    queryKey: ['reports-loyalty', activeCompany?.id, filterCompanyId],
-    queryFn: () => api.get('/loyalty', { params: { ...companyParams, per_page: 50 } }).then((r) => r.data.data),
+    queryKey: ['reports-loyalty', activeCompany?.id, filterCompanyId, rptPage],
+    queryFn: () => api.get('/loyalty', { params: { ...companyParams, per_page: 50, page: rptPage } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'loyalty_report' && canLoyaltyReport,
     placeholderData: keepPreviousData,
   });
 
   const whatsappReportQ = useQuery({
-    queryKey: ['reports-whatsapp', activeCompany?.id, filterCompanyId, waType],
+    queryKey: ['reports-whatsapp', activeCompany?.id, filterCompanyId, waType, rptPage],
     queryFn: () => api.get('/commission/whatsapp-logs', {
-      params: { ...companyParams, message_type: waType || undefined },
+      params: { ...companyParams, message_type: waType || undefined, page: rptPage },
     }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'whatsapp_report' && canWhatsappReport,
     placeholderData: keepPreviousData,
@@ -670,7 +676,8 @@ export default function ReportsPage() {
               )
               : (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <PagedTable rows={marginRows}>{(pg) => (
+<table className="w-full text-sm">
                     <thead><tr className="border-b border-line text-left text-faint">
                       <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Revenue</th>
@@ -679,7 +686,7 @@ export default function ReportsPage() {
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Margin %</th>
                     </tr></thead>
                     <tbody>
-                      {marginRows.map((r) => (
+                      {pg.map((r) => (
                         <tr key={r.id ?? r.name} className="border-b border-line/60 last:border-0">
                           <td className="px-4 py-2.5 font-medium">{r.name}</td>
                           <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.revenue)}</td>
@@ -690,6 +697,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+)}</PagedTable>
                 </div>
               )}
           </Card>
@@ -786,7 +794,8 @@ export default function ReportsPage() {
                   {(internalEstimateQ.data.rows?.length ?? 0) === 0 ? <div className="px-4 py-12 text-center text-sm text-muted">No confirmed sales in this range.</div>
                     : (
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <PagedTable rows={internalEstimateQ.data.rows}>{(pg) => (
+<table className="w-full text-sm">
                           <thead><tr className="border-b border-line text-left text-faint">
                             <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
                             <th className="microlabel px-4 py-2.5 text-right font-semibold">Sales</th>
@@ -796,7 +805,7 @@ export default function ReportsPage() {
                             <th className="microlabel px-4 py-2.5 text-right font-semibold">Estimate</th>
                           </tr></thead>
                           <tbody>
-                            {internalEstimateQ.data.rows.map((r) => (
+                            {pg.map((r) => (
                               <tr key={r.date} className="border-b border-line/60 last:border-0">
                                 <td className="px-4 py-2.5">{formatDate(r.date)}</td>
                                 <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.sales)}</td>
@@ -816,6 +825,7 @@ export default function ReportsPage() {
                             <td className="tnum px-4 py-2.5 text-right">{formatCurrency(internalEstimateQ.data.totals.estimate)}</td>
                           </tr></tfoot>
                         </table>
+)}</PagedTable>
                       </div>
                     )}
                 </Card>
@@ -837,7 +847,8 @@ export default function ReportsPage() {
                     <div className="px-4 py-12 text-center text-sm text-muted">No confirmed sales in this range.</div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <PagedTable rows={priceLevelQ.data.rows}>{(pg) => (
+<table className="w-full text-sm">
                         <thead><tr className="border-b border-line text-left text-faint">
                           <th className="microlabel px-4 py-2.5 font-semibold">Price tier</th>
                           <th className="microlabel px-4 py-2.5 text-right font-semibold">Sales</th>
@@ -845,7 +856,7 @@ export default function ReportsPage() {
                           <th className="microlabel px-4 py-2.5 text-right font-semibold">Revenue</th>
                         </tr></thead>
                         <tbody>
-                          {priceLevelQ.data.rows.map((r) => (
+                          {pg.map((r) => (
                             <tr key={r.price_level} className="border-b border-line/60 last:border-0">
                               <td className="px-4 py-2.5 font-medium">{r.label}</td>
                               <td className="tnum px-4 py-2.5 text-right">{r.sale_count}</td>
@@ -855,6 +866,7 @@ export default function ReportsPage() {
                           ))}
                         </tbody>
                       </table>
+)}</PagedTable>
                     </div>
                   )}
                 </Card>
@@ -894,6 +906,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+<Pagination meta={rentalDeliveryQ.data.meta} onPage={setRptPage} />
                 </div>
               )}
           </Card>
@@ -967,7 +980,8 @@ export default function ReportsPage() {
                   {(rentalIncomeQ.data.rows?.length ?? 0) === 0 ? <div className="px-4 py-12 text-center text-sm text-muted">No rental invoices in this range.</div>
                     : (
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <PagedTable rows={rentalIncomeQ.data.rows}>{(pg) => (
+<table className="w-full text-sm">
                           <thead><tr className="border-b border-line text-left text-faint">
                             <th className="microlabel px-4 py-2.5 font-semibold">Invoice</th>
                             <th className="microlabel px-4 py-2.5 font-semibold">Rental</th>
@@ -977,7 +991,7 @@ export default function ReportsPage() {
                             <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                           </tr></thead>
                           <tbody>
-                            {rentalIncomeQ.data.rows.map((r) => (
+                            {pg.map((r) => (
                               <tr key={r.invoice_no} className="border-b border-line/60 last:border-0">
                                 <td className="px-4 py-2.5 font-medium">{r.invoice_no}</td>
                                 <td className="px-4 py-2.5 text-muted">{r.rental_no}</td>
@@ -989,6 +1003,7 @@ export default function ReportsPage() {
                             ))}
                           </tbody>
                         </table>
+)}</PagedTable>
                       </div>
                     )}
                 </Card>
@@ -1010,7 +1025,8 @@ export default function ReportsPage() {
                   {(rentalStaffQ.data?.rows?.length ?? 0) === 0 ? <ReportEmptyState title="No rentals" description="No rental transactions in this range." />
                     : (
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <PagedTable rows={rentalStaffQ.data.rows}>{(pg) => (
+<table className="w-full text-sm">
                           <thead><tr className="border-b border-line text-left text-faint">
                             <th className="microlabel px-4 py-2.5 font-semibold">Rental</th>
                             <th className="microlabel px-4 py-2.5 font-semibold">Staff</th>
@@ -1021,7 +1037,7 @@ export default function ReportsPage() {
                             <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                           </tr></thead>
                           <tbody>
-                            {rentalStaffQ.data.rows.map((r) => (
+                            {pg.map((r) => (
                               <tr key={r.id} className="border-b border-line/60 last:border-0">
                                 <td className="px-4 py-2.5 font-medium">{r.rental_no}</td>
                                 <td className="px-4 py-2.5">{r.staff_name}</td>
@@ -1034,6 +1050,7 @@ export default function ReportsPage() {
                             ))}
                           </tbody>
                         </table>
+)}</PagedTable>
                       </div>
                     )}
                 </Card>
@@ -1072,6 +1089,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+<Pagination meta={rentalCurrentQ.data.meta} onPage={setRptPage} />
                 </div>
               )}
         </Card>
@@ -1116,6 +1134,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+<Pagination meta={rentalCustomerQ.data.meta} onPage={setRptPage} />
                 </div>
               )}
         </Card>
@@ -1165,6 +1184,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+<Pagination meta={productionSummaryQ.data.data.meta} onPage={setRptPage} />
                 </div>
                 )}
               </Card>
@@ -1178,7 +1198,8 @@ export default function ReportsPage() {
             : (productionByProductQ.data?.rows?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No production by product in this range.</div>
             : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <PagedTable rows={productionByProductQ.data.rows}>{(pg) => (
+<table className="w-full text-sm">
                   <thead><tr className="border-b border-line text-left text-faint">
                     <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Runs</th>
@@ -1187,7 +1208,7 @@ export default function ReportsPage() {
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Avg unit</th>
                   </tr></thead>
                   <tbody>
-                    {productionByProductQ.data.rows.map((r) => (
+                    {pg.map((r) => (
                       <tr key={r.product_id} className="border-b border-line/60 last:border-0">
                         <td className="px-4 py-2.5 font-medium">{r.product_name}<div className="text-xs text-muted">{r.sku}</div></td>
                         <td className="tnum px-4 py-2.5 text-right">{r.run_count}</td>
@@ -1198,6 +1219,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
+)}</PagedTable>
               </div>
             )}
         </Card>
@@ -1214,7 +1236,8 @@ export default function ReportsPage() {
           ) : (
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <PagedTable rows={productionBySupervisorQ.data.rows}>{(pg) => (
+<table className="w-full text-sm">
                   <thead><tr className="border-b border-line text-left text-faint">
                     <th className="microlabel px-4 py-2.5 font-semibold">Supervisor</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Runs</th>
@@ -1222,7 +1245,7 @@ export default function ReportsPage() {
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Total cost</th>
                   </tr></thead>
                   <tbody>
-                    {productionBySupervisorQ.data.rows.map((r, i) => (
+                    {pg.map((r, i) => (
                       <tr key={r.supervisor_id ?? `u-${i}`} className="border-b border-line/60 last:border-0">
                         <td className="px-4 py-2.5 font-medium">{r.supervisor_name}</td>
                         <td className="tnum px-4 py-2.5 text-right">{r.run_count}</td>
@@ -1232,6 +1255,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
+)}</PagedTable>
               </div>
             </Card>
           )
@@ -1265,6 +1289,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
+<Pagination meta={productionBatchesQ.data.meta} onPage={setRptPage} />
               </div>
             )}
         </Card>
@@ -1308,6 +1333,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+<Pagination meta={transferSummaryQ.data.data.meta} onPage={setRptPage} />
                 </div>
                 )}
               </Card>
@@ -1341,6 +1367,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
+<Pagination meta={transferInTransitQ.data.meta} onPage={setRptPage} />
               </div>
             )}
         </Card>
@@ -1362,7 +1389,8 @@ export default function ReportsPage() {
                     <ReportEmptyState title="No items found" description={`No ${movementClass === 'all' ? '' : movementClass + ' '}stock in the last ${movementDays} days.`} />
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <PagedTable rows={movementRows}>{(pg) => (
+<table className="w-full text-sm">
                         <thead><tr className="border-b border-line text-left text-faint">
                           <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
                           <th className="microlabel px-4 py-2.5 text-right font-semibold">Stock</th>
@@ -1371,7 +1399,7 @@ export default function ReportsPage() {
                           <th className="microlabel px-4 py-2.5 font-semibold">Class</th>
                         </tr></thead>
                         <tbody>
-                          {movementRows.slice(0, 100).map((r) => (
+                          {pg.map((r) => (
                             <tr key={r.id} className="border-b border-line/60 last:border-0">
                               <td className="px-4 py-2.5"><div className="font-medium">{r.name}</div><div className="text-xs text-muted">{r.sku}</div></td>
                               <td className="tnum px-4 py-2.5 text-right">{r.stock}</td>
@@ -1382,6 +1410,7 @@ export default function ReportsPage() {
                           ))}
                         </tbody>
                       </table>
+)}</PagedTable>
                     </div>
                   )}
                 </Card>
@@ -1396,7 +1425,8 @@ export default function ReportsPage() {
             : locationInvRows.length === 0 ? <ReportEmptyState title="No location stock" description="No non-zero location balances for this filter." />
             : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <PagedTable rows={locationInvRows}>{(pg) => (
+<table className="w-full text-sm">
                   <thead><tr className="border-b border-line text-left text-faint">
                     <th className="microlabel px-4 py-2.5 font-semibold">Location</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
@@ -1405,7 +1435,7 @@ export default function ReportsPage() {
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Stock value</th>
                   </tr></thead>
                   <tbody>
-                    {locationInvRows.slice(0, 200).map((r) => (
+                    {pg.map((r) => (
                       <tr key={`${r.location_id}-${r.product_id}`} className="border-b border-line/60 last:border-0">
                         <td className="px-4 py-2.5">{r.location_name || '—'}</td>
                         <td className="px-4 py-2.5"><div className="font-medium">{r.product_name}</div><div className="text-xs text-muted">{r.sku}</div></td>
@@ -1416,6 +1446,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
+)}</PagedTable>
               </div>
             )}
         </Card>
@@ -1569,7 +1600,8 @@ export default function ReportsPage() {
               <>
                 <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">{leaderboardQ.data.label} — ranked by {leaderboardQ.data.metric === 'invoices' ? 'invoice count' : leaderboardQ.data.metric === 'incentives' ? 'incentives' : 'net sales'}</div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <PagedTable rows={leaderboardQ.data.rankings}>{(pg) => (
+<table className="w-full text-sm">
                     <thead><tr className="border-b border-line text-left text-faint">
                       <th className="microlabel px-4 py-2.5 font-semibold">Rank</th>
                       <th className="microlabel px-4 py-2.5 font-semibold">Employee</th>
@@ -1579,7 +1611,7 @@ export default function ReportsPage() {
                       {canCommissionReport && <th className="microlabel px-4 py-2.5 text-right font-semibold">Incentives</th>}
                     </tr></thead>
                     <tbody>
-                      {leaderboardQ.data.rankings.map((r) => (
+                      {pg.map((r) => (
                         <tr key={r.user_id} className="border-b border-line/60 last:border-0">
                           <td className="px-4 py-2.5 font-medium">#{r.rank}</td>
                           <td className="px-4 py-2.5">{r.user_name}</td>
@@ -1591,6 +1623,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+)}</PagedTable>
                 </div>
               </>
             )}
@@ -1634,7 +1667,8 @@ export default function ReportsPage() {
                   Total commission {formatCurrency(commissionReportQ.data.totals?.commission)} · Supervisor {formatCurrency(commissionReportQ.data.totals?.supervisor)}
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <PagedTable rows={commissionReportQ.data.staff}>{(pg) => (
+<table className="w-full text-sm">
                     <thead><tr className="border-b border-line text-left text-faint">
                       <th className="microlabel px-4 py-2.5 font-semibold">Employee</th>
                       <th className="microlabel px-4 py-2.5 font-semibold">Staff type</th>
@@ -1645,7 +1679,7 @@ export default function ReportsPage() {
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Total accrued</th>
                     </tr></thead>
                     <tbody>
-                      {commissionReportQ.data.staff.map((s) => (
+                      {pg.map((s) => (
                         <tr key={s.user_id} className="border-b border-line/60 last:border-0">
                           <td className="px-4 py-2.5 font-medium">{s.user_name}</td>
                           <td className="px-4 py-2.5 text-muted">{s.staff_type || '—'}</td>
@@ -1658,6 +1692,7 @@ export default function ReportsPage() {
                       ))}
                     </tbody>
                   </table>
+)}</PagedTable>
                 </div>
               </>
             )}
@@ -1697,6 +1732,7 @@ export default function ReportsPage() {
                           ))}
                         </tbody>
                       </table>
+<Pagination meta={loyaltyReportQ.data.customers} onPage={setRptPage} />
                     </div>
                   )}
                 </Card>
@@ -1706,7 +1742,8 @@ export default function ReportsPage() {
                     <div className="px-4 py-12 text-center text-sm text-muted">No point movements yet.</div>
                   ) : (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <PagedTable rows={loyaltyReportQ.data.recent_ledger}>{(pg) => (
+<table className="w-full text-sm">
                         <thead><tr className="border-b border-line text-left text-faint">
                           <th className="microlabel px-4 py-2.5 font-semibold">When</th>
                           <th className="microlabel px-4 py-2.5 font-semibold">Customer</th>
@@ -1715,7 +1752,7 @@ export default function ReportsPage() {
                           <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
                         </tr></thead>
                         <tbody>
-                          {loyaltyReportQ.data.recent_ledger.map((e) => (
+                          {pg.map((e) => (
                             <tr key={e.id} className="border-b border-line/60 last:border-0">
                               <td className="px-4 py-2.5 text-muted">{formatDate(e.created_at)}</td>
                               <td className="px-4 py-2.5 font-medium">{e.customer_name}</td>
@@ -1726,6 +1763,7 @@ export default function ReportsPage() {
                           ))}
                         </tbody>
                       </table>
+)}</PagedTable>
                     </div>
                   )}
                 </Card>
@@ -1758,6 +1796,7 @@ export default function ReportsPage() {
                     ))}
                   </tbody>
                 </table>
+<Pagination meta={whatsappReportQ.data.meta} onPage={setRptPage} />
               </div>
             )}
         </Card>

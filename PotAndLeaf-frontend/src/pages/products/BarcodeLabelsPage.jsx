@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { printBarcodeSheet, expandLabels } from '../../lib/barcodeSheet';
+import PagedTable from '../../components/PagedTable';
 
 const numInput = 'h-8 w-20 rounded-[8px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
 
@@ -97,7 +98,8 @@ export default function BarcodeLabelsPage() {
       </Card>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto"><table className="w-full text-sm">
+        <div className="overflow-x-auto"><PagedTable rows={rows}>{(pg) => (
+<table className="w-full text-sm">
           <thead><tr className="border-b border-line text-left text-faint">
             <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
             <th className="microlabel px-4 py-2.5 font-semibold">Barcode</th>
@@ -106,7 +108,7 @@ export default function BarcodeLabelsPage() {
             <th className="microlabel px-4 py-2.5 text-right font-semibold">Labels</th>
           </tr></thead>
           <tbody>
-            {rows.map((r) => (
+            {pg.map((r) => (
               <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                 <td className="px-4 py-2 font-medium">
                   {r.name}
@@ -127,7 +129,8 @@ export default function BarcodeLabelsPage() {
               </tr>
             ))}
           </tbody>
-        </table></div>
+        </table>
+)}</PagedTable></div>
       </Card>
     </div>
   );

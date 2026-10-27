@@ -17,7 +17,7 @@ class StockTransfer extends Model
         'company_id', 'to_company_id', 'transfer_type', 'from_location_id', 'to_location_id', 'transfer_no',
         'transfer_date', 'status', 'approved_at', 'rejection_reason',
         'redirected_from_company_id', 'redirected_at', 'redirected_by',
-        'notes', 'dispatched_at', 'received_at',
+        'notes', 'dispatched_at', 'received_at', 'requested_by',
     ];
 
     protected function casts(): array
@@ -33,6 +33,11 @@ class StockTransfer extends Model
     public function items(): HasMany
     {
         return $this->hasMany(StockTransferItem::class);
+    }
+
+    public function requester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by');
     }
 
     public function fromLocation(): BelongsTo

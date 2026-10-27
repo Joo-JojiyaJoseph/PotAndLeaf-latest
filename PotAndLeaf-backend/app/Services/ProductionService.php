@@ -278,6 +278,12 @@ class ProductionService
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with(['outputProduct:id,sku,name', 'supervisor:id,name'])
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
+            ->when(filled($filters['search'] ?? null), function ($q) use ($filters) {
+                $term = '%'.trim($filters['search']).'%';
+                $q->where(fn ($w) => $w->where('order_no', 'like', $term)
+                    ->orWhereHas('outputProduct', fn ($p) => $p->where('name', 'like', $term)->orWhere('sku', 'like', $term))
+                    ->orWhereHas('supervisor', fn ($u) => $u->where('name', 'like', $term)));
+            })
             ->orderByDesc('order_date')->orderByDesc('created_at')
             ->paginate(min((int) ($filters['per_page'] ?? 15), 100))
             ->withQueryString();

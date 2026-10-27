@@ -75,7 +75,9 @@ class PurchaseOrderController extends Controller
             ? $headerCompany
             : (Company::find($companyId) ?? $headerCompany);
         $layout = $request->query('layout') === 'flat' ? 'flat' : 'supplier';
-        $report = $this->orders->reorderReport($company->id);
+        // The screen sends what was picked there (supplier, qty, ticked) so the PDF matches it.
+        $choices = json_decode((string) $request->query('choices', ''), true);
+        $report = $this->orders->reorderReport($company->id, is_array($choices) ? $choices : []);
 
         $pdf = Pdf::loadView('pdf.reorder-report', [
             'company'      => $company,

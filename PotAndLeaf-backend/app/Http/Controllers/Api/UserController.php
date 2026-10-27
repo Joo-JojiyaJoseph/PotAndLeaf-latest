@@ -40,7 +40,9 @@ class UserController extends Controller
                 ->companyMembers($companyId, $status)
                 ->with([
                     'companies:id,name',
-                    'roles' => fn ($q) => $q->when($companyId !== null, fn ($q2) => $q2->wherePivot('company_id', $companyId)),
+                    // Roles held in the listed company. (Inside when() the query is a plain
+                    // builder without wherePivot(); MySQL then failed with "unknown column pivot".)
+                    'roles' => fn ($q) => $q->when($companyId !== null, fn ($q2) => $q2->where('role_user.company_id', $companyId)),
                 ])
                 ->orderBy('name')
                 ->paginate(min((int) $request->integer('per_page', 25), 100))

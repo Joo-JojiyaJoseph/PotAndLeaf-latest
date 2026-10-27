@@ -17,10 +17,10 @@ class ProductRepository implements ProductRepositoryInterface
         $perPage = min((int) ($filters['per_page'] ?? 15), 100);
 
         return Product::query()
-            ->with(['category:id,name', 'brand:id,name', 'unit:id,name,short_name'])
+            ->with(['category:id,name,parent_id', 'category.parent:id,name', 'brand:id,name', 'unit:id,name,short_name'])
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->search($filters['search'] ?? null)
-            ->when(filled($filters['category_id'] ?? null), fn ($q) => $q->where('category_id', $filters['category_id']))
+            ->when(filled($filters['category_id'] ?? null), fn ($q) => $q->whereIn('category_id', \App\Models\ProductCategory::query()->where('id', $filters['category_id'])->orWhere('parent_id', $filters['category_id'])->pluck('id')))
             ->when(filled($filters['brand_id'] ?? null), fn ($q) => $q->where('brand_id', $filters['brand_id']))
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
             ->when(($filters['low_stock'] ?? null) === '1',
@@ -33,7 +33,7 @@ class ProductRepository implements ProductRepositoryInterface
     public function findForCompany(int|string $companyId, string $id): ?Product
     {
         return Product::query()
-            ->with(['category', 'brand', 'unit', 'suppliers'])
+            ->with(['category.parent:id,name', 'brand', 'unit', 'suppliers'])
             ->forCompany($companyId)->whereKey($id)->first();
     }
 

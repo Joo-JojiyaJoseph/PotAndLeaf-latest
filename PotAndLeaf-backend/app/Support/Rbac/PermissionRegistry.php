@@ -74,6 +74,7 @@ class PermissionRegistry
                 'backup.view'    => 'View & download database backups',
                 'backup.run'     => 'Run manual backups',
                 'backup.restore' => 'Restore the database from a backup',
+                'backup.delete'  => 'Delete database backups',
             ],
             'Plant Rental' => [
                 'rental.view'     => 'View rentals',

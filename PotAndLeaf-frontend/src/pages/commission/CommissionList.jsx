@@ -8,6 +8,7 @@ import { useConfirm } from '../../lib/confirm';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import { formatCurrency, formatDate, todayISO } from '../../lib/format';
+import PagedTable from '../../components/PagedTable';
 
 /*
  * Commission in plain words. Every amount is in rupees and every screen says,
@@ -876,14 +877,15 @@ export default function CommissionList() {
         <Card className="overflow-hidden">
           {payoutsQ.isLoading ? <Loading /> : payouts.length === 0 ? <Empty>No payments yet. Use “Pay commission” to see what a staff member earned in a month.</Empty> : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <PagedTable rows={payouts}>{(pg) => (
+<table className="w-full text-sm">
                 <thead><tr className="border-b border-line text-left text-faint">
                   <th className={th}>Staff</th><th className={th}>Month</th>
                   <th className={th + ' text-right'}>Their sales</th><th className={th + ' text-right'}>Paid</th>
                   <th className={th}>Paid by</th><th className={th}>Date</th><th className={th}>Status</th><th className={th} />
                 </tr></thead>
                 <tbody>
-                  {payouts.map((p) => (
+                  {pg.map((p) => (
                     <tr key={p.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                       <td className="px-4 py-2.5 font-medium">{p.user_name}</td>
                       <td className="tnum px-4 py-2.5">{p.period}</td>
@@ -902,6 +904,7 @@ export default function CommissionList() {
                   ))}
                 </tbody>
               </table>
+)}</PagedTable>
             </div>
           )}
         </Card>
@@ -1011,11 +1014,12 @@ export default function CommissionList() {
             <div className="border-b border-line px-4 py-2 text-sm font-semibold">Recently sent</div>
             {waLogs.length === 0 ? <Empty>Nothing sent yet.</Empty> : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <PagedTable rows={waLogs}>{(pg) => (
+<table className="w-full text-sm">
                   <thead><tr className="border-b border-line text-left text-faint">
                     <th className={th}>Date</th><th className={th}>Message</th><th className={th}>Phone</th><th className={th}>Status</th>
                   </tr></thead>
-                  <tbody>{waLogs.map((l) => (
+                  <tbody>{pg.map((l) => (
                     <tr key={l.id} className="border-b border-line/60">
                       <td className="px-4 py-2.5 text-muted">{formatDate(l.business_date || l.created_at)}</td>
                       <td className="px-4 py-2.5">{String(l.message_type || '').replace(/_/g, ' ')}</td>
@@ -1024,6 +1028,7 @@ export default function CommissionList() {
                     </tr>
                   ))}</tbody>
                 </table>
+)}</PagedTable>
               </div>
             )}
           </Card>

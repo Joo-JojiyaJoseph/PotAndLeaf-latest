@@ -148,9 +148,11 @@ export default function ProductForm() {
     if (isSuperAdmin && isEdit && formCompanyId && String(formCompanyId) !== String(originalCompanyId)) {
       payload.company_id = Number(formCompanyId);
     }
-    ['hsn_code', 'barcode', 'description', 'category_id', 'unit_id'].forEach(
+    ['barcode', 'description', 'category_id', 'unit_id'].forEach(
       (k) => (payload[k] = payload[k] === '' ? null : payload[k]),
     );
+    // HSN code is hidden on this form: don't send it, so a code already saved is kept.
+    delete payload.hsn_code;
 
     try {
       const res = isEdit
@@ -237,9 +239,6 @@ export default function ProductForm() {
             )}
             <Field label="Name" required error={err('name')}>
               <Input value={form.name} onChange={set('name')} />
-            </Field>
-            <Field label="HSN code" error={err('hsn_code')}>
-              <Input value={form.hsn_code} onChange={set('hsn_code')} />
             </Field>
             <Field label="Status" error={err('status')}>
               <Select value={form.status} onChange={set('status')} className={selectCls}>

@@ -11,15 +11,19 @@ import { apiMessage } from '../../lib/formErrors';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
 
+const STATUS = { requested: 'Waiting approval', draft: 'Approved · to dispatch', in_transit: 'On the way', received: 'Received', rejected: 'Rejected', cancelled: 'Cancelled' };
 const tone = { requested: 'warning', draft: 'inactive', in_transit: 'warning', received: 'active', rejected: 'blocked', cancelled: 'blocked' };
 
 export default function TransferDetail() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const { companies, companyId } = useAuth();
+  const { companies, companyId, isSuperAdmin } = useAuth();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const headerCompanyId = searchParams.get('company_id') || companyId;
+  // A company user always works under their own company (they may not be a
+  // member of the other one, which made the page fail to load). The admin may
+  // open any company's transfer, so the link carries that company.
+  const headerCompanyId = (isSuperAdmin && searchParams.get('company_id')) || companyId;
   const [receiving, setReceiving] = useState(false);
   const [receipts, setReceipts] = useState({});
   const [rejecting, setRejecting] = useState(false);
@@ -29,6 +33,7 @@ export default function TransferDetail() {
   const [approving, setApproving] = useState(false);
   const [approvals, setApprovals] = useState({});
   const [approveTo, setApproveTo] = useState('');
+  const [approveFrom, setApproveFrom] = useState('');
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['transfer', headerCompanyId, id],
@@ -51,8 +56,15 @@ export default function TransferDetail() {
     enabled: approving && Boolean(headerCompanyId),
   });
 
-  const sourceCompanyId = data?.company_id ?? headerCompanyId;
-  const destCompanyId = data?.is_intra_company
+  const { data: sources, isFetching: sourcesLoading } = useQuery({
+    queryKey: ['transfer-sources', headerCompanyId, id],
+    queryFn: () => api.get(`/transfers/${id}/sources`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: approving && Boolean(data?.can?.change_source),
+  });
+
+  // Admin: act as the company that does the step. Company user: own company.
+  const sourceCompanyId = isSuperAdmin ? (data?.company_id ?? headerCompanyId) : headerCompanyId;
+  const destCompanyId = !isSuperAdmin ? headerCompanyId : data?.is_intra_company
     ? sourceCompanyId
     : (data?.to_company_id ?? sourceCompanyId);
   const fail = (fallback) => (err) => toast.error(apiMessage(err, fallback));
@@ -64,7 +76,7 @@ export default function TransferDetail() {
   };
   const dispatchM = useMutation({
     mutationFn: () => api.post(`/transfers/${id}/dispatch`, {}, withCompany(sourceCompanyId)),
-    onSuccess: invalidate,
+    onSuccess: () => { invalidate(); toast.success('Dispatched. The stock is on the way.'); },
     onError: fail('Could not dispatch this transfer.'),
   });
   const confirm = useConfirm();
@@ -76,12 +88,13 @@ export default function TransferDetail() {
   const approveM = useMutation({
     mutationFn: () => api.post(`/transfers/${id}/approve`, {
       to_company_id: approveTo ? Number(approveTo) : undefined,
+      from_company_id: approveFrom && String(approveFrom) !== String(data?.company_id) ? Number(approveFrom) : undefined,
       approvals: Object.entries(approvals).map(([itemId, row]) => ({
         id: itemId,
         approved_qty: Number(row.qty) || 0,
       })),
     }, withCompany(sourceCompanyId)),
-    onSuccess: () => { invalidate(); setApproving(false); },
+    onSuccess: (res) => { invalidate(); setApproving(false); toast.success(res.data?.message ?? 'Approved.'); },
     onError: fail('Could not approve this transfer.'),
   });
   const redirectM = useMutation({
@@ -96,7 +109,7 @@ export default function TransferDetail() {
   });
   const receiveM = useMutation({
     mutationFn: () => api.post(`/transfers/${id}/receive`, { receipts: Object.entries(receipts).map(([itemId, q]) => ({ id: itemId, received_qty: Number(q) || 0 })) }, withCompany(destCompanyId)),
-    onSuccess: () => { invalidate(); setReceiving(false); toast.success('Transfer received.'); },
+    onSuccess: () => { invalidate(); setReceiving(false); toast.success('Received. Stock added and new barcodes made.'); },
     onError: fail('Could not confirm receipt.'),
   });
 
@@ -113,7 +126,7 @@ export default function TransferDetail() {
   const openApprove = () => {
     const seed = {};
     (t.items ?? []).forEach((it) => { seed[it.id] = { qty: String(it.qty), reason: '' }; });
-    setApprovals(seed); setApproving(true);
+    setApprovals(seed); setApproveFrom(String(t.company_id)); setApproving(true);
   };
 
   return (
@@ -123,7 +136,7 @@ export default function TransferDetail() {
         subtitle={`${t.from_location ?? t.from_company} → ${t.to_location ?? t.to_company} · ${formatDate(t.transfer_date)}${t.is_intra_company ? ' · location move' : ''}`}
         backTo="/transfers"
         actions={<>
-          <Badge tone={tone[t.status] ?? 'default'}>{t.status.replace('_', ' ')}</Badge>
+          <Badge tone={tone[t.status] ?? 'default'}>{STATUS[t.status] ?? t.status}</Badge>
           {t.can?.approve && <Button size="sm" onClick={openApprove} disabled={approveM.isPending}><CheckCircleIcon className="size-4" /> Approve</Button>}
           {t.can?.reject && <Button variant="ghost" size="sm" onClick={() => setRejecting(true)}><XCircleIcon className="size-4" /> Reject</Button>}
           {t.can?.cancel && <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this transfer', message: 'Cancel this stock transfer? Any stock already sent comes back to the sending company.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
@@ -133,16 +146,18 @@ export default function TransferDetail() {
         </>}
       />
       <NextStep>{{
-        requested: 'Waiting for head office to approve this request.',
-        draft: 'Approved. Pack the items and click “Dispatch” to send them.',
-        in_transit: 'On the way. The receiving company clicks “Receive” when the stock arrives.',
+        requested: t.can?.approve
+          ? `${t.to_company} asked for this stock. Check it and click “Approve”${t.can?.change_source ? ' (you can choose which company sends it)' : ''}, or “Reject”.`
+          : `Request sent to ${t.from_company}. Waiting for the admin to approve it.`,
+        draft: t.can?.dispatch
+          ? `Approved. Pack the items and click “Dispatch” to send them to ${t.to_company ?? t.to_location}.`
+          : `Approved. Waiting for ${t.from_company} to dispatch the stock.`,
+        in_transit: t.can?.receive
+          ? 'The stock is on the way. When it arrives, click “Receive” — stock is added and new barcodes are made.'
+          : `On the way. ${t.to_company ?? t.to_location} clicks “Receive” when the stock arrives.`,
+        received: 'Done. The stock was added to the receiving company with new barcodes (see the items below).',
       }[t.status] ?? null}</NextStep>
 
-      {t.status === 'requested' && (
-        <div className="rounded-xl border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Awaiting HO approval before stock can be dispatched.
-        </div>
-      )}
       {t.status === 'rejected' && (
         <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
           This transfer request was rejected{t.rejection_reason ? `: ${t.rejection_reason}` : '.'}
@@ -151,9 +166,10 @@ export default function TransferDetail() {
 
       <Section title="Details">
         <InfoGrid cols={4}>
-          <InfoItem label="Type" value={t.is_intra_company ? 'Location transfer' : 'Inter-company'} />
-          <InfoItem label="From" value={t.from_location ?? t.from_company} />
-          <InfoItem label="To" value={t.to_location ?? t.to_company} />
+          <InfoItem label="Type" value={t.is_intra_company ? 'Location transfer' : (t.is_stock_request ? 'Stock request' : 'Inter-company')} />
+          <InfoItem label="Sent by (from)" value={t.from_location ?? t.from_company} />
+          <InfoItem label="Needed by (to)" value={t.to_location ?? t.to_company} />
+          {t.requested_by && <InfoItem label="Requested by" value={t.requested_by} />}
           {t.redirected_at && <InfoItem label="Redirected from" value={t.redirected_from_company || formatDate(t.redirected_at)} />}
           {t.redirected_at && <InfoItem label="Redirected on" value={formatDate(t.redirected_at)} />}
           <InfoItem label="Dispatched" value={t.dispatched_at ? formatDate(t.dispatched_at) : null} />
@@ -169,7 +185,8 @@ export default function TransferDetail() {
             <th className="microlabel px-3 py-2 text-right font-semibold">Requested</th>
             <th className="microlabel px-3 py-2 text-right font-semibold">Approved</th>
             <th className="microlabel px-3 py-2 text-right font-semibold">Rejected</th>
-            <th className="microlabel py-2 pl-3 text-right font-semibold">Received</th>
+            <th className="microlabel px-3 py-2 text-right font-semibold">Received</th>
+            <th className="microlabel py-2 pl-3 font-semibold">New barcode</th>
           </tr></thead>
           <tbody>
             {(t.items ?? []).map((it) => (
@@ -188,7 +205,8 @@ export default function TransferDetail() {
                 <td className="tnum px-3 py-2 text-right text-muted">{it.qty}</td>
                 <td className="tnum px-3 py-2 text-right text-muted">{it.approved_qty != null ? it.approved_qty : (t.status === 'draft' || t.status === 'in_transit' || t.status === 'received' ? (it.dispatch_qty ?? it.qty) : '—')}</td>
                 <td className="tnum px-3 py-2 text-right text-muted">{it.rejected_qty > 0 ? it.rejected_qty : '—'}</td>
-                <td className="tnum py-2 pl-3 text-right font-medium">{t.status === 'received' ? it.received_qty : '—'}</td>
+                <td className="tnum px-3 py-2 text-right font-medium">{t.status === 'received' ? it.received_qty : '—'}</td>
+                <td className="py-2 pl-3 font-mono text-xs">{it.received_barcode ?? <span className="font-sans text-muted">—</span>}</td>
               </tr>
             ))}
           </tbody>
@@ -201,6 +219,31 @@ export default function TransferDetail() {
           <Button size="sm" disabled={approveM.isPending} onClick={() => approveM.mutate()}>Confirm approval</Button>
         </>}
       >
+        {t.can?.change_source && (
+          <div className="mb-4">
+            <p className="mb-2 text-sm font-medium">Which company sends the stock?</p>
+            {sourcesLoading && !sources ? <div className="flex justify-center py-4"><Spinner className="size-5" /></div> : (
+              <div className="space-y-2">
+                {(sources ?? []).map((src) => {
+                  const picked = String(approveFrom) === String(src.company_id);
+                  return (
+                    <button key={src.company_id} type="button" onClick={() => setApproveFrom(String(src.company_id))}
+                      className={'w-full rounded-xl border p-3 text-left transition-colors ' + (picked ? 'border-leaf bg-leaf-soft/60 ring-2 ring-leaf/20' : 'border-line hover:border-leaf/40')}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold">{src.company_name}{src.is_current && <span className="ml-1 text-xs font-normal text-muted">(asked)</span>}</span>
+                        <span className={'rounded-full px-2 py-0.5 text-[10px] font-semibold ' + (src.enough ? 'bg-leaf-soft text-leaf-hover' : 'bg-amber-50 text-amber-700')}>{src.enough ? 'Has enough' : 'Not enough'}</span>
+                      </div>
+                      <div className="mt-1 text-xs text-muted">
+                        {src.lines.map((l) => `${l.product_name}: ${l.found ? `${l.available} free` : 'not stocked'}`).join(' · ')}
+                      </div>
+                    </button>
+                  );
+                })}
+                {(sources ?? []).length === 0 && <p className="text-sm text-muted">No other company has these products.</p>}
+              </div>
+            )}
+          </div>
+        )}
         <p className="mb-3 text-sm text-muted">Set the approved quantity for each line. Only that quantity will be dispatched.</p>
         {!t.to_company_id && !t.is_intra_company && (
           <label className="mb-3 block text-sm">

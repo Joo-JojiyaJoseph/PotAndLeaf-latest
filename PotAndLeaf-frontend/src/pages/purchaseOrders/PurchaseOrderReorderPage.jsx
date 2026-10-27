@@ -180,9 +180,15 @@ export default function PurchaseOrderReorderPage() {
   async function exportPdf(layout) {
     setExporting(layout);
     try {
+      // Send what is picked on screen (supplier, qty, ticked) so the PDF matches the screen.
+      const choices = Object.fromEntries(allLines.map((row) => [row.product_id, {
+        supplier_id: effectiveSupplierId(row) || null,
+        qty: qty(row),
+        include: isIncluded(row),
+      }]));
       await downloadWithParams(
         '/purchase-orders/reorder-report/export',
-        { layout, ...companyParams },
+        { layout, ...companyParams, choices: JSON.stringify(choices) },
         layout === 'supplier' ? 'reorder-report-supplier.pdf' : 'reorder-report.pdf',
         'application/pdf',
         targetCompanyId,
@@ -194,10 +200,11 @@ export default function PurchaseOrderReorderPage() {
     }
   }
 
+  // The product's own suppliers first, then every other supplier of the company.
   function supplierOptions(row) {
     const linked = row.suppliers ?? [];
-    if (linked.length > 0) return linked;
-    return companySuppliers;
+    const seen = new Set(linked.map((s) => String(s.id)));
+    return [...linked, ...companySuppliers.filter((s) => !seen.has(String(s.id)))];
   }
 
   if (isSuperAdmin && !companyReady) {
@@ -274,7 +281,7 @@ export default function PurchaseOrderReorderPage() {
         <>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Card className="p-4"><p className="microlabel text-faint">Products low</p><p className="tnum text-xl font-semibold">{summary?.product_count ?? 0}</p></Card>
-            <Card className="p-4"><p className="microlabel text-faint">Suppliers</p><p className="tnum text-xl font-semibold">{summary?.supplier_count ?? 0}</p></Card>
+            <Card className="p-4"><p className="microlabel text-faint">Suppliers</p><p className="tnum text-xl font-semibold">{displayGroups.suppliers.length}</p></Card>
             <Card className="p-4"><p className="microlabel text-faint">No supplier</p><p className="tnum text-xl font-semibold">{displayGroups.unassigned.length}</p></Card>
             <Card className="p-4"><p className="microlabel text-faint">Suggested value</p><p className="tnum text-xl font-semibold">{formatCurrency(summary?.estimated_value ?? 0)}</p></Card>
           </div>
@@ -340,6 +347,9 @@ export default function PurchaseOrderReorderPage() {
                                 <option key={s.id} value={s.id}>{s.name}{s.is_primary ? ' (preferred)' : ''}</option>
                               ))}
                             </Select>
+                            {row.supplier_source === 'last_purchase' && String(sid) === String(row.supplier_id) && (
+                              <p className="mt-0.5 text-[11px] text-muted">From the last purchase of this product</p>
+                            )}
                           </td>
                           <td className="tnum px-4 py-2 text-right text-muted">{row.last_purchase_price != null ? formatCurrency(row.last_purchase_price) : '—'}</td>
                           <td className="tnum px-4 py-2 text-right text-muted">{formatCurrency(rateForSupplier(row, sid))}</td>
