@@ -124,7 +124,8 @@ const statAccent = {
 /** Dashboard-style metric card with a colored top accent bar. */
 export function StatCard({ label, value, sub, tone = 'default', icon: Icon }) {
   return (
-    <div className="glass-card relative min-w-0 overflow-hidden p-3 transition-transform duration-150 sm:p-5 sm:hover:-translate-y-0.5">
+    <div data-stat={typeof label === 'string' ? label : undefined} data-value={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+      className="glass-card relative min-w-0 overflow-hidden p-3 transition-transform duration-150 sm:p-5 sm:hover:-translate-y-0.5">
       <span className={classNames('absolute inset-y-3 left-0 w-[3px] rounded-full sm:inset-y-4', statAccent[tone] ?? statAccent.default)} />
       <div className="flex items-start justify-between gap-2 pl-2">
         <div className="microlabel min-w-0 leading-snug text-muted">{label}</div>

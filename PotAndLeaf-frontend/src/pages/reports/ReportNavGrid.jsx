@@ -1,10 +1,15 @@
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { classNames } from '../../lib/format';
 
+/**
+ * Report menu: one grid of icon tiles (icon on top, short name under it).
+ * Search also looks in the full name and the one-line description, so
+ * "profit", "GST" or "rent" finds the right report.
+ */
 export default function ReportNavGrid({ tabs, activeTab, onSelect, search, onSearchChange }) {
   const q = search.trim().toLowerCase();
   const visible = q
-    ? tabs.filter((t) => t.label.toLowerCase().includes(q) || t.shortLabel?.toLowerCase().includes(q))
+    ? tabs.filter((t) => [t.label, t.shortLabel, t.plain, t.help].filter(Boolean).join(' ').toLowerCase().includes(q))
     : tabs;
 
   return (
@@ -19,7 +24,7 @@ export default function ReportNavGrid({ tabs, activeTab, onSelect, search, onSea
           className="h-10 w-full rounded-xl border border-line bg-paper pl-9 pr-3 text-sm focus:border-leaf/40 focus:outline-none focus:ring-2 focus:ring-leaf/15"
         />
       </div>
-      <div className="-mx-1 flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] sm:overflow-visible sm:px-0">
+      <div className="-mx-1 flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-11">
         {visible.map((t) => {
           const Icon = t.icon;
           const active = t.value === activeTab;
@@ -28,7 +33,7 @@ export default function ReportNavGrid({ tabs, activeTab, onSelect, search, onSea
               key={t.value}
               type="button"
               onClick={() => onSelect(t.value)}
-              title={t.label}
+              title={t.help ? `${t.label} — ${t.help}` : t.label}
               className={classNames(
                 'group flex min-w-[4.75rem] shrink-0 flex-col items-center gap-1 rounded-xl px-2 py-2.5 text-center transition-all sm:min-w-0 sm:gap-1.5 sm:py-3',
                 active
@@ -37,7 +42,7 @@ export default function ReportNavGrid({ tabs, activeTab, onSelect, search, onSea
               )}
             >
               <Icon className={classNames('size-5 shrink-0 sm:size-6', active ? 'text-leaf' : 'text-muted group-hover:text-leaf/70')} strokeWidth={1.5} />
-              <span className={classNames('whitespace-nowrap text-[10px] leading-tight sm:text-[11px]', active ? 'font-semibold text-leaf-hover' : 'font-medium')}>
+              <span className={classNames('line-clamp-2 text-[10px] leading-tight sm:text-[11px]', active ? 'font-semibold text-leaf-hover' : 'font-medium')}>
                 {t.shortLabel ?? t.label}
               </span>
               {active && <span className="h-0.5 w-6 rounded-full bg-leaf sm:w-8" />}

@@ -24,7 +24,7 @@ class RentalService
     {
         return Rental::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
-            ->with('customer:id,name')
+            ->with(['customer:id,name', 'items:id,rental_id,qty,rate_per_cycle,returned_qty', 'invoices:id,rental_id,amount,status'])
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
             ->listFilters($filters, 'start_date', ['rental_no'], ['customer' => 'name'])
@@ -512,19 +512,9 @@ class RentalService
         return $invoice->refresh();
     }
 
-    public function deleteInvoice(RentalInvoice $invoice): void
-    {
-        DB::transaction(function () use ($invoice) {
-            // Only an unpaid invoice still sits on the customer's outstanding.
-            if ($invoice->status === 'unpaid') {
-                $rental = $invoice->rental()->first();
-                if ($rental) {
-                    $this->adjustCustomerOutstanding($invoice->company_id, $rental->customer_id, -(float) $invoice->amount);
-                }
-            }
-            $invoice->delete();
-        });
-    }
+    // Rent bills cannot be deleted: the amount is on the customer's account and
+    // is used when the rental is settled. Correct a wrong bill with a receipt or
+    // a journal entry instead.
 
     private function adjustCustomerOutstanding(int|string $companyId, string $customerId, float $delta): void
     {

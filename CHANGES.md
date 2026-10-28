@@ -1,24 +1,155 @@
-# Pot & Leaf ERP — all fixes (27 Oct 2026, update 26)
+# Pot & Leaf ERP — all fixes (28 Oct 2026, update 47)
 
-This package holds **every file changed** from the uploaded project (362 files + this note).
+This package holds **every file changed** from the uploaded project (426 files + this note).
 It replaces all earlier packages; install only this one.
 
 ## Install
 
 1. Copy each file over the same path in your project.
-2. Backend: **back up the database first**, then `php artisan migrate` (13 new migrations — update 12 adds 3, one of them removes soft delete for good; updates 14, 18, 19 and 20 add 1 each).
+2. Backend: **back up the database first**, then `php artisan migrate` (17 new migrations — update 12 adds 3, one of them removes soft delete for good; updates 14, 18, 19, 20, 30, 39, 41 and 47 add 1 each).
 3. Frontend: `npm run build`.
 
 ## Verified
 
 | Check | Result |
 |---|---|
-| Backend test suite (Pest, PHP 8.4) | 455 passed, 0 failed, 16 skipped (before: 379 passed) |
+| Backend test suite (Pest, PHP 8.4) | 488 passed, 0 failed, 16 skipped (before: 379 passed) |
 | Frontend build (Vite) + unit tests (Vitest) | builds · 23 passed |
 | Browser check of every changed screen | no script errors, no failed API calls |
 | API run-through: purchase → batch/barcode → damage → purchase return; sale (cash/UPI/credit/walk-in) → confirm; transfer between companies → receive; bulk split | all OK; batch totals = stock |
 
 ## 00. Update 2 — one location per company, simpler commission
+
+**Stock count batch by batch (update 47)** — 1 migration (`2026_10_28_000004`: batch on each count line), no commission calculation changed
+- **New stock count** lists **one row per batch** (batch number, barcode, date), oldest first, with each batch's system quantity; a product with no batches stays one row (stock outside every batch, if any, gets a "Not in a batch" row). The filter also finds a batch number or barcode.
+- On approval **each batch is set to its own count** and the product's stock moves by the same total; the stock ledger names the batch. Submit/approve recheck each batch's stock at that moment. Cost of a variance uses that batch's cost.
+- The count page shows "Batch …" under each line. Old counts (product totals) still work as before.
+- Server refuses a batch that belongs to another product, or the same batch twice.
+- Guide 6.4 updated with picture and example. New test `tests/Feature/StockCountByBatchTest.php`.
+
+**Sell by batch; new purchase price stays on its batch; Request shortage only when short (update 46)** — no migration, no commission calculation changed
+- **New sale:** under each product a **Batch** box lists its batches with stock (oldest first): "GRN-000004-01 · 40 left · ₹52" (cost shown only to people allowed to see cost). Leave "oldest first (automatic)" or pick one; that batch's stock is used and its cost goes into profit. Typing more than the batch has shows "Only 40 in batch …" (the server also refuses it). Scanning a barcode fills the box too. The sale page shows the batch under each item.
+- **Purchase confirm no longer changes the product's cost** to the newest price. The new cost is stored on that purchase's batch only (it already was); the product's cost is filled in only when it had none. Selling prices were never changed by purchases. (Bulk "sell as" lines follow the same rule.)
+- **Request shortage** on a draft bill shows only when an item needs more than is in stock (and the bill has a customer); the item shows "Short by N — not enough in stock". Before, it showed always and clicking it gave "All line items have sufficient stock".
+- Guide 3.3, 3.5, 4.1 updated with a picture and example.
+- New test `tests/Feature/BatchWiseSellingTest.php`; `CalculationFixesTest` now checks the batch cost instead of the product cost.
+
+**Customer "Opening balance" is now "Outstanding", same as suppliers (update 45)** — no migration, no commission calculation changed
+- Customer form, page, import/export: one field **Outstanding** (what they owed before the app). It shows what is **still unpaid** and goes down by itself when the customer pays "On account / outstanding from before" (receipt form option renamed; it also shows "Outstanding from before still unpaid").
+- The full amount owed is now labelled **Owes you** (list) / **Owes you now (all bills)** (customer page), so the two numbers are not both called "Outstanding".
+- Fixed: editing a customer's opening amount did not change what they owe. Now a change of +₹1,000 adds ₹1,000 to what they owe (same as suppliers). The form/import never set the balances directly.
+- Guide 2.6 explains why the field is needed, with an example; 4.3 step 5.
+- New test `tests/Feature/CustomerOutstandingPaidTest.php`.
+
+**Supplier outstanding goes down when paid; report menu back to the icon design (update 44)** — no migration, no commission calculation changed
+- **Supplier "Outstanding" (from before) now shows what is still unpaid.** Pay ₹3,000 "On account / outstanding from before" on an outstanding of ₹10,000 → the supplier form, supplier page, export and the payment box show **₹7,000** (with the working "₹10,000 − paid ₹3,000 = ₹7,000 still to pay"). Bills are not touched until the old outstanding is cleared.
+- Editing the supplier: the box holds the amount still to pay. Saving it unchanged changes nothing; typing a new amount sets what is still to pay, and what was already paid stays recorded. (The server keeps the original amount; the new field `opening_left` is used for edits.)
+- **Reports menu:** back to the icon tiles (icon on top, short name under it) with "Search reports…", as in your screenshot. The line under the menu shows the report's name and what it shows. Export, This FY and everything else unchanged.
+- Guide (in app and shared document) updated: section 2.7 / 3.7 example and new picture, section 10 picture.
+- New test `tests/Feature/SupplierOutstandingPaidTest.php`.
+
+**Simple guide rewritten (update 43)** — text and pictures only, no code or migration
+- `public/help/guide.md` (Help → Guide in the app) rewritten for a first-time user: every screen step by step, with **66 screenshots** of the current app and a worked sum next to each calculation.
+- New or updated sections: first-day setup Steps 7–8, 2.2 Access requests, 2.10 Activity log, 3.2 Purchase orders (Send before Convert), 3.7 "What you owe" box, 5.3 rent totals, 6.1 stock = batches, 7.3 Journal (every entry, Dr/Cr), 8 commission (limit, My commission, Change), 10 Reports (groups, Export), more Common questions.
+- The same guide is shared as a document (link in the reply).
+
+**Suppliers, commission, journal, reports (update 42)** — no migration, no commission calculation changed
+- **Supplier "Opening balance" is now called "Outstanding"** (form: "What you already owe this supplier from before"; supplier page: "Outstanding (from before)"; payment box and import use the same word — an import file headed "Opening balance" still works).
+- **Pick-lists show only the chosen company:** head office forms (Apply advance, Record payment, purchase, PO, purchase return, commission…) listed every company's suppliers/products/staff. Now every form list follows the company chosen in that form.
+- **Commission:** product offers and care reminders have a **Change** button (and On/Off). A new role for someone who already has a staff rate **changes that rate** (Supervisor ↔ Salesman) instead of needing a second rule. A commission payment **can no longer be more than what was earned** that month (server refuses; the box shows the limit). Pay / Set rate lists show **only that company's staff**.
+- **Journal:** now lists **every entry by itself** — customer receipts, supplier payments, cash sales, commission paid, cash/bank vouchers — with both sides (Dr/Cr), plus your corrections. "Show: Only corrections I made" gives the old view. **Add entry** stays.
+- **Supplier payments:** the **Void** (delete) button is removed from Payment history.
+- **Reports:** menu grouped under plain headings (Sales & profit · Money · Stock & production · Plant rental · Staff & customers) with full names and a one-line "what this shows". **Every report now has Export** → "Excel — this report as shown" (all rows, not just page 1, plus the summary figures). Fixed: Approx. Profit export was empty (now shop lines + Total).
+- New tests `CommissionRuleEditTest`, `JournalAndPickersTest`; `TesterIssues2Test` updated (paying ₹100 to someone who earned ₹0 is now refused).
+
+**PO send-before-convert, stock = batches, rent totals (update 41)** — **1 new migration**
+- **Purchase order:** "Convert to purchase" only after **Mark sent** (server refuses a draft PO; button hidden).
+- **Reorder report:** Export PDF, Supplier-wise PDF and Single PO are hidden when nothing needs reordering (PO list stays, to go back).
+- **Cancel rules checked:** confirmed purchase bills and confirmed purchase returns already cannot be cancelled (server refuses; tests cover it). Unchanged.
+- **Stock shown higher than batches:** some stock coming back did not go back on a batch (rental cancel, bulk-split cancel, stock-count gains, older rental returns), so Stock Levels showed more than Batches & Barcodes. Now, after every stock movement, the product's batches are made to add up to stock on hand: refilled oldest first, any extra into a new **ADJ-…** batch with its own barcode (PLA…). Migration `2026_10_28_000003_sync_batches_to_stock` corrects existing products once (stock on hand itself is not changed).
+- **Plant rental totals:** list has **Rent / cycle** and **Billed so far**; the rental page has a **Rent** box (rent per day/week/month, total till expected end, billed so far, deposit); the new-rental form shows each line's total and the rent per cycle / total for the expected period.
+- New test `tests/Feature/StockBatchSyncTest.php`; rental totals added to `RentalOnlyRentableTest`.
+
+**Payment box shows how "You owe" is worked out (update 40)** — no migration
+- **Record supplier payment:** after picking a supplier, a box shows: + opening balance + purchase bills (count) − paid to the supplier − advance used − goods returned (± other corrections, only if any) = **You owe**. Lines that are zero are hidden.
+- Picking a bill shows its own working: "Bill ₹9,850 − paid ₹1,500 = ₹8,350 left".
+- New API `GET /api/supplier-payments/owed?supplier_id=` (payments.view). Test added to `OnAccountPaymentTest`.
+
+**Supplier "on account" payments now clear bills (update 39)** — **1 new migration**
+- Before: money paid without picking a bill lowered what you owe, but every bill still showed fully unpaid, and you could pay a bill's full figure on top — taking the supplier below zero. Example: opening ₹500 + bill ₹9,850 − two on-account payments ₹2,000 = owe ₹8,350, but the bill still said ₹9,850 and ₹9,850 could be paid.
+- Now: on-account money clears the **opening balance first, then the oldest bills** (linked automatically). The bill shows paid ₹1,500, balance ₹8,350. A payment — also one against a bill — can never be more than you owe in all (pay extra as an advance). Re-worked whenever a payment is added or removed, an advance is applied, or the opening balance is edited.
+- Supplier page: each payment shows "Paid bill … ₹X" and "Old dues / opening balance ₹Y" (it used to say "Extra kept as advance" by mistake).
+- Migration `2026_10_28_000002_auto_apply_on_account_payments` adds `supplier_payment_allocations.auto_applied` and **corrects existing suppliers** (links their earlier on-account payments to the oldest bills). No money totals change — only which bill the money is shown against.
+- Guide 3.7 has the worked example. New test `tests/Feature/OnAccountPaymentTest.php`.
+
+**Reorder level default works from the product form (update 38)** — no migration
+- The product form turned an empty Reorder level into 0 before saving, so the Settings default (update 33) only worked for imports. Now a **new product** opens with the company default already in the box (e.g. 10), with the line "Company default 10 (Settings). Left empty = default." Emptying the box on any product saves the default; typing 0 keeps 0.
+- Products already saved with 0 keep 0 — open them and empty the box (or type a number) to change.
+
+**Batch prices on sales; settings checked one by one (update 37)** — no migration, commission not touched
+- **Selling price** stays on the product (MRP / Retail / Wholesale / Dealer) — same price whichever batch. Each **batch keeps its own cost**.
+- **Sale cost now comes from the batch the pieces left:** a scanned batch at its cost; picked by name = oldest batches first, each at its own cost. Before, every sale was costed at the product's latest purchase price, so profit was wrong when batches cost different amounts. Used by Approx. Profit, Margin and every report that reads the sale's stock movement. Older sales keep the cost they were saved with.
+- **Batches & Barcodes:** new **Cost / pc** column (only for people with "View product cost price"; the API hides it from others too).
+- **Settings checked:** opening balances, freight, reorder default, daily expense, WhatsApp, website API, dead stock, EOD — all work. One fix: the Reports **Year** button used 1 January; it is now **This FY** and starts from the Settings financial-year month (1 April by default). Each company's month comes with the login data (`fy_start_month`).
+- Guide: 3.5 explains batch prices with an example; 2.4 and 10 updated; same text in the shared guide document.
+- New tests `tests/Feature/BatchCostOnSaleTest.php`, `tests/Feature/SettingsWorkTest.php`.
+
+**Request access: empty list fixed (update 36)** — no new migration (but see below)
+- On a server where `php artisan migrate` was not run after update 30, the Request access page showed an empty list ("Nothing matches") and, worse, every permission check for staff failed, so staff saw only the Help menu. Now:
+  - roles and permissions keep working even before the migration;
+  - the permission list always shows; a yellow note says requests cannot be sent until `php artisan migrate` is run;
+  - if the list cannot load for any other reason, the page shows the server's message and a **Try again** button instead of an empty box.
+- **After copying, run `php artisan migrate` and `php artisan optimize:clear`** on the server — that turns Request access on.
+- New test `tests/Feature/AccessRequestNotMigratedTest.php`.
+
+**Freight paid to a transporter now shows on the purchase (update 35)** — no migration, no money sum changed
+- With Settings → "Freight / loading on purchases is paid to the supplier" = **Off**, the supplier's balance was already right, but the **purchase page** still showed Payable / Balance / "Pay ₹…" with the freight included. Now it shows **Bill total → Freight paid to transporter → Owed to supplier**, and Balance and the Pay button use the owed amount.
+- **Purchase form:** under the freight box it says whether the freight goes to the supplier or a transporter (from Settings), and the totals show the same split before you save.
+- The setting is fixed on a bill when it is confirmed; changing it later does not change bills already confirmed (guide 2.4 says so).
+- New test `tests/Feature/FreightToTransporterScreensTest.php`.
+
+**Supplier payment shows old dues; damage list tidied (update 34)** — no migration, no money sum changed
+- **Record supplier payment:** instead of a bare "Outstanding", it now says **You owe ₹X = old dues / opening balance ₹A + unpaid bills ₹B**. The opening balance was always part of what you owe (money owed from before you started using the app); now it is shown separately. "On account" is renamed **On account / old dues** — use it to pay the opening balance.
+- **Damage Entry:** the Location column is removed from the list.
+
+**Settings explained (update 33)** — no migration
+- **Settings page:** every setting now has a one-line explanation under it (what it does, with an example value).
+- **"Default reorder alert qty" now works:** it was saved but not used anywhere. A new product (form or import) with the reorder level left blank now gets this number. Products already made are not changed. New test `tests/Feature/ReorderDefaultSettingTest.php`.
+- **User guide 2.4 Settings** rewritten: every setting, group by group, with worked examples (loyalty, discount limit, freight, daily expense, rental due/reminder dates) and the website API key. New Settings picture. Same text in the shared guide document.
+
+**Rental shows only rentable products (update 32)** — no migration
+- **New rental** now lists only products ticked **"This product can be rented"** (before, every active product was listed). If none is ticked, the form says how to set one up.
+- The server also refuses a product not set for rent: "This product is not set for rent. Tick "This product can be rented" on the product first." Rentals already made are not changed.
+- New test `tests/Feature/RentalOnlyRentableTest.php`.
+
+**Product export shows category and unit again (update 31)** — no migration
+- **Products → Export** had empty Category and Unit columns (the list now sends them as plain names, the export still looked for the old format). Fixed: Category, **Subcategory** (new column) and Unit are filled.
+- **Import** takes the same optional **Subcategory** column: it is added under the category if it is new, and the product is saved under it. So an exported file can be imported back as it is. The download template shows the new column.
+- New test `tests/Feature/ProductExportFieldsTest.php`.
+
+**Request access (update 30)** — 1 new migration
+- **Any user can ask for more access.** New **Request Access** in the menu (and in the avatar menu): every permission listed by area with a search box; the ones you already have are ticked and greyed. Tick what you need, type why, **Send request**. "My requests" shows each request: waiting / approved / rejected, what was given, the admin's note; a waiting request can be withdrawn. Asking again for the same thing while it waits is refused.
+- On a page you cannot open, the "no access" card now has a **Request access** button with that permission already ticked.
+- **Admins answer** in **Setup → Access Requests** (super admin, or anyone who can edit users): each request shows the person, reason and permissions; tick what to give and **Approve** (all or some), or **Reject** with a note. A company admin can only give permissions they have themselves (others say "only HO can give this"); nobody can approve their own request. HO sees every company's requests.
+- **Bell:** shows a red count — requests waiting for an admin, and answers to your own requests (approved/rejected, with the note). When a request is approved, the new access is loaded within a minute; no sign-out needed.
+- Given access is for **that person in that company only** — their role (shared by everyone) is not changed. The user page shows **Extra permissions** with who gave them and a **Remove** button. "Full access" can never be requested.
+- Migration `2026_10_28_000001` adds `access_requests` and `user_permissions`. New test `tests/Feature/AccessRequestTest.php`.
+
+**Rent bills cannot be deleted (update 29)** — no migration
+- The bin (delete) button on rental invoices is removed, and the server no longer has a way to delete a rent bill. Deleting one silently wiped what the customer owed: in RNT-000001 the ₹100 rent was billed, the deposit of ₹3,800 was refunded in full on return (the rent stays on the customer's account), and after the bill was deleted nobody owed the ₹100. Correct a wrong bill with a receipt or a journal entry instead.
+- **Generate invoice** shows only while the plants are out (Active). After return the settlement already charges the whole period, so a bill made then was always ₹0.
+- New test `tests/Feature/RentalInvoiceNoDeleteTest.php`.
+
+**"My commission" page for salespeople (update 28)** — no migration, no calculation changed
+- Why it was missing: the Salesman and Supervisor roles have **View own commission**, but the Commission menu needs **View commission** (the manager's full page). So they saw only today's tiles on the Dashboard and no page with their details.
+- New **My Commission** menu item (and Dashboard quick action / "See my commission for the month →" link) for staff who may see only their own commission. It shows, for any month: **My rate** in plain words ("You get 2% of what you sell — ₹2 for every ₹100"); boxes for **My sales**, **Commission earned**, **Paid to me**, **Still to be paid**; **How it is worked out** (same lines as the manager's statement, plus "Sell ₹… more to reach the target"); **Each bill that earned commission** (date, what for, bill amount, amount earned, earned / taken back, link to the bill); **Payments I received**.
+- Server: a staff member with only "View own commission" can now read their own staff rate and their own payments (still never anyone else's). Everything else was already limited to their own records. New test `tests/Feature/MyCommissionTest.php`.
+- Also fixed by update 24's role-check fix: a Manager with "View commission" no longer hits a database error on the Commission page on MySQL.
+
+**Pick customers by name; user page tidied (update 27)** — no migration
+- **Loyalty → Adjust points:** the "Customer ID — Paste customer UUID" box is replaced by a **Customer** box: type part of the name, code or phone and pick from the list (each line shows code, phone and current points). Changing the company clears the choice. Under the points it shows e.g. "City Garden Dealers has 9 points → after this: 59 points". Reason is now marked required (the server always needed it) and any problem is shown in the window. This was the only place in the app that asked for a typed customer ID; every other customer choice was already a list of names.
+- New API `GET /api/customers/options?search=` (active customers of the company with code, phone, type and points), allowed for customer, loyalty or sales viewers. New test `tests/Feature/CustomerOptionsTest.php`.
+- **User page:** the "HO super admin: No" line is removed from Access; it now shows only Role and Status (the heading already says "HO super admin" for a super admin).
 
 **Pop-up windows cover the whole screen (update 26)** — frontend only
 - Pop-ups (New supplier, New customer, Import, Add user, Set staff rate, Approve, Receive…) were drawn inside the page area, so the top bar stayed bright and clickable above the dimmed page and the window could sit under it. Every pop-up is now drawn on top of the whole screen: the top bar is dimmed too and the window is always fully visible and centred. Same for the enlarged picture on the Help page.

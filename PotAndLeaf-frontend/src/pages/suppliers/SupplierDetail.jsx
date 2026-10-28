@@ -113,7 +113,15 @@ export default function SupplierDetail() {
         <InfoGrid cols={3}>
           <InfoItem label="Credit limit" value={s.credit_limit != null ? formatCurrency(s.credit_limit) : null} mono />
           <InfoItem label="Credit days" value={s.credit_days != null ? `${s.credit_days} days` : null} mono />
-          <InfoItem label="Opening balance" value={s.opening_balance != null ? formatCurrency(s.opening_balance) : null} mono />
+          <InfoItem
+            label="Outstanding (from before)"
+            value={s.opening_balance != null
+              ? (Number(s.opening_paid) > 0.005
+                ? `${formatCurrency(s.opening_left)} (of ${formatCurrency(s.opening_balance)}, ${formatCurrency(s.opening_paid)} paid)`
+                : formatCurrency(s.opening_left ?? s.opening_balance))
+              : null}
+            mono
+          />
         </InfoGrid>
         {s.notes && <div className="mt-4 border-t border-line pt-4"><InfoItem label="Notes" value={s.notes} /></div>}
       </Section>
@@ -147,7 +155,10 @@ export default function SupplierDetail() {
                           {p.is_advance ? 'Paid as advance' : 'Extra kept as advance'} · {formatCurrency(p.to_advance)}
                         </span>
                       )}
-                      {p.bills.length === 0 && p.to_advance <= 0 && <span className="text-xs text-muted">Against what was owed</span>}
+                      {p.bills.length > 0 && p.to_old_dues > 0 && (
+                        <span className="rounded-full bg-paper px-2 py-0.5 text-xs text-muted ring-1 ring-line">Outstanding from before · {formatCurrency(p.to_old_dues)}</span>
+                      )}
+                      {p.bills.length === 0 && p.to_advance <= 0 && <span className="text-xs text-muted">Against outstanding from before</span>}
                     </div>
                   </div>
                   <p className="tnum shrink-0 text-sm font-semibold">{formatCurrency(p.amount)}</p>

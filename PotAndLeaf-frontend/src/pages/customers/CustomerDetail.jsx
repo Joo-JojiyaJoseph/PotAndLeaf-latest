@@ -86,8 +86,14 @@ export default function CustomerDetail() {
         <InfoGrid cols={4}>
           <InfoItem label="Credit days" value={c.credit_days} mono />
           <InfoItem label="Credit limit" value={formatCurrency(c.credit_limit)} mono />
-          <InfoItem label="Opening balance" value={formatCurrency(c.opening_balance)} mono />
-          <InfoItem label="Outstanding" value={formatCurrency(c.outstanding)} mono />
+          <InfoItem label="Owes you now (all bills)" value={formatCurrency(c.outstanding)} mono />
+          <InfoItem
+            label="Outstanding (from before)"
+            value={Number(c.opening_paid) > 0.005
+              ? `${formatCurrency(c.opening_left)} (of ${formatCurrency(c.opening_balance)}, ${formatCurrency(c.opening_paid)} received)`
+              : formatCurrency(c.opening_left ?? c.opening_balance)}
+            mono
+          />
           <InfoItem label="Advance balance" value={formatCurrency(c.advance_balance)} mono />
           <InfoItem label="Loyalty points" value={loyalty.balance ?? c.loyalty_points} mono />
         </InfoGrid>

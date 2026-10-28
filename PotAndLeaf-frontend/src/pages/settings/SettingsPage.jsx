@@ -11,56 +11,56 @@ const GROUPS = [
   {
     title: 'Loyalty points',
     keys: [
-      { key: 'loyalty_earn_rupees', label: 'Earn: ₹ spent per point', type: 'number', step: '1' },
-      { key: 'loyalty_earn_points', label: 'Earn: points per unit', type: 'number', step: '1' },
-      { key: 'loyalty_redeem_rupees', label: 'Redeem: ₹ value per point', type: 'number', step: '0.01' },
-      { key: 'loyalty_redeem_cap_percent', label: 'Redeem cap (% of bill)', type: 'number', step: '1' },
+      { key: 'loyalty_earn_rupees', label: 'Earn: ₹ spent per point', type: 'number', step: '1', help: "Spend this much to earn points. 100 = points for every ₹100 on the bill. Used when no loyalty rule (Loyalty Points page) gives points for that bill." },
+      { key: 'loyalty_earn_points', label: 'Earn: points per unit', type: 'number', step: '1', help: "Points given for each step above. 1 = 1 point for every ₹100." },
+      { key: 'loyalty_redeem_rupees', label: 'Redeem: ₹ value per point', type: 'number', step: '0.01', help: "What 1 point is worth when the customer uses it. 1 = ₹1 off per point." },
+      { key: 'loyalty_redeem_cap_percent', label: 'Redeem cap (% of bill)', type: 'number', step: '1', help: "Most of a bill that can be paid with points. 50 = points can cover at most half the bill." },
     ],
   },
   {
     title: 'Sales & discounts',
     keys: [
-      { key: 'discount_ceiling_percent', label: 'Discount ceiling (%)', type: 'number', step: '1' },
-      { key: 'sale_cancel_requires_approval', label: 'Require HO approval to cancel confirmed sales', type: 'toggle' },
+      { key: 'discount_ceiling_percent', label: 'Discount ceiling (%)', type: 'number', step: '1', help: "Biggest discount allowed on one bill line, as % of qty × rate. A bigger discount is refused. 0 = no limit. Free (complimentary) bills are not checked." },
+      { key: 'sale_cancel_requires_approval', label: 'Require HO approval to cancel confirmed sales', type: 'toggle', help: "On: a confirmed sale cannot be cancelled straight away. Staff send a cancel request and HO approves it. Off: anyone allowed to cancel can do it directly." },
     ],
   },
   {
     title: 'Accounting',
     keys: [
-      { key: 'cash_opening_balance', label: 'Cash opening balance (₹)', type: 'number', step: '0.01' },
-      { key: 'bank_opening_balance', label: 'Bank opening balance (₹)', type: 'number', step: '0.01' },
-      { key: 'landed_cost_payable_to_supplier', label: 'Freight / loading on purchases is paid to the supplier (off = paid to a transporter)', type: 'toggle' },
+      { key: 'cash_opening_balance', label: 'Cash opening balance (₹)', type: 'number', step: '0.01', help: "Cash in hand on the day you started using the software. The Cash Book starts from this amount." },
+      { key: 'bank_opening_balance', label: 'Bank opening balance (₹)', type: 'number', step: '0.01', help: "Bank balance on the day you started. The Bank Book starts from this amount." },
+      { key: 'landed_cost_payable_to_supplier', label: 'Freight / loading on purchases is paid to the supplier (off = paid to a transporter)', type: 'toggle', help: "On: freight / loading typed on a purchase bill is added to what you owe that supplier. Off: you pay it to a transporter, so it is not added to the supplier balance. Either way it is added to the product cost." },
     ],
   },
   {
     title: 'Inventory & company',
     keys: [
-      { key: 'reorder_alert_default', label: 'Default reorder alert qty', type: 'number', step: '1' },
-      { key: 'daily_expense', label: 'Daily expense (₹, for approx. profit)', type: 'number', step: '0.01' },
-      { key: 'whatsapp_enabled', label: 'WhatsApp invoice sharing', type: 'toggle' },
-      { key: 'website_integration', label: 'Allow company website / app API', type: 'toggle' },
+      { key: 'reorder_alert_default', label: 'Default reorder alert qty', type: 'number', step: '1', help: "A new product with the reorder level left blank gets this number. When stock falls to the reorder level, the product shows as low stock." },
+      { key: 'daily_expense', label: 'Daily expense (₹, for approx. profit)', type: 'number', step: '0.01', help: "Rough daily running cost (rent, salary, power). Approx. Profit report takes off this × number of days from the sales profit." },
+      { key: 'whatsapp_enabled', label: 'WhatsApp invoice sharing', type: 'toggle', help: "On: bills, order updates and commission messages can go out on WhatsApp. Off: nothing is sent on WhatsApp for this company." },
+      { key: 'website_integration', label: 'Allow company website / app API', type: 'toggle', help: "On: this company’s own website or mobile app can show products and take orders using an API key (made below). Off: every key is blocked." },
     ],
   },
   {
     title: 'Reports & EOD',
     keys: [
-      { key: 'financial_year_start_month', label: 'Financial year start month (1–12)', type: 'number', step: '1' },
-      { key: 'dead_stock_days', label: 'Dead stock threshold (days)', type: 'number', step: '1' },
-      { key: 'eod_management_enabled', label: 'Send HO management EOD summary', type: 'toggle' },
-      { key: 'eod_management_whatsapp_phones', label: 'EOD WhatsApp phones (comma-separated)', type: 'text' },
-      { key: 'eod_management_email_recipients', label: 'EOD email recipients (comma-separated)', type: 'text' },
-      { key: 'eod_management_send_time', label: 'EOD send time (HH:MM, 24h)', type: 'text' },
+      { key: 'financial_year_start_month', label: 'Financial year start month (1–12)', type: 'number', step: '1', help: "Month your accounting year starts. 4 = April (India). Used for “this financial year” in the sales reports." },
+      { key: 'dead_stock_days', label: 'Dead stock threshold (days)', type: 'number', step: '1', help: "A product that has stock but nothing sold or sent out for this many days is shown as dead in Stock Levels (Fast / slow / dead)." },
+      { key: 'eod_management_enabled', label: 'Send HO management EOD summary', type: 'toggle', help: "On: every day at the send time, a summary (sales, cash and bank in, stock value, low stock, top staff) goes to the phones and emails below." },
+      { key: 'eod_management_whatsapp_phones', label: 'EOD WhatsApp phones (comma-separated)', type: 'text', help: "WhatsApp numbers that get the daily summary, separated by commas. Example: 9876543210, 9123456789" },
+      { key: 'eod_management_email_recipients', label: 'EOD email recipients (comma-separated)', type: 'text', help: "Email addresses that get the daily summary, separated by commas." },
+      { key: 'eod_management_send_time', label: 'EOD send time (HH:MM, 24h)', type: 'text', help: "Time to send the summary, 24-hour clock. 20:30 = 8:30 pm." },
     ],
   },
   {
     title: 'Rental automation',
     keys: [
-      { key: 'rental_auto_bill', label: 'Auto-generate invoices on billing cycle', type: 'toggle' },
-      { key: 'rental_whatsapp_on_bill', label: 'WhatsApp when auto-billing', type: 'toggle' },
-      { key: 'sms_enabled', label: 'SMS rental reminders & overdue alerts', type: 'toggle' },
-      { key: 'rental_payment_due_days', label: 'Payment due days after period end', type: 'number', step: '1' },
-      { key: 'rental_overdue_alert_days', label: 'Overdue alert grace (days)', type: 'number', step: '1' },
-      { key: 'rental_reminder_lead_days', label: 'Reminder lead time (days before due)', type: 'number', step: '1' },
+      { key: 'rental_auto_bill', label: 'Auto-generate invoices on billing cycle', type: 'toggle', help: "On: each morning a rent bill is made by itself for every rental whose billing cycle has ended (if that rental has “Generate invoices automatically” ticked). Off: make each rent bill by hand." },
+      { key: 'rental_whatsapp_on_bill', label: 'WhatsApp when auto-billing', type: 'toggle', help: "On: when a rent bill is made by itself, the customer gets it on WhatsApp." },
+      { key: 'sms_enabled', label: 'SMS rental reminders & overdue alerts', type: 'toggle', help: "On: rental reminders and overdue alerts also go by SMS (an SMS provider must be set up on the server)." },
+      { key: 'rental_payment_due_days', label: 'Payment due days after period end', type: 'number', step: '1', help: "Days the customer gets to pay a rent bill after the period ends. 7 = due one week later." },
+      { key: 'rental_overdue_alert_days', label: 'Overdue alert grace (days)', type: 'number', step: '1', help: "Extra days to wait after the due / return date before sending an overdue alert. 0 = alert on the due date." },
+      { key: 'rental_reminder_lead_days', label: 'Reminder lead time (days before due)', type: 'number', step: '1', help: "Days before the payment due date or return date to send a reminder. 3 = three days before." },
     ],
   },
 ];
@@ -280,6 +280,7 @@ export default function SettingsPage() {
                       onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
                     />
                   )}
+                  {field.help && <p className="mt-1.5 text-xs leading-relaxed text-muted">{field.help}</p>}
                 </Field>
               ))}
             </div>

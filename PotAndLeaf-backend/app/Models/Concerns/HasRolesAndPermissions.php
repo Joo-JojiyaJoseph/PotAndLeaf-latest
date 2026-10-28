@@ -88,7 +88,31 @@ trait HasRolesAndPermissions
             ->with('permissions:id,name')
             ->get()
             ->flatMap(fn (Role $role) => $role->permissions->pluck('name'))
+            // Extra permissions given to this user alone (approved access requests).
+            ->merge($this->extraPermissionNames($companyId))
             ->unique()
             ->values();
+    }
+
+    /** Permissions given to this one user in a company, on top of their role. */
+    public function extraPermissionNames(int|string $companyId): Collection
+    {
+        // Before "php artisan migrate" adds the table, act as if there are none,
+        // so roles keep working instead of every permission check failing.
+        if (! \App\Support\Rbac\AccessRequestTables::ready()) {
+            return collect();
+        }
+
+        return \Illuminate\Support\Facades\DB::table('user_permissions')
+            ->join('permissions', 'permissions.id', '=', 'user_permissions.permission_id')
+            ->where('user_permissions.user_id', $this->getKey())
+            ->where('user_permissions.company_id', $companyId)
+            ->pluck('permissions.name');
+    }
+
+    /** Forget cached permission names (after a grant or removal). */
+    public function forgetPermissionCache(): void
+    {
+        $this->permissionCache = [];
     }
 }

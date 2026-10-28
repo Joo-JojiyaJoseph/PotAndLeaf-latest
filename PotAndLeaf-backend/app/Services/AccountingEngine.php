@@ -345,7 +345,7 @@ class AccountingEngine
      *
      * @return array{opening:float,closing:float,receipts:float,payments:float,rows:array,meta:array}
      */
-    public function book(int|string $companyId, string $book, string $from, string $to, int $page = 1, int $perPage = 50): array
+    public function book(int|string $companyId, string $book, string $from, string $to, int $page = 1, int $perPage = 50, bool $correctionsOnly = false): array
     {
         $from = substr($from, 0, 10);
         $to = substr($to, 0, 10);
@@ -364,7 +364,7 @@ class AccountingEngine
         $this->coa->ensureForCompany($companyId);
 
         if ($book === 'journal') {
-            return $this->journalBook($companyId, $from, $to, $page, $perPage);
+            return $this->journalBook($companyId, $from, $to, $page, $perPage, $correctionsOnly);
         }
 
         $key = $book === 'bank' ? 'bank' : 'cash';
@@ -448,11 +448,17 @@ class AccountingEngine
         return $voucher->load('entries.account');
     }
 
-    private function journalBook(int|string $companyId, string $from, string $to, int $page, int $perPage): array
+    /**
+     * The Journal shows every entry of the period — the ones made by themselves
+     * (customer receipts, supplier payments, walk-in sales, commission paid, cash
+     * and bank vouchers) and the corrections typed by hand. $correctionsOnly
+     * shows just the hand-made journal corrections.
+     */
+    private function journalBook(int|string $companyId, string $from, string $to, int $page, int $perPage, bool $correctionsOnly = false): array
     {
         $query = AccountingTransaction::forCompany($companyId)
             ->posted()
-            ->where('book', 'journal')
+            ->when($correctionsOnly, fn ($q) => $q->where('book', 'journal'))
             ->whereDate('voucher_date', '>=', $from)
             ->whereDate('voucher_date', '<=', $to)
             ->with('entries.account')

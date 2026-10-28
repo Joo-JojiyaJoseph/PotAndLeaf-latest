@@ -252,6 +252,8 @@ export default function PurchaseOrderReorderPage() {
               {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           )}
+          {/* Nothing to reorder: no PDFs or PO to make. */}
+          {allLines.length > 0 && !isError && (<>
           <Button variant="outline" size="sm" disabled={Boolean(exporting)} onClick={() => exportPdf('flat')}>
             {exporting === 'flat' ? <Spinner className="size-4" /> : <ArrowDownTrayIcon className="size-4" />} Export PDF
           </Button>
@@ -263,6 +265,7 @@ export default function PurchaseOrderReorderPage() {
               <Button variant="outline" size="sm"><ClipboardDocumentListIcon className="size-4" /> Single PO</Button>
             </Link>
           )}
+          </>)}
         </div>
       </div>
 

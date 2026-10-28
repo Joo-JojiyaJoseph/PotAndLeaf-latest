@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, PlusIcon, TrashIcon, PrinterIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, PlusIcon, PrinterIcon, ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
@@ -173,7 +173,6 @@ export default function RentalDetail() {
     onError: (err) => toast.error(apiMessage(err, 'Could not generate invoice.')),
   });
   const payM = useMutation({ mutationFn: (invId) => api.post(`/rental-invoices/${invId}/paid`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
-  const delInvM = useMutation({ mutationFn: (invId) => api.delete(`/rental-invoices/${invId}`, withCompany(recordCompanyId)), onSuccess: invalidate });
   const waM = useMutation({
     mutationFn: (invId) => api.post(`/rental-invoices/${invId}/whatsapp`, {}, withCompany(recordCompanyId)),
     onSuccess: (res) => toast.success(res.data?.message || 'WhatsApp message sent.'),
@@ -243,6 +242,20 @@ export default function RentalDetail() {
           {apiMessage(activateM.error, 'Not enough stock to activate this rental.')}
         </div>
       )}
+
+      {r.rent_per_cycle != null && (() => {
+        const word = { daily: 'day', weekly: 'week', monthly: 'month' }[r.billing_cycle] ?? 'cycle';
+        return (
+          <Section title="Rent">
+            <InfoGrid cols={4}>
+              <InfoItem label={`Rent per ${word}`} value={formatCurrency(r.rent_per_cycle)} mono />
+              {r.expected_cycles != null && <InfoItem label={`Total till expected end (${r.expected_cycles} ${word}${r.expected_cycles === 1 ? '' : 's'})`} value={formatCurrency(r.rent_per_cycle * r.expected_cycles)} mono />}
+              <InfoItem label="Billed so far" value={formatCurrency(r.billed_total ?? 0)} mono />
+              <InfoItem label="Security deposit" value={formatCurrency(r.deposit)} mono />
+            </InfoGrid>
+          </Section>
+        );
+      })()}
 
       <Section title="Details">
         <InfoGrid cols={4}>
@@ -335,7 +348,6 @@ export default function RentalDetail() {
                             <ChatBubbleLeftRightIcon className="size-4" />
                           </button>
                         )}
-                        {r.can?.bill && <button onClick={async () => { if (await confirm({ title: 'Delete rent bill', message: `Delete rent bill ${inv.invoice_no ?? ''}? The customer will no longer owe this amount.`, confirmLabel: 'Delete' })) delInvM.mutate(inv.id); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>}
                       </div>
                     </td>
                   </tr>

@@ -67,7 +67,7 @@ class AccountingController extends Controller
 
     public function journal(Request $request): JsonResponse
     {
-        return $this->book($request, 'journal');
+        return $this->book($request, 'journal', $request->query('show') === 'corrections');
     }
 
     public function show(Request $request, AccountingTransaction $accountingTransaction): JsonResponse
@@ -110,7 +110,7 @@ class AccountingController extends Controller
         return $this->message('Entry cancelled.');
     }
 
-    private function book(Request $request, string $book): JsonResponse
+    private function book(Request $request, string $book, bool $correctionsOnly = false): JsonResponse
     {
         $this->allow($request, 'accounts.view');
         $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
@@ -123,6 +123,7 @@ class AccountingController extends Controller
             $to,
             (int) $request->query('page', 1),
             (int) $request->query('per_page', 50),
+            $correctionsOnly,
         );
 
         $meta = $payload['meta'];

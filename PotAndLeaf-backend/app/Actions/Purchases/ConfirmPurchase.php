@@ -17,7 +17,8 @@ use Illuminate\Validation\ValidationException;
 /**
  * Confirming a purchase is the point stock becomes real: each line posts an
  * "in" movement to the ledger, the product's current_stock rises, and its
- * cost_price is refreshed to the landed unit cost. All within one transaction.
+ * the new landed unit cost is stored on that line's batch only (the product's
+ * own cost is set just once, when it has none). All within one transaction.
  * Bulk lines with a `sell_as` strategy are delegated to
  * SellAsFulfillmentService instead, which decides where the stock lands
  * (set product, split units, or a shared pool of both).
@@ -92,8 +93,12 @@ class ConfirmPurchase
                     productBatchId: $batch->id,
                 );
 
-                $product->cost_price = $item->landed_unit_cost;
-                $product->save();
+                // The new price belongs to this batch only (batch cost_price above).
+                // The product keeps its own cost; it is filled only if it had none yet.
+                if ((float) $product->cost_price <= 0) {
+                    $product->cost_price = $item->landed_unit_cost;
+                }
+                $product->save(); // saves the new stock set by post()
             }
 
             // A confirmed purchase is money owed to the supplier. Landed cost

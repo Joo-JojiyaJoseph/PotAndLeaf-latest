@@ -38,11 +38,12 @@ class SupplierPaymentController extends Controller
         $suppliers = Supplier::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->orderBy('name')
-            ->get(['id', 'name', 'outstanding', 'advance_balance', 'company_id'])
+            ->get(['id', 'name', 'outstanding', 'opening_balance', 'advance_balance', 'company_id'])
             ->map(fn ($s) => [
                 'id' => $s->id,
                 'name' => $s->name,
                 'outstanding' => (float) $s->outstanding,
+                'opening_balance' => (float) $s->opening_balance,
                 'advance_balance' => (float) $s->advance_balance,
                 'company_id' => $s->company_id,
             ]);
@@ -56,6 +57,17 @@ class SupplierPaymentController extends Controller
         $this->allow($request, 'payments.view');
 
         return $this->ok(['payables' => $this->payments->payables($this->listCompanyId($request), $request->query('supplier_id'))]);
+    }
+
+    /** How "you owe" is made up, for the record-payment form. */
+    public function owed(Request $request): JsonResponse
+    {
+        $this->allow($request, 'payments.view');
+        $companyId = $this->listCompanyId($request);
+        $supplier = Supplier::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->findOrFail($request->query('supplier_id'));
+
+        return $this->ok($this->payments->owedBreakdown($supplier));
     }
 
     public function store(StoreSupplierPaymentRequest $request): JsonResponse

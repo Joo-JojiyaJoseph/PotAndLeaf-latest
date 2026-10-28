@@ -33,6 +33,35 @@ class CustomerController extends Controller
         return $this->ok(CustomerResource::collection($this->customers->list($this->listCompanyId($request), $filters)));
     }
 
+    /**
+     * Short list for "choose a customer" boxes (loyalty points, etc.): every
+     * active customer of the company with name, code, phone and points.
+     */
+    public function options(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $user = $request->user();
+        abort_unless(
+            collect(['customers.view', 'loyalty.view', 'loyalty.adjust', 'sales.view'])->contains(fn ($p) => $user->hasPermission($p, $company->id)),
+            403,
+        );
+
+        $rows = Customer::query()
+            ->where('company_id', $company->id)
+            ->where('status', 'active')
+            ->when(filled($request->query('search')), fn ($q) => $q->where(fn ($w) => $w
+                ->where('name', 'like', '%'.trim($request->query('search')).'%')
+                ->orWhere('customer_code', 'like', '%'.trim($request->query('search')).'%')))
+            ->orderBy('name')
+            ->limit(1000)
+            ->get(['id', 'company_id', 'customer_code', 'name', 'phone', 'type', 'loyalty_points']);
+
+        return $this->ok($rows->map(fn (Customer $c) => [
+            'id' => $c->id, 'company_id' => $c->company_id, 'code' => $c->customer_code, 'name' => $c->name,
+            'phone' => $c->phone, 'type' => $c->type, 'loyalty_points' => (int) $c->loyalty_points,
+        ])->values());
+    }
+
     public function store(StoreCustomerRequest $request): JsonResponse
     {
         $company = $this->company($request);

@@ -137,9 +137,10 @@ export function AuthProvider({ children }) {
       logout,
       selectCompany,
       refreshCompanies,
+      reloadPermissions: loadPermissions,
       can,
     }),
-    [token, user, companies, companyId, booting, login, logout, selectCompany, refreshCompanies, can],
+    [token, user, companies, companyId, booting, login, logout, selectCompany, refreshCompanies, loadPermissions, can],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

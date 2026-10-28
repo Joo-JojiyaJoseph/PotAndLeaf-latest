@@ -93,21 +93,27 @@ class ConfirmSale
                             'items' => "Not enough stock for {$product->name}: {$product->current_stock} available, {$item->qty} required.",
                         ]);
                     }
-                    $this->inventory->post(
-                        product: $product, direction: 'out', qty: (float) $item->qty,
-                        unitCost: (float) $product->cost_price, referenceType: 'sale',
-                        referenceId: $sale->id, note: "Sale {$sale->sale_no}", userId: $userId,
-                        productBatchId: $batch?->id,
-                    );
-                    $product->save();
+                    // Take the goods out of their batch first (the scanned one, or the
+                    // oldest batches), then record the sale at THAT batch's cost, so
+                    // profit uses what these pieces really cost, not the latest price.
+                    $fallbackCost = (float) $product->cost_price;
                     if ($batch) {
                         $batch->decrement('remaining_qty', (float) $item->qty);
                         if ((float) $batch->fresh()->remaining_qty <= 0) {
                             $batch->update(['status' => 'depleted']);
                         }
+                        $unitCost = (float) $batch->cost_price > 0 ? (float) $batch->cost_price : $fallbackCost;
                     } else {
-                        $this->inventory->consumeBatchesFifo($product->id, (float) $item->qty);
+                        $taken = $this->inventory->consumeBatchesFifo($product->id, (float) $item->qty);
+                        $unitCost = $this->inventory->costOfTaken($taken, (float) $item->qty, $fallbackCost);
                     }
+                    $this->inventory->post(
+                        product: $product, direction: 'out', qty: (float) $item->qty,
+                        unitCost: $unitCost, referenceType: 'sale',
+                        referenceId: $sale->id, note: "Sale {$sale->sale_no}", userId: $userId,
+                        productBatchId: $batch?->id,
+                    );
+                    $product->save();
                 }
 
                 $this->supervisorCommission->accrue(

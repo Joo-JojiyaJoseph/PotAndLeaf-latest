@@ -96,6 +96,12 @@ export default function SaleForm() {
   const products = data?.products ?? [];
   const customers = data?.customers ?? [];
   const productsById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
+  // Batches with stock, oldest first, grouped by product (to sell from a chosen batch).
+  const batchesByProduct = useMemo(() => {
+    const m = {};
+    (data?.batches ?? []).forEach((b) => { (m[b.product_id] ??= []).push(b); });
+    return m;
+  }, [data]);
   const customer = customers.find((c) => c.id === header.customer_id);
   const customerType = customer?.type ?? 'retail';
   // A retail customer always buys at the retail tier — the tier box is locked.
@@ -136,6 +142,7 @@ export default function SaleForm() {
     const level = customerType === 'wholesale' || customerType === 'dealer' ? customerType : 'retail';
     setLine(i, {
       product_id: productId,
+      product_batch_id: '', barcode: '', batch_no: '',
       price_level: level,
       rate: p ? String(tierPrice(p, level)) : '',
       gst_rate: p ? String(p.gst_rate) : '',
@@ -290,8 +297,31 @@ export default function SaleForm() {
                         <option value="">Select…</option>
                         {products.map((pr) => <option key={pr.id} value={pr.id}>{pr.name} · stock {pr.current_stock}</option>)}
                       </Select>
-                      {p && Number(line.qty) > p.current_stock && <span className="mt-1 block text-xs text-danger">Only {p.current_stock} in stock</span>}
-                      {line.barcode && <span className="mt-1 block text-[11px] text-muted">Batch {line.batch_no} · {line.barcode}</span>}
+                      {p && (batchesByProduct[p.id]?.length ?? 0) > 0 && (
+                        <Select
+                          aria-label="Batch"
+                          value={line.product_batch_id || ''}
+                          onChange={(e) => {
+                            const b = (batchesByProduct[p.id] ?? []).find((x) => x.id === e.target.value);
+                            setLine(i, { product_batch_id: b?.id ?? '', barcode: b?.barcode ?? '', batch_no: b?.batch_no ?? '' });
+                          }}
+                          className="mt-1 h-8 w-full min-w-[180px] rounded-[10px] text-xs"
+                        >
+                          <option value="">Batch: oldest first (automatic)</option>
+                          {(batchesByProduct[p.id] ?? []).map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.batch_no} · {b.remaining_qty} left{b.cost_price != null ? ` · ₹${b.cost_price}` : ''}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                      {(() => {
+                        const b = line.product_batch_id ? (batchesByProduct[line.product_id] ?? []).find((x) => x.id === line.product_batch_id) : null;
+                        if (b && Number(line.qty) > b.remaining_qty) return <span className="mt-1 block text-xs text-danger">Only {b.remaining_qty} in batch {b.batch_no}</span>;
+                        if (p && Number(line.qty) > p.current_stock) return <span className="mt-1 block text-xs text-danger">Only {p.current_stock} in stock</span>;
+                        return null;
+                      })()}
+                      {line.barcode && !batchesByProduct[line.product_id]?.length && <span className="mt-1 block text-[11px] text-muted">Batch {line.batch_no} · {line.barcode}</span>}
                     </td>
                     <td className="px-1 py-1.5">
                       <Select icon={TagIcon} value={tierLocked ? 'retail' : (line.price_level || 'retail')} onChange={(e) => applyPriceLevel(i, e.target.value)} disabled={tierLocked} className={selectCls + ' min-w-[110px]'}>

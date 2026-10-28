@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PlusIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { formatCurrency, formatDate, todayISO as today } from '../../lib/format';
-import { useConfirm } from '../../lib/confirm';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
@@ -55,6 +54,12 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   const { data: payables } = useQuery({
     queryKey: ['payables', 'modal', targetCompanyId, form.supplier_id],
     queryFn: () => api.get('/supplier-payments/payables', { params: { supplier_id: form.supplier_id }, ...companyRequest() }).then((r) => r.data.data.payables),
+    enabled: open && Boolean(form.supplier_id) && Boolean(targetCompanyId),
+  });
+
+  const { data: owedInfo } = useQuery({
+    queryKey: ['payables', 'owed', targetCompanyId, form.supplier_id],
+    queryFn: () => api.get('/supplier-payments/owed', { params: { supplier_id: form.supplier_id }, ...companyRequest() }).then((r) => r.data.data),
     enabled: open && Boolean(form.supplier_id) && Boolean(targetCompanyId),
   });
 
@@ -141,14 +146,50 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
             <option value="">Select supplier…</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
-          {supplier && <span className="mt-1 block text-xs text-muted">Outstanding: {formatCurrency(supplier.outstanding)} · Advance: {formatCurrency(supplier.advance_balance ?? 0)}</span>}
+          {supplier && <span className="mt-1 block text-xs text-muted">You owe: <b className="text-ink">{formatCurrency(owedInfo?.you_owe ?? supplier.outstanding)}</b> · Advance: {formatCurrency(supplier.advance_balance ?? 0)}</span>}
         </Field>
         <Field label="Purchase bill being paid (optional)" error={err('purchase_id')}>
           <Select value={form.purchase_id} onChange={set('purchase_id')} className={selectCls} disabled={!form.supplier_id || form.is_advance}>
-            <option value="">On account</option>
+            <option value="">On account / outstanding from before</option>
             {grns.map((p) => <option key={p.id} value={p.id}>{p.purchase_no} · bal {formatCurrency(p.balance)}</option>)}
           </Select>
+          {(() => {
+            const bill = (payables ?? []).find((p) => String(p.id) === String(form.purchase_id));
+            return bill ? (
+              <span className="mt-1 block text-xs text-muted">
+                Bill {formatCurrency(bill.invoice_total)} − paid {formatCurrency(bill.paid)} = <b className="text-ink">{formatCurrency(bill.balance)}</b> left
+              </span>
+            ) : null;
+          })()}
         </Field>
+        {owedInfo && (
+          <div className="rounded-xl border border-line bg-paper/60 px-3 py-2 text-xs sm:col-span-2">
+            <div className="mb-1 font-semibold text-ink">How “You owe” is worked out</div>
+            <dl className="space-y-0.5">
+              {[
+                ['Outstanding from before (supplier page)', owedInfo.opening_balance, '+'],
+                [`Purchase bills (${owedInfo.bills_count})`, owedInfo.bills_total, '+'],
+                ['Paid to the supplier', owedInfo.paid, '−'],
+                ['Advance used on bills', owedInfo.advance_used, '−'],
+                ['Goods returned', owedInfo.returned, '−'],
+                ['Other corrections', owedInfo.adjustment, owedInfo.adjustment < 0 ? '−' : '+'],
+              ].filter(([, v], i) => i < 3 || Math.abs(Number(v)) > 0.005).map(([label, v, sign]) => (
+                <div key={label} className="flex justify-between gap-3 text-muted">
+                  <dt>{sign} {label}</dt><dd className="tnum">{formatCurrency(Math.abs(Number(v)))}</dd>
+                </div>
+              ))}
+              <div className="mt-1 flex justify-between gap-3 border-t border-line pt-1 font-semibold text-ink">
+                <dt>= You owe</dt><dd className="tnum">{formatCurrency(owedInfo.you_owe)}</dd>
+              </div>
+            </dl>
+            {Number(owedInfo.opening_balance) > 0.005 && (
+              <div className="mt-1.5 border-t border-dashed border-line pt-1.5 text-muted">
+                Outstanding from before: {formatCurrency(owedInfo.opening_balance)} − paid {formatCurrency(Math.max(0, owedInfo.opening_balance - (owedInfo.opening_left ?? owedInfo.opening_balance)))} = <b className="text-ink">{formatCurrency(owedInfo.opening_left ?? owedInfo.opening_balance)}</b> still to pay
+                <span className="block">Money paid with “On account / outstanding from before” clears this first, then the oldest bills.</span>
+              </div>
+            )}
+          </div>
+        )}
         <Field label="Amount" required error={err('amount')}><Input type="number" step="0.01" value={form.amount} onChange={set('amount')} /></Field>
         <Field label="Mode" error={err('mode')}>
           <Select value={form.mode} onChange={set('mode')} className={selectCls}>
@@ -294,11 +335,7 @@ export default function PaymentsList() {
     queryFn: () => api.get('/supplier-payments', { params: { ...companyParams, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'history',
   });
-  const confirm = useConfirm();
-  const voidM = useMutation({
-    mutationFn: (id) => api.delete(`/supplier-payments/${id}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['supplier-payments'] }); queryClient.invalidateQueries({ queryKey: ['payables'] }); },
-  });
+  // Payment history is read-only (no delete / void button).
 
   const rowPrefill = (row) => ({
     key: row.id,
@@ -406,7 +443,6 @@ export default function PaymentsList() {
                     <th className="microlabel px-4 py-2.5 font-semibold">Mode</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Reference</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Amount</th>
-                    <th className="microlabel px-4 py-2.5" />
                   </tr></thead>
                   <tbody>
                     {history.map((p) => (
@@ -418,7 +454,7 @@ export default function PaymentsList() {
                         <td className="px-4 py-2.5"><Badge tone={p.is_advance ? 'warning' : p.applied_from_advance ? 'info' : 'info'}>{p.is_advance ? 'advance' : p.applied_from_advance ? 'applied' : p.mode}</Badge></td>
                         <td className="px-4 py-2.5 text-muted">{p.reference || '—'}</td>
                         <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(p.amount)}</td>
-                        <td className="px-4 py-2.5 text-right">{can('payments.delete') && <button onClick={async () => { if (await confirm({ title: 'Void payment', message: `Void this ${formatCurrency(p.amount)} payment? The amount goes back onto what you owe ${p.supplier_name ?? 'the supplier'}.`, confirmLabel: 'Void' })) voidM.mutate(p.id); }} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" aria-label="Void"><TrashIcon className="size-4" /></button>}</td>
+
                       </tr>
                     ))}
                   </tbody>

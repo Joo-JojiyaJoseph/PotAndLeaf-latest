@@ -51,7 +51,13 @@ class ResolveApiCompany
         if ($request->isMethod('GET') && $request->user()->is_super_admin) {
             $param = $request->query('company_id');
 
-            if ($param === 'all' || $param === null || $param === '') {
+            // Lists for a form (suppliers, products, staff… to pick from) belong to the
+            // company chosen in that form (the X-Company-Id header), never all companies.
+            $isFormList = str_ends_with($request->path(), '/form-data') || str_ends_with($request->path(), '/options')
+                || str_ends_with($request->path(), '/request-data');
+            if ($isFormList && ($param === null || $param === '')) {
+                $listCompanyId = $company->id;
+            } elseif ($param === 'all' || $param === null || $param === '') {
                 $listCompanyId = null;
             } elseif (filled($param)) {
                 $target = Company::query()->whereKey($param)->first();

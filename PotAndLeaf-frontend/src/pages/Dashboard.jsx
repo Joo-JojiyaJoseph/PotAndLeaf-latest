@@ -20,6 +20,7 @@ const QUICK = [
   { label: 'New purchase', desc: 'Enter a supplier bill', to: '/purchases/new', icon: ShoppingCartIcon },
   { label: 'Pay supplier', desc: 'Pay what you owe a supplier', to: '/payments', icon: TruckIcon },
   { label: 'Stock levels', desc: 'What you have and what is low', to: '/inventory', icon: CubeIcon },
+  { label: 'My commission', desc: 'What I earned and was paid', to: '/my-commission', icon: BanknotesIcon },
   { label: 'Add product', desc: 'New item to buy or sell', to: '/products/new', icon: PlusCircleIcon },
   { label: 'Reports', desc: 'Sales, stock, GST and dues', to: '/reports', icon: ChartBarIcon },
   { label: 'Companies', desc: 'Your shops / companies', to: '/companies', icon: BuildingOffice2Icon },
@@ -35,6 +36,7 @@ export default function Dashboard() {
 
   const quickLinks = QUICK.filter((q) => {
     if (q.to === '/companies') return isSuperAdmin;
+    if (q.to === '/my-commission') return !isSuperAdmin && can('commission.view_own') && !can('commission.view');
     if (q.to === '/products/new') return can('products.create');
     if (q.to === '/purchases/new') return can('purchases.create');
     if (q.to === '/sales/new') return can('sales.create');
@@ -133,6 +135,11 @@ export default function Dashboard() {
                   tone="good"
                 />
               </div>
+            )}
+            {canIncentive && incentiveQ.data && (
+              <Link to="/my-commission" className="-mt-2 inline-block text-sm font-medium text-leaf-hover hover:underline">
+                See my commission for the month →
+              </Link>
             )}
 
             {lowStock > 0 && can('inventory.view') && (

@@ -15,6 +15,8 @@ class SaleItemResource extends JsonResource
             'id'            => $this->id,
             'product_id'    => $this->product_id,
             'product_name'  => $this->product_name,
+            'product_batch_id' => $this->product_batch_id,
+            'batch_no'      => $this->product_batch_id ? $this->whenLoaded('batch', fn () => $this->batch?->batch_no) : null,
             'hsn_code'      => $this->hsn_code,
             'qty'           => (float) $this->qty,
             'rate'          => (float) $this->rate,

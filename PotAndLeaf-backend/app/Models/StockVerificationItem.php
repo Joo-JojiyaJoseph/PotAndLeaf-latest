@@ -11,7 +11,7 @@ class StockVerificationItem extends Model
     use HasUuids;
 
     protected $fillable = [
-        'stock_verification_id', 'product_id', 'product_name',
+        'stock_verification_id', 'product_id', 'product_batch_id', 'batch_no', 'product_name',
         'system_qty', 'counted_qty', 'variance', 'unit_cost', 'batch_adjustments',
     ];
 

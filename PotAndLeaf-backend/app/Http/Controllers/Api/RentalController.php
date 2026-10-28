@@ -40,7 +40,8 @@ class RentalController extends Controller
 
         $customers = Customer::forCompany($company->id)->where('status', 'active')->orderBy('name')
             ->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name]);
-        $products = Product::forCompany($company->id)->where('status', 'active')->orderByDesc('is_rental')->orderBy('name')
+        // Only products ticked "This product can be rented" can go on a rental.
+        $products = Product::forCompany($company->id)->where('status', 'active')->where('is_rental', true)->orderBy('name')
             ->get(['id', 'sku', 'name', 'retail_price', 'current_stock', 'is_rental', 'rental_daily_rate'])
             ->map(fn ($p) => [
                 'id'                => $p->id,
@@ -137,15 +138,6 @@ class RentalController extends Controller
         $this->rentals->markInvoicePaid($rentalInvoice);
 
         return $this->message('Invoice marked paid.');
-    }
-
-    public function deleteInvoice(Request $request, RentalInvoice $rentalInvoice): JsonResponse
-    {
-        $this->allow($request, 'rental.bill');
-        $this->assertRecordCompany($request, $rentalInvoice, writable: true);
-        $this->rentals->deleteInvoice($rentalInvoice);
-
-        return $this->message('Invoice removed.');
     }
 
     public function sendInvoiceWhatsapp(Request $request, RentalInvoice $rentalInvoice, RentalNotificationService $notifications): JsonResponse

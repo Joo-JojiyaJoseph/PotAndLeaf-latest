@@ -135,7 +135,8 @@ export default function SuppliersList() {
 
   function openEdit(row) {
     setEditing(row);
-    setForm({ ...EMPTY, ...row, photo: row.photo ?? null });
+    // Outstanding shows what is still unpaid (it goes down as it is paid).
+    setForm({ ...EMPTY, ...row, photo: row.photo ?? null, opening_balance: row.opening_left ?? row.opening_balance ?? '' });
     setErrors({});
     setFormCompanyId(row.company_id ?? companyId ?? '');
     setPickedCompany(true);
@@ -167,6 +168,9 @@ export default function SuppliersList() {
       else if (editing?.company_id) payload.target_company_id = editing.company_id;
       if (editing && isSuperAdmin && formCompanyId) payload.company_id = formCompanyId;
       delete payload.supplier_code;
+      // Editing: the box holds the outstanding still unpaid; the server keeps what was already paid.
+      if (editing) { payload.opening_left = payload.opening_balance; delete payload.opening_balance; }
+      delete payload.opening_paid;
       saveMutation.mutate(payload, { onSettled: release });
     });
   }
@@ -402,8 +406,14 @@ export default function SuppliersList() {
               <Field label="Credit days" error={err('credit_days')}>
                 <Input type="number" step="1" min="0" max="365" value={form.credit_days ?? ''} onChange={set('credit_days')} placeholder="e.g. 30" />
               </Field>
-              <Field label="Opening balance" error={err('opening_balance')}>
-                <Input type="number" step="0.01" value={form.opening_balance ?? ''} onChange={set('opening_balance')} />
+              <Field label="Outstanding" error={err('opening_balance') || err('opening_left')}>
+                <Input type="number" step="0.01" min="0" value={form.opening_balance ?? ''} onChange={set('opening_balance')} />
+                <span className="block text-xs text-muted">What you still owe this supplier from before (bills not entered in this app). It goes down by itself when you pay it.</span>
+                {editing && Number(editing.opening_paid) > 0.005 && (
+                  <span className="block text-xs text-muted">
+                    Entered {formatCurrency(editing.opening_balance)} − paid {formatCurrency(editing.opening_paid)} = <b className="text-ink">{formatCurrency(editing.opening_left)}</b> still to pay
+                  </span>
+                )}
               </Field>
               <Field label="Status" required error={err('status')}>
                 <Select value={form.status} onChange={set('status')} className={selectClass}>

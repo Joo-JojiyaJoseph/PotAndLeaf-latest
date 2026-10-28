@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { useIsFetching } from '@tanstack/react-query';
+import { useIsFetching, useQuery } from '@tanstack/react-query';
+import api from '../lib/api';
+import { formatDateTime } from '../lib/format';
 import {
   ArrowPathIcon,
   ArrowRightStartOnRectangleIcon,
@@ -11,6 +13,8 @@ import {
   QuestionMarkCircleIcon,
   SunIcon,
   UserCircleIcon,
+  KeyIcon,
+  InboxArrowDownIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { queryClient } from '../lib/queryClient';
@@ -20,7 +24,28 @@ const iconBtn =
   'relative flex size-9 items-center justify-center rounded-full glass-control text-ink hover:bg-white hover:text-ink';
 
 export default function Topbar({ onMenu }) {
-  const { user, activeCompany, logout } = useAuth();
+  const { user, activeCompany, logout, isSuperAdmin, can, reloadPermissions } = useAuth();
+  // Access requests: how many wait for me (admins) and answers to my own requests.
+  const noticesQ = useQuery({
+    queryKey: ['access-notices', activeCompany?.id],
+    queryFn: () => api.get('/access-requests/notices').then((r) => r.data.data),
+    enabled: Boolean(activeCompany && user),
+    refetchInterval: 60_000,
+  });
+  const waiting = noticesQ.data?.waiting_for_me ?? 0;
+  const answers = noticesQ.data?.my_answers ?? [];
+  const seenKey = `pl_seen_answers_${user?.id ?? ''}`;
+  const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem(seenKey) || '[]'); } catch { return []; } });
+  const unseen = answers.filter((a) => !seen.includes(a.id));
+  const badge = waiting + unseen.length;
+  // A newly approved request: load the new permissions straight away (menu updates, no refresh needed).
+  const newlyApproved = unseen.filter((a) => a.status === 'approved').map((a) => a.id).join(',');
+  useEffect(() => { if (newlyApproved) reloadPermissions?.(); }, [newlyApproved, reloadPermissions]);
+  function markSeen() {
+    const ids = [...new Set([...seen, ...answers.map((a) => a.id)])].slice(-50);
+    setSeen(ids);
+    try { localStorage.setItem(seenKey, JSON.stringify(ids)); } catch { /* ignore */ }
+  }
   const [menuOpen, setMenuOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -97,9 +122,10 @@ export default function Topbar({ onMenu }) {
           aria-label="Notifications"
           aria-expanded={notesOpen}
           title="Notifications"
-          onClick={() => { setNotesOpen((v) => !v); setMenuOpen(false); }}
+          onClick={() => { setNotesOpen((v) => !v); setMenuOpen(false); if (!notesOpen) markSeen(); }}
         >
           <BellIcon className="size-[18px]" />
+          {badge > 0 && <span className="absolute -right-0.5 -top-0.5 flex min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold leading-[18px] text-white">{badge}</span>}
         </button>
 
         <Link to="/help" className={iconBtn} aria-label="Help and user guide" title="Help & user guide">
@@ -135,15 +161,34 @@ export default function Topbar({ onMenu }) {
         >
           <div className="border-b border-line px-4 py-3">
             <p className="text-sm font-semibold text-ink">Notifications</p>
-            <p className="text-xs text-muted">Activity for this session</p>
+            <p className="text-xs text-muted">Access requests and answers</p>
           </div>
-          <div className="px-4 py-8 text-center">
-            <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-leaf-soft text-leaf">
-              <BellIcon className="size-5" />
-            </span>
-            <p className="mt-3 text-sm font-medium text-ink">You are all caught up</p>
-            <p className="mt-1 text-xs text-muted">New alerts will appear here.</p>
-          </div>
+          {waiting > 0 && (
+            <Link to="/access-requests" onClick={() => setNotesOpen(false)} className="flex items-start gap-3 border-b border-line px-4 py-3 hover:bg-leaf-soft/60">
+              <InboxArrowDownIcon className="mt-0.5 size-5 shrink-0 text-amber" />
+              <span className="text-sm"><b>{waiting}</b> access request{waiting === 1 ? '' : 's'} waiting for you to approve or reject.</span>
+            </Link>
+          )}
+          {answers.map((a) => (
+            <Link key={a.id} to="/request-access" onClick={() => setNotesOpen(false)} className="flex items-start gap-3 border-b border-line px-4 py-3 last:border-0 hover:bg-leaf-soft/60">
+              <KeyIcon className={'mt-0.5 size-5 shrink-0 ' + (a.status === 'approved' ? 'text-leaf' : 'text-danger')} />
+              <span className="text-sm">
+                Your access request was <b>{a.status}</b>{a.decided_by ? ` by ${a.decided_by}` : ''}.
+                {a.status === 'approved' && ' You can use it now.'}
+                {a.decision_note && <span className="block text-xs text-muted">“{a.decision_note}”</span>}
+                <span className="block text-[11px] text-faint">{formatDateTime(a.decided_at)}</span>
+              </span>
+            </Link>
+          ))}
+          {waiting === 0 && answers.length === 0 && (
+            <div className="px-4 py-8 text-center">
+              <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-leaf-soft text-leaf">
+                <BellIcon className="size-5" />
+              </span>
+              <p className="mt-3 text-sm font-medium text-ink">You are all caught up</p>
+              <p className="mt-1 text-xs text-muted">New alerts will appear here.</p>
+            </div>
+          )}
         </div>,
         document.body,
       )}
@@ -170,6 +215,26 @@ export default function Topbar({ onMenu }) {
             <UserCircleIcon className="size-4" />
             My profile
           </Link>
+          {!isSuperAdmin && (
+            <Link
+              to="/request-access"
+              onClick={() => setMenuOpen(false)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-leaf-soft/70"
+            >
+              <KeyIcon className="size-4" />
+              Request access
+            </Link>
+          )}
+          {(isSuperAdmin || can('users.update')) && (
+            <Link
+              to="/access-requests"
+              onClick={() => setMenuOpen(false)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-leaf-soft/70"
+            >
+              <InboxArrowDownIcon className="size-4" />
+              Access requests{waiting > 0 ? ` (${waiting})` : ''}
+            </Link>
+          )}
           <button
             onClick={logout}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-leaf-soft/70"

@@ -88,6 +88,12 @@ export default function ProductForm() {
     setFormCompanyId(defaultCreateCompanyId({ filterCompanyId: presetCompanyId, companyId }));
   }, [isEdit, isSuperAdmin, presetCompanyId, companyId]);
 
+  // New product: start the reorder level at the company's default (Settings).
+  useEffect(() => {
+    if (isEdit || formData?.reorder_default == null) return;
+    setForm((f) => (f.reorder_level === '' ? { ...f, reorder_level: String(formData.reorder_default) } : f));
+  }, [isEdit, formData?.reorder_default]);
+
   useEffect(() => {
     if (!existing) return;
     if (seededRef.current === existing.id) return;
@@ -137,9 +143,13 @@ export default function ProductForm() {
     delete payload.subcategory_id;
     delete payload.sku;
     delete payload.brand_id;
-    ['gst_rate', 'cost_price', 'mrp', 'dealer_price', 'wholesale_price', 'retail_price', 'reorder_level', 'opening_stock'].forEach(
+    ['gst_rate', 'cost_price', 'mrp', 'dealer_price', 'wholesale_price', 'retail_price', 'opening_stock'].forEach(
       (k) => (payload[k] = payload[k] === '' || payload[k] == null ? 0 : Number(payload[k])),
     );
+    // Reorder level left empty = the company default from Settings (0 is kept if typed).
+    payload.reorder_level = form.reorder_level === '' || form.reorder_level == null
+      ? Number(formData?.reorder_default ?? 0)
+      : Number(form.reorder_level);
     ['length_cm', 'width_cm', 'height_cm'].forEach(
       (k) => (payload[k] = payload[k] === '' ? null : Number(payload[k])),
     );
@@ -321,7 +331,7 @@ export default function ProductForm() {
           <div className="mt-5 border-t border-line pt-5">
             <div className="microlabel mb-3 text-faint">Stock</div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <Field label="Reorder level"><Input type="number" step="0.01" value={form.reorder_level} onChange={set('reorder_level')} /></Field>
+              <Field label="Reorder level"><Input type="number" step="0.01" value={form.reorder_level} placeholder={formData?.reorder_default != null ? String(formData.reorder_default) : ''} onChange={set('reorder_level')} />{formData?.reorder_default != null && <span className="block text-xs text-muted">Company default {formData.reorder_default} (Settings). Left empty = default.</span>}</Field>
               <Field label="Opening stock"><Input type="number" step="0.01" min="0" value={form.opening_stock} onChange={set('opening_stock')} /></Field>
               {isEdit && existing?.current_stock != null && (
                 <Field label="Stock on hand">

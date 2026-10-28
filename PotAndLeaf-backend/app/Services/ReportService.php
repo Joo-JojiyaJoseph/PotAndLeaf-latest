@@ -60,6 +60,8 @@ class ReportService
     /**
      * Product-wise or shop-wise margin (HO cost data). Revenue is the taxable
      * value (before GST): GST is collected for the government, not earned.
+     * Cost = what the pieces sold cost from their own batch (recorded on the
+     * sale's stock movement); older sales without it use the product cost.
      */
     public function marginAnalysis(int|string|null $companyId, string $from, string $to, string $groupBy = 'product'): array
     {
@@ -76,7 +78,7 @@ class ReportService
                 ->whereBetween('sales.sale_date', [$from, $to])
                 ->selectRaw('sales.location_id as group_id, COALESCE(locations.name, ?) as group_name,
                     SUM(sale_items.taxable_value) as revenue,
-                    SUM(sale_items.qty * COALESCE(products.cost_price, 0)) as cogs', ['Unassigned'])
+                    SUM(sale_items.qty * COALESCE((SELECT SUM(l.qty * COALESCE(l.unit_cost, 0)) / NULLIF(SUM(l.qty), 0) FROM stock_ledger_entries l WHERE l.reference_type = \'sale\' AND l.direction = \'out\' AND l.reference_id = sale_items.sale_id AND l.product_id = sale_items.product_id), products.cost_price, 0)) as cogs', ['Unassigned'])
                 ->groupBy('sales.location_id', 'locations.name')
                 ->get();
         } else {
@@ -88,7 +90,7 @@ class ReportService
                 ->whereBetween('sales.sale_date', [$from, $to])
                 ->selectRaw('sale_items.product_id as group_id, COALESCE(sale_items.product_name, products.name, ?) as group_name,
                     SUM(sale_items.taxable_value) as revenue,
-                    SUM(sale_items.qty * COALESCE(products.cost_price, 0)) as cogs', ['Unknown'])
+                    SUM(sale_items.qty * COALESCE((SELECT SUM(l.qty * COALESCE(l.unit_cost, 0)) / NULLIF(SUM(l.qty), 0) FROM stock_ledger_entries l WHERE l.reference_type = \'sale\' AND l.direction = \'out\' AND l.reference_id = sale_items.sale_id AND l.product_id = sale_items.product_id), products.cost_price, 0)) as cogs', ['Unknown'])
                 ->groupBy('sale_items.product_id', 'sale_items.product_name', 'products.name')
                 ->get();
         }

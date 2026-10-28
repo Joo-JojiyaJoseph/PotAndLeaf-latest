@@ -10,11 +10,11 @@ class SupplierPaymentAllocation extends Model
 {
     use HasUuids;
 
-    protected $fillable = ['supplier_payment_id', 'purchase_id', 'amount'];
+    protected $fillable = ['supplier_payment_id', 'purchase_id', 'amount', 'auto_applied'];
 
     protected function casts(): array
     {
-        return ['amount' => 'decimal:2'];
+        return ['amount' => 'decimal:2', 'auto_applied' => 'boolean'];
     }
 
     public function payment(): BelongsTo

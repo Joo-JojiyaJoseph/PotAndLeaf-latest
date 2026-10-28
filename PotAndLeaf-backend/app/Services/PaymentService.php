@@ -101,6 +101,9 @@ class PaymentService
             if (! $isAdvance && $allocations === [] && ! empty($data['purchase_id'])) {
                 $this->syncPurchasePaid($data['purchase_id']);
             }
+            if (! $isAdvance) {
+                $this->settleOnAccount($supplier);
+            }
 
             $this->activity->log($companyId, $userId, 'create', 'payment', 'supplier_payment', $payment->id, "Payment {$payment->payment_no} recorded");
 
@@ -172,6 +175,7 @@ class PaymentService
             $this->consumeAdvanceFifo($supplier->id, $amount);
 
             $this->syncPurchasePaid($purchase->id);
+            $this->settleOnAccount($supplier);
             $this->activity->log($companyId, $userId, 'create', 'payment', 'supplier_payment', $payment->id, "Advance applied {$payment->payment_no}");
 
             return $payment->load(['supplier:id,name', 'purchase:id,purchase_no']);
@@ -198,7 +202,8 @@ class PaymentService
                     $unapplied = max(0, round((float) $payment->amount - (float) ($payment->adjusted_amount ?? 0), 2));
                     $supplier->advance_balance = max(0, (float) $supplier->advance_balance - $unapplied);
                 } else {
-                    $allocated = (float) $payment->allocations()->sum('amount');
+                    // Only allocations the user chose; automatic ones were still "against what was owed".
+                    $allocated = (float) $payment->allocations()->where('auto_applied', false)->sum('amount');
                     $againstOutstanding = $allocated > 0.005 ? $allocated : (float) $payment->amount;
                     $remainder = round((float) $payment->amount - $againstOutstanding, 2);
                     $supplier->outstanding = (float) $supplier->outstanding + $againstOutstanding;
@@ -214,6 +219,9 @@ class PaymentService
 
             foreach (array_unique($purchaseIds) as $purchaseId) {
                 $this->syncPurchasePaid($purchaseId);
+            }
+            if ($supplier) {
+                $this->settleOnAccount($supplier->fresh());
             }
 
             $this->activity->log($companyId, $userId, 'delete', 'payment', 'supplier_payment', $payment->id, "Payment {$paymentNo} removed");
@@ -268,9 +276,10 @@ class PaymentService
         int|string|null $purchaseId = null,
     ): void {
         $outstanding = (float) $supplier->outstanding;
-        if (! filled($purchaseId) && $amount > $outstanding + 1e-6) {
+        // Never pay more than is owed in all — also when paying a particular bill.
+        if ($amount > $outstanding + 1e-6) {
             throw ValidationException::withMessages([
-                'amount' => "Payment amount cannot exceed supplier outstanding ({$outstanding}).",
+                'amount' => "Payment amount cannot exceed what you owe this supplier ({$outstanding}). Use \"This is an advance\" to pay extra.",
             ]);
         }
 
@@ -296,6 +305,147 @@ class PaymentService
             throw ValidationException::withMessages([
                 'amount' => "Payment amount cannot exceed the remaining GRN balance ({$balance}).",
             ]);
+        }
+    }
+
+    /**
+     * How "you owe" is made up, for the payment form:
+     * opening balance + bills − paid − advance used − goods returned (= outstanding).
+     * Anything that does not come from these (old corrections) shows as one adjustment line.
+     */
+    public function owedBreakdown(Supplier $supplier): array
+    {
+        $bills = Purchase::query()->where('supplier_id', $supplier->id)->where('status', 'confirmed')->get();
+        $billsTotal = round($bills->sum(fn (Purchase $p) => $p->supplierPayable()), 2);
+
+        $paid = 0.0;
+        $advanceUsed = 0.0;
+        foreach (SupplierPayment::query()->where('supplier_id', $supplier->id)->with('allocations')->get() as $p) {
+            if ($p->applied_from_advance) {
+                $advanceUsed += (float) $p->amount;
+            } elseif (! $p->is_advance) {
+                $manual = (float) $p->allocations->where('auto_applied', false)->sum('amount');
+                $paid += $manual > 0.005 ? $manual : (float) $p->amount;  // the rest of a split payment went to advance
+            }
+        }
+        $returned = (float) \App\Models\PurchaseReturn::query()->where('supplier_id', $supplier->id)->where('status', 'confirmed')
+            ->get()->sum(fn ($r) => max(0, (float) $r->grand_total - (float) $r->advance_credit));
+
+        $opening = round((float) $supplier->opening_balance, 2);
+        $owed = round((float) $supplier->outstanding, 2);
+        $worked = round($opening + $billsTotal - $paid - $advanceUsed - $returned, 2);
+
+        return [
+            'opening_balance' => $opening,
+            'opening_left'    => $this->openingLeft($supplier),
+            'bills_total'     => $billsTotal,
+            'bills_count'     => $bills->count(),
+            'paid'            => round($paid, 2),
+            'advance_used'    => round($advanceUsed, 2),
+            'returned'        => round($returned, 2),
+            'adjustment'      => round($owed - $worked, 2),
+            'you_owe'         => $owed,
+            'advance_balance' => round((float) $supplier->advance_balance, 2),
+        ];
+    }
+
+    /**
+     * The supplier's "Outstanding (from before)" still unpaid: what is owed in all
+     * minus what is still open on bills, never below 0 or above the amount entered.
+     * Example: entered 10,000, bills open 5,000, owed in all 12,000 → 7,000 left
+     * (3,000 of the old outstanding has been paid).
+     */
+    public function openingLeft(Supplier $supplier): float
+    {
+        $opening = round((float) $supplier->opening_balance, 2);
+        if ($opening <= 0.005) {
+            return max(0, $opening);
+        }
+        $billsOpen = Purchase::query()
+            ->where('supplier_id', $supplier->id)
+            ->where('status', 'confirmed')
+            ->get()
+            ->sum(fn (Purchase $p) => StoreSupplierPaymentRequest::remainingPurchaseBalance($p));
+
+        return round(min($opening, max(0, (float) $supplier->outstanding - $billsOpen)), 2);
+    }
+
+    /**
+     * Money paid "on account" (not against a bill) pays the old dues / opening
+     * balance first, then the oldest bills. Worked out again from scratch each
+     * time, so it stays right after any payment is added or removed:
+     * the bills' unpaid total may never be more than what is owed in all.
+     */
+    public function settleOnAccount(Supplier $supplier): void
+    {
+        $auto = SupplierPaymentAllocation::query()
+            ->where('auto_applied', true)
+            ->whereIn('supplier_payment_id', SupplierPayment::query()->where('supplier_id', $supplier->id)->select('id'));
+        $touched = (clone $auto)->pluck('purchase_id')->all();
+        $auto->delete();
+        foreach (array_unique($touched) as $pid) {
+            $this->syncPurchasePaid($pid);
+        }
+
+        $bills = Purchase::query()
+            ->where('supplier_id', $supplier->id)
+            ->where('status', 'confirmed')
+            ->orderBy('purchase_date')->orderBy('created_at')
+            ->get()
+            ->map(fn (Purchase $p) => ['purchase' => $p, 'balance' => StoreSupplierPaymentRequest::remainingPurchaseBalance($p)])
+            ->filter(fn ($b) => $b['balance'] > 0.005)
+            ->values();
+        $excess = round($bills->sum('balance') - max(0, (float) $supplier->fresh()->outstanding), 2);
+        if ($excess <= 0.005) {
+            return;
+        }
+
+        // Payments made "against what was owed": not an advance, no bill, no hand-picked bills.
+        $sources = SupplierPayment::query()
+            ->where('supplier_id', $supplier->id)
+            ->where('is_advance', false)
+            ->where(fn ($q) => $q->whereNull('applied_from_advance')->orWhere('applied_from_advance', false))
+            ->whereNull('purchase_id')
+            ->whereDoesntHave('allocations', fn ($q) => $q->where('auto_applied', false))
+            ->orderBy('payment_date')->orderBy('created_at')
+            ->get();
+
+        $changed = [];
+        $bi = 0;
+        $billLeft = $bills[0]['balance'] ?? 0;
+        // The earliest on-account money paid the old dues / opening balance; only what
+        // is left after that goes to bills.
+        $skip = max(0, round($sources->sum(fn ($p) => (float) $p->amount) - $excess, 2));
+        foreach ($sources as $payment) {
+            $cap = (float) $payment->amount;
+            $used = min($cap, $skip);
+            $cap = round($cap - $used, 2);
+            $skip = round($skip - $used, 2);
+            while ($excess > 0.005 && $cap > 0.005 && $bi < $bills->count()) {
+                $take = round(min($excess, $cap, $billLeft), 2);
+                if ($take > 0.005) {
+                    SupplierPaymentAllocation::create([
+                        'supplier_payment_id' => $payment->id,
+                        'purchase_id' => $bills[$bi]['purchase']->id,
+                        'amount' => $take,
+                        'auto_applied' => true,
+                    ]);
+                    $changed[] = $bills[$bi]['purchase']->id;
+                }
+                $excess = round($excess - $take, 2);
+                $cap = round($cap - $take, 2);
+                $billLeft = round($billLeft - $take, 2);
+                if ($billLeft <= 0.005) {
+                    $bi++;
+                    $billLeft = $bills[$bi]['balance'] ?? 0;
+                }
+            }
+            if ($excess <= 0.005) {
+                break;
+            }
+        }
+        foreach (array_unique($changed) as $pid) {
+            $this->syncPurchasePaid($pid);
         }
     }
 

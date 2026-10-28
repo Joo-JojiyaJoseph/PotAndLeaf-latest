@@ -81,9 +81,14 @@ class CommissionController extends Controller
 
     public function rules(Request $request): JsonResponse
     {
-        $this->allow($request, 'commission.view');
+        // Staff with "View own commission" see only their own rate.
+        $scope = $this->commissionScope($request);
+        $rules = $this->commission->rules($this->listCompanyId($request));
+        if ($scope['mode'] === 'own') {
+            $rules = $rules->filter(fn ($r) => (int) $r->user_id === (int) $scope['user_id'])->values();
+        }
 
-        return $this->ok(CommissionRuleResource::collection($this->commission->rules($this->listCompanyId($request))));
+        return $this->ok(CommissionRuleResource::collection($rules));
     }
 
     public function upsertRule(UpsertCommissionRuleRequest $request): JsonResponse
@@ -154,9 +159,13 @@ class CommissionController extends Controller
 
     public function payouts(Request $request): JsonResponse
     {
-        $this->allow($request, 'commission.view');
+        // Staff with "View own commission" see only their own payments.
+        $scope = $this->commissionScope($request);
 
-        return $this->ok(CommissionPayoutResource::collection($this->commission->payouts($this->listCompanyId($request))));
+        return $this->ok(CommissionPayoutResource::collection($this->commission->payouts(
+            $this->listCompanyId($request),
+            $scope['mode'] === 'own' ? (int) $scope['user_id'] : null,
+        )));
     }
 
     public function storePayout(StoreCommissionPayoutRequest $request): JsonResponse
@@ -174,6 +183,7 @@ class CommissionController extends Controller
         abort_if(CommissionPayout::forCompany($company->id)->where('user_id', $data['user_id'])->where('period', $data['period'])->exists(),
             422, "A commission payment for {$name} for {$data['period']} already exists. Use “Change” on that row.");
 
+        $this->assertNotMoreThanEarned($company->id, (int) $data['user_id'], $data['period'], (float) ($data['amount'] ?? 0), $name);
         $payout = $this->commission->recordPayout($company->id, $data);
 
         return $this->created(new CommissionPayoutResource($payout), 'Commission payout recorded.');
@@ -192,6 +202,8 @@ class CommissionController extends Controller
             'status'       => ['required', 'in:draft,paid'],
         ]);
 
+        $this->assertNotMoreThanEarned($commissionPayout->company_id, (int) $commissionPayout->user_id, $commissionPayout->period, (float) $data['amount'],
+            User::whereKey($commissionPayout->user_id)->value('name'));
         $payout = $this->commission->recordPayout($commissionPayout->company_id, $data + [
             'user_id' => $commissionPayout->user_id, 'period' => $commissionPayout->period, 'sales_total' => $commissionPayout->sales_total,
         ]);
@@ -369,6 +381,30 @@ class CommissionController extends Controller
         return $this->created($promo, 'Promotion saved.');
     }
 
+    /** Change a product offer (same fields as when it was added). */
+    public function updatePromotion(Request $request, CommissionPromotion $commissionPromotion): JsonResponse
+    {
+        $this->allow($request, 'commission.manage');
+        abort_unless((string) $commissionPromotion->company_id === (string) $this->company($request)->id, 404);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'product_id' => ['nullable', 'uuid'],
+            'category_id' => ['nullable', 'uuid'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'min_qty' => ['nullable', 'numeric', 'min:0'],
+            'bonus_per_unit' => ['nullable', 'numeric', 'min:0'],
+            'bonus_fixed' => ['nullable', 'numeric', 'min:0'],
+            'bonus_percent' => ['nullable', 'numeric', 'min:0'],
+            'eligible_user_ids' => ['nullable', 'array'],
+            'eligible_user_ids.*' => ['integer'],
+            'is_active' => ['boolean'],
+        ]);
+        $commissionPromotion->update($data);
+
+        return $this->ok($commissionPromotion->fresh(), 'Offer updated.');
+    }
+
     public function seasonalCareRules(Request $request): JsonResponse
     {
         $this->allow($request, 'commission.manage');
@@ -400,6 +436,28 @@ class CommissionController extends Controller
         ]));
 
         return $this->created($rule, 'Seasonal care rule saved.');
+    }
+
+    /** Change a care reminder. */
+    public function updateSeasonalCareRule(Request $request, SeasonalCareRule $seasonalCareRule): JsonResponse
+    {
+        $this->allow($request, 'commission.manage');
+        abort_unless((string) $seasonalCareRule->company_id === (string) $this->company($request)->id, 404);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'product_id' => ['nullable', 'uuid'],
+            'category_id' => ['nullable', 'uuid'],
+            'days_after_purchase' => ['nullable', 'integer', 'min:0'],
+            'season' => ['nullable', 'in:summer,monsoon,winter'],
+            'timing' => ['nullable', 'in:days_after_purchase,season_start'],
+            'season_months' => ['nullable', 'array'],
+            'message_template' => ['required', 'string', 'max:2000'],
+            'max_sends_per_customer' => ['nullable', 'integer', 'min:0'],
+            'is_active' => ['boolean'],
+        ]);
+        $seasonalCareRule->update($data);
+
+        return $this->ok($seasonalCareRule->fresh(), 'Care reminder updated.');
     }
 
     public function seasonalCareSends(Request $request): JsonResponse
@@ -549,6 +607,17 @@ class CommissionController extends Controller
         $managerCommissionRule->delete();
 
         return $this->message('Manager share removed.');
+    }
+
+    /** A commission payment can never be more than what the person earned that month. */
+    private function assertNotMoreThanEarned(int|string $companyId, int $userId, string $period, float $amount, ?string $name): void
+    {
+        $earned = round((float) ($this->commission->compute($companyId, $userId, $period)['commission'] ?? 0), 2);
+        if ($amount > $earned + 0.005) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'amount' => sprintf('%s earned ₹%s for %s. You cannot pay more than that.', $name ?? 'This person', number_format($earned, 2), $period),
+            ]);
+        }
     }
 
     private function company(Request $request)

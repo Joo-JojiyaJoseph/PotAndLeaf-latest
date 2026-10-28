@@ -96,7 +96,8 @@ export default function CustomersList() {
     setPickedCompany(!isSuperAdmin || Boolean(createCompanyId));
   };
   const openEdit = (c) => {
-    setForm({ ...empty, ...c, photo: c.photo ?? null });
+    // Outstanding shows what is still unpaid (it goes down as the customer pays it).
+    setForm({ ...empty, ...c, photo: c.photo ?? null, opening_balance: c.opening_left ?? c.opening_balance ?? '' });
     setErrors({});
     setEditing(c);
     setFormCompanyId(c.company_id ?? companyId ?? '');
@@ -155,7 +156,7 @@ export default function CustomersList() {
                   </div>
                   <div className="mt-3 space-y-1 text-xs text-muted">
                     <p>{c.phone || 'No phone'}{c.email ? ` · ${c.email}` : ''}</p>
-                    <p className="tnum">Outstanding {formatCurrency(c.outstanding ?? 0)} · {c.loyalty_points ?? 0} pts</p>
+                    <p className="tnum">Owes you {formatCurrency(c.outstanding ?? 0)} · {c.loyalty_points ?? 0} pts</p>
                   </div>
                   <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
                     {c.status === 'blocked' || !can('customers.update')
@@ -191,6 +192,9 @@ export default function CustomersList() {
               company_id: !isCreate && isSuperAdmin && formCompanyId ? formCompanyId : undefined,
             };
             if (!payload.id) delete payload.customer_code;
+            // Editing: the box holds the outstanding still unpaid; the server keeps what was already received.
+            if (payload.id) { payload.opening_left = payload.opening_balance; delete payload.opening_balance; }
+            delete payload.opening_paid; delete payload.outstanding; delete payload.advance_balance;
             saveM.mutate(payload, { onSettled: release });
           })}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}</Button>
         </>}
@@ -242,7 +246,15 @@ export default function CustomersList() {
               <Field label="PIN code" error={err('pincode')}><Input inputMode="numeric" maxLength={6} value={form.pincode || ''} onChange={set('pincode')} placeholder="e.g. 682001" /></Field>
               <Field label="Credit days" error={err('credit_days')}><Input type="number" value={form.credit_days ?? ''} onChange={set('credit_days')} /></Field>
               <Field label="Credit limit" error={err('credit_limit')}><Input type="number" step="0.01" value={form.credit_limit ?? ''} onChange={set('credit_limit')} /></Field>
-              <Field label="Opening balance" error={err('opening_balance')}><Input type="number" step="0.01" value={form.opening_balance ?? ''} onChange={set('opening_balance')} /></Field>
+              <Field label="Outstanding" error={err('opening_balance') || err('opening_left')}>
+                <Input type="number" step="0.01" min="0" value={form.opening_balance ?? ''} onChange={set('opening_balance')} />
+                <span className="block text-xs text-muted">What this customer still owes you from before (bills not entered in this app). It goes down by itself when they pay it.</span>
+                {editing?.id && Number(editing.opening_paid) > 0.005 && (
+                  <span className="block text-xs text-muted">
+                    Entered {formatCurrency(editing.opening_balance)} − received {formatCurrency(editing.opening_paid)} = <b className="text-ink">{formatCurrency(editing.opening_left)}</b> still to receive
+                  </span>
+                )}
+              </Field>
               <div className="sm:col-span-2"><Field label="Address" error={err('address_line1')}><Input value={form.address_line1 || ''} onChange={set('address_line1')} /></Field></div>
               <Field label="Status">
                 <Select value={form.status} onChange={set('status')} className={selectCls}>

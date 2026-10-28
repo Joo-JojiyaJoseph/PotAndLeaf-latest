@@ -8,7 +8,7 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { apiMessage } from '../../lib/formErrors';
 import { useToast } from '../../lib/toast';
-import { Badge, Button, Card, Field, Input, PageHeader, Spinner, StatCard, TableWrap } from '../../components/ui';
+import { Badge, Button, Card, Field, Input, PageHeader, Select, Spinner, StatCard, TableWrap } from '../../components/ui';
 import { formatCurrency, formatDate, todayISO } from '../../lib/format';
 import Pagination from '../../components/Pagination';
 
@@ -34,7 +34,7 @@ const BOOKS = {
     slug: 'journal',
     title: 'Journal',
     endpoint: '/accounting/journal',
-    subtitle: 'Corrections that do not involve cash or bank. The two sides of each entry must be equal.',
+    subtitle: 'Every money entry in one list: the ones made by themselves (receipts, supplier payments, cash sales, commission paid) and your own corrections. The two sides of each entry are always equal.',
     icon: BookOpenIcon,
   },
 };
@@ -70,10 +70,11 @@ export default function AccountingBookPage() {
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
   const [page, setPage] = useState(1);
+  const [show, setShow] = useState('all'); // Journal: every entry, or only hand-made corrections
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['accounting-book', meta.book, activeCompany?.id, filterCompanyId, from, to, page],
-    queryFn: () => api.get(meta.endpoint, { params: { ...companyParams, from, to, page } }).then((r) => r.data),
+    queryKey: ['accounting-book', meta.book, activeCompany?.id, filterCompanyId, from, to, page, show],
+    queryFn: () => api.get(meta.endpoint, { params: { ...companyParams, from, to, page, ...(meta.book === 'journal' ? { show } : {}) } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -135,6 +136,14 @@ export default function AccountingBookPage() {
           <Field label="To">
             <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />
           </Field>
+          {meta.book === 'journal' && (
+            <Field label="Show">
+              <Select value={show} onChange={(e) => { setShow(e.target.value); setPage(1); }} className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm">
+                <option value="all">All entries (automatic + corrections)</option>
+                <option value="corrections">Only corrections I made</option>
+              </Select>
+            </Field>
+          )}
         </div>
       </Card>
 
@@ -158,7 +167,7 @@ export default function AccountingBookPage() {
           : rows.length === 0 ? (
             <div className="px-4 py-16 text-center">
               <p className="text-sm font-medium">No entries in this period</p>
-              <p className="mt-1 text-sm text-muted">Add a voucher, or record a receipt/payment — those post here automatically.</p>
+              <p className="mt-1 text-sm text-muted">Money taken from customers, paid to suppliers, cash sales and commission paid show here by themselves. Use “Add entry” for a correction.</p>
             </div>
           ) : (
             <TableWrap>
@@ -184,7 +193,16 @@ export default function AccountingBookPage() {
                         <Badge tone={typeTone[row.voucher_type] || 'default'}>{TYPE_LABEL[row.voucher_type] || row.voucher_type}</Badge>
                         {!row.is_manual ? <span className="ml-2 text-[10px] uppercase tracking-wide text-muted">auto</span> : null}
                       </td>
-                      <td className="max-w-[18rem] px-4 py-2.5 text-ink">{row.narration || '—'}</td>
+                      <td className="max-w-[22rem] px-4 py-2.5 text-ink">
+                        {row.narration || '—'}
+                        {meta.book === 'journal' && Array.isArray(row.entries) && row.entries.length > 0 && (
+                          <div className="mt-0.5 space-y-0.5 text-xs text-muted">
+                            {row.entries.map((e, i) => (
+                              <div key={i}>{Number(e.debit) > 0 ? `Dr ${e.account_name} ${formatCurrency(e.debit)}` : `Cr ${e.account_name} ${formatCurrency(e.credit)}`}</div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       <td className="tnum px-4 py-2.5 text-right">{row.debit ? formatCurrency(row.debit) : '—'}</td>
                       <td className="tnum px-4 py-2.5 text-right">{row.credit ? formatCurrency(row.credit) : '—'}</td>
                       {meta.book !== 'journal' ? (
@@ -193,7 +211,7 @@ export default function AccountingBookPage() {
                       <td className="px-4 py-2.5">
                         <div className="flex justify-end gap-1">
                           {row.is_manual && can('accounts.update') ? (
-                            <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => navigate(`/accounting/${meta.slug}/${row.id}/edit`)}>
+                            <Button variant="ghost" size="icon" aria-label="Edit" onClick={() => navigate(`/accounting/${row.book === 'cash' ? 'cash-book' : row.book === 'bank' ? 'bank-book' : meta.slug}/${row.id}/edit`)}>
                               <PencilSquareIcon className="size-4" />
                             </Button>
                           ) : null}

@@ -64,6 +64,8 @@ class ProductController extends Controller
             'suppliers'  => Supplier::forCompany($company->id)->where('status', 'active')->orderBy('name')->get(['id', 'name'])
                 ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name]),
             'tax_rates'  => [0, 5, 12, 18, 28],
+            // Settings → "Default reorder alert qty": used when the reorder level is left blank.
+            'reorder_default' => app(\App\Services\SettingsService::class)->getFloat($company->id, 'reorder_alert_default'),
         ]);
     }
 
@@ -107,6 +109,8 @@ class ProductController extends Controller
         $this->allow($request, 'products.view');
         $companyId = $this->listCompanyId($request);
         $status = $request->query('status', 'in_stock');
+        $u = $request->user();
+        $showCost = $u->is_super_admin || $u->hasPermission('products.view_cost', $this->company($request)->id);
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($companyId) {
             app(\App\Services\InventoryService::class)->alignBatchRemainingToOnHand($companyId);
@@ -129,7 +133,7 @@ class ProductController extends Controller
             ->get()
             ->mapWithKeys(fn ($i) => [$i->received_batch_id => $i->stockTransfer?->transfer_no]);
         $batches = $batches
-            ->map(function ($b) use ($fromTransfer) {
+            ->map(function ($b) use ($fromTransfer, $showCost) {
                 try {
                     $transferNo = $fromTransfer[$b->id] ?? null;
                     $looksTransfer = ! $b->purchase_id && ! $b->production_order_id && ! $b->bulk_split_id
@@ -152,7 +156,7 @@ class ProductController extends Controller
                         'barcode'       => $b->barcode,
                         'remaining_qty' => (float) ($b->remaining_qty ?? 0),
                         'qty'           => (float) ($b->qty ?? 0),
-                        'cost_price'    => (float) ($b->cost_price ?? 0),
+                        'cost_price'    => $showCost ? (float) ($b->cost_price ?? 0) : null,
                         'source'        => $source,
                         'bulk_split_id' => $b->bulk_split_id,
                         'source_product' => $b->bulkSplit?->source_product_name,

@@ -46,11 +46,16 @@ class SupplierAccountService
             if (! $bills && $p->purchase_id) {
                 $bills = [['purchase_id' => $p->purchase_id, 'purchase_no' => $p->purchase?->purchase_no, 'amount' => $amount]];
             }
-            $extra = $bills ? round($amount - collect($bills)->sum('amount'), 2) : 0.0;
+            // Bills linked automatically (money paid "on account"): the rest of the
+            // payment went to old dues / the opening balance, not to advance.
+            $onlyAuto = $p->allocations->isNotEmpty() && $p->allocations->every(fn ($a) => (bool) $a->auto_applied);
+            $extra = ($bills && ! $onlyAuto) ? round($amount - collect($bills)->sum('amount'), 2) : 0.0;
             if ($extra > 0.005) {
                 $moves[] = $this->move($p->payment_date, $p->created_at, 'extra', 'Extra paid, kept as advance', $p->payment_no, $extra, 0);
             }
-            $payments[] = $this->paymentRow($p, $bills, max(0, $extra), 0);
+            $row = $this->paymentRow($p, $bills, max(0, $extra), 0);
+            $row['to_old_dues'] = $onlyAuto || ! $bills ? max(0, round($amount - collect($bills)->sum('amount'), 2)) : 0.0;
+            $payments[] = $row;
         }
 
         foreach (PurchaseReturn::query()->where('supplier_id', $supplier->id)->where('status', 'confirmed')

@@ -115,11 +115,11 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
             <option value="">Select customer…</option>
             {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </Select>
-          {customer && <span className="mt-1 block text-xs text-muted">Outstanding: {formatCurrency(customer.outstanding)} · Advance: {formatCurrency(customer.advance_balance ?? 0)}</span>}
+          {customer && <span className="mt-1 block text-xs text-muted">Owes you: {formatCurrency(customer.outstanding)} · Advance: {formatCurrency(customer.advance_balance ?? 0)}{Number(customer.opening_left) > 0.005 ? <> · Outstanding from before still unpaid: {formatCurrency(customer.opening_left)}</> : null}</span>}
         </Field>
         <Field label="Against invoice (optional)" error={err('sale_id')}>
           <Select value={form.sale_id} onChange={set('sale_id')} className={selectCls} disabled={!form.customer_id || form.is_advance}>
-            <option value="">On account</option>
+            <option value="">On account / outstanding from before</option>
             {invoices.map((r) => <option key={r.id} value={r.id}>{r.sale_no} · bal {formatCurrency(r.balance)}</option>)}
           </Select>
         </Field>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon, TrashIcon, PencilSquareIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
@@ -9,6 +9,7 @@ import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../..
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 import { formatCurrency, formatDate, todayISO } from '../../lib/format';
 import PagedTable from '../../components/PagedTable';
+import { TYPE_LABEL, STATUS_LABEL, describeRule, n, rupees } from '../../lib/commissionText';
 
 /*
  * Commission in plain words. Every amount is in rupees and every screen says,
@@ -40,21 +41,9 @@ const HELP = {
   seasonal: 'WhatsApp care tips sent to customers a few days after they buy a plant.',
 };
 
-const TYPE_LABEL = {
-  salesman_tier: 'Sales commission',
-  daily_target: 'Daily target bonus',
-  promotion: 'Product offer bonus',
-  manager: 'Manager share',
-  reversal: 'Taken back (return / cancel)',
-};
-const STATUS_LABEL = { accrued: 'earned', reversed: 'taken back', paid: 'paid' };
-
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const thisMonth = () => todayISO().slice(0, 7);
 const today = todayISO;
-const n = (v) => Number(v) || 0;
-// Whole rupees without “.00” — easier to read.
-const rupees = (v) => formatCurrency(v).replace(/\.00$/, '');
 
 function Help({ children }) {
   return (
@@ -69,38 +58,21 @@ function Example({ children }) {
   return <div className="rounded-xl border border-dashed border-line bg-paper/60 px-3 py-2 text-xs text-muted sm:col-span-2">{children}</div>;
 }
 
-/** What a staff rate pays, in simple sentences (follows the existing calculation). */
-function describeRule(r) {
-  const made = n(r.production_per_unit) > 0 ? [`Gets ${rupees(r.production_per_unit)} for every piece they make, when the production is completed`] : [];
-  if (r.is_supervisor) {
-    const sold = r.rate_type === 'per_unit'
-      ? (n(r.per_unit_amount) > 0 ? [`Gets ${rupees(r.per_unit_amount)} for every piece they made that is sold or sent to another company`] : [])
-      : (n(r.base_percent) > 0 ? [`Gets ${r.base_percent}% of the price of every piece they made that is sold or sent to another company`] : []);
-    return [...made, ...sold];
-  }
-  const parts = [...made];
-  if (r.tiers?.length) {
-    const flat = r.tier_mode === 'flat';
-    const per = r.tier_period === 'daily' ? 'day' : 'month';
-    r.tiers.forEach((t) => parts.push(flat
-      ? `Gets ${t.percent}% of all sales in a ${per} when the ${per}’s sales are ${t.max_amount != null ? `between ${rupees(t.min_amount)} and ${rupees(t.max_amount)}` : `above ${rupees(t.min_amount)}`}`
-      : `Gets ${t.percent}% on sales ${t.max_amount != null ? `from ${rupees(t.min_amount)} to ${rupees(t.max_amount)}` : `above ${rupees(t.min_amount)}`} in a ${per}`));
-  } else if (n(r.base_percent) > 0) {
-    parts.push(`Gets ${r.base_percent}% of what they sell — ${rupees(n(r.base_percent))} for every ₹100`);
-  }
-  // The monthly target bonus only counts when no commission is worked out on the bills.
-  if (!r.tiers?.length && !n(r.base_percent) && n(r.monthly_target) > 0 && n(r.target_bonus) > 0) {
-    parts.push(`Gets ${rupees(r.target_bonus)} if the month’s sales reach ${rupees(r.monthly_target)}`);
-  }
-  (r.daily_target_tiers ?? []).forEach((t) => parts.push(`Gets ${rupees(t.bonus_amount)} extra on any day they sell ${rupees(t.min_amount)} or more`));
-  if (r.max_commission) parts.push(`Commission stops at ${rupees(r.max_commission)} in a month`);
-  if (!parts.length) parts.push('Nothing set yet — click Edit');
-  return parts;
+
+// Staff of the company chosen in a form (not every company's staff).
+function useCompanyStaff(open, companyRequest, formCompanyId, fallback) {
+  const { data } = useQuery({
+    queryKey: ['commission-form-staff', formCompanyId],
+    queryFn: () => api.get('/commission/form-data', companyRequest()).then((r) => r.data.data),
+    enabled: open && Boolean(formCompanyId),
+  });
+  return data?.staff ?? fallback ?? [];
 }
 
-function RuleModal({ open, onClose, staff, editing, takenIds = [] }) {
+function RuleModal({ open, onClose, staff: allStaff, editing, takenIds = [] }) {
   const queryClient = useQueryClient();
   const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
+  const staff = useCompanyStaff(open && !editing, companyRequest, formCompanyId, allStaff);
   const blank = {
     user_id: '', kind: 'sales', rate_type: 'percent', base_percent: '', per_unit_amount: '', production_per_unit: '',
     monthly_target: '', target_bonus: '', max_commission: '', is_active: true, notes: '',
@@ -409,7 +381,7 @@ function DailyBonusModal({ open, onClose, rule }) {
   );
 }
 
-function PromotionModal({ open, onClose, products, categories }) {
+function PromotionModal({ open, onClose, products, categories, editing }) {
   const queryClient = useQueryClient();
   const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const blank = {
@@ -418,9 +390,22 @@ function PromotionModal({ open, onClose, products, categories }) {
   };
   const [form, setForm] = useState(blank);
   const [errors, setErrors] = useState({});
+  // Change an offer: start from what is saved.
+  useEffect(() => {
+    if (!open) return;
+    setErrors({});
+    setForm(editing ? {
+      name: editing.name ?? '', applies: editing.product_id ? 'product' : editing.category_id ? 'category' : 'all',
+      product_id: editing.product_id ?? '', category_id: editing.category_id ?? '',
+      start_date: String(editing.start_date ?? '').slice(0, 10), end_date: String(editing.end_date ?? '').slice(0, 10),
+      min_qty: String(editing.min_qty ?? 1), bonus_per_unit: n(editing.bonus_per_unit) ? String(editing.bonus_per_unit) : '',
+      bonus_fixed: n(editing.bonus_fixed) ? String(editing.bonus_fixed) : '', bonus_percent: n(editing.bonus_percent) ? String(editing.bonus_percent) : '',
+      is_active: editing.is_active !== false,
+    } : blank);
+  }, [open, editing]);
 
   const saveM = useMutation({
-    mutationFn: () => api.post('/commission/promotions', {
+    mutationFn: () => api[editing ? 'put' : 'post'](editing ? `/commission/promotions/${editing.id}` : '/commission/promotions', {
       name: form.name,
       product_id: form.applies === 'product' ? form.product_id || null : null,
       category_id: form.applies === 'category' ? form.category_id || null : null,
@@ -430,7 +415,7 @@ function PromotionModal({ open, onClose, products, categories }) {
       bonus_per_unit: n(form.bonus_per_unit),
       bonus_fixed: n(form.bonus_fixed),
       bonus_percent: n(form.bonus_percent),
-      is_active: true,
+      is_active: form.is_active !== false,
     }, companyRequest()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['commission-promotions'] }); setForm(blank); setErrors({}); onClose(); },
     onError: (err) => setErrors(err.response?.data?.errors ?? { name: [err.response?.data?.message ?? 'Could not save.'] }),
@@ -443,10 +428,18 @@ function PromotionModal({ open, onClose, products, categories }) {
   const nothing = !n(form.bonus_per_unit) && !n(form.bonus_fixed) && !n(form.bonus_percent);
 
   return (
-    <Modal open={open} onClose={onClose} title="New product offer for staff"
-      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending || !form.name || nothing} onClick={() => saveM.mutate()}>Save offer</Button></>}>
+    <Modal open={open} onClose={onClose} title={editing ? 'Change product offer' : 'New product offer for staff'}
+      footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending || !form.name || nothing} onClick={() => saveM.mutate()}>{editing ? 'Save changes' : 'Save offer'}</Button></>}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
+        {!editing && <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />}
+        {editing && (
+          <Field label="Status" className="sm:col-span-2">
+            <Select value={form.is_active !== false ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}>
+              <option value="1">On — staff earn this offer</option>
+              <option value="0">Off — stopped</option>
+            </Select>
+          </Field>
+        )}
         <Field label="Offer name" required error={err('name')} className="sm:col-span-2"><Input value={form.name} onChange={set('name')} placeholder="e.g. Push Areca Palm — October" /></Field>
         <Field label="For">
           <Select value={form.applies} onChange={set('applies')} className={selectCls}>
@@ -486,7 +479,7 @@ function PromotionModal({ open, onClose, products, categories }) {
   );
 }
 
-function SeasonalModal({ open, onClose, products, categories }) {
+function SeasonalModal({ open, onClose, products, categories, editing }) {
   const queryClient = useQueryClient();
   const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const [form, setForm] = useState({
@@ -494,15 +487,24 @@ function SeasonalModal({ open, onClose, products, categories }) {
     message_template: 'Hi {customer_name}, care tips for your {product_name} from {company_name}.',
   });
 
+  useEffect(() => {
+    if (!open || !editing) return;
+    setForm({
+      name: editing.name ?? '', product_id: editing.product_id ?? '', category_id: editing.category_id ?? '',
+      days_after_purchase: String(editing.days_after_purchase ?? 15), max_sends_per_customer: String(editing.max_sends_per_customer ?? 1),
+      message_template: editing.message_template ?? '', is_active: editing.is_active !== false,
+    });
+  }, [open, editing]);
+
   const saveM = useMutation({
-    mutationFn: () => api.post('/commission/seasonal-care-rules', {
+    mutationFn: () => api[editing ? 'put' : 'post'](editing ? `/commission/seasonal-care-rules/${editing.id}` : '/commission/seasonal-care-rules', {
       name: form.name,
       product_id: form.product_id || null,
       category_id: form.category_id || null,
       days_after_purchase: n(form.days_after_purchase),
       max_sends_per_customer: n(form.max_sends_per_customer),
       message_template: form.message_template,
-      is_active: true,
+      is_active: form.is_active !== false,
     }, companyRequest()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['seasonal-care'] }); onClose(); },
   });
@@ -510,7 +512,7 @@ function SeasonalModal({ open, onClose, products, categories }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   return (
-    <Modal open={open} onClose={onClose} title="Care reminder"
+    <Modal open={open} onClose={onClose} title={editing ? 'Change care reminder' : 'Care reminder'}
       footer={<><Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button><Button size="sm" disabled={saveM.isPending || !form.name} onClick={() => saveM.mutate()}>Save</Button></>}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} className="sm:col-span-2" />
@@ -623,9 +625,10 @@ function ManagerModal({ open, onClose, managers, editing, takenIds }) {
   );
 }
 
-function PayoutModal({ open, onClose, staff, editing }) {
+function PayoutModal({ open, onClose, staff: allStaff, editing }) {
   const queryClient = useQueryClient();
   const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
+  const staff = useCompanyStaff(open && !editing, companyRequest, formCompanyId, allStaff);
   const [userId, setUserId] = useState('');
   const [period, setPeriod] = useState(thisMonth());
   const [amount, setAmount] = useState('');
@@ -675,7 +678,7 @@ function PayoutModal({ open, onClose, staff, editing }) {
     <Modal open={open} onClose={handleClose} title={editing ? `Change payment — ${editing.user_name} (${editing.period})` : 'Pay commission'}
       footer={<>
         <Button variant="ghost" size="sm" onClick={handleClose}>Cancel</Button>
-        <Button size="sm" disabled={saveM.isPending || !userId || !c || (!editing && !hasSetup)} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : (status === 'paid' ? 'Mark as paid' : 'Save for later')}</Button>
+        <Button size="sm" disabled={saveM.isPending || !userId || !c || (!editing && !hasSetup) || (amount !== '' && n(amount) > n(c?.commission) + 0.005)} onClick={() => saveM.mutate()}>{saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : (status === 'paid' ? 'Mark as paid' : 'Save for later')}</Button>
       </>}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -713,7 +716,10 @@ function PayoutModal({ open, onClose, staff, editing }) {
       ) : null}
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Amount paid (blank = full amount)" error={err('amount')}><Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={c ? rupees(c.commission) : ''} /></Field>
+        <Field label="Amount paid (blank = full amount)" error={err('amount')}>
+          <Input type="number" step="0.01" min="0" max={c ? Math.max(0, n(c.commission)) : undefined} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={c ? rupees(c.commission) : ''} />
+          {c && amount !== '' && n(amount) > n(c.commission) + 0.005 && <span className="block text-xs text-danger">More than they earned for this month ({rupees(c.commission)}). You cannot pay more.</span>}
+        </Field>
         <Field label="Paid by" error={err('mode')}>
           <Select value={mode} onChange={(e) => setMode(e.target.value)} className={selectCls}>
             <option value="cash">Cash</option><option value="bank">Bank</option><option value="upi">UPI</option>
@@ -789,6 +795,8 @@ export default function CommissionList() {
   const managers = formData?.managers ?? [];
   const [editingPayout, setEditingPayout] = useState(null);
   const [editingManager, setEditingManager] = useState(null);
+  const [editingPromo, setEditingPromo] = useState(null);
+  const [editingSeasonal, setEditingSeasonal] = useState(null);
   const delManagerM = useMutation({
     mutationFn: (r) => api.delete(`/commission/manager-rules/${r.id}`, withCompany(r.company_id)),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['commission-manager-rules'] }),
@@ -825,8 +833,8 @@ export default function CommissionList() {
           <Filter />
           {tab === 'rules' && can('commission.manage') && <Button size="sm" onClick={() => { setEditingRule(null); setRuleModal(true); }}><PlusIcon className="size-4" /> Set staff rate</Button>}
           {tab === 'managers' && can('commission.manage') && <Button size="sm" onClick={() => setManagerModal(true)}><PlusIcon className="size-4" /> Add manager share</Button>}
-          {tab === 'promotions' && can('commission.manage') && <Button size="sm" onClick={() => setPromoModal(true)}><PlusIcon className="size-4" /> Add product offer</Button>}
-          {tab === 'seasonal' && can('commission.manage') && <Button size="sm" onClick={() => setSeasonalModal(true)}><PlusIcon className="size-4" /> Add reminder</Button>}
+          {tab === 'promotions' && can('commission.manage') && <Button size="sm" onClick={() => { setEditingPromo(null); setPromoModal(true); }}><PlusIcon className="size-4" /> Add product offer</Button>}
+          {tab === 'seasonal' && can('commission.manage') && <Button size="sm" onClick={() => { setEditingSeasonal(null); setSeasonalModal(true); }}><PlusIcon className="size-4" /> Add reminder</Button>}
           {tab === 'templates' && can('whatsapp.templates') && <Button size="sm" onClick={() => setTemplateModal(true)}><PlusIcon className="size-4" /> Add message</Button>}
           {tab === 'payouts' && can('commission.pay') && <Button size="sm" onClick={() => setPayoutModal(true)}><PlusIcon className="size-4" /> Pay commission</Button>}
           {tab === 'ledger' && can('commission.manage') && (
@@ -975,7 +983,10 @@ export default function CommissionList() {
                     <div className="font-medium">{p.name}</div>
                     <div className="text-muted">{p.product?.name || (p.category?.name && `All ${p.category.name}`) || 'Everything'} · {formatDate(p.start_date)} – {formatDate(p.end_date)}</div>
                   </div>
-                  <div className="text-right">Staff get <b>{describePromo(p) || '—'}</b> extra</div>
+                  <div className="flex items-center gap-3 text-right">
+                    <span>Staff get <b>{describePromo(p) || '—'}</b> extra{p.is_active === false && <Badge tone="inactive" className="ml-2">off</Badge>}</span>
+                    {can('commission.manage') && <Button variant="ghost" size="sm" onClick={() => { setEditingPromo(p); setPromoModal(true); }}><PencilSquareIcon className="size-4" /> Change</Button>}
+                  </div>
                 </div>
               ))}
             </div>
@@ -988,9 +999,12 @@ export default function CommissionList() {
           {seasonalQ.isLoading ? <Loading /> : seasonalRules.length === 0 ? <Empty>No care reminders.</Empty> : (
             <div className="divide-y divide-line/60">
               {seasonalRules.map((r) => (
-                <div key={r.id} className="px-4 py-3 text-sm">
-                  <div className="font-medium">{r.name} <span className="font-normal text-muted">· {r.days_after_purchase} days after purchase</span></div>
-                  <div className="mt-0.5 truncate text-xs text-muted">{r.message_template}</div>
+                <div key={r.id} className="flex items-start justify-between gap-3 px-4 py-3 text-sm">
+                  <div className="min-w-0">
+                    <div className="font-medium">{r.name} <span className="font-normal text-muted">· {r.days_after_purchase} days after purchase</span>{r.is_active === false && <Badge tone="inactive" className="ml-2">off</Badge>}</div>
+                    <div className="mt-0.5 truncate text-xs text-muted">{r.message_template}</div>
+                  </div>
+                  {can('commission.manage') && <Button variant="ghost" size="sm" onClick={() => { setEditingSeasonal(r); setSeasonalModal(true); }}><PencilSquareIcon className="size-4" /> Change</Button>}
                 </div>
               ))}
             </div>
@@ -1093,8 +1107,8 @@ export default function CommissionList() {
         takenIds={rules.filter((x) => filterCompanyId === 'all' || !filterCompanyId || String(x.company_id) === String(filterCompanyId) || String(x.company_id) === String(activeCompany?.id)).map((x) => String(x.user_id))} />
       {slabRule && <SlabModal key={slabRule.id} open onClose={() => setSlabRule(null)} rule={slabRule} />}
       {dailyRule && <DailyBonusModal key={dailyRule.id} open onClose={() => setDailyRule(null)} rule={dailyRule} />}
-      <PromotionModal open={promoModal} onClose={() => setPromoModal(false)} products={products} categories={categories} />
-      <SeasonalModal open={seasonalModal} onClose={() => setSeasonalModal(false)} products={products} categories={categories} />
+      <PromotionModal open={promoModal} onClose={() => { setPromoModal(false); setEditingPromo(null); }} products={products} categories={categories} editing={editingPromo} />
+      <SeasonalModal key={editingSeasonal?.id ?? 'new'} open={seasonalModal} onClose={() => { setSeasonalModal(false); setEditingSeasonal(null); }} products={products} categories={categories} editing={editingSeasonal} />
       <TemplateModal open={templateModal} onClose={() => setTemplateModal(false)} />
       <PayoutModal open={payoutModal} onClose={() => { setPayoutModal(false); setEditingPayout(null); }} staff={staff} editing={editingPayout} />
       <ManagerModal open={managerModal} onClose={() => { setManagerModal(false); setEditingManager(null); }} managers={managers} editing={editingManager}

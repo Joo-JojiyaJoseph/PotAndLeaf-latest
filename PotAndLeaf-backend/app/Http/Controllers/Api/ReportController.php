@@ -165,9 +165,12 @@ class ReportController extends Controller
         $format = $request->query('format', 'pdf');
 
         $data = $this->reports->approximateProfit($companyId, $from, $to, $period, null);
+        // Shop rows when sales carry a shop; always a total line, so the file is never empty.
+        $agg = $data['aggregate'];
+        $data['by_branch'][] = ['location_name' => 'Total', 'sales' => $agg['sales'], 'cogs' => $agg['cogs'], 'expenses' => $agg['expenses'], 'profit' => $agg['profit']];
         $headers = ['location_name', 'sales', 'cogs', 'expenses', 'profit'];
         $labels = [
-            'location_name' => 'Company', 'sales' => 'Sales', 'cogs' => 'COGS',
+            'location_name' => 'Shop', 'sales' => 'Sales (before GST)', 'cogs' => 'Cost of goods sold',
             'expenses' => 'Expenses', 'profit' => 'Profit',
         ];
 

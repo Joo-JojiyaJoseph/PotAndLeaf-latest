@@ -38,6 +38,8 @@ import {
   CircleStackIcon,
   EyeIcon,
   QuestionMarkCircleIcon,
+  InboxArrowDownIcon,
+  KeyIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 import { classNames } from '../lib/format';
@@ -66,6 +68,8 @@ const GROUPS = [
       { key: 'receipts', label: 'Money from Customers', to: '/receipts', icon: ReceiptRefundIcon, permission: 'receipts.view' },
       { key: 'loyalty', label: 'Loyalty Points', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
       { key: 'commission', label: 'Commission', to: '/commission', icon: CurrencyRupeeIcon, permission: 'commission.view' },
+      // Staff who may see only their own commission get their own page.
+      { key: 'my-commission', label: 'My Commission', to: '/my-commission', icon: CurrencyRupeeIcon, ownCommission: true },
     ],
   },
   {
@@ -106,6 +110,7 @@ const GROUPS = [
       { key: 'companies', label: 'Companies', to: '/companies', icon: BuildingOffice2Icon, superAdmin: true },
       { key: 'users', label: 'Users', to: '/users', icon: UserGroupIcon, permission: 'users.view' },
       { key: 'roles', label: 'Roles & Permissions', to: '/roles', icon: ShieldCheckIcon, permission: 'roles.view' },
+      { key: 'access-requests', label: 'Access Requests', to: '/access-requests', icon: InboxArrowDownIcon, permission: 'users.update' },
       { key: 'settings', label: 'Settings', to: '/settings', icon: Cog6ToothIcon, anyOf: ['settings.view', 'api.view', 'api.manage'] },
       { key: 'backups', label: 'Backups', to: '/backups', icon: CircleStackIcon, permission: 'backup.view' },
       { key: 'activity', label: 'Activity Log', to: '/activity-monitoring', icon: EyeIcon, permission: 'activity.view' },
@@ -115,12 +120,15 @@ const GROUPS = [
     label: 'Help',
     items: [
       { key: 'help', label: 'Help & User Guide', to: '/help', icon: QuestionMarkCircleIcon, everyone: true },
+      { key: 'request-access', label: 'Request Access', to: '/request-access', icon: KeyIcon, everyone: true, notSuperAdmin: true },
     ],
   },
 ];
 
 function itemVisible(item, { isSuperAdmin, showHo, can }) {
+  if (item.notSuperAdmin && isSuperAdmin) return false;
   if (item.everyone) return true;
+  if (item.ownCommission) return !isSuperAdmin && can('commission.view_own') && !can('commission.view');
   if (item.superAdmin) return isSuperAdmin;
   if (item.hoOnly && !showHo) return false;
   if (item.anyOf?.length) return item.anyOf.some((p) => can(p));

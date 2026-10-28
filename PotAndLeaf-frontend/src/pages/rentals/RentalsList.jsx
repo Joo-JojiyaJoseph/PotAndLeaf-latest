@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
-import { formatDate } from '../../lib/format';
+import { formatCurrency, formatDate } from '../../lib/format';
 import { ListToolbar, useListFilters } from '../../components/ListToolbar';
 import { exportList } from '../../lib/exportList';
 import Pagination from '../../components/Pagination';
@@ -52,7 +52,7 @@ export default function RentalsList() {
       </div>
 
       <ListToolbar lf={lf} placeholder={'Search rental no. or customer…'} withSearch={true}
-        onExport={() => exportList({ url: '/rentals', params: { ...companyParams, status, ...lf.filters }, filename: 'rentals', columns: [['Rental no', (r) => r.rental_no], ['Customer', (r) => r.customer_name], ['Start', (r) => r.start_date], ['Expected end', (r) => r.expected_end_date], ['Deposit', (r) => r.deposit], ['Balance due', (r) => r.balance_due], ['Status', (r) => r.display_status ?? r.status]] })} />
+        onExport={() => exportList({ url: '/rentals', params: { ...companyParams, status, ...lf.filters }, filename: 'rentals', columns: [['Rental no', (r) => r.rental_no], ['Customer', (r) => r.customer_name], ['Start', (r) => r.start_date], ['Expected end', (r) => r.expected_end_date], ['Rent per cycle', (r) => r.rent_per_cycle], ['Billed so far', (r) => r.billed_total], ['Deposit', (r) => r.deposit], ['Balance due', (r) => r.balance_due], ['Status', (r) => r.display_status ?? r.status]] })} />
 
       <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (
@@ -76,6 +76,8 @@ export default function RentalsList() {
                   <th className="microlabel px-4 py-2.5 font-semibold">Start</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Cycle</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Items</th>
+                  <th className="microlabel px-4 py-2.5 text-right font-semibold">Rent / cycle</th>
+                  <th className="microlabel px-4 py-2.5 text-right font-semibold">Billed so far</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                 </tr></thead>
                 <tbody>
@@ -86,6 +88,8 @@ export default function RentalsList() {
                       <td className="px-4 py-2.5 text-muted">{formatDate(r.start_date)}</td>
                       <td className="px-4 py-2.5"><Badge tone="info">{r.billing_cycle}</Badge></td>
                       <td className="tnum px-4 py-2.5 text-right text-muted">{r.items_count ?? '—'}</td>
+                      <td className="tnum px-4 py-2.5 text-right font-medium">{r.rent_per_cycle != null ? formatCurrency(r.rent_per_cycle) : '—'}</td>
+                      <td className="tnum px-4 py-2.5 text-right text-muted">{r.billed_total != null ? formatCurrency(r.billed_total) : '—'}</td>
                       <td className="px-4 py-2.5"><Badge tone={tone[r.display_status ?? r.status] ?? 'default'}>{r.display_status ?? r.status}</Badge></td>
                     </tr>
                   ))}

@@ -11,7 +11,7 @@ import { FormCompanyField, useFormCompany } from '../../components/FormCompanyFi
 import Pagination from '../../components/Pagination';
 import SearchSelect from '../../components/SearchSelect';
 import { useConfirm } from '../../lib/confirm';
-import { fieldError } from '../../lib/formErrors';
+import { apiMessage, fieldError } from '../../lib/formErrors';
 
 const ledgerTone = { earn: 'active', redeem: 'pending', reverse: 'blocked' };
 
@@ -56,12 +56,35 @@ export default function LoyaltyPage() {
   });
   const rf = ruleFormQ.data ?? {};
 
+  // Customers of the chosen company, for the "Customer" box (pick by name, not by ID).
+  const adjustCompanyId = formCompanyId || activeCompany?.id;
+  const custQ = useQuery({
+    queryKey: ['customer-options', adjustCompanyId],
+    queryFn: () => api.get('/customers/options', withCompany(adjustCompanyId)).then((r) => r.data.data),
+    enabled: adjustOpen && Boolean(adjustCompanyId),
+  });
+  const custOptions = (custQ.data ?? []).map((c) => ({
+    value: c.id,
+    label: c.name,
+    sublabel: [c.code, c.phone, `${c.loyalty_points} pts`].filter(Boolean).join(' · '),
+  }));
+  const pickedCustomer = (custQ.data ?? []).find((c) => String(c.id) === String(adjustForm.customer_id));
+  const [adjustError, setAdjustError] = useState('');
+
   const adjustM = useMutation({
     mutationFn: () => {
-      const party = (data?.customers?.data ?? []).find((c) => String(c.id) === String(adjustForm.customer_id));
-      return api.post('/loyalty/adjust', { customer_id: adjustForm.customer_id, points: Number(adjustForm.points), reason: adjustForm.reason }, withCompany(party?.company_id || formCompanyId));
+      setAdjustError('');
+      if (!adjustForm.customer_id) return Promise.reject(new Error('Choose a customer.'));
+      if (!Number(adjustForm.points)) return Promise.reject(new Error('Enter the points to add (e.g. 50) or take away (e.g. -20).'));
+      if (!adjustForm.reason.trim()) return Promise.reject(new Error('Type a reason, so everyone can see why the points changed.'));
+      return api.post('/loyalty/adjust', { customer_id: adjustForm.customer_id, points: Number(adjustForm.points), reason: adjustForm.reason }, withCompany(pickedCustomer?.company_id || adjustCompanyId));
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['loyalty'] }); setAdjustOpen(false); setAdjustForm({ customer_id: '', points: '', reason: '' }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['loyalty'] });
+      queryClient.invalidateQueries({ queryKey: ['customer-options'] });
+      setAdjustOpen(false); setAdjustForm({ customer_id: '', points: '', reason: '' });
+    },
+    onError: (e) => setAdjustError(e.response ? apiMessage(e, 'Could not save the points.') : e.message),
   });
 
   const num = (v) => (v === '' || v == null ? null : Number(v));
@@ -247,10 +270,28 @@ export default function LoyaltyPage() {
       <Modal open={adjustOpen} onClose={() => setAdjustOpen(false)} title="Adjust customer points"
         footer={<><Button variant="ghost" size="sm" onClick={() => setAdjustOpen(false)}>Cancel</Button><Button size="sm" disabled={adjustM.isPending} onClick={() => adjustM.mutate()}>Save</Button></>}>
         <div className="space-y-3">
-          <FormCompanyField value={formCompanyId} onChange={setFormCompanyId} />
-          <Field label="Customer ID"><Input value={adjustForm.customer_id} onChange={(e) => setAdjustForm((f) => ({ ...f, customer_id: e.target.value }))} placeholder="Paste customer UUID" /></Field>
-          <Field label="Points (+/-)"><Input type="number" value={adjustForm.points} onChange={(e) => setAdjustForm((f) => ({ ...f, points: e.target.value }))} /></Field>
-          <Field label="Reason"><Input value={adjustForm.reason} onChange={(e) => setAdjustForm((f) => ({ ...f, reason: e.target.value }))} /></Field>
+          <FormCompanyField value={formCompanyId} onChange={(v) => { setFormCompanyId(v); setAdjustForm((f) => ({ ...f, customer_id: '' })); }} />
+          <Field label="Customer" required>
+            <SearchSelect
+              value={adjustForm.customer_id}
+              onChange={(v) => setAdjustForm((f) => ({ ...f, customer_id: v }))}
+              options={custOptions}
+              searchable
+              placeholder={custQ.isLoading ? 'Loading customers…' : 'Search customer by name, code or phone…'}
+              emptyLabel="No customers in this company"
+            />
+          </Field>
+          <Field label="Points to add (+) or take away (−)" required>
+            <Input type="number" value={adjustForm.points} onChange={(e) => setAdjustForm((f) => ({ ...f, points: e.target.value }))} placeholder="e.g. 50 or -20" />
+          </Field>
+          {pickedCustomer && (
+            <p className="rounded-xl bg-leaf-soft/60 px-3 py-2 text-sm">
+              {pickedCustomer.name} has <b>{pickedCustomer.loyalty_points}</b> points
+              {Number(adjustForm.points) ? <> → after this: <b>{pickedCustomer.loyalty_points + Number(adjustForm.points)}</b> points</> : null}.
+            </p>
+          )}
+          <Field label="Reason" required><Input value={adjustForm.reason} onChange={(e) => setAdjustForm((f) => ({ ...f, reason: e.target.value }))} placeholder="e.g. Diwali gift, wrong points corrected" /></Field>
+          {adjustError && <p className="text-sm text-danger">{adjustError}</p>}
         </div>
       </Modal>
 

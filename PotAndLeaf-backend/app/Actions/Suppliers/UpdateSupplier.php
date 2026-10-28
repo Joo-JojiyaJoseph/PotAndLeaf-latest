@@ -29,6 +29,15 @@ class UpdateSupplier
         return DB::transaction(function () use ($supplier, $data) {
             $locked = Supplier::query()->whereKey($supplier->id)->lockForUpdate()->first() ?? $supplier;
 
+            // The form shows the outstanding still unpaid. Saving it keeps what was
+            // already paid: entered amount = still unpaid + already paid.
+            if (array_key_exists('opening_left', $data)) {
+                $service = app(\App\Services\PaymentService::class);
+                $paid = round((float) $locked->opening_balance - $service->openingLeft($locked), 2);
+                $data['opening_balance'] = round((float) ($data['opening_left'] ?: 0) + $paid, 2);
+            }
+            unset($data['opening_left']);
+
             if (array_key_exists('opening_balance', $data)) {
                 $delta = round((float) $data['opening_balance'] - (float) $locked->opening_balance, 2);
                 if (abs($delta) >= 0.005) {
@@ -46,7 +55,13 @@ class UpdateSupplier
                 abort_if($hasHistory, 422, 'Cannot change company — this supplier has purchase or payment history.');
             }
 
-            return $this->suppliers->update($locked, $data);
+            $updated = $this->suppliers->update($locked, $data);
+            // Opening balance changed: re-work which bills the "on account" payments cleared.
+            if (array_key_exists('outstanding', $data)) {
+                app(\App\Services\PaymentService::class)->settleOnAccount($updated->fresh());
+            }
+
+            return $updated;
         });
     }
 }

@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from 'react';
-import { useQuery, useMutation, keepPreviousData } from '@tanstack/react-query';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useCompanyFilter } from '../../hooks/useCompanyFilter';
@@ -15,6 +15,8 @@ import Pagination from '../../components/Pagination';
 import PagedTable from '../../components/PagedTable';
 import ReportEmptyState from './ReportEmptyState';
 import { REPORT_TABS, filterVisibleTabs, tabMeta } from './reportConfig';
+import { ShowAllRowsContext } from '../../components/PagedTable';
+import { tablesToCsv, downloadText } from '../../lib/tableExport';
 
 const daysAgo = (n) => addCalendarDays(todayISO(), -n);
 const selectCls = 'h-10 w-full min-w-0 rounded-lg border border-line bg-surface px-2 text-sm sm:h-9 sm:w-auto';
@@ -54,7 +56,12 @@ export default function ReportsPage() {
   const toast = useToast();
   const [tab, setTab] = useState('dashboard');
   // Page number for reports the server sends in pages (50 rows each).
+  const queryClient = useQueryClient();
   const [rptPage, setRptPage] = useState(1);
+  const [exportingAll, setExportingAll] = useState(false);
+  // While exporting, page-by-page reports load everything at once.
+  const pageParams = exportingAll ? { page: 1, per_page: 500 } : { page: rptPage };
+  const pageKey = exportingAll ? 'all' : rptPage;
   const [range, setRange] = useState({ from: daysAgo(29), to: todayISO() });
   const [showCustomDates, setShowCustomDates] = useState(false);
   const [reportSearch, setReportSearch] = useState('');
@@ -152,8 +159,8 @@ export default function ReportsPage() {
   });
 
   const rentalDeliveryQ = useQuery({
-    queryKey: ['reports-rental-delivery', activeCompany?.id, range.from, range.to, locationId, rptPage],
-    queryFn: () => api.get('/reports/rental/delivery', { params: { ...range, location_id: locationParam, page: rptPage } }).then((r) => r.data),
+    queryKey: ['reports-rental-delivery', activeCompany?.id, range.from, range.to, locationId, pageKey],
+    queryFn: () => api.get('/reports/rental/delivery', { params: { ...range, location_id: locationParam, ...pageParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'rental_delivery' && canRentalReports,
     placeholderData: keepPreviousData,
   });
@@ -173,22 +180,22 @@ export default function ReportsPage() {
   });
 
   const rentalCurrentQ = useQuery({
-    queryKey: ['reports-rental-current', activeCompany?.id, locationId, rptPage],
-    queryFn: () => api.get('/reports/rental/current', { params: { location_id: locationParam, page: rptPage } }).then((r) => r.data),
+    queryKey: ['reports-rental-current', activeCompany?.id, locationId, pageKey],
+    queryFn: () => api.get('/reports/rental/current', { params: { location_id: locationParam, ...pageParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'rental_current' && canRentalReports,
     placeholderData: keepPreviousData,
   });
 
   const rentalCustomerQ = useQuery({
-    queryKey: ['reports-rental-customer', activeCompany?.id, customerId, range.from, range.to, locationId, rptPage],
-    queryFn: () => api.get(`/reports/rental/customer/${customerId}`, { params: { ...range, location_id: locationParam, page: rptPage } }).then((r) => r.data),
+    queryKey: ['reports-rental-customer', activeCompany?.id, customerId, range.from, range.to, locationId, pageKey],
+    queryFn: () => api.get(`/reports/rental/customer/${customerId}`, { params: { ...range, location_id: locationParam, ...pageParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'rental_customer' && canRentalReports && Boolean(customerId),
     placeholderData: keepPreviousData,
   });
 
   const productionSummaryQ = useQuery({
-    queryKey: ['reports-production-summary', activeCompany?.id, filterCompanyId, range.from, range.to, rptPage],
-    queryFn: () => api.get('/reports/production/summary', { params: { ...range, ...companyParams, page: rptPage } }).then((r) => r.data),
+    queryKey: ['reports-production-summary', activeCompany?.id, filterCompanyId, range.from, range.to, pageKey],
+    queryFn: () => api.get('/reports/production/summary', { params: { ...range, ...companyParams, ...pageParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'production_summary' && canProductionReports,
     placeholderData: keepPreviousData,
   });
@@ -208,22 +215,22 @@ export default function ReportsPage() {
   });
 
   const productionBatchesQ = useQuery({
-    queryKey: ['reports-production-batches', activeCompany?.id, filterCompanyId, range.from, range.to, rptPage],
-    queryFn: () => api.get('/reports/production/batches', { params: { ...range, ...companyParams, page: rptPage } }).then((r) => r.data),
+    queryKey: ['reports-production-batches', activeCompany?.id, filterCompanyId, range.from, range.to, pageKey],
+    queryFn: () => api.get('/reports/production/batches', { params: { ...range, ...companyParams, ...pageParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'production_batches' && canProductionReports,
     placeholderData: keepPreviousData,
   });
 
   const transferSummaryQ = useQuery({
-    queryKey: ['reports-transfer-summary', activeCompany?.id, filterCompanyId, range.from, range.to, rptPage],
-    queryFn: () => api.get('/reports/transfers/summary', { params: { ...range, ...companyParams, page: rptPage } }).then((r) => r.data),
+    queryKey: ['reports-transfer-summary', activeCompany?.id, filterCompanyId, range.from, range.to, pageKey],
+    queryFn: () => api.get('/reports/transfers/summary', { params: { ...range, ...companyParams, ...pageParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'transfer_summary' && canTransferReports,
     placeholderData: keepPreviousData,
   });
 
   const transferInTransitQ = useQuery({
-    queryKey: ['reports-transfer-in-transit', activeCompany?.id, filterCompanyId, rptPage],
-    queryFn: () => api.get('/reports/transfers/in-transit', { params: { ...companyParams, page: rptPage } }).then((r) => r.data),
+    queryKey: ['reports-transfer-in-transit', activeCompany?.id, filterCompanyId, pageKey],
+    queryFn: () => api.get('/reports/transfers/in-transit', { params: { ...companyParams, ...pageParams } }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'transfer_in_transit' && canTransferReports,
     placeholderData: keepPreviousData,
   });
@@ -313,16 +320,16 @@ export default function ReportsPage() {
   });
 
   const loyaltyReportQ = useQuery({
-    queryKey: ['reports-loyalty', activeCompany?.id, filterCompanyId, rptPage],
-    queryFn: () => api.get('/loyalty', { params: { ...companyParams, per_page: 50, page: rptPage } }).then((r) => r.data.data),
+    queryKey: ['reports-loyalty', activeCompany?.id, filterCompanyId, pageKey],
+    queryFn: () => api.get('/loyalty', { params: { ...companyParams, ...pageParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany) && tab === 'loyalty_report' && canLoyaltyReport,
     placeholderData: keepPreviousData,
   });
 
   const whatsappReportQ = useQuery({
-    queryKey: ['reports-whatsapp', activeCompany?.id, filterCompanyId, waType, rptPage],
+    queryKey: ['reports-whatsapp', activeCompany?.id, filterCompanyId, waType, pageKey],
     queryFn: () => api.get('/commission/whatsapp-logs', {
-      params: { ...companyParams, message_type: waType || undefined, page: rptPage },
+      params: { ...companyParams, message_type: waType || undefined, ...pageParams },
     }).then((r) => r.data),
     enabled: Boolean(activeCompany) && tab === 'whatsapp_report' && canWhatsappReport,
     placeholderData: keepPreviousData,
@@ -439,6 +446,8 @@ export default function ReportsPage() {
       opts.push({ label: 'Export PDF', path: '/purchase-orders/reorder-report/export', params: { ...companyParams, layout: 'flat' }, file: 'reorder-report.pdf', mime: 'application/pdf' });
       opts.push({ label: 'Supplier-wise PDF', path: '/purchase-orders/reorder-report/export', params: { ...companyParams, layout: 'supplier' }, file: 'reorder-report-supplier.pdf', mime: 'application/pdf' });
     }
+    // Every report: an Excel file of exactly what the report shows (all rows, not only page 1).
+    opts.push({ label: opts.length ? 'Excel — this report as shown' : 'Export Excel', screen: true });
     return opts;
   }, [tab, range, companyParams, period, locationParam, customerId, supplierId, reorderNeedsCompany]);
 
@@ -448,6 +457,21 @@ export default function ReportsPage() {
     rows.sort((a, b) => (b[sortKey] ?? 0) - (a[sortKey] ?? 0));
     return rows;
   }, [marginQ.data, sortKey]);
+
+  const reportBodyRef = useRef(null);
+  // Draw every row (no page buttons), read the tables on screen, save as CSV.
+  async function exportScreen() {
+    setExportingAll(true);
+    await new Promise((r) => setTimeout(r, 300));
+    for (let i = 0; i < 40 && queryClient.isFetching() > 0; i += 1) await new Promise((r) => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 150));
+    const title = `${tabMeta(tab).label} · ${range.from} to ${range.to}`;
+    const csv = tablesToCsv(reportBodyRef.current, title);
+    setExportingAll(false);
+    if (!csv) { toast.error(filterCompanyId === 'all' ? 'Nothing to export. Choose one company at the top (and a customer or supplier where asked), then export again.' : 'Nothing to export for these dates. Pick other dates, or a customer or supplier where asked.'); return; }
+    downloadText(csv, `${tab}-${range.from}-to-${range.to}.csv`);
+    toast.success('Export downloaded.');
+  }
 
   async function exportFile(path, params, filename, mime) {
     try {
@@ -489,7 +513,7 @@ export default function ReportsPage() {
         showCustomDates={showCustomDates}
         onToggleCustomDates={setShowCustomDates}
         exportOptions={exportOptions}
-        onExport={(opt) => exportFile(opt.path, opt.params, opt.file, opt.mime)}
+        onExport={(opt) => (opt.screen ? exportScreen() : exportFile(opt.path, opt.params, opt.file, opt.mime))}
         showBusinessPeriods={isProductionTab || tab === 'profit'}
         extraFilters={(
           <>
@@ -570,10 +594,14 @@ export default function ReportsPage() {
         onSearchChange={setReportSearch}
       />
 
-      <div className="flex items-center gap-2 text-sm text-muted">
-        <ActiveIcon className="size-4 text-leaf" strokeWidth={1.5} />
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm text-muted">
+        <ActiveIcon className="size-4 self-center text-leaf" strokeWidth={1.5} />
         <span className="font-medium text-ink">{activeMeta.label}</span>
+        {activeMeta.help && <span className="text-xs">— {activeMeta.help}</span>}
       </div>
+
+      <ShowAllRowsContext.Provider value={exportingAll}>
+      <div ref={reportBodyRef} className="space-y-5">
 
       {tab === 'dashboard' && (
         <>
@@ -1875,6 +1903,8 @@ export default function ReportsPage() {
           ageingPayQ={ageingPayQ}
         />
       )}
+      </div>
+      </ShowAllRowsContext.Provider>
     </div>
   );
 }

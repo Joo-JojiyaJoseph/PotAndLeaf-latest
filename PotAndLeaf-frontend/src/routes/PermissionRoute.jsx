@@ -2,13 +2,16 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 /** Friendly "not allowed" card with a way back, instead of a dead end. */
-function NoAccess({ message }) {
+function NoAccess({ message, need = [] }) {
   return (
     <div className="p-6">
       <div className="rounded-xl bg-surface p-10 text-center shadow-card">
         <p className="text-sm font-medium text-ink">{message}</p>
-        <p className="mt-1 text-sm text-muted">If you need this page for your work, ask your manager or HO admin to give your role access.</p>
-        <Link to="/" className="mt-4 inline-block rounded-full bg-leaf px-4 py-2 text-sm font-medium text-white hover:bg-leaf-hover">Go to dashboard</Link>
+        <p className="mt-1 text-sm text-muted">If you need this page for your work, send a request and an admin can give you access.</p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Link to={`/request-access${need.length ? `?need=${need.join(',')}` : ''}`} className="inline-block rounded-full bg-leaf px-4 py-2 text-sm font-medium text-white hover:bg-leaf-hover">Request access</Link>
+          <Link to="/" className="inline-block rounded-full border border-line px-4 py-2 text-sm font-medium text-ink hover:bg-paper">Go to dashboard</Link>
+        </div>
       </div>
     </div>
   );
@@ -31,7 +34,7 @@ export default function PermissionRoute({ permission, anyOf, superAdmin, childre
     || (anyOf?.length ? anyOf.some((p) => can(p)) : permission ? can(permission) : true);
 
   if (!allowed) {
-    return <NoAccess message="Your role does not have access to this page." />;
+    return <NoAccess message="Your role does not have access to this page." need={permission ? [permission] : (anyOf?.slice(0, 1) ?? [])} />;
   }
 
   return children;

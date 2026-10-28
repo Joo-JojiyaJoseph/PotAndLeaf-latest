@@ -18,6 +18,7 @@ class CreateCustomer
         if (blank($data['type'] ?? null)) $data['type'] = 'retail';
         if (blank($data['status'] ?? null)) $data['status'] = 'active';
 
+        unset($data['opening_left']);
         $opening = (float) ($data['opening_balance'] ?? 0);
         foreach (['credit_days', 'credit_limit', 'opening_balance', 'advance_balance', 'loyalty_points'] as $k) {
             if (! isset($data[$k]) || $data[$k] === '' || $data[$k] === null) {

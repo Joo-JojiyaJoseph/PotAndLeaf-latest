@@ -51,7 +51,7 @@ class PurchaseOrderResource extends JsonResource
             ])->values()),
             'can'           => [
                 'send'    => $this->status === 'draft' && $user?->hasPermission('po.send', $companyId),
-                'convert' => in_array($this->status, ['draft', 'sent'], true) && $user?->hasPermission('po.convert', $companyId),
+                'convert' => $this->status === 'sent' && $user?->hasPermission('po.convert', $companyId),
                 'cancel'  => in_array($this->status, ['draft', 'sent'], true) && $user?->hasPermission('po.delete', $companyId),
             ],
         ];

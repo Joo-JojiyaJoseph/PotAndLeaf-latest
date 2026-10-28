@@ -197,6 +197,27 @@ class UserController extends Controller
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+            $this->followRoleInCommission($user, $companyId, $roleId);
+        }
+    }
+
+    /**
+     * New role for someone who already has a staff commission rate: change that
+     * same rate to match (Supervisor = paid for what they grow/make, Salesman =
+     * paid on sales). The rates themselves stay; no second rule is ever made.
+     */
+    private function followRoleInCommission(User $user, int|string $companyId, string $roleId): void
+    {
+        $rule = \App\Models\CommissionRule::query()->where('company_id', $companyId)->where('user_id', $user->id)->first();
+        if (! $rule) {
+            return;
+        }
+        $role = DB::table('roles')->where('id', $roleId)->first(['slug', 'name']);
+        $text = strtolower(($role->slug ?? '').' '.($role->name ?? ''));
+        if (str_contains($text, 'supervisor')) {
+            $rule->update(['is_supervisor' => true]);
+        } elseif (str_contains($text, 'sales') || str_contains($text, 'cashier')) {
+            $rule->update(['is_supervisor' => false]);
         }
     }
 

@@ -25,6 +25,27 @@ class UpdateCustomer
             $data['photo'] = MediaStorage::replace($customer->photo, $data['photo']);
         }
 
-        return $this->customers->update($customer, $data);
+        // Balances are kept by bills and receipts; the form never sets them directly.
+        unset($data['outstanding'], $data['advance_balance']);
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($customer, $data) {
+            $locked = Customer::query()->whereKey($customer->id)->lockForUpdate()->first() ?? $customer;
+            // The form shows the outstanding still unpaid; what was already received stays recorded.
+            if (array_key_exists('opening_left', $data)) {
+                $receipts = app(\App\Services\ReceiptService::class);
+                $paid = round((float) $locked->opening_balance - $receipts->openingLeft($locked), 2);
+                $data['opening_balance'] = round((float) ($data['opening_left'] ?: 0) + $paid, 2);
+            }
+            unset($data['opening_left']);
+            // A changed outstanding-from-before changes what the customer owes by the same amount.
+            if (array_key_exists('opening_balance', $data)) {
+                $delta = round((float) $data['opening_balance'] - (float) $locked->opening_balance, 2);
+                if (abs($delta) >= 0.005) {
+                    $data['outstanding'] = round((float) $locked->outstanding + $delta, 2);
+                }
+            }
+
+            return $this->customers->update($locked, $data);
+        });
     }
 }

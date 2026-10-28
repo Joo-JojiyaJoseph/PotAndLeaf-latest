@@ -56,6 +56,7 @@ class InventoryService
         }
 
         $product->current_stock = $newBalance;
+        $this->queueBatchSync($product);
 
         return StockLedgerEntry::create([
             'company_id'        => $product->company_id,
@@ -78,7 +79,7 @@ class InventoryService
      * was not aimed at one batch. Stops the batch screen from keeping the
      * original received quantity after the product stock has already fallen.
      */
-    /** @return list<array{batch_id: string, batch_no: ?string, qty: float}> what was taken from each batch */
+    /** @return list<array{batch_id: string, batch_no: ?string, qty: float, cost: float}> what was taken from each batch, at that batch's cost */
     public function consumeBatchesFifo(string $productId, float $qty): array
     {
         $left = round($qty, 3);
@@ -105,11 +106,35 @@ class InventoryService
                 $batch->status = 'depleted';
             }
             $batch->save();
-            $taken[] = ['batch_id' => $batch->id, 'batch_no' => $batch->batch_no, 'qty' => round($take, 3)];
+            $taken[] = ['batch_id' => $batch->id, 'batch_no' => $batch->batch_no, 'qty' => round($take, 3), 'cost' => (float) $batch->cost_price];
             $left = round($left - $take, 3);
         }
 
         return $taken;
+    }
+
+    /**
+     * Cost of one piece for goods that left these batches: each batch at its own
+     * cost (weighted by qty taken). A batch with no cost, or qty not covered by
+     * any batch, is valued at $fallback (the product's cost price).
+     *
+     * @param  list<array{qty: float, cost?: float}>  $taken
+     */
+    public function costOfTaken(array $taken, float $qty, float $fallback): float
+    {
+        if ($qty <= 0) {
+            return $fallback;
+        }
+        $value = 0.0;
+        $covered = 0.0;
+        foreach ($taken as $t) {
+            $cost = (float) ($t['cost'] ?? 0);
+            $value += (float) $t['qty'] * ($cost > 0 ? $cost : $fallback);
+            $covered += (float) $t['qty'];
+        }
+        $value += max(0, $qty - $covered) * $fallback;
+
+        return round($value / $qty, 4);
     }
 
     /**
@@ -220,6 +245,76 @@ class InventoryService
             $newest->status = 'active';
             $newest->save();
         }
+    }
+
+    /**
+     * After the transaction that moved stock is saved, make the product's batches
+     * add up to its stock on hand again. Most movements already move their batch
+     * (purchase, sale, transfer…); this catches the ones that did not (rental
+     * cancel, bulk-split cancel, stock-count gains, …) so Stock Levels, Batches,
+     * barcodes and the sale screen always show the same number.
+     */
+    private function queueBatchSync(Product $product): void
+    {
+        if ($product->pool_role === 'set' || \Illuminate\Support\Facades\DB::transactionLevel() === 0) {
+            return;   // pooled "set" rows mirror the unit product and have no batches of their own
+        }
+        $id = (string) $product->id;
+        \Illuminate\Support\Facades\DB::afterCommit(fn () => $this->syncBatchesToStock($id));
+    }
+
+    /**
+     * Make one product's batch quantities add up to its stock on hand.
+     * Too much in batches: taken off the oldest first. Too little: first refills
+     * batches that were drawn down (oldest first, never above what they received),
+     * the rest goes into a new "ADJ" batch with its own barcode.
+     */
+    public function syncBatchesToStock(string $productId): void
+    {
+        \Illuminate\Support\Facades\DB::transaction(function () use ($productId) {
+            $product = Product::query()->lockForUpdate()->find($productId);
+            if (! $product || $product->pool_role === 'set') {
+                return;
+            }
+            $batches = ProductBatch::query()->where('product_id', $product->id)
+                ->orderBy('received_at')->orderBy('created_at')->lockForUpdate()->get();
+            $diff = round((float) $product->current_stock - (float) $batches->sum('remaining_qty'), 3);
+            if (abs($diff) < 0.001) {
+                return;
+            }
+            if ($diff < 0) {
+                $this->consumeBatchesFifo($product->id, -$diff);
+
+                return;
+            }
+            foreach ($batches as $batch) {
+                if ($diff <= 0.0001) {
+                    break;
+                }
+                $room = round((float) $batch->qty - (float) $batch->remaining_qty, 3);
+                if ($room <= 0) {
+                    continue;
+                }
+                $put = min($room, $diff);
+                $batch->remaining_qty = round((float) $batch->remaining_qty + $put, 3);
+                $batch->status = 'active';
+                $batch->save();
+                $diff = round($diff - $put, 3);
+            }
+            if ($diff > 0.0001) {
+                ProductBatch::create([
+                    'company_id'    => $product->company_id,
+                    'product_id'    => $product->id,
+                    'batch_no'      => 'ADJ-'.$product->sku.'-'.now()->format('ymdHis'),
+                    'barcode'       => 'PLA'.$product->company_id.'-'.strtoupper(substr(str_replace('-', '', (string) \Illuminate\Support\Str::uuid()), 0, 12)),
+                    'qty'           => $diff,
+                    'remaining_qty' => $diff,
+                    'cost_price'    => (float) $product->cost_price,
+                    'status'        => 'active',
+                    'received_at'   => now(),
+                ]);
+            }
+        });
     }
 
     /**

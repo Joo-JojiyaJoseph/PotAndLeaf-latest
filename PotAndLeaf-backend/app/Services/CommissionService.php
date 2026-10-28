@@ -207,10 +207,11 @@ class CommissionService
         return $this->supervisorCommission->entries($companyId, $filters);
     }
 
-    public function payouts(int|string|null $companyId)
+    public function payouts(int|string|null $companyId, ?int $userId = null)
     {
         return CommissionPayout::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->when($userId !== null, fn ($q) => $q->where('user_id', $userId))
             ->with('user:id,name')
             ->orderByDesc('period')
             ->orderByDesc('created_at')

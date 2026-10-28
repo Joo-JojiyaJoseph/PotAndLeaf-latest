@@ -231,7 +231,8 @@ it('keeps freight out of the supplier balance when it is paid to a transporter',
     expect((float) $supplier->fresh()->outstanding)->toBe(17376.0 + 16176.0)
         ->and((float) $p2->supplier_payable)->toBe(16176.0)
         ->and(\App\Http\Requests\Payment\StoreSupplierPaymentRequest::remainingPurchaseBalance($p2))->toBe(16176.0)
-        ->and((float) $pot->fresh()->cost_price)->toBe(123.31); // landed unit cost 123.3062, stored to 2 decimals
+        // The landed unit cost (123.3062) is kept on this purchase's batch; the product's own cost is not changed.
+        ->and(round((float) \App\Models\ProductBatch::where('purchase_id', $p2->id)->where('product_id', $pot->id)->value('cost_price'), 2))->toBe(123.31);
 });
 
 it('refuses a credit sale that would take the customer past their credit limit', function () {

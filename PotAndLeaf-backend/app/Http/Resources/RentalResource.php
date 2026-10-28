@@ -51,6 +51,13 @@ class RentalResource extends JsonResource
             'activated_at'      => optional($this->activated_at)->toIso8601String(),
             'returned_at'       => optional($this->returned_at)->toIso8601String(),
             'items_count'       => $this->when($this->items_count !== null, $this->items_count),
+            // Totals, so the rent is easy to see at a glance.
+            'rent_per_cycle'    => $this->whenLoaded('items', fn () => round($this->items->sum(fn ($i) => (float) $i->qty * (float) $i->rate_per_cycle), 2)),
+            'cycle_days'        => ['daily' => 1, 'weekly' => 7, 'monthly' => 30][$this->billing_cycle] ?? 30,
+            'expected_cycles'   => $this->start_date && $this->expected_end_date
+                ? max(1, (int) ceil(($this->start_date->diffInDays($this->expected_end_date) + 1) / (['daily' => 1, 'weekly' => 7, 'monthly' => 30][$this->billing_cycle] ?? 30)))
+                : null,
+            'billed_total'      => $this->whenLoaded('invoices', fn () => round($this->invoices->where('status', '!=', 'cancelled')->sum(fn ($i) => (float) $i->amount), 2)),
             'items'             => $this->whenLoaded('items', fn () => $this->items->map(fn ($i) => [
                 'id' => $i->id, 'product_id' => $i->product_id, 'product_name' => $i->product_name,
                 'qty' => (float) $i->qty, 'rate_per_cycle' => (float) $i->rate_per_cycle,
@@ -71,7 +78,8 @@ class RentalResource extends JsonResource
                 'settle'   => $this->status === 'active' && $user?->hasPermission('rental.return', $companyId),
                 'return'   => $this->status === 'active' && $user?->hasPermission('rental.return', $companyId),
                 'cancel'   => in_array($this->status, ['draft', 'active'], true) && $user?->hasPermission('rental.delete', $companyId),
-                'bill'     => in_array($this->status, ['active', 'returned'], true) && $user?->hasPermission('rental.bill', $companyId),
+                // Rent is billed while plants are out; the return settles the whole period.
+                'bill'     => $this->status === 'active' && $user?->hasPermission('rental.bill', $companyId),
             ],
         ];
     }

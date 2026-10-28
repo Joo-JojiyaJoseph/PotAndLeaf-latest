@@ -521,6 +521,13 @@ export default function PurchaseForm() {
                 type="number" step="0.01" value={header.landed_cost_total}
                 onChange={(e) => setHeader((h) => ({ ...h, landed_cost_total: e.target.value }))}
               />
+              {formData && (
+                <span className="mt-1 block text-xs text-muted">
+                  {formData.freight_to_supplier === false
+                    ? 'Paid to a transporter (Settings): added to the product cost, not to what you owe this supplier.'
+                    : 'Charged by this supplier (Settings): added to the product cost and to what you owe the supplier.'}
+                </span>
+              )}
             </Field>
             <Field label="Notes">
               <Input
@@ -593,10 +600,27 @@ export default function PurchaseForm() {
               <dt>Landed cost</dt>
               <dd className="tnum">{formatCurrency(t.landed_cost_total)}</dd>
             </div>
-            <div className="mt-2 flex justify-between border-t border-line pt-2 text-base font-semibold">
-              <dt>Payable</dt>
-              <dd className="tnum">{formatCurrency(t.grand_total)}</dd>
-            </div>
+            {formData?.freight_to_supplier === false && t.landed_cost_total > 0 ? (
+              <>
+                <div className="mt-2 flex justify-between border-t border-line pt-2 font-medium">
+                  <dt>Bill total</dt>
+                  <dd className="tnum">{formatCurrency(t.grand_total)}</dd>
+                </div>
+                <div className="flex justify-between text-muted">
+                  <dt>Freight paid to transporter</dt>
+                  <dd className="tnum">− {formatCurrency(t.landed_cost_total)}</dd>
+                </div>
+                <div className="mt-1 flex justify-between border-t border-line pt-2 text-base font-semibold">
+                  <dt>Owed to supplier</dt>
+                  <dd className="tnum">{formatCurrency(t.grand_total - t.landed_cost_total)}</dd>
+                </div>
+              </>
+            ) : (
+              <div className="mt-2 flex justify-between border-t border-line pt-2 text-base font-semibold">
+                <dt>Payable</dt>
+                <dd className="tnum">{formatCurrency(t.grand_total)}</dd>
+              </div>
+            )}
           </dl>
           <Button className="mt-4 w-full" onClick={save} disabled={saving}>
             {saving ? <Spinner className="border-white/40 border-t-white" /> : isEdit ? 'Save changes' : 'Save draft'}

@@ -63,6 +63,22 @@ class SaleController extends Controller
                 'dealer_price' => (float) $p->dealer_price, 'mrp' => (float) $p->mrp,
             ]);
 
+        // Batches with stock, oldest first, so a line can be sold from a chosen batch.
+        $seeCost = $request->user()->hasPermission('products.view_cost', $company->id);
+        $batches = \App\Models\ProductBatch::query()
+            ->where('company_id', $company->id)
+            ->where('remaining_qty', '>', 0)
+            ->whereIn('product_id', $products->pluck('id'))
+            ->orderBy('received_at')->orderBy('created_at')
+            ->get(['id', 'product_id', 'batch_no', 'barcode', 'remaining_qty', 'cost_price', 'received_at'])
+            ->map(fn ($b) => array_filter([
+                'id' => $b->id, 'product_id' => $b->product_id, 'batch_no' => $b->batch_no, 'barcode' => $b->barcode,
+                'remaining_qty' => (float) $b->remaining_qty,
+                'received_at' => optional($b->received_at)->toDateString(),
+                'cost_price' => $seeCost ? round((float) $b->cost_price, 2) : null,
+            ], fn ($v) => $v !== null))
+            ->values();
+
         $locations = Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'is_default'])
             ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'is_default' => (bool) $l->is_default]);
@@ -70,6 +86,7 @@ class SaleController extends Controller
         return $this->ok([
             'customers' => $customers,
             'products'  => $products,
+            'batches'   => $batches,
             'locations' => $locations,
             'settings'  => [
                 'loyalty_earn_rupees'        => (float) $settings['loyalty_earn_rupees'],
@@ -97,7 +114,7 @@ class SaleController extends Controller
         $this->assertOwnSale($request, $sale);
 
         return $this->ok(new SaleResource($sale->load([
-            'items', 'customer:id,name,type', 'createdBy:id,name',
+            'items.batch:id,batch_no', 'customer:id,name,type', 'createdBy:id,name',
             'company:id,name,legal_name,gst_number,address,phone,email,state,state_code',
             'cancelRequestedBy:id,name', 'cancelReviewedBy:id,name',
         ])));

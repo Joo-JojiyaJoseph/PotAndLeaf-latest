@@ -21,8 +21,16 @@ class SubmitStockVerification
         return DB::transaction(function () use ($verification) {
             $verification->loadMissing('items');
 
+            $batchedProducts = $verification->items->whereNotNull('product_batch_id')->pluck('product_id')->unique()->flip();
+
             foreach ($verification->items as $item) {
                 if (! $item->product_id) {
+                    continue;
+                }
+                if ($item->product_batch_id) {
+                    // A batch line: compare with that batch's stock now.
+                    $system = (float) (\App\Models\ProductBatch::query()->whereKey($item->product_batch_id)->value('remaining_qty') ?? 0);
+                    $item->update(['system_qty' => $system, 'variance' => round((float) $item->counted_qty - $system, 3)]);
                     continue;
                 }
 
@@ -33,7 +41,9 @@ class SubmitStockVerification
                     continue;
                 }
 
-                $system = (float) $product->current_stock;
+                $system = $batchedProducts->has($product->id)
+                    ? max(0, round((float) $product->current_stock - (float) \App\Models\ProductBatch::where('product_id', $product->id)->sum('remaining_qty'), 3))
+                    : (float) $product->current_stock;
                 $item->update([
                     'system_qty' => $system,
                     'variance'   => round((float) $item->counted_qty - $system, 3),

@@ -39,7 +39,7 @@ export default function ImportModal({ open, onClose, entity, title, columns, onD
     if (!/\.csv$/i.test(file.name)) { setError('Please choose a .csv file. In Excel: File → Save As → “CSV UTF-8 (Comma delimited)”.'); return; }
     const { headers, rows: parsed } = parseCsv(await file.text());
     // Accept either the column key (cost_price) or its label (Cost price).
-    const lookup = Object.fromEntries(columns.flatMap((c) => [[c.key.toLowerCase(), c.key], [c.label.toLowerCase(), c.key]]));
+    const lookup = Object.fromEntries(columns.flatMap((c) => [[c.key.toLowerCase(), c.key], [c.label.toLowerCase(), c.key], ...(c.aliases ?? []).map((x) => [x.toLowerCase(), c.key])]));
     const map = Object.fromEntries(headers.map((h) => [h, lookup[h.toLowerCase().trim()] ?? null]));
     setUnknown(headers.filter((h) => !map[h]));
     const mapped = parsed.map((r) => Object.fromEntries(Object.entries(r).filter(([h]) => map[h]).map(([h, v]) => [map[h], v])));

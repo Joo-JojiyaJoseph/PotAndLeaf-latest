@@ -8,7 +8,7 @@ import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
-import { todayISO as today } from '../../lib/format';
+import { formatCurrency, todayISO as today } from '../../lib/format';
 const emptyLine = () => ({ product_id: '', qty: '1', rate_per_cycle: '' });
 const CYCLE_DAYS = { daily: 1, weekly: 7, monthly: 30 };
 const cycleRate = (product, cycle) => {
@@ -158,6 +158,12 @@ export default function RentalForm() {
         </div>
       </Card>
 
+      {data && products.length === 0 && (
+        <Card className="border-warn/40 p-4 text-sm">
+          No product is set for rent yet. Open the product in <b>Products</b>, tick <b>“This product can be rented”</b>, enter the daily rate and save. Only those products show here.
+        </Card>
+      )}
+
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -165,6 +171,7 @@ export default function RentalForm() {
               <th className="microlabel px-3 py-2 font-semibold">Plant</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Qty</th>
               <th className="microlabel px-3 py-2 text-right font-semibold">Rate / cycle</th>
+              <th className="microlabel px-3 py-2 text-right font-semibold">Line total</th>
               <th className="px-3 py-2" />
             </tr></thead>
             <tbody>
@@ -179,7 +186,7 @@ export default function RentalForm() {
                       <option value="">Select…</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
-                          {p.name}{p.is_rental && p.rental_daily_rate != null ? ` · ₹${p.rental_daily_rate}/day` : ''} · {p.current_stock ?? 0} in stock
+                          {p.name}{p.rental_daily_rate != null ? ` · ₹${p.rental_daily_rate}/day` : ''} · {p.current_stock ?? 0} in stock
                         </option>
                       ))}
                     </Select>
@@ -191,15 +198,38 @@ export default function RentalForm() {
                     )}
                   </td>
                   <td className="px-3 py-2"><input type="number" step="0.01" className={numInput} value={line.rate_per_cycle} onChange={(e) => setLine(i, { rate_per_cycle: e.target.value })} /></td>
+                  <td className="tnum px-3 py-2 text-right font-medium">{formatCurrency((Number(line.qty) || 0) * (Number(line.rate_per_cycle) || 0))}</td>
                   <td className="px-3 py-2"><button onClick={() => setLines((p) => (p.length === 1 ? p : p.filter((_, idx) => idx !== i)))} className="rounded-md p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="border-t border-line px-3 py-2">
-          <Button variant="ghost" size="sm" onClick={() => setLines((p) => [...p, emptyLine()])}><PlusIcon className="size-4" /> Add plant</Button>
-          {err('items') && <span className="ml-2 text-xs text-danger">{err('items')}</span>}
+        <div className="flex flex-wrap items-start justify-between gap-3 border-t border-line px-3 py-2">
+          <div>
+            <Button variant="ghost" size="sm" onClick={() => setLines((p) => [...p, emptyLine()])}><PlusIcon className="size-4" /> Add plant</Button>
+            {err('items') && <span className="ml-2 text-xs text-danger">{err('items')}</span>}
+          </div>
+          {(() => {
+            // Rent at a glance: per cycle, and for the whole expected period.
+            const perCycle = lines.reduce((t, l) => t + (Number(l.qty) || 0) * (Number(l.rate_per_cycle) || 0), 0);
+            const cycleDays = { daily: 1, weekly: 7, monthly: 30 }[header.billing_cycle] ?? 30;
+            const cycleWord = { daily: 'day', weekly: 'week', monthly: 'month' }[header.billing_cycle] ?? 'cycle';
+            let cycles = null;
+            if (header.start_date && header.expected_end_date && header.expected_end_date >= header.start_date) {
+              const days = Math.round((new Date(header.expected_end_date) - new Date(header.start_date)) / 86400000) + 1;
+              cycles = Math.max(1, Math.ceil(days / cycleDays));
+            }
+            return (
+              <dl className="min-w-[240px] space-y-0.5 text-sm">
+                <div className="flex justify-between gap-4"><dt className="text-muted">Rent per {cycleWord}</dt><dd className="tnum font-semibold">{formatCurrency(perCycle)}</dd></div>
+                {cycles != null && (
+                  <div className="flex justify-between gap-4"><dt className="text-muted">Total for {cycles} {cycleWord}{cycles === 1 ? '' : 's'} (till expected end)</dt><dd className="tnum font-semibold">{formatCurrency(perCycle * cycles)}</dd></div>
+                )}
+                {Number(header.deposit) > 0 && <div className="flex justify-between gap-4"><dt className="text-muted">Security deposit</dt><dd className="tnum">{formatCurrency(header.deposit)}</dd></div>}
+              </dl>
+            );
+          })()}
         </div>
       </Card>
 

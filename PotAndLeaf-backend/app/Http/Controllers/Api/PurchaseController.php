@@ -65,6 +65,8 @@ class PurchaseController extends Controller
             'suppliers' => $suppliers,
             'products'  => $products,
             'tax_rates' => [0, 5, 12, 18, 28],
+            // Settings → "Freight / loading on purchases is paid to the supplier".
+            'freight_to_supplier' => app(\App\Services\SettingsService::class)->get($company->id, 'landed_cost_payable_to_supplier') !== '0',
         ]);
     }
 

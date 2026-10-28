@@ -40,6 +40,7 @@ class StoreCustomerRequest extends FormRequest
             'credit_days'     => ['nullable', 'integer', 'min:0'],
             'credit_limit'    => ['nullable', 'numeric', 'min:0'],
             'opening_balance' => ['nullable', 'numeric'],
+            'opening_left'    => ['nullable', 'numeric', 'min:0'],
             'notes'           => ['nullable', 'string', 'max:2000'],
             'status'          => ['required', 'in:active,inactive,blocked'],
             'photo'           => ['nullable', 'string', 'max:500'],

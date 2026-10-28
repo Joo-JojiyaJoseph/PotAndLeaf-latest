@@ -26,9 +26,16 @@ class StoreRentalRequest extends FormRequest
             'deposit'           => ['nullable', 'numeric', 'min:0'],
             'notes'             => ['nullable', 'string', 'max:1000'],
             'items'                    => ['required', 'array', 'min:1'],
-            'items.*.product_id'       => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],
+            'items.*.product_id'       => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)->where('is_rental', true)],
             'items.*.qty'              => ['required', 'numeric', 'gt:0'],
             'items.*.rate_per_cycle'   => ['nullable', 'numeric', 'min:0'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'items.*.product_id.exists' => 'This product is not set for rent. Tick "This product can be rented" on the product first.',
         ];
     }
 }

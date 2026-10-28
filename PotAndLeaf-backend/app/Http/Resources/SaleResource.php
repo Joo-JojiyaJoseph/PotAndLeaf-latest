@@ -58,8 +58,12 @@ class SaleResource extends JsonResource
             'created_by'    => $this->created_by,
             'items_count'   => $this->when($this->items_count !== null, $this->items_count),
             'items'         => SaleItemResource::collection($this->whenLoaded('items')),
+            // Draft lines that need more than is in stock now (for "Request shortage").
+            'short_items'   => $shortItems = $this->shortItems(),
             'can'           => [
                 'confirm'         => $this->status === 'draft' && $user?->hasPermission('sales.confirm', $companyId),
+                // Only when some item is short of stock and there is a customer to wait for it.
+                'request_shortage' => $this->status === 'draft' && $this->customer_id && $shortItems !== [],
                 'cancel'          => $this->status !== 'cancelled'
                     && ! $this->hasCancelRequest()
                     && (
@@ -77,5 +81,26 @@ class SaleResource extends JsonResource
                 'convert_proforma'=> $this->isProforma() && $user?->hasPermission('sales.confirm', $companyId),
             ],
         ];
+    }
+
+    /** @return array<string,float> sale item id → how many are missing (draft sales only). */
+    private function shortItems(): array
+    {
+        if ($this->status !== 'draft' || ! $this->relationLoaded('items')) {
+            return [];
+        }
+        $stock = \App\Models\Product::query()->whereIn('id', $this->items->pluck('product_id')->filter())->pluck('current_stock', 'id');
+        $out = [];
+        foreach ($this->items as $item) {
+            if (! $item->product_id) {
+                continue;
+            }
+            $short = round((float) $item->qty - (float) ($stock[$item->product_id] ?? 0), 3);
+            if ($short > 0.0005) {
+                $out[$item->id] = $short;
+            }
+        }
+
+        return $out;
     }
 }

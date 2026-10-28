@@ -36,9 +36,12 @@ const SalesReturnDetail = lazy(() => import('./pages/salesReturns/SalesReturnDet
 const PaymentsList = lazy(() => import('./pages/payments/PaymentsList'));
 const ReceiptsList = lazy(() => import('./pages/receipts/ReceiptsList'));
 const CommissionList = lazy(() => import('./pages/commission/CommissionList'));
+const MyCommissionPage = lazy(() => import('./pages/commission/MyCommissionPage'));
 const TransfersList = lazy(() => import('./pages/transfers/TransfersList'));
 const TransferForm = lazy(() => import('./pages/transfers/TransferForm'));
 const HelpPage = lazy(() => import('./pages/help/HelpPage'));
+const RequestAccessPage = lazy(() => import('./pages/access/RequestAccessPage'));
+const AccessRequestsPage = lazy(() => import('./pages/access/AccessRequestsPage'));
 const RequestStockForm = lazy(() => import('./pages/transfers/RequestStockForm'));
 const TransferDetail = lazy(() => import('./pages/transfers/TransferDetail'));
 const ProductionList = lazy(() => import('./pages/production/ProductionList'));
@@ -120,6 +123,8 @@ export default function App() {
             <Route path="masters" element={<PermissionRoute anyOf={['categories.view', 'subcategories.view', 'units.view']}><MastersPage /></PermissionRoute>} />
             <Route path="profile" element={<ProfilePage />} />
             <Route path="help" element={<HelpPage />} />
+            <Route path="request-access" element={<RequestAccessPage />} />
+            <Route path="access-requests" element={<PermissionRoute permission="users.update"><AccessRequestsPage /></PermissionRoute>} />
             <Route path="bulk-splits" element={<PermissionRoute permission="bulk_splits.view"><BulkSplitsList /></PermissionRoute>} />
             <Route path="bulk-splits/new" element={<PermissionRoute permission="bulk_splits.create"><BulkSplitForm /></PermissionRoute>} />
             <Route path="bulk-splits/:id" element={<PermissionRoute permission="bulk_splits.view"><BulkSplitDetail /></PermissionRoute>} />
@@ -135,6 +140,7 @@ export default function App() {
             <Route path="payments" element={<PermissionRoute permission="payments.view"><PaymentsList /></PermissionRoute>} />
             <Route path="receipts" element={<PermissionRoute permission="receipts.view"><ReceiptsList /></PermissionRoute>} />
             <Route path="commission" element={<PermissionRoute permission="commission.view"><CommissionList /></PermissionRoute>} />
+            <Route path="my-commission" element={<PermissionRoute anyOf={['commission.view_own', 'commission.view']}><MyCommissionPage /></PermissionRoute>} />
             <Route path="transfers" element={<PermissionRoute permission="transfers.view"><TransfersList /></PermissionRoute>} />
             <Route path="transfers/new" element={<PermissionRoute permission="transfers.create"><RequestStockForm /></PermissionRoute>} />
             <Route path="transfers/send" element={<PermissionRoute permission="transfers.create"><TransferForm /></PermissionRoute>} />

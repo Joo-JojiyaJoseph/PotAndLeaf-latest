@@ -119,7 +119,8 @@ export default function SaleDetail() {
         actions={<>
           <Button variant="outline" size="sm" onClick={() => printInvoice(s)}><PrinterIcon className="size-4" /> Print</Button>
           <Button variant="outline" size="sm" onClick={downloadInvoicePdf}><PrinterIcon className="size-4" /> PDF</Button>
-          {s.status === 'draft' && s.customer_id && (
+          {/* Only when an item is short of stock (and there is a customer to wait for it). */}
+          {s.can?.request_shortage && (
             <Button variant="outline" size="sm" onClick={() => backorderM.mutate()} disabled={backorderM.isPending}>
               <ClockIcon className="size-4" /> Request shortage
             </Button>
@@ -212,7 +213,11 @@ export default function SaleDetail() {
             <tbody>
               {(s.items ?? []).map((it) => (
                 <tr key={it.id} className="border-b border-line/60 last:border-0">
-                  <td className="py-2 pr-3 font-medium">{it.product_name}{it.hsn_code ? <span className="ml-1 text-xs text-muted">HSN {it.hsn_code}</span> : null}</td>
+                  <td className="py-2 pr-3 font-medium">
+                    {it.product_name}{it.hsn_code ? <span className="ml-1 text-xs text-muted">HSN {it.hsn_code}</span> : null}
+                    {it.batch_no && <span className="block text-[11px] font-normal text-muted">Batch {it.batch_no}</span>}
+                    {s.short_items?.[it.id] > 0 && <span className="block text-xs font-normal text-danger">Short by {s.short_items[it.id]} — not enough in stock</span>}
+                  </td>
                   <td className="tnum px-3 py-2 text-right text-muted">{it.qty}</td>
                   <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(it.rate)}</td>
                   <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(it.discount)}</td>

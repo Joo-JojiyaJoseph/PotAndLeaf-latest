@@ -37,11 +37,13 @@ class CustomerReceiptController extends Controller
         $customers = Customer::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->orderBy('name')
-            ->get(['id', 'name', 'outstanding', 'advance_balance', 'company_id'])
+            ->get(['id', 'name', 'outstanding', 'opening_balance', 'advance_balance', 'company_id'])
             ->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,
                 'outstanding' => (float) $c->outstanding,
+                // Outstanding from before, still unpaid (for the "On account" line).
+                'opening_left' => app(\App\Services\ReceiptService::class)->openingLeft($c),
                 'advance_balance' => (float) $c->advance_balance,
                 'company_id' => $c->company_id,
             ]);

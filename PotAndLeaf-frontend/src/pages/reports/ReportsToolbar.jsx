@@ -9,6 +9,7 @@ import {
 import { Button } from '../../components/ui';
 import { addCalendarDays, classNames, formatDate, startOfIstWeek, todayISO } from '../../lib/format';
 import CompanyFilter from '../../components/CompanyFilter';
+import { useAuth } from '../../context/AuthContext';
 
 const PRESETS = [
   { label: '7D', days: 6 },
@@ -20,14 +21,22 @@ const BUSINESS_PERIODS = [
   { label: 'Today', kind: 'today' },
   { label: 'Week', kind: 'week' },
   { label: 'Month', kind: 'month' },
-  { label: 'Year', kind: 'year' },
+  { label: 'This FY', kind: 'year' },
 ];
 
-function rangeForKind(kind) {
+// "This FY" starts on the company's financial-year month (Settings; 4 = April).
+function fyStartISO(to, fyStartMonth = 4) {
+  const y = Number(to.slice(0, 4));
+  const m = Number(to.slice(5, 7));
+  const startYear = m >= fyStartMonth ? y : y - 1;
+  return `${startYear}-${String(fyStartMonth).padStart(2, '0')}-01`;
+}
+
+function rangeForKind(kind, fyStartMonth) {
   const to = todayISO();
   if (kind === 'week') return { from: startOfIstWeek(to), to };
   if (kind === 'month') return { from: `${to.slice(0, 7)}-01`, to };
-  if (kind === 'year') return { from: `${to.slice(0, 4)}-01-01`, to };
+  if (kind === 'year') return { from: fyStartISO(to, fyStartMonth), to };
   return { from: to, to };
 }
 
@@ -47,6 +56,8 @@ export default function ReportsToolbar({
   extraFilters,
   showBusinessPeriods,
 }) {
+  const { activeCompany } = useAuth();
+  const fyStart = Number(activeCompany?.fy_start_month) || 4;
   const [exportOpen, setExportOpen] = useState(false);
   const exportRef = useRef(null);
   const today = todayISO();
@@ -117,14 +128,14 @@ export default function ReportsToolbar({
                   );
                 })}
                 {showBusinessPeriods && BUSINESS_PERIODS.map((p) => {
-                  const r = rangeForKind(p.kind);
+                  const r = rangeForKind(p.kind, fyStart);
                   const on = range.from === r.from && range.to === r.to;
                   return (
                     <button
                       key={p.kind}
                       type="button"
                       onClick={() => {
-                        onRangeChange(rangeForKind(p.kind));
+                        onRangeChange(rangeForKind(p.kind, fyStart));
                         onToggleCustomDates?.(false);
                       }}
                       className={classNames(chip(on), 'border-l border-line')}

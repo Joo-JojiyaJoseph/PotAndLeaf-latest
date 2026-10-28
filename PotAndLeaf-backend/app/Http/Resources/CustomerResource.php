@@ -35,6 +35,9 @@ class CustomerResource extends JsonResource
             'credit_days'     => $this->credit_days,
             'credit_limit'    => (float) $this->credit_limit,
             'opening_balance' => (float) $this->opening_balance,
+            // Old outstanding still unpaid (goes down as it is received).
+            'opening_left'    => $openingLeft = app(\App\Services\ReceiptService::class)->openingLeft($this->resource),
+            'opening_paid'    => round((float) $this->opening_balance - $openingLeft, 2),
             'outstanding'     => (float) $this->outstanding,
             'advance_balance' => (float) $this->advance_balance,
             'loyalty_points'  => (int) $this->loyalty_points,

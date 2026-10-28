@@ -19,6 +19,10 @@ class CreateProduct
     {
         return DB::transaction(function () use ($companyId, $data, $userId) {
             $suppliers = $this->pullSuppliers($data);
+            // Reorder level left blank: use the company's "Default reorder alert qty" (Settings).
+            if (! isset($data['reorder_level']) || $data['reorder_level'] === '') {
+                $data['reorder_level'] = app(\App\Services\SettingsService::class)->getFloat($companyId, 'reorder_alert_default');
+            }
             $data = $this->normalizeDecimals($data);
 
             if (empty($data['sku'])) {

@@ -220,7 +220,16 @@ export default function PurchaseDetail() {
               </>
             )}
             <div className="flex justify-between text-muted"><dt>Landed cost</dt><dd className="tnum">{formatCurrency(p.landed_cost_total)}</dd></div>
-            <div className="mt-2 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Payable</dt><dd className="tnum">{formatCurrency(p.grand_total)}</dd></div>
+            {Number(p.freight_to_transporter) > 0 ? (
+              <>
+                <div className="mt-2 flex justify-between border-t border-line pt-2 font-medium"><dt>Bill total</dt><dd className="tnum">{formatCurrency(p.grand_total)}</dd></div>
+                <div className="flex justify-between text-muted"><dt>Freight paid to transporter</dt><dd className="tnum">− {formatCurrency(p.freight_to_transporter)}</dd></div>
+                <div className="mt-1 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Owed to supplier</dt><dd className="tnum">{formatCurrency(p.supplier_payable)}</dd></div>
+                <p className="mt-1 text-xs text-muted">Pay the transporter from the Cash Book or Bank Book.</p>
+              </>
+            ) : (
+              <div className="mt-2 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Payable</dt><dd className="tnum">{formatCurrency(p.grand_total)}</dd></div>
+            )}
             {p.status === 'confirmed' && (
               <>
                 <div className="flex justify-between text-muted"><dt>Paid</dt><dd className="tnum">{formatCurrency(p.amount_paid)}</dd></div>

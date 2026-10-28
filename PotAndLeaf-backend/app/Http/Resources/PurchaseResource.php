@@ -13,6 +13,11 @@ class PurchaseResource extends JsonResource
     {
         $user = $request->user();
         $companyId = $this->company_id;
+        // What is owed to the supplier for this bill. Fixed when confirmed; for a draft
+        // it follows Settings → "Freight / loading on purchases is paid to the supplier".
+        $payable = $this->status === 'confirmed'
+            ? $this->supplierPayable()
+            : round((float) $this->grand_total - (app(\App\Services\SettingsService::class)->get($companyId, 'landed_cost_payable_to_supplier') === '0' ? (float) $this->landed_cost_total : 0.0), 2);
 
         return [
             'id'                => $this->id,
@@ -28,7 +33,10 @@ class PurchaseResource extends JsonResource
             'landed_cost_total' => (float) $this->landed_cost_total,
             'grand_total'       => (float) $this->grand_total,
             'amount_paid'       => (float) $this->amount_paid,
-            'balance'           => round((float) $this->grand_total - (float) $this->amount_paid, 2),
+            'supplier_payable'  => $payable,
+            // Freight / loading paid to a transporter, not to this supplier.
+            'freight_to_transporter' => round(max(0, (float) $this->grand_total - $payable), 2),
+            'balance'           => round($payable - (float) $this->amount_paid, 2),
             'payment_status'    => $this->paymentStatus(),
             'status'            => $this->status,
             'notes'             => $this->notes,

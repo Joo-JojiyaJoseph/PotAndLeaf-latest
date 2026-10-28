@@ -55,7 +55,8 @@ it('keeps a retail customer on the retail price tier', function () {
 
 it('refuses a commission payment for staff with no commission set, or a second one for the same month', function () {
     $h = $this->apiHeaders();
-    $body = ['user_id' => $this->user->id, 'period' => now()->format('Y-m'), 'amount' => 100, 'mode' => 'cash', 'status' => 'paid'];
+    // Nothing sold this month, so nothing earned: only ₹0 can be recorded.
+    $body = ['user_id' => $this->user->id, 'period' => now()->format('Y-m'), 'amount' => 0, 'mode' => 'cash', 'status' => 'paid'];
 
     $this->postJson('/api/commission/payouts', $body, $h)->assertStatus(422)
         ->assertJsonPath('message', $this->user->name.' has no commission set. Set a staff rate first.');
@@ -64,9 +65,11 @@ it('refuses a commission payment for staff with no commission set, or a second o
     $id = $this->postJson('/api/commission/payouts', $body, $h)->assertCreated()->json('data.id');
     $this->postJson('/api/commission/payouts', ['amount' => 999] + $body, $h)->assertStatus(422);
 
-    // Change it properly instead.
+    // Change it properly instead — but never above what was earned.
     $this->putJson("/api/commission/payouts/{$id}", ['amount' => 150, 'mode' => 'upi', 'status' => 'paid'], $h)
-        ->assertOk()->assertJsonPath('data.amount', 150);
+        ->assertStatus(422)->assertJsonPath('errors.amount.0', $this->user->name.' earned ₹0.00 for '.now()->format('Y-m').'. You cannot pay more than that.');
+    $this->putJson("/api/commission/payouts/{$id}", ['amount' => 0, 'mode' => 'upi', 'status' => 'paid'], $h)
+        ->assertOk()->assertJsonPath('data.mode', 'upi');
 
     // Removed then added again for the same month works (no duplicate-key error).
     $this->deleteJson("/api/commission/payouts/{$id}", [], $h)->assertOk();

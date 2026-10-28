@@ -52,7 +52,10 @@ class SellAsFulfillmentService
             product: $set, direction: 'in', qty: $qty, unitCost: (float) $item->landed_unit_cost,
             referenceType: 'purchase', referenceId: $purchase->id, note: $note, userId: $userId,
         );
-        $set->cost_price = $item->landed_unit_cost;
+        // New price lives on the batch; the product's cost is set only once.
+        if ((float) $set->cost_price <= 0) {
+            $set->cost_price = $item->landed_unit_cost;
+        }
         $set->save();
 
         $item->set_product_id = $set->id;
@@ -71,7 +74,9 @@ class SellAsFulfillmentService
             referenceType: 'purchase', referenceId: $purchase->id,
             note: "{$note} (split from {$purchasedProduct->name})", userId: $userId,
         );
-        $split->cost_price = $unitCost;
+        if ((float) $split->cost_price <= 0) {
+            $split->cost_price = $unitCost;
+        }
         $split->save();
 
         $item->split_product_id = $split->id;

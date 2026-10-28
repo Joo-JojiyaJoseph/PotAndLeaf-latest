@@ -157,7 +157,8 @@ class ImportController extends Controller
         $row += ['status' => 'active'];
 
         $category = $row['category'] ?? null;
-        unset($row['category']);
+        $subcategory = isset($row['subcategory']) && trim((string) $row['subcategory']) !== '' ? trim((string) $row['subcategory']) : null;
+        unset($row['category'], $row['subcategory']);
         if ($category !== null && empty($row['category_id'])) {
             $found = ProductCategory::query()->where('company_id', $companyId)->where('status', 'active')
                 ->whereRaw('LOWER(name) = ?', [mb_strtolower($category)])->value('id');
@@ -169,6 +170,20 @@ class ImportController extends Controller
                 ])->id;
             }
             $row['category_id'] = $found;
+
+            // Optional subcategory under that category: the product is saved under it.
+            if ($subcategory !== null) {
+                $sub = ProductCategory::query()->where('company_id', $companyId)->where('parent_id', $found)
+                    ->whereRaw('LOWER(name) = ?', [mb_strtolower($subcategory)])->value('id');
+                if (! $sub) {
+                    $newCategories[] = "{$category} › {$subcategory}";
+                    $sub = ProductCategory::create([
+                        'company_id' => $companyId, 'parent_id' => $found, 'name' => $subcategory, 'status' => 'active',
+                        'code' => $this->uniqueCode(ProductCategory::class, $companyId, $subcategory),
+                    ])->id;
+                }
+                $row['category_id'] = $sub;
+            }
         }
 
         $unit = $row['unit'] ?? null;

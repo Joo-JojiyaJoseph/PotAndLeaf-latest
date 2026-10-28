@@ -62,6 +62,7 @@ class UpdateSupplierRequest extends FormRequest
             'credit_limit'      => ['nullable', 'numeric', 'min:0'],
             'credit_days'       => ['nullable', 'integer', 'min:0', 'max:365'],
             'opening_balance'   => ['nullable', 'numeric'],
+            'opening_left'      => ['nullable', 'numeric', 'min:0'],
             'notes'             => ['nullable', 'string', 'max:2000'],
             'status'            => ['required', new Enum(SupplierStatus::class)],
             'company_id'        => [

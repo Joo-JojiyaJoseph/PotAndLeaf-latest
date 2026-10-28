@@ -5,6 +5,7 @@ import { ExclamationTriangleIcon, MagnifyingGlassIcon, PrinterIcon, QrCodeIcon }
 import { useToast } from '../../lib/toast';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { formatCurrency } from '../../lib/format';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Spinner, PageHeader } from '../../components/ui';
 import { Barcode, printBarcodeLabel } from '../../components/Barcode';
@@ -24,7 +25,9 @@ function SafeBarcode({ value, height = 40 }) {
 }
 
 export default function BatchesPage() {
-  const { activeCompany } = useAuth();
+  const { activeCompany, can, isSuperAdmin } = useAuth();
+  // Each batch keeps what one piece cost when it came in; shown to people allowed to see cost.
+  const showCost = isSuperAdmin || can('products.view_cost') || can('*');
   const { companyParams, Filter } = useCompanyFilter();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -146,6 +149,7 @@ export default function BatchesPage() {
                   <th className="microlabel px-4 py-2 font-semibold">Batch</th>
                   <th className="microlabel px-4 py-2 font-semibold">Source</th>
                   <th className="microlabel px-4 py-2 text-right font-semibold" title="How many from this batch are still in stock">Left in batch</th>
+                  {showCost && <th className="microlabel px-4 py-2 text-right font-semibold" title="What one piece of this batch cost (purchase price + freight share)">Cost / pc</th>}
                   <th className="microlabel px-4 py-2 font-semibold">Barcode</th>
                   <th className="px-4 py-2" />
                 </tr>
@@ -171,6 +175,7 @@ export default function BatchesPage() {
                         </div>
                       )}
                     </td>
+                    {showCost && <td className="tnum px-4 py-2.5 text-right text-muted">{Number(b.cost_price) > 0 ? formatCurrency(b.cost_price) : '—'}</td>}
                     <td className="px-4 py-2.5"><div className="w-40"><SafeBarcode value={b.barcode} height={40} /></div></td>
                     <td className="px-4 py-2.5 text-right">
                       {b.barcode && (

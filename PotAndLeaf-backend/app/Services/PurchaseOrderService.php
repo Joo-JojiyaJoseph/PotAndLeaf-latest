@@ -391,6 +391,10 @@ class PurchaseOrderService
             if (! $po || ! $po->isOpen() || $po->purchase_id) {
                 throw ValidationException::withMessages(['status' => 'This PO has already been received or cancelled.']);
             }
+            // A draft has not gone to the supplier yet: send it first, then convert when the goods arrive.
+            if ($po->status !== 'sent') {
+                throw ValidationException::withMessages(['status' => 'Mark this PO as sent first. A purchase can be made only from a PO sent to the supplier.']);
+            }
             $po->load('items');
             $purchase = $this->createPurchase->handle($po->company_id, [
                 'supplier_id'   => $po->supplier_id,

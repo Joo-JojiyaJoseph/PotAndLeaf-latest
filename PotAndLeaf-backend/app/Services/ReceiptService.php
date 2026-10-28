@@ -417,6 +417,27 @@ class ReceiptService
             ->all();
     }
 
+    /**
+     * The customer's "Outstanding (from before)" still unpaid. Money received
+     * "On account" (no bill picked, not an advance) pays this old amount first.
+     * Example: entered 5,000, received 2,000 on account → 3,000 left.
+     */
+    public function openingLeft(Customer $customer): float
+    {
+        $opening = round((float) $customer->opening_balance, 2);
+        if ($opening <= 0.005) {
+            return max(0, $opening);
+        }
+        $onAccount = (float) CustomerReceipt::query()
+            ->where('customer_id', $customer->id)
+            ->where('is_advance', false)
+            ->whereNull('sale_id')
+            ->whereDoesntHave('allocations')
+            ->sum('amount');
+
+        return round(max(0, min($opening - $onAccount, (float) $customer->outstanding)), 2);
+    }
+
     private function nextReceiptNo(int|string $companyId): string
     {
         return \App\Support\Numbering\DocumentNumber::next(CustomerReceipt::query()->where('company_id', $companyId), 'receipt_no', 'RCP-', 6);

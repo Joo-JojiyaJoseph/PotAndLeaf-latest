@@ -46,7 +46,18 @@ class StockVerificationController extends Controller
                 'unit' => $p->unit?->short_name ?? $p->unit?->name,
             ]);
 
-        return $this->ok(['products' => $products]);
+        // Batches with stock, oldest first: the count sheet lists one row per batch.
+        $batches = \App\Models\ProductBatch::query()
+            ->where('company_id', $company->id)
+            ->where('remaining_qty', '>', 0)
+            ->orderBy('received_at')->orderBy('created_at')
+            ->get(['id', 'product_id', 'batch_no', 'barcode', 'remaining_qty', 'received_at'])
+            ->map(fn ($b) => [
+                'id' => $b->id, 'product_id' => $b->product_id, 'batch_no' => $b->batch_no, 'barcode' => $b->barcode,
+                'system_qty' => (float) $b->remaining_qty, 'received_at' => optional($b->received_at)->toDateString(),
+            ]);
+
+        return $this->ok(['products' => $products, 'batches' => $batches]);
     }
 
     public function store(StoreStockVerificationRequest $request): JsonResponse

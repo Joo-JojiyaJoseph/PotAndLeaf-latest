@@ -91,6 +91,17 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
     // Company-scoped
     Route::middleware(ResolveApiCompany::class)->group(function () {
         Route::get('permissions', [AuthController::class, 'permissions']);
+
+        // Request access (any signed-in user) and answering requests (admins).
+        Route::get('access-requests/form-data', [\App\Http\Controllers\Api\AccessRequestController::class, 'formData']);
+        Route::get('access-requests/notices', [\App\Http\Controllers\Api\AccessRequestController::class, 'notices']);
+        Route::get('access-requests', [\App\Http\Controllers\Api\AccessRequestController::class, 'index']);
+        Route::post('access-requests', [\App\Http\Controllers\Api\AccessRequestController::class, 'store']);
+        Route::post('access-requests/{accessRequest}/approve', [\App\Http\Controllers\Api\AccessRequestController::class, 'approve']);
+        Route::post('access-requests/{accessRequest}/reject', [\App\Http\Controllers\Api\AccessRequestController::class, 'reject']);
+        Route::delete('access-requests/{accessRequest}', [\App\Http\Controllers\Api\AccessRequestController::class, 'destroy']);
+        Route::get('users/{user}/extra-permissions', [\App\Http\Controllers\Api\AccessRequestController::class, 'userExtras']);
+        Route::delete('users/{user}/extra-permissions/{permission}', [\App\Http\Controllers\Api\AccessRequestController::class, 'removeExtra']);
         Route::get('dashboard', [DashboardController::class, 'index']);
 
         Route::get('suppliers', [SupplierController::class, 'index']);
@@ -127,8 +138,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('commission/rules/{commissionRule}/daily-targets', [CommissionController::class, 'syncDailyTargets']);
         Route::get('commission/promotions', [CommissionController::class, 'promotions']);
         Route::post('commission/promotions', [CommissionController::class, 'storePromotion']);
+        Route::put('commission/promotions/{commissionPromotion}', [CommissionController::class, 'updatePromotion']);
         Route::get('commission/seasonal-care-rules', [CommissionController::class, 'seasonalCareRules']);
         Route::post('commission/seasonal-care-rules', [CommissionController::class, 'storeSeasonalCareRule']);
+        Route::put('commission/seasonal-care-rules/{seasonalCareRule}', [CommissionController::class, 'updateSeasonalCareRule']);
         Route::get('commission/seasonal-care-sends', [CommissionController::class, 'seasonalCareSends']);
         Route::get('commission/supervisor-rates', [CommissionController::class, 'supervisorRates']);
         Route::post('commission/supervisor-rates', [CommissionController::class, 'storeSupervisorRate']);
@@ -161,6 +174,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
         Route::get('supplier-payments/form-data', [SupplierPaymentController::class, 'formData']);
         Route::get('supplier-payments/payables', [SupplierPaymentController::class, 'payables']);
+        Route::get('supplier-payments/owed', [SupplierPaymentController::class, 'owed']);
         Route::get('supplier-payments', [SupplierPaymentController::class, 'index']);
         Route::post('supplier-payments', [SupplierPaymentController::class, 'store']);
         Route::post('supplier-payments/apply-advance', [SupplierPaymentController::class, 'applyAdvance']);
@@ -189,6 +203,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
         // Module 12 — Customer master (CRUD)
         Route::get('customers', [CustomerController::class, 'index']);
+        Route::get('customers/options', [CustomerController::class, 'options']);
         Route::get('loyalty', [LoyaltyController::class, 'index']);
         Route::post('loyalty/adjust', [LoyaltyController::class, 'adjust']);
         Route::get('loyalty/customers/{customer}', [LoyaltyController::class, 'customer']);
@@ -246,7 +261,6 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('rental-invoices/{rentalInvoice}/paid', [RentalController::class, 'markInvoicePaid']);
         Route::get('rental-invoices/{rentalInvoice}/invoice.pdf', [InvoicePdfController::class, 'rental']);
         Route::post('rental-invoices/{rentalInvoice}/whatsapp', [RentalController::class, 'sendInvoiceWhatsapp']);
-        Route::delete('rental-invoices/{rentalInvoice}', [RentalController::class, 'deleteInvoice']);
 
         // Module 10 — Advance orders (customer pre-bookings)
         Route::get('advance-orders/form-data', [AdvanceOrderController::class, 'formData']);

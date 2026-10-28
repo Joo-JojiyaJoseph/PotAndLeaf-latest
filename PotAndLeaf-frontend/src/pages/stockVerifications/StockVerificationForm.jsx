@@ -52,16 +52,36 @@ export default function StockVerificationForm() {
   });
 
   const products = data?.products ?? [];
-  const countFor = (p) => (counts[p.id] === undefined ? p.system_qty : counts[p.id]);
+  // One row per batch (oldest first); a product with no batches is one row.
+  // Stock outside every batch (rare) gets its own "Not in a batch" row.
+  const rows = useMemo(() => {
+    const byProduct = {};
+    (data?.batches ?? []).forEach((b) => { (byProduct[b.product_id] ??= []).push(b); });
+    const out = [];
+    products.forEach((p) => {
+      const bs = byProduct[p.id] ?? [];
+      if (bs.length === 0) {
+        out.push({ key: `p:${p.id}`, product: p, batch: null, system_qty: p.system_qty, first: true, last: true });
+        return;
+      }
+      const outside = Math.round((p.system_qty - bs.reduce((t, b) => t + b.system_qty, 0)) * 1000) / 1000;
+      const list = bs.map((b) => ({ key: `b:${b.id}`, product: p, batch: b, system_qty: b.system_qty }));
+      if (outside > 0.0005) list.push({ key: `p:${p.id}`, product: p, batch: null, outsideBatches: true, system_qty: outside });
+      list.forEach((r, i) => { r.first = i === 0; r.last = i === list.length - 1; r.count = list.length; });
+      out.push(...list);
+    });
+    return out;
+  }, [products, data]);
+  const countFor = (r) => (counts[r.key] === undefined ? r.system_qty : counts[r.key]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter((p) => p.name.toLowerCase().includes(q) || (p.sku ?? '').toLowerCase().includes(q));
-  }, [products, search]);
+    if (!q) return rows;
+    return rows.filter((r) => [r.product.name, r.product.sku, r.batch?.batch_no, r.batch?.barcode].filter(Boolean).join(' ').toLowerCase().includes(q));
+  }, [rows, search]);
 
-  const discrepancies = products.reduce((n, p) => {
-    const v = Number(countFor(p)) - p.system_qty;
+  const discrepancies = rows.reduce((n, r) => {
+    const v = Number(countFor(r)) - r.system_qty;
     return Math.abs(v) > 1e-6 ? n + 1 : n;
   }, 0);
 
@@ -73,7 +93,7 @@ export default function StockVerificationForm() {
 
     setErrors([]);
     setSaving(true);
-    const items = products.map((p) => ({ product_id: p.id, counted_qty: Number(countFor(p)) || 0 }));
+    const items = rows.map((r) => ({ product_id: r.product.id, product_batch_id: r.batch?.id ?? null, counted_qty: Number(countFor(r)) || 0 }));
     try {
       await api.post('/stock-verifications', {
         count_date: countDate,
@@ -128,7 +148,7 @@ export default function StockVerificationForm() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="page-title">New stock count</h1>
-          <p className="text-sm text-muted">Enter counted quantities; submit for HO approval to adjust stock.</p>
+          <p className="text-sm text-muted">Count each batch on the shelf (match the barcode label) and type what you find. Submit for approval to adjust stock.</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate('/stock-verifications')}>
           <ArrowLeftIcon className="size-4" /> Back
@@ -177,7 +197,7 @@ export default function StockVerificationForm() {
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter products…" className="pl-9" />
         </div>
         <span className="text-sm text-muted">
-          {discrepancies} discrepanc{discrepancies === 1 ? 'y' : 'ies'} of {products.length} items
+          {discrepancies} discrepanc{discrepancies === 1 ? 'y' : 'ies'} of {rows.length} rows ({products.length} products)
         </span>
       </div>
 
@@ -186,32 +206,53 @@ export default function StockVerificationForm() {
           <div className="px-4 py-16 text-center text-sm text-muted">No products in this company yet.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
+            <table className="w-full min-w-[680px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-faint">
                   <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
+                  <th className="microlabel px-4 py-2.5 font-semibold">Batch</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">System</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Counted</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Variance</th>
                 </tr>
               </thead>
               <tbody>
-                {visible.map((p) => {
-                  const v = Number(countFor(p)) - p.system_qty;
+                {visible.map((r) => {
+                  const v = Number(countFor(r)) - r.system_qty;
+                  const showName = r.first || search.trim();
                   return (
-                    <tr key={p.id} className="border-b border-line/60 last:border-0">
-                      <td className="px-4 py-2">
-                        <div className="font-medium">{p.name}</div>
-                        <div className="tnum text-xs text-muted">{p.sku}{p.unit ? ` · ${p.unit}` : ''}</div>
+                    <tr key={r.key} className={classNames('border-line/60', r.last || search.trim() ? 'border-b last:border-0' : '')}>
+                      <td className="px-4 py-2 align-top">
+                        {showName ? (
+                          <>
+                            <div className="font-medium">{r.product.name}</div>
+                            <div className="tnum text-xs text-muted">
+                              {r.product.sku}{r.product.unit ? ` · ${r.product.unit}` : ''}
+                              {r.count > 1 ? ` · total ${r.product.system_qty} in ${r.count} rows` : ''}
+                            </div>
+                          </>
+                        ) : null}
                       </td>
-                      <td className="tnum px-4 py-2 text-right text-muted">{p.system_qty}</td>
+                      <td className="px-4 py-2">
+                        {r.batch ? (
+                          <>
+                            <div className="tnum text-sm">{r.batch.batch_no}</div>
+                            <div className="tnum text-[11px] text-muted">{r.batch.barcode}{r.batch.received_at ? ` · ${r.batch.received_at}` : ''}</div>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted">{r.outsideBatches ? 'Not in a batch' : 'No batches'}</span>
+                        )}
+                      </td>
+                      <td className="tnum px-4 py-2 text-right text-muted">{r.system_qty}</td>
                       <td className="px-4 py-2">
                         <input
                           type="number"
                           step="0.001"
+                          min="0"
+                          aria-label={`Counted ${r.product.name}${r.batch ? ` batch ${r.batch.batch_no}` : ''}`}
                           className={numInput}
-                          value={countFor(p)}
-                          onChange={(e) => setCounts((c) => ({ ...c, [p.id]: e.target.value }))}
+                          value={countFor(r)}
+                          onChange={(e) => setCounts((c) => ({ ...c, [r.key]: e.target.value }))}
                         />
                       </td>
                       <td className={classNames('tnum px-4 py-2 text-right font-medium', varianceClass(v))}>

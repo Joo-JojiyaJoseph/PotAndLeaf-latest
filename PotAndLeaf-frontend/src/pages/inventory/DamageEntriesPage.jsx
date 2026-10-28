@@ -320,7 +320,6 @@ export default function DamageEntriesPage() {
                   <th className="microlabel px-4 py-2.5 font-semibold">Entry</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
-                  <th className="microlabel px-4 py-2.5 font-semibold">Location</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Qty</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Reason</th>
                 </tr>
@@ -331,7 +330,6 @@ export default function DamageEntriesPage() {
                     <td className="tnum px-4 py-2.5 text-xs">{e.entry_no}</td>
                     <td className="px-4 py-2.5">{formatDate(e.entry_date)}</td>
                     <td className="px-4 py-2.5 font-medium">{e.product?.name}</td>
-                    <td className="px-4 py-2.5 text-muted">{e.location?.name ?? '—'}</td>
                     <td className="tnum px-4 py-2.5 text-right text-danger">{e.qty}</td>
                     <td className="px-4 py-2.5 text-sm">{e.reason}</td>
                   </tr>

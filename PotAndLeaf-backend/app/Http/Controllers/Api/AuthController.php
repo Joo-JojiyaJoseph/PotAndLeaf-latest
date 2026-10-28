@@ -127,6 +127,11 @@ class AuthController extends Controller
 
     private function companies($user): array
     {
+        return $this->withFinancialYear($this->companyRows($user));
+    }
+
+    private function companyRows($user): array
+    {
         if ($user->is_super_admin) {
             return \App\Models\Company::query()
                 ->active()
@@ -153,5 +158,21 @@ class AuthController extends Controller
                 'is_default' => (bool) ($c->pivot->is_default ?? false),
             ])
             ->all();
+    }
+
+    /** Each company's financial-year start month (Settings), for the "Year" report presets. */
+    private function withFinancialYear(array $rows): array
+    {
+        $months = \App\Models\CompanySetting::query()
+            ->whereIn('company_id', array_column($rows, 'id'))
+            ->where('key', 'financial_year_start_month')
+            ->pluck('value', 'company_id');
+
+        return array_map(function ($r) use ($months) {
+            $m = (int) ($months[$r['id']] ?? 4);
+            $r['fy_start_month'] = $m >= 1 && $m <= 12 ? $m : 4;
+
+            return $r;
+        }, $rows);
     }
 }

@@ -41,6 +41,9 @@ class SupplierResource extends JsonResource
             'credit_limit'    => (float) $this->credit_limit,
             'credit_days'     => (int) $this->credit_days,
             'opening_balance' => (float) $this->opening_balance,
+            // Old outstanding still unpaid (goes down as it is paid).
+            'opening_left'    => $openingLeft = app(\App\Services\PaymentService::class)->openingLeft($this->resource),
+            'opening_paid'    => round((float) $this->opening_balance - $openingLeft, 2),
             'outstanding'     => (float) $this->outstanding,
             'advance_balance' => (float) $this->advance_balance,
             'notes'           => $this->notes,
