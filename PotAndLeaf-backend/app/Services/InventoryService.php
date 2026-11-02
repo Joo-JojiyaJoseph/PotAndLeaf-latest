@@ -527,6 +527,13 @@ class InventoryService
         return StockLedgerEntry::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->when(filled($filters['product_id'] ?? null), fn ($q) => $q->where('product_id', $filters['product_id']))
+            // Product status: active products only unless asked (a product picked by name always shows).
+            ->when(blank($filters['product_id'] ?? null) && ($filters['product_status'] ?? 'active') !== 'all', function ($q) use ($filters) {
+                $status = ($filters['product_status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
+                $q->whereHas('product', fn ($p) => $status === 'active'
+                    ? $p->where('status', 'active')
+                    : $p->where('status', '!=', 'active'));
+            })
             ->when(filled($filters['reference_type'] ?? null), fn ($q) => $q->where('reference_type', $filters['reference_type']))
             ->when(filled($filters['direction'] ?? null), fn ($q) => $q->where('direction', $filters['direction']))
             ->when(filled($filters['from'] ?? null), fn ($q) => $q->whereDate('occurred_at', '>=', $filters['from']))

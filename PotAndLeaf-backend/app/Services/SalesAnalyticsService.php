@@ -338,7 +338,10 @@ class SalesAnalyticsService
         ];
     }
 
-    /** Monthly or yearly staff leaderboard. Default rank metric is net sales (existing). */
+    /**
+     * Monthly or yearly staff leaderboard. Net sales = confirmed bills (before GST,
+     * minus points used) − goods returned in the period on that person's bills.
+     */
     public function leaderboard(int|string|null $companyId, string $period = 'month', ?string $asOf = null, ?string $locationId = null, string $metric = 'net_sales'): array
     {
         $asOf = Carbon::parse($asOf ?? now());
@@ -366,12 +369,37 @@ class SalesAnalyticsService
             ->orderByDesc('net_sales')
             ->get();
 
+        // Goods returned in the period come off the sales of whoever made the
+        // original bill (before GST) — the same rule commission uses.
+        $returns = \App\Models\SalesReturn::query()
+            ->when($companyId !== null, fn ($q) => $q->where('sales_returns.company_id', $companyId))
+            ->where('sales_returns.status', 'confirmed')
+            ->whereDate('return_date', '>=', $from)
+            ->whereDate('return_date', '<=', $to)
+            ->when($locationId, fn ($q) => $q->where('sales_returns.location_id', $locationId))
+            ->join('sales', 'sales.id', '=', 'sales_returns.sale_id')
+            ->whereNotIn('sales.bill_kind', ['proforma', 'complimentary'])
+            ->whereNotNull('sales.created_by')
+            ->groupBy('sales.created_by')
+            ->selectRaw('sales.created_by as user_id, SUM(sales_returns.subtotal) as returned')
+            ->pluck('returned', 'user_id');
+
+        // Staff with only returns in the period still appear (their sales were earlier).
+        foreach ($returns as $uid => $amount) {
+            if (! $rows->contains(fn ($r) => (string) $r->user_id === (string) $uid)) {
+                $rows->push((object) ['user_id' => $uid, 'net_sales' => 0, 'invoices' => 0]);
+            }
+        }
+
         $users = User::whereIn('id', $rows->pluck('user_id'))->get(['id', 'name'])->keyBy('id');
         $roleLabels = $this->roleLabelsForUsers($companyId, $rows->pluck('user_id')->map(fn ($id) => (int) $id)->all());
         $metric = in_array($metric, ['net_sales', 'invoices', 'incentives'], true) ? $metric : 'net_sales';
 
-        $ranked = $rows->values()->map(function ($r) use ($users, $companyId, $from, $to, $roleLabels) {
-            $net = round((float) $r->net_sales, 2);
+        $ranked = $rows->values()->map(function ($r) use ($users, $companyId, $from, $to, $roleLabels, $returns) {
+            $sold = round((float) $r->net_sales, 2);
+            $returned = round((float) ($returns[$r->user_id] ?? 0), 2);
+            // Net sales = sold (before GST, after points) − returned, never below 0.
+            $net = max(0.0, round($sold - $returned, 2));
             $commission = round((float) CommissionTransaction::query()
                 ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
                 ->where('user_id', $r->user_id)
@@ -384,6 +412,8 @@ class SalesAnalyticsService
                 'user_id'     => (int) $r->user_id,
                 'user_name'   => $users[$r->user_id]->name ?? 'Staff #'.$r->user_id,
                 'staff_type'  => $roleLabels[(int) $r->user_id] ?? '—',
+                'sales'       => $sold,
+                'returns'     => $returned,
                 'net_sales'   => $net,
                 'invoices'    => (int) $r->invoices,
                 'incentives'  => $commission,

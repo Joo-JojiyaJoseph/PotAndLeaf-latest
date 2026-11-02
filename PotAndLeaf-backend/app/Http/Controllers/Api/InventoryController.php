@@ -83,10 +83,11 @@ class InventoryController extends Controller
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('company:id,name')
             ->orderBy('name')
-            ->get(['id', 'sku', 'name', 'company_id'])
+            ->get(['id', 'sku', 'name', 'company_id', 'status'])
             ->map(fn ($p) => [
                 'id'   => $p->id,
                 'sku'  => $p->sku,
+                'active' => $p->status === 'active',
                 'name' => $companyId === null && $p->company?->name
                     ? "{$p->name} · {$p->company->name}"
                     : $p->name,
@@ -180,9 +181,10 @@ class InventoryController extends Controller
             'to'             => ['nullable', 'date', 'after_or_equal:from'],
             'search'         => ['nullable', 'string', 'max:100'],
             'per_page'       => ['nullable', 'integer', 'min:10', 'max:100'],
+            'product_status' => ['nullable', 'in:active,inactive,all'],
         ]);
 
-        return $request->only(['product_id', 'reference_type', 'direction', 'from', 'to', 'search', 'per_page']);
+        return $request->only(['product_id', 'reference_type', 'direction', 'from', 'to', 'search', 'per_page', 'product_status']);
     }
 
     /** @return array<int, array{value: string, label: string}> */

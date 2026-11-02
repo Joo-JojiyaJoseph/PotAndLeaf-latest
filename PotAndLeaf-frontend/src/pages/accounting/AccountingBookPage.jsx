@@ -132,9 +132,11 @@ export default function AccountingBookPage() {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="From">
             <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} />
+            {!from && <span className="mt-1 block text-xs text-muted">Empty = from the very first entry</span>}
           </Field>
           <Field label="To">
             <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />
+            {!to && <span className="mt-1 block text-xs text-muted">Empty = up to today</span>}
           </Field>
           {meta.book === 'journal' && (
             <Field label="Show">

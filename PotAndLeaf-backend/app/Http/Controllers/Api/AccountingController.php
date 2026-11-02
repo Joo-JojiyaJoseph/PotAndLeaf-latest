@@ -113,8 +113,8 @@ class AccountingController extends Controller
     private function book(Request $request, string $book, bool $correctionsOnly = false): JsonResponse
     {
         $this->allow($request, 'accounts.view');
-        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->startOfMonth()->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         $payload = $this->engine->book(
             $this->bookCompanyId($request),

@@ -200,10 +200,13 @@ export default function SettingsPage() {
     if (data) setForm(data);
   }, [data]);
 
+  // Each group has its own Save button: only the clicked one shows the spinner.
   const saveM = useMutation({
-    mutationFn: (payload) => api.put('/settings', payload),
-    onSuccess: (res) => {
-      setForm(res.data.data);
+    mutationFn: ({ payload }) => api.put('/settings', payload),
+    onSuccess: (res, vars) => {
+      // Update only this group's fields, so typing in other groups is kept.
+      const saved = res.data.data ?? {};
+      setForm((f) => ({ ...f, ...Object.fromEntries(Object.keys(vars.payload).map((k) => [k, saved[k] ?? vars.payload[k]])) }));
       queryClient.invalidateQueries({ queryKey: ['settings'] });
       toast.success('Settings saved.');
     },
@@ -288,14 +291,14 @@ export default function SettingsPage() {
               <div className="mt-4 flex justify-end">
                 <Button
                   size="sm"
-                  disabled={saveM.isPending}
+                  disabled={saveM.isPending && saveM.variables?.group === group.title}
                   onClick={() => {
                     const payload = {};
                     group.keys.forEach(({ key }) => { payload[key] = form[key]; });
-                    saveM.mutate(payload);
+                    saveM.mutate({ group: group.title, payload });
                   }}
                 >
-                  {saveM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}
+                  {saveM.isPending && saveM.variables?.group === group.title ? <Spinner className="border-white/40 border-t-white" /> : 'Save'}
                 </Button>
               </div>
             )}

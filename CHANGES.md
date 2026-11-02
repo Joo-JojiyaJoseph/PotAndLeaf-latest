@@ -1,24 +1,58 @@
-# Pot & Leaf ERP — all fixes (28 Oct 2026, update 47)
+# Pot & Leaf ERP — all fixes (2 Nov 2026, update 54)
 
-This package holds **every file changed** from the uploaded project (426 files + this note).
+This package holds **every file changed** from the uploaded project (433 files + this note).
 It replaces all earlier packages; install only this one.
 
 ## Install
 
 1. Copy each file over the same path in your project.
 2. Backend: **back up the database first**, then `php artisan migrate` (17 new migrations — update 12 adds 3, one of them removes soft delete for good; updates 14, 18, 19, 20, 30, 39, 41 and 47 add 1 each).
-3. Frontend: `npm run build`.
+3. Frontend: `npm run build`. **Update 51:** on the web server, delete the old `help` folder next to `index.html` (the guide now lives in `user-guide`).
 
 ## Verified
 
 | Check | Result |
 |---|---|
-| Backend test suite (Pest, PHP 8.4) | 488 passed, 0 failed, 16 skipped (before: 379 passed) |
+| Backend test suite (Pest, PHP 8.4) | 492 passed, 0 failed, 16 skipped (before: 379 passed) |
 | Frontend build (Vite) + unit tests (Vitest) | builds · 23 passed |
 | Browser check of every changed screen | no script errors, no failed API calls |
 | API run-through: purchase → batch/barcode → damage → purchase return; sale (cash/UPI/credit/walk-in) → confirm; transfer between companies → receive; bulk split | all OK; batch totals = stock |
 
 ## 00. Update 2 — one location per company, simpler commission
+
+**Stock ledger hides inactive products (update 54)** — no migration
+- Stock → Stock Levels → Stock ledger now lists **active products only** by default. New filter **Products shown**: Active products only / Inactive products only / All. The Product list follows it (inactive ones marked "(inactive)"). Export CSV follows the same filter.
+- A product picked by name (or opened from its product page) is always shown, even if inactive.
+- New test `tests/Feature/LedgerInactiveProductsTest.php`.
+
+**Clearing a date filter shows everything (update 53)** — no migration
+- Cash Book, Bank Book and Journal: clearing **From** used to fall back to the 1st of this month (older entries disappeared into "Opening"); clearing **To** used today. Now empty From = from the very first entry, empty To = up to today. A small note under each empty box says so.
+- Reports → Custom: clearing a date used to fall back to "last 30 days". Now the same rule (from the start / up to today); the date line reads "From the start – today".
+- Checked and already fine: list pages (Sales, Purchases, Receipts… "Pick dates") and the Stock ledger — an empty date there was already "no limit".
+- New `app/Support/Http/DateRange.php` (a date not sent keeps the screen's normal default; a date sent empty means no limit). New test `tests/Feature/EmptyDateFilterTest.php`.
+
+**Settings: only the clicked Save button shows loading (update 52)** — `SettingsPage.jsx` only, no migration
+- All Save buttons shared one "saving" state, so every section spun when one was saved. Now only the section you saved shows the spinner; the others stay usable.
+- Saving one section no longer resets what you typed (but did not save yet) in other sections.
+
+**Help page showed "Index of /help" after refresh (update 51)** — no migration
+- Cause: the guide's files were in a real folder `help/`, the same name as the app's `/help` page. On refresh Apache served that folder (a file listing) instead of the app.
+- Fix: guide files moved to `public/user-guide/` (guide.md + img/); `HelpPage.jsx` loads them from there. `public/.htaccess` now has `Options -Indexes`, so no folder is ever listed.
+- **On the server: delete the old `help` folder** (next to `index.html`) after copying the new build — otherwise Apache still finds it.
+- Earlier notes in this file that say `public/help/` now mean `public/user-guide/`.
+
+**Help: "What's new" chapter removed (update 50)** — `public/help/guide.md` only
+- The "What's new — 28 October 2026" chapter is gone from Help; the guide starts with the introduction, then 1. Getting started. "Updated" date set to 2 November 2026. Nothing else changed.
+
+**GST report shows every part of the sum (update 49)** — screen only, no migration, calculation unchanged
+- Five boxes: Output GST, **Sales return GST**, Input GST, **Purchase return GST** (was missing from the screen though already used in the sum), and **GST to pay** — or **Credit to carry forward** when the result is below zero.
+- A line shows the sum with your figures, e.g. ₹400 − ₹0 − (₹1,050 − ₹300) = −₹350 → no GST to pay; ₹350 credit for next period.
+- Guide section 10 has a second example (credit case).
+
+**Leaderboard subtracts sales returns (update 48)** — no migration, no commission calculation changed
+- **Net sales** on the Leaderboard = confirmed bills before GST (after points used) − goods returned in the period on that person's bills (confirmed returns, by return date; returns of Proforma/free bills ignored). Same rule commission uses. Never below 0. Staff with only returns in the period still appear.
+- Table now shows **Sales**, **Returns** and **Net sales**, with a one-line explanation. Ranking by net sales uses the figure after returns; ranking by invoices or incentives is unchanged.
+- Guide section 10 explains the Leaderboard with an example. New test `tests/Feature/LeaderboardReturnsTest.php`.
 
 **Stock count batch by batch (update 47)** — 1 migration (`2026_10_28_000004`: batch on each count line), no commission calculation changed
 - **New stock count** lists **one row per batch** (batch number, barcode, date), oldest first, with each batch's system quantity; a product with no batches stays one row (stock outside every batch, if any, gets a "Not in a batch" row). The filter also finds a batch number or barcode.

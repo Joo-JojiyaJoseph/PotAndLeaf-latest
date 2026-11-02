@@ -1,6 +1,9 @@
 # SPA hosting (Apache / cPanel). Copy this file with the Vite dist output.
 # Does not affect the Laravel API .htaccess.
 
+# Never show folder listings.
+Options -Indexes
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteCond %{REQUEST_FILENAME} !-f

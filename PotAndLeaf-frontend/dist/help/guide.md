@@ -1,41 +1,8 @@
 # Pot & Leaf ERP — User Guide
 
-*Updated 28 October 2026*
+*Updated 2 November 2026*
 
 This guide shows every screen of Pot & Leaf, step by step, with a picture and a small example sum you can check on a calculator. You do not need to know accounting or computers: follow the numbered steps exactly as written. Read it from top to bottom the first time. Later, jump to the section you need, or type a word in the search box of **Help**.
-
-## What's new — 28 October 2026
-
-The changes since the last version of this guide. Every picture in the guide was taken again on the new screens.
-
-| Area | What changed | Read more |
-| --- | --- | --- |
-| Stock transfers | You now **ask** another company for stock. Admin approves, that company dispatches, you receive. New barcodes are made when it arrives. | 6.2 |
-| Batches | Column is now **Left in batch**, with "of 30 received · 11 gone out". Editing opening stock no longer adds to "received". Transfer batches say "Transfer TRF-…". | 3.5 |
-| Page numbers | Every long list shows 25 rows a page with page buttons. Stock levels and some reports were hiding rows before. | Step 5 |
-| Help menu | **Help & User Guide** in the menu and the **?** button at the top open this guide inside the app. | Step 6 |
-| Dark mode | Tables, notices, pop-ups and barcodes are easy to read in dark mode. | Step 6 |
-| Suppliers | Supplier page shows **You owe**, **Advance** and **Paid so far**, then payments and advance in separate lists. | 2.7 |
-| Products | HSN code box removed from the product form. Product page shows **Category** and **Subcategory** separately. | 2.5 |
-| Purchases | A purchase made from a purchase order keeps that order's supplier. A direct purchase picks from saved suppliers. | 3.3 |
-| Reorder report | The PDF shows the supplier you picked on screen; a product with no supplier uses the one it was last bought from. | 3.1 |
-| Backups | Old backups can be deleted (the last one is always kept). | 2.9 |
-| Settings | Every setting has a one-line explanation under it. "Default reorder alert qty" now fills the reorder level of a new product left blank. Guide section rewritten with examples. | 2.4 |
-| Stock count by batch | The count sheet has one row per batch (batch number and barcode). Count each batch; on approval each batch is set to its own count. | 6.4 |
-| Selling by batch | On **New sale**, under the product, choose the **Batch** to sell from (or leave "oldest first"). A new purchase at a new price changes **only that batch's** cost, not the product. **Request shortage** shows only when an item is short of stock. | 3.3, 3.5, 4.1 |
-| Batch prices | A sale's cost (for profit) now comes from the batch the pieces left, not the latest purchase price. Batches page shows **Cost / pc**. Reports' **This FY** button follows the financial year in Settings. | 3.5 |
-| Supplier payments | Money paid on account clears the opening balance, then the oldest bills; bill balances now match what you owe, and you cannot pay more than you owe. | 3.7 |
-| Purchase orders | A PO can be turned into a purchase only after **Mark sent**. The reorder report hides its PDF and PO buttons when nothing needs reordering. | 3.2 |
-| Stock = batches | Stock on hand, Batches & Barcodes and the sale screen always show the same number. Stock that came back without a batch goes back on its batch, or into a new **ADJ** batch with its own barcode. | 3.5 |
-| Plant rental | Rentals show **Rent per day/week/month**, **Total till expected end** and **Billed so far** (list, form and rental page). | 5.3 |
-| Request access | Any user can ask for more permissions; an admin approves or rejects; a bell shows the answer. | Step 8, 2.2 |
-| My commission | Salespeople see their own rate, earnings and payments. | 8 |
-| Customers | "Opening balance" is now called **Outstanding** (what the customer owed you before you started the app). It goes down by itself when they pay it. The total they owe now is shown as **Owes you**. | 2.6, 4.3 |
-| Suppliers | "Opening balance" is now called **Outstanding** (what you already owe from before). It **goes down by itself when you pay it**. Pick-lists in forms show only the chosen company's suppliers. | 2.7, 3.7 |
-| Supplier payments | The payment box shows **How "You owe" is worked out**. Payment history has no Void/delete button. | 3.7 |
-| Commission | Product offers and care reminders have **Change**. A new role changes the existing rate. You cannot pay more than was earned. | 8 |
-| Journal | Shows every money entry by itself (receipts, payments, cash sales, commission) with both sides, plus your corrections. | 7.3 |
-| Reports | Icon menu with a search box; a one-line note says what the open report shows; every report has **Export → Excel**; Approx. Profit export fixed; **This FY** button. | 10 |
 
 ## 1. Getting started
 
@@ -1178,11 +1145,23 @@ If the export says *Nothing to export*, choose one company at the top (and a cus
 
 ### The report sums
 
+**Leaderboard (Best staff)**
+
+Ranks staff for **this month** or **this financial year**. Choose **Rank by** net sales, invoices (number of bills) or incentives (commission earned).
+
+**Net sales = their confirmed bills before GST (after points used) − goods returned in the period on their bills.** Proforma and free (Complimentary) bills do not count. A bill belongs to the person who **entered** it. Equal figures get the same rank.
+
+> Example (October): Anu's bills before GST ₹8,000, points used ₹300 → ₹7,700; a ₹2,000 bill of hers comes back → **net ₹5,700**. Rahul ₹6,500, no returns → **₹6,500**. Rahul is rank 1, Anu rank 2. The table shows Sales, Returns and Net sales for each person.
+
 **GST Reconciliation**
 
 **GST to pay = GST on sales − GST on sales returns − (GST paid on purchases − GST on purchase returns).**
 
 > Example: GST on sales ₹18,000; on sales returns ₹500; on purchases ₹11,000; on purchase returns ₹300. GST to pay = 18,000 − 500 − (11,000 − 300) = **₹6,800**. If the answer is below zero, you have credit to carry forward.
+>
+> Example with credit: GST on sales ₹400; no sales returns; on purchases ₹1,050; on purchase returns ₹300. 400 − 0 − (1,050 − 300) = 400 − 750 = **−₹350** → nothing to pay, **₹350 credit to carry forward**.
+
+The screen shows five boxes — **Output GST**, **Sales return GST**, **Input GST**, **Purchase return GST** and **GST to pay** (or **Credit to carry forward** when below zero) — and a line with the sum worked out with your figures.
 
 **Approx. Profit**
 

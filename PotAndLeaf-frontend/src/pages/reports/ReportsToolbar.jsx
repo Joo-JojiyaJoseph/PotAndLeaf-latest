@@ -172,11 +172,14 @@ export default function ReportsToolbar({
                   onChange={(e) => onRangeChange({ ...range, to: e.target.value })}
                   className="h-10 w-full rounded-xl glass-control px-2 text-sm sm:h-9 sm:w-auto"
                 />
+                {(!range.from || !range.to) && (
+                  <span className="text-xs text-muted">Empty date = {!range.from ? 'from the start' : ''}{!range.from && !range.to ? ', ' : ''}{!range.to ? 'up to today' : ''}</span>
+                )}
               </div>
             )}
             {!showCustomDates && (
               <span className="text-xs text-muted">
-                {formatDate(range.from)} – {formatDate(range.to)}
+                {range.from ? formatDate(range.from) : 'From the start'} – {range.to ? formatDate(range.to) : 'today'}
               </span>
             )}
           </>

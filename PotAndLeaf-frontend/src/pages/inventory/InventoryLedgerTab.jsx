@@ -43,6 +43,7 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
     from: daysAgo(29),
     to: todayISO(),
     search: '',
+    product_status: 'active',
   });
   const [applied, setApplied] = useState(filters);
   const [page, setPage] = useState(1);
@@ -77,6 +78,7 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
     if (applied.from) p.from = applied.from;
     if (applied.to) p.to = applied.to;
     if (applied.search?.trim()) p.search = applied.search.trim();
+    p.product_status = applied.product_status || 'active';
     return p;
   }, [applied, page, companyParams]);
 
@@ -114,7 +116,7 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
   }
 
   function resetFilters() {
-    const blank = { product_id: '', direction: '', reference_type: '', from: daysAgo(29), to: todayISO(), search: '' };
+    const blank = { product_id: '', direction: '', reference_type: '', from: daysAgo(29), to: todayISO(), search: '', product_status: 'active' };
     setFilters(blank);
     setApplied(blank);
     setPage(1);
@@ -157,12 +159,22 @@ export default function InventoryLedgerTab({ initialProductId = '', companyParam
 
       {showFilters && (
         <Card className="p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div>
               <label className="microlabel mb-1.5 block text-faint">Product</label>
               <Select value={filters.product_id} onChange={(e) => setFilters((f) => ({ ...f, product_id: e.target.value }))} className={selectCls}>
                 <option value="">All products</option>
-                {products.map((p) => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` · ${p.sku}` : ''}</option>)}
+                {products
+                  .filter((p) => filters.product_status === 'all' || p.id === filters.product_id || (filters.product_status === 'inactive' ? p.active === false : p.active !== false))
+                  .map((p) => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` · ${p.sku}` : ''}{p.active === false ? ' (inactive)' : ''}</option>)}
+              </Select>
+            </div>
+            <div>
+              <label className="microlabel mb-1.5 block text-faint">Products shown</label>
+              <Select value={filters.product_status} onChange={(e) => setFilters((f) => ({ ...f, product_status: e.target.value }))} className={selectCls}>
+                <option value="active">Active products only</option>
+                <option value="inactive">Inactive products only</option>
+                <option value="all">All products (active + inactive)</option>
               </Select>
             </div>
             <div>

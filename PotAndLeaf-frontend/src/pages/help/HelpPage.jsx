@@ -5,13 +5,15 @@ import { Card, Spinner } from '../../components/ui';
 
 /*
  * Help & User Guide. The guide is a Markdown file shipped with the app
- * (public/help/guide.md) with its screenshots in public/help/img/, so it opens
+ * (public/user-guide/guide.md) with its screenshots in public/user-guide/img/, so it opens
  * offline and for every user. Only the small part of Markdown the guide uses is
  * understood: headings, paragraphs, lists, tick lists, tables, quotes, pictures,
  * code blocks, **bold**, *italic*, `code` and [links](url).
  */
 
-const BASE = `${import.meta.env.BASE_URL ?? '/'}help/`;
+// Not "help/": that would be a real folder with the same name as the /help page,
+// so refreshing /help on Apache showed the folder listing instead of the app.
+const BASE = `${import.meta.env.BASE_URL ?? '/'}user-guide/`;
 
 function slug(text) {
   return String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -234,7 +236,7 @@ export default function HelpPage() {
       </div>
 
       {failed ? (
-        <Card className="p-10 text-center text-sm text-muted">The guide could not be loaded. Check that <code>public/help/guide.md</code> was copied with the app.</Card>
+        <Card className="p-10 text-center text-sm text-muted">The guide could not be loaded. Check that <code>public/user-guide/guide.md</code> was copied with the app.</Card>
       ) : !md ? (
         <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
       ) : (

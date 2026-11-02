@@ -619,7 +619,7 @@ export default function ReportsPage() {
                 <Card className="p-5">
                   <div className="mb-3 flex items-center justify-between">
                     <h2 className="text-sm font-semibold">Sales trend</h2>
-                    <span className="text-xs text-muted">{formatDate(range.from)} – {formatDate(range.to)}</span>
+                    <span className="text-xs text-muted">{range.from ? formatDate(range.from) : 'From the start'} – {range.to ? formatDate(range.to) : 'today'}</span>
                   </div>
                   <TrendChart data={dashQ.data.sales.trend} />
                 </Card>
@@ -1626,7 +1626,10 @@ export default function ReportsPage() {
             : (leaderboardQ.data?.rankings?.length ?? 0) === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No sales in this period.</div>
             : (
               <>
-                <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">{leaderboardQ.data.label} — ranked by {leaderboardQ.data.metric === 'invoices' ? 'invoice count' : leaderboardQ.data.metric === 'incentives' ? 'incentives' : 'net sales'}</div>
+                <div className="border-b border-line px-4 py-2.5 text-sm font-semibold">
+                  {leaderboardQ.data.label} — ranked by {leaderboardQ.data.metric === 'invoices' ? 'invoice count' : leaderboardQ.data.metric === 'incentives' ? 'incentives' : 'net sales'}
+                  <span className="block text-xs font-normal text-muted">Net sales = bills before GST (after points used) − goods returned on that person's bills in this period. Proforma and free bills are not counted.</span>
+                </div>
                 <div className="overflow-x-auto">
                   <PagedTable rows={leaderboardQ.data.rankings}>{(pg) => (
 <table className="w-full text-sm">
@@ -1634,6 +1637,8 @@ export default function ReportsPage() {
                       <th className="microlabel px-4 py-2.5 font-semibold">Rank</th>
                       <th className="microlabel px-4 py-2.5 font-semibold">Employee</th>
                       <th className="microlabel px-4 py-2.5 font-semibold">Staff type</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Sales</th>
+                      <th className="microlabel px-4 py-2.5 text-right font-semibold">Returns</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Net sales</th>
                       <th className="microlabel px-4 py-2.5 text-right font-semibold">Invoices</th>
                       {canCommissionReport && <th className="microlabel px-4 py-2.5 text-right font-semibold">Incentives</th>}
@@ -1644,6 +1649,8 @@ export default function ReportsPage() {
                           <td className="px-4 py-2.5 font-medium">#{r.rank}</td>
                           <td className="px-4 py-2.5">{r.user_name}</td>
                           <td className="px-4 py-2.5 text-muted">{r.staff_type || '—'}</td>
+                          <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(r.sales ?? r.net_sales)}</td>
+                          <td className="tnum px-4 py-2.5 text-right text-muted">{Number(r.returns) > 0 ? `− ${formatCurrency(r.returns)}` : '—'}</td>
                           <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.net_sales)}</td>
                           <td className="tnum px-4 py-2.5 text-right text-muted">{r.invoices}</td>
                           {canCommissionReport && <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.incentives)}</td>}
@@ -1664,12 +1671,34 @@ export default function ReportsPage() {
             : !gstQ.data ? <Card className="px-4 py-16 text-center text-sm text-muted">Could not load GST reconciliation.</Card>
             : (
               <>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
-                  <StatCard label="Output GST" value={formatCurrency(gstQ.data.output?.tax_total)} sub={`${gstQ.data.output?.invoice_count ?? 0} invoices`} />
-                  <StatCard label="Input GST" value={formatCurrency(gstQ.data.input?.tax_total)} sub={`${gstQ.data.input?.bill_count ?? 0} purchases`} />
-                  <StatCard label="Return GST" value={formatCurrency(gstQ.data.sales_returns?.tax)} />
-                  <StatCard label="Net payable" value={formatCurrency(gstQ.data.net_gst_payable)} />
-                </div>
+{(() => {
+                  const g = gstQ.data;
+                  const out = Number(g.output?.tax_total) || 0;
+                  const sr = Number(g.sales_returns?.tax) || 0;
+                  const inp = Number(g.input?.tax_total) || 0;
+                  const pr = Number(g.purchase_returns?.tax) || 0;
+                  const net = Number(g.net_gst_payable) || 0;
+                  return (
+                    <>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
+                        <StatCard label="Output GST (on sales)" value={formatCurrency(out)} sub={`${g.output?.invoice_count ?? 0} invoices`} />
+                        <StatCard label="Sales return GST" value={formatCurrency(sr)} sub="given back to customers" />
+                        <StatCard label="Input GST (on purchases)" value={formatCurrency(inp)} sub={`${g.input?.bill_count ?? 0} purchases`} />
+                        <StatCard label="Purchase return GST" value={formatCurrency(pr)} sub="goods sent back to suppliers" />
+                        {net >= 0
+                          ? <StatCard label="GST to pay" value={formatCurrency(net)} />
+                          : <StatCard label="Credit to carry forward" value={formatCurrency(-net)} sub="nothing to pay this period" />}
+                      </div>
+                      <Card className="p-4 text-sm">
+                        <span className="font-semibold">How it is worked out: </span>
+                        <span className="text-muted">Output − Sales return − (Input − Purchase return) = </span>
+                        <span className="tnum">{formatCurrency(out)} − {formatCurrency(sr)} − ({formatCurrency(inp)} − {formatCurrency(pr)}) = </span>
+                        <b className="tnum">{formatCurrency(net)}</b>
+                        <span className="text-muted">{net < 0 ? ' → below zero: no GST to pay; the amount is input tax credit for next period.' : ' → GST to pay for this period.'}</span>
+                      </Card>
+                    </>
+                  );
+                })()}
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   <Card className="p-5">
                     <h2 className="mb-2 text-sm font-semibold">Output tax split</h2>

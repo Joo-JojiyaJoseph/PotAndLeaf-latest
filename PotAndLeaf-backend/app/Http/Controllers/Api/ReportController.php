@@ -30,8 +30,8 @@ class ReportController extends Controller
     {
         $this->allow($request, 'reports.view');
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->dashboard($companyId, $from, $to, null));
     }
@@ -78,8 +78,8 @@ class ReportController extends Controller
     {
         $this->allowHo($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->marginAnalysis($companyId, $from, $to, 'product'));
     }
@@ -88,8 +88,8 @@ class ReportController extends Controller
     {
         $this->allowHo($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $period = $request->query('period', 'daily');
         if (! in_array($period, ['daily', 'weekly', 'monthly', 'yearly'], true)) {
             $period = 'daily';
@@ -102,8 +102,8 @@ class ReportController extends Controller
     {
         $this->allow($request, 'reports.view');
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->salesByPriceLevel($companyId, $from, $to));
     }
@@ -112,8 +112,8 @@ class ReportController extends Controller
     {
         $this->allow($request, 'reports.view');
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $format = $request->query('format', 'pdf');
 
         $data = $this->reports->dashboard($companyId, $from, $to, null);
@@ -136,8 +136,8 @@ class ReportController extends Controller
     {
         $this->allowHo($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $format = $request->query('format', 'pdf');
 
         $data = $this->reports->marginAnalysis($companyId, $from, $to, 'product');
@@ -159,8 +159,8 @@ class ReportController extends Controller
     {
         $this->allowHo($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $period = $request->query('period', 'daily');
         $format = $request->query('format', 'pdf');
 
@@ -188,8 +188,8 @@ class ReportController extends Controller
     {
         $this->allowRentalReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->rentalDelivery(
             $companyId, $from, $to,
@@ -203,8 +203,8 @@ class ReportController extends Controller
     {
         $this->allowRentalReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $period = $request->query('period', 'daily');
 
         return $this->ok($this->reports->rentalIncome(
@@ -216,8 +216,8 @@ class ReportController extends Controller
     {
         $this->allowRentalReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->rentalByStaff(
             $companyId, $from, $to, $request->query('location_id'),
@@ -262,8 +262,8 @@ class ReportController extends Controller
     {
         $this->allowRentalReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $format = $request->query('format', 'pdf');
 
         $data = $this->reports->rentalDelivery(
@@ -289,8 +289,8 @@ class ReportController extends Controller
     {
         $this->allowRentalReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $period = $request->query('period', 'daily');
         $format = $request->query('format', 'pdf');
 
@@ -372,8 +372,8 @@ class ReportController extends Controller
     {
         $this->allowProductionReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         $result = $this->reports->productionSummary(
             $companyId, $from, $to,
@@ -398,8 +398,8 @@ class ReportController extends Controller
     {
         $this->allowProductionReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->productionByProduct($companyId, $from, $to));
     }
@@ -408,8 +408,8 @@ class ReportController extends Controller
     {
         $this->allowProductionReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->productionBySupervisor($companyId, $from, $to));
     }
@@ -418,8 +418,8 @@ class ReportController extends Controller
     {
         $this->allowProductionReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->productionBatches(
             $companyId, $from, $to,
@@ -432,8 +432,8 @@ class ReportController extends Controller
     {
         $this->allowTransferReports($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         $result = $this->reports->transferSummary(
             $companyId, $from, $to,
@@ -472,8 +472,8 @@ class ReportController extends Controller
     {
         $this->allowAccounting($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->cashBook(
             $companyId, $from, $to,
@@ -486,8 +486,8 @@ class ReportController extends Controller
     {
         $this->allowAccounting($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->bankBook(
             $companyId, $from, $to,
@@ -501,8 +501,8 @@ class ReportController extends Controller
         $this->allowAccounting($request);
         $companyId = $this->reportCompanyId($request);
         $request->validate(['customer_id' => ['required', 'uuid']]);
-        $from = $request->query('from') ?: now()->subDays(89)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(89)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->debtorLedger($companyId, $request->query('customer_id'), $from, $to));
     }
@@ -512,8 +512,8 @@ class ReportController extends Controller
         $this->allowAccounting($request);
         $companyId = $this->reportCompanyId($request);
         $request->validate(['supplier_id' => ['required', 'uuid']]);
-        $from = $request->query('from') ?: now()->subDays(89)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(89)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->creditorLedger($companyId, $request->query('supplier_id'), $from, $to));
     }
@@ -536,8 +536,8 @@ class ReportController extends Controller
     {
         $this->allowAccounting($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $data = $this->reports->cashBook($companyId, $from, $to, 1, 5000);
         $company = $companyId ? Company::find($companyId) : $this->company($request);
 
@@ -566,8 +566,8 @@ class ReportController extends Controller
     {
         $this->allowAccounting($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->subDays(29)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $data = $this->reports->bankBook($companyId, $from, $to, 1, 5000);
         $company = $companyId ? Company::find($companyId) : $this->company($request);
 
@@ -597,8 +597,8 @@ class ReportController extends Controller
         $this->allowAccounting($request);
         $companyId = $this->reportCompanyId($request);
         $request->validate(['customer_id' => ['required', 'uuid']]);
-        $from = $request->query('from') ?: now()->subDays(89)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(89)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $data = $this->reports->debtorLedger($companyId, $request->query('customer_id'), $from, $to);
         $company = $companyId ? Company::find($companyId) : $this->company($request);
         $name = $data['customer']['name'] ?? 'Customer';
@@ -629,8 +629,8 @@ class ReportController extends Controller
         $this->allowAccounting($request);
         $companyId = $this->reportCompanyId($request);
         $request->validate(['supplier_id' => ['required', 'uuid']]);
-        $from = $request->query('from') ?: now()->subDays(89)->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(89)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
         $data = $this->reports->creditorLedger($companyId, $request->query('supplier_id'), $from, $to);
         $company = $companyId ? Company::find($companyId) : $this->company($request);
         $name = $data['supplier']['name'] ?? 'Supplier';
@@ -716,8 +716,8 @@ class ReportController extends Controller
             'share_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'rate_percent'  => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
-        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->startOfMonth()->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->internalEstimate(
             $companyId,
@@ -734,8 +734,8 @@ class ReportController extends Controller
         $this->allowAccounting($request);
         // Tally imports into one company at a time: fall back to the open company.
         $companyId = $this->reportCompanyId($request) ?? $this->company($request)->id;
-        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->startOfMonth()->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         $result = $tally->build($companyId, $from, $to);
 
@@ -749,8 +749,8 @@ class ReportController extends Controller
     {
         $this->allowAccounting($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->startOfMonth()->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->analytics->gstReconciliation($companyId, $from, $to, $request->query('location_id')));
     }
@@ -759,8 +759,8 @@ class ReportController extends Controller
     {
         $this->allowCommissionReport($request);
         $companyId = $this->reportCompanyId($request);
-        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
-        $to = $request->query('to') ?: now()->toDateString();
+        $from = \App\Support\Http\DateRange::from($request, now()->startOfMonth()->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->analytics->commissionReport(
             $companyId,
