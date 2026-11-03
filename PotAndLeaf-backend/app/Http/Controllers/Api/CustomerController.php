@@ -102,7 +102,7 @@ class CustomerController extends Controller
         $this->assertRecordCompany($request, $customer);
         abort_if($request->user()->seesOnlyOwn('customers', $customer->company_id) && (int) $customer->created_by !== (int) $request->user()->id, 403, 'You can only see the customers you added.');
 
-        $perPage = min(50, max(1, (int) $request->input('per_page', 15)));
+        $perPage = min(100, max(1, (int) $request->input('per_page', 15)));
         $paginated = \App\Models\Sale::forCompany($customer->company_id)
             ->where('customer_id', $customer->id)
             ->with(['customer:id,name,type'])

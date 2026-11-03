@@ -14,6 +14,7 @@ import { executePaymentSubmit } from '../../lib/paymentValidation';
 import { ListToolbar, useListFilters } from '../../components/ListToolbar';
 import { exportList } from '../../lib/exportList';
 import Pagination from '../../components/Pagination';
+import PagedTable from '../../components/PagedTable';
 
 const TABS = [{ value: 'payables', label: 'Payables' }, { value: 'history', label: 'Payment history' }];
 const payStatusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -384,6 +385,7 @@ export default function PaymentsList() {
             : payables.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No confirmed purchases to pay.</div>
             : (
               <div className="overflow-x-auto">
+                <PagedTable rows={payables}>{(pageRows) => (
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-line text-left text-faint">
                     <th className="microlabel px-4 py-2.5 font-semibold">Purchase bill</th>
@@ -396,7 +398,7 @@ export default function PaymentsList() {
                     <th className="microlabel px-4 py-2.5" />
                   </tr></thead>
                   <tbody>
-                    {payables.map((p) => (
+                    {pageRows.map((p) => (
                       <tr key={p.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                         <td className="tnum px-4 py-2.5 text-xs">{p.purchase_no}</td>
                         <td className="px-4 py-2.5 font-medium">{p.supplier_name}</td>
@@ -419,6 +421,7 @@ export default function PaymentsList() {
                     ))}
                   </tbody>
                 </table>
+                )}</PagedTable>
               </div>
             )}
         </Card>
@@ -461,7 +464,7 @@ export default function PaymentsList() {
                 </table>
               </div>
             )}
-        {!historyQ.isLoading && <div className="border-t border-line px-3"><Pagination meta={historyQ.data?.meta} onPage={lf.setPage} /></div>}
+        {!historyQ.isLoading && <div className="border-t border-line px-3"><Pagination meta={historyQ.data?.meta} onPage={lf.setPage} onPerPage={lf.setPerPage} /></div>}
         </Card>
       )}
 

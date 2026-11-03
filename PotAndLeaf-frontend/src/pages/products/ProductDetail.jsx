@@ -4,6 +4,7 @@ import { PencilSquareIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card } from '../../components/ui';
+import PagedTable from '../../components/PagedTable';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency } from '../../lib/format';
 import { mediaUrl } from '../../components/media';
@@ -109,8 +110,9 @@ export default function ProductDetail() {
           </div>
         )}
         {activeBatches.length > 0 ? (
+          <PagedTable rows={activeBatches} perPage={12}>{(pageBatches) => (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {activeBatches.map((b, i) => (
+            {pageBatches.map((b, i) => (
               <Card key={b.id ?? b.batch_id ?? `${b.batch_no}-${b.barcode}-${i}`} className="flex flex-col gap-2 p-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-ink">Batch {b.batch_no}</span>
@@ -123,6 +125,7 @@ export default function ProductDetail() {
               </Card>
             ))}
           </div>
+          )}</PagedTable>
         ) : (
           !p.barcode && <p className="text-sm text-muted">No barcodes yet. Barcodes are created per batch when stock is received on a purchase, or via the opening-barcode generator on the Batches page.</p>
         )}

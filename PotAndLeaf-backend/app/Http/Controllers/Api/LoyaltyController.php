@@ -34,7 +34,7 @@ class LoyaltyController extends Controller
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->orderByDesc('loyalty_points')
             ->orderBy('name')
-            ->paginate(min(50, max(1, (int) $request->input('per_page', 25))));
+            ->paginate(min(100, max(1, (int) $request->input('per_page', 25))));
 
         $customersPayload = $customers->through(fn ($c) => [
             'id'             => $c->id,
@@ -121,7 +121,7 @@ class LoyaltyController extends Controller
         $ledger = LoyaltyLedgerEntry::query()
             ->where('customer_id', $customer->id)
             ->orderByDesc('created_at')
-            ->paginate(min(50, max(1, (int) $request->input('per_page', 25))));
+            ->paginate(min(100, max(1, (int) $request->input('per_page', 25))));
 
         return $this->ok([
             'customer_id'    => $customer->id,

@@ -44,9 +44,10 @@ export function useListFilters({ perPage = 25 } = {}) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [page, setPage] = useState(1);
+  const [rows, setRows] = useState(perPage);
 
   useEffect(() => { const t = setTimeout(() => setDebounced(search.trim()), 300); return () => clearTimeout(t); }, [search]);
-  useEffect(() => { setPage(1); }, [debounced, from, to]);
+  useEffect(() => { setPage(1); }, [debounced, from, to, rows]);
 
   const choosePreset = (p) => {
     setPreset(p);
@@ -58,9 +59,11 @@ export function useListFilters({ perPage = 25 } = {}) {
 
   return {
     search, setSearch, preset, choosePreset, from, setFrom, to, setTo, page, setPage, clear,
+    // Rows per page, chosen under the list (Pagination onPerPage={lf.setPerPage}).
+    perPage: rows, setPerPage: setRows,
     filters,
-    params: { ...filters, page, per_page: perPage },
-    key: [debounced, from, to, page],
+    params: { ...filters, page, per_page: rows },
+    key: [debounced, from, to, page, rows],
     active: Boolean(debounced || from || to),
   };
 }

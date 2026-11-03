@@ -104,7 +104,7 @@ class AccessRequestController extends Controller
             ->where('user_id', '!=', $user->id)
             ->when($status !== 'all', fn ($q) => $q->where('status', $status))
             ->with(['user:id,name,email', 'decider:id,name', 'company:id,name'])
-            ->latest()->paginate(25);
+            ->latest()->paginate(min(100, max(1, (int) $request->input('per_page', 25))));
 
         $rows->getCollection()->transform(fn ($r) => $this->present($r, $request));
 

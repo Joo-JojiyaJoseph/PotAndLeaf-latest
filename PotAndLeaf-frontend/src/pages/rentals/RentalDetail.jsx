@@ -5,6 +5,7 @@ import { CheckCircleIcon, XCircleIcon, ArrowUturnLeftIcon, PlusIcon, PrinterIcon
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../components/ui';
+import PagedTable from '../../components/PagedTable';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatCurrency, formatDate, todayISO as today } from '../../lib/format';
 import { printRentalInvoice } from '../../lib/invoicePrint';
@@ -320,6 +321,8 @@ export default function RentalDetail() {
           <p className="text-sm text-muted">No invoices yet.{r.can?.bill ? ' Generate one for a billing period.' : ''}</p>
         ) : (
           <div className="overflow-x-auto">
+            {/* Rent bills grow every cycle: 10 a page. */}
+            <PagedTable rows={r.invoices} perPage={10}>{(pageInv) => (
             <table className="w-full text-sm">
               <thead><tr className="border-b border-line text-left text-faint">
                 <th className="microlabel py-2 pr-3 font-semibold">No.</th>
@@ -331,7 +334,7 @@ export default function RentalDetail() {
                 <th className="microlabel py-2 pl-3" />
               </tr></thead>
               <tbody>
-                {r.invoices.map((inv) => (
+                {pageInv.map((inv) => (
                   <tr key={inv.id} className="border-b border-line/60 last:border-0">
                     <td className="tnum py-2 pr-3 text-xs">{inv.invoice_no}</td>
                     <td className="px-3 py-2 text-muted">{formatDate(inv.period_from)} – {formatDate(inv.period_to)}</td>
@@ -354,6 +357,7 @@ export default function RentalDetail() {
                 ))}
               </tbody>
             </table>
+            )}</PagedTable>
           </div>
         )}
       </Section>

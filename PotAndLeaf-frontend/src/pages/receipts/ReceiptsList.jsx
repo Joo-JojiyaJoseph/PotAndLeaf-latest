@@ -14,6 +14,7 @@ import { useConfirm } from '../../lib/confirm';
 import { ListToolbar, useListFilters } from '../../components/ListToolbar';
 import { exportList } from '../../lib/exportList';
 import Pagination from '../../components/Pagination';
+import PagedTable from '../../components/PagedTable';
 
 const TABS = [{ value: 'receivables', label: 'Receivables' }, { value: 'history', label: 'Receipt history' }];
 const statusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
@@ -316,6 +317,7 @@ export default function ReceiptsList() {
             : receivables.length === 0 ? <div className="px-4 py-16 text-center text-sm text-muted">No credit sales outstanding.</div>
             : (
               <div className="overflow-x-auto">
+                <PagedTable rows={receivables}>{(pageRows) => (
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-line text-left text-faint">
                     <th className="microlabel px-4 py-2.5 font-semibold">Invoice</th>
@@ -328,7 +330,7 @@ export default function ReceiptsList() {
                     <th className="microlabel px-4 py-2.5" />
                   </tr></thead>
                   <tbody>
-                    {receivables.map((r) => (
+                    {pageRows.map((r) => (
                       <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                         <td className="tnum px-4 py-2.5 text-xs">{r.sale_no}</td>
                         <td className="px-4 py-2.5 font-medium">{r.customer_name}</td>
@@ -351,6 +353,7 @@ export default function ReceiptsList() {
                     ))}
                   </tbody>
                 </table>
+                )}</PagedTable>
               </div>
             )}
         </Card>
@@ -394,7 +397,7 @@ export default function ReceiptsList() {
                 </table>
               </div>
             )}
-        {!historyQ.isLoading && <div className="border-t border-line px-3"><Pagination meta={historyQ.data?.meta} onPage={lf.setPage} /></div>}
+        {!historyQ.isLoading && <div className="border-t border-line px-3"><Pagination meta={historyQ.data?.meta} onPage={lf.setPage} onPerPage={lf.setPerPage} /></div>}
         </Card>
       )}
 

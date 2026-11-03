@@ -74,6 +74,7 @@ export default function SuppliersList() {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(15); // rows per page, chosen under the list
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -88,10 +89,10 @@ export default function SuppliersList() {
   }, [search]);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['suppliers', activeCompany?.id, filterCompanyId, debounced, page],
+    queryKey: ['suppliers', activeCompany?.id, filterCompanyId, debounced, page, perPage],
     queryFn: () =>
       api
-        .get('/suppliers', { params: { ...companyParams, search: debounced, page, per_page: 15 } })
+        .get('/suppliers', { params: { ...companyParams, search: debounced, page, per_page: perPage } })
         .then((r) => r.data),
     enabled: Boolean(activeCompany),
     keepPreviousData: true,
@@ -287,7 +288,7 @@ export default function SuppliersList() {
         </div>
       )}
 
-      <Pagination meta={meta} onPage={setPage} />
+      <Pagination meta={meta} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1); }} />
 
       <Modal
         open={modalOpen}

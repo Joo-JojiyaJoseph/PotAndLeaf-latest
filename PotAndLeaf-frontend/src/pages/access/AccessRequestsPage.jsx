@@ -73,9 +73,10 @@ export default function AccessRequestsPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('pending');
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
   const { data, isLoading } = useQuery({
-    queryKey: ['access-requests', activeCompany?.id, status, page],
-    queryFn: () => api.get('/access-requests', { params: { status, page } }).then((r) => r.data),
+    queryKey: ['access-requests', activeCompany?.id, status, page, perPage],
+    queryFn: () => api.get('/access-requests', { params: { status, page, per_page: perPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
   });
   const rows = data?.data ?? [];
@@ -101,7 +102,7 @@ export default function AccessRequestsPage() {
             {rows.map((r) => <RequestCard key={r.id} r={r} onDone={done} />)}
           </div>
         )}
-      <Pagination meta={data?.meta} onPage={setPage} />
+      <Pagination meta={data?.meta} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1); }} />
     </div>
   );
 }

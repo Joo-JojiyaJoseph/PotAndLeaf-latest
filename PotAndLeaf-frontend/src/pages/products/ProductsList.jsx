@@ -48,6 +48,7 @@ export default function ProductsList() {
     return () => clearTimeout(t);
   }, [search]);
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(24); // rows per page, chosen under the list
   const [status, setStatus] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [lowOnly, setLowOnly] = useState(false);
@@ -59,12 +60,12 @@ export default function ProductsList() {
   });
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['products', activeCompany?.id, filterCompanyId, debounced, page, status, categoryId, lowOnly],
+    queryKey: ['products', activeCompany?.id, filterCompanyId, debounced, page, status, categoryId, lowOnly, perPage],
     queryFn: () => api.get('/products', {
       params: {
         ...companyParams,
         search: debounced,
-        per_page: 24,
+        per_page: perPage,
         page,
         status: status || undefined,
         category_id: categoryId || undefined,
@@ -252,7 +253,7 @@ export default function ProductsList() {
 
       {meta && meta.last_page > 1 && (
         <div className="border-t border-line pt-3">
-          <Pagination meta={meta} onPage={setPage} />
+          <Pagination meta={meta} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1); }} />
         </div>
       )}
     </div>

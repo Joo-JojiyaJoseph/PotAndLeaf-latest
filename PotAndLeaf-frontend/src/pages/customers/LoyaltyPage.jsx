@@ -21,13 +21,14 @@ export default function LoyaltyPage() {
   const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25); // rows per page, chosen under the list
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [ruleOpen, setRuleOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['loyalty', activeCompany?.id, filterCompanyId, page],
-    queryFn: () => api.get('/loyalty', { params: { ...companyParams, page, per_page: 25 } }).then((r) => r.data.data),
+    queryKey: ['loyalty', activeCompany?.id, filterCompanyId, page, perPage],
+    queryFn: () => api.get('/loyalty', { params: { ...companyParams, page, per_page: perPage } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -133,7 +134,7 @@ export default function LoyaltyPage() {
 
   const cp = data?.customers;
   const customers = cp?.data ?? [];
-  const meta = cp?.last_page > 1 ? cp : null;
+  const meta = cp?.last_page ? cp : null;
   const settings = data?.settings ?? {};
   const totals = data?.totals ?? {};
   const ledger = data?.recent_ledger ?? [];
@@ -224,7 +225,7 @@ export default function LoyaltyPage() {
                 </div>
                 {meta && (
                   <div className="border-t border-line px-4 py-2">
-                    <Pagination meta={meta} onPage={setPage} />
+                    <Pagination meta={meta} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1); }} />
                   </div>
                 )}
               </>

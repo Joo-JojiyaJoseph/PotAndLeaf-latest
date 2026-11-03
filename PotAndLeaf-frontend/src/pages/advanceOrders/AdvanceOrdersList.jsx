@@ -89,7 +89,7 @@ export default function AdvanceOrdersList() {
               </table>
             </div>
           )}
-      {!isLoading && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={lf.setPage} /></div>}
+      {!isLoading && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={lf.setPage} onPerPage={lf.setPerPage} /></div>}
         </Card>
     </div>
   );

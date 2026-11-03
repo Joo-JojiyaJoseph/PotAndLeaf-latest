@@ -29,6 +29,7 @@ export default function ProductionList() {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25); // rows per page, chosen under the list
 
   useEffect(() => {
     const t = setTimeout(() => { setDebounced(search.trim()); setPage(1); }, 300);
@@ -36,8 +37,8 @@ export default function ProductionList() {
   }, [search]);
 
   const ordersQ = useQuery({
-    queryKey: ['production-orders', activeCompany?.id, filterCompanyId, status, debounced, page],
-    queryFn: () => api.get('/production/orders', { params: { ...companyParams, status: status || undefined, search: debounced || undefined, page, per_page: 25 } }).then((r) => r.data),
+    queryKey: ['production-orders', activeCompany?.id, filterCompanyId, status, debounced, page, perPage],
+    queryFn: () => api.get('/production/orders', { params: { ...companyParams, status: status || undefined, search: debounced || undefined, page, per_page: perPage } }).then((r) => r.data),
     placeholderData: (prev) => prev,
     enabled: Boolean(activeCompany),
   });
@@ -166,7 +167,7 @@ export default function ProductionList() {
               </table>
             </div>
           )}
-        <div className="border-t border-line px-3"><Pagination meta={ordersQ.data?.meta} onPage={setPage} /></div>
+        <div className="border-t border-line px-3"><Pagination meta={ordersQ.data?.meta} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1); }} /></div>
       </Card>
     </div>
   );

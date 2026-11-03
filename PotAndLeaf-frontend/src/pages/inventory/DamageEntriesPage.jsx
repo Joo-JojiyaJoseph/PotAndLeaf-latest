@@ -205,6 +205,7 @@ export default function DamageEntriesPage() {
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
   const [modal, setModal] = useState(false);
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25); // rows per page, chosen under the list
   const [movementFilter, setMovementFilter] = useState('');
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -219,8 +220,8 @@ export default function DamageEntriesPage() {
   }, [search]);
 
   const listQ = useQuery({
-    queryKey: ['damage-entries', activeCompany?.id, filterCompanyId, page, debounced],
-    queryFn: () => api.get('/damage-entries', { params: { ...companyParams, per_page: 25, page, search: debounced } }).then((r) => r.data),
+    queryKey: ['damage-entries', activeCompany?.id, filterCompanyId, page, debounced, perPage],
+    queryFn: () => api.get('/damage-entries', { params: { ...companyParams, per_page: perPage, page, search: debounced } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     keepPreviousData: true,
   });
@@ -339,7 +340,7 @@ export default function DamageEntriesPage() {
           )}
           {!listQ.isLoading && rows.length > 0 && (
             <div className="border-t border-line px-3">
-              <Pagination meta={listQ.data?.meta} onPage={setPage} />
+              <Pagination meta={listQ.data?.meta} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1); }} />
             </div>
           )}
         </Card>

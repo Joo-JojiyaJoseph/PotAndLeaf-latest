@@ -45,6 +45,7 @@ export default function CustomersList() {
   }, [search]);
   const [type, setType] = useState('');
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25); // rows per page, chosen under the list
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
@@ -52,8 +53,8 @@ export default function CustomersList() {
   const [formCompanyId, setFormCompanyId] = useState('');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['customers', activeCompany?.id, filterCompanyId, debounced, type, page],
-    queryFn: () => api.get('/customers', { params: { ...companyParams, search: debounced, type, page, per_page: 25 } }).then((r) => r.data),
+    queryKey: ['customers', activeCompany?.id, filterCompanyId, debounced, type, page, perPage],
+    queryFn: () => api.get('/customers', { params: { ...companyParams, search: debounced, type, page, per_page: perPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     keepPreviousData: true,
   });
@@ -171,7 +172,7 @@ export default function CustomersList() {
                 </Card>
               ))}
             </div>
-            <Pagination meta={data?.meta} onPage={setPage} />
+            <Pagination meta={data?.meta} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1); }} />
           </>
         )}
 

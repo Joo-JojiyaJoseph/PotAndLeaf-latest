@@ -28,6 +28,7 @@ export default function UsersList() {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25); // rows per page, chosen under the list
   const [statusFilter, setStatusFilter] = useState('active');
   const [pickedCompany, setPickedCompany] = useState(false);
   const [formCompanyId, setFormCompanyId] = useState('');
@@ -40,8 +41,8 @@ export default function UsersList() {
   useEffect(() => { setPage(1); }, [filterCompanyId, statusFilter]);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['users', activeCompany?.id, filterCompanyId, statusFilter, page],
-    queryFn: () => api.get('/users', { params: { ...companyParams, status: statusFilter, page, per_page: 25 } }).then((r) => r.data),
+    queryKey: ['users', activeCompany?.id, filterCompanyId, statusFilter, page, perPage],
+    queryFn: () => api.get('/users', { params: { ...companyParams, status: statusFilter, page, per_page: perPage } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
   });
   const { data: formData } = useQuery({
@@ -222,7 +223,7 @@ export default function UsersList() {
             </table>
           </div>
         )}
-        {!isLoading && rows.length > 0 && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={setPage} /></div>}
+        {!isLoading && rows.length > 0 && <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1); }} /></div>}
       </Card>
 
       <Modal

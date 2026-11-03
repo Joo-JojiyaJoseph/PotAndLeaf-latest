@@ -82,7 +82,7 @@ class SupplierController extends Controller
         $this->allow($request, 'suppliers.view');
         $this->assertRecordCompany($request, $supplier);
 
-        $perPage = min(50, max(1, (int) $request->input('per_page', 15)));
+        $perPage = min(100, max(1, (int) $request->input('per_page', 15)));
         $paginated = \App\Models\Purchase::forCompany($supplier->company_id)
             ->where('supplier_id', $supplier->id)
             ->withCount('items')

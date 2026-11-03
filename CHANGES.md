@@ -1,4 +1,4 @@
-# Pot & Leaf ERP — all fixes (2 Nov 2026, update 54)
+# Pot & Leaf ERP — all fixes (2 Nov 2026, update 55)
 
 This package holds **every file changed** from the uploaded project (433 files + this note).
 It replaces all earlier packages; install only this one.
@@ -19,6 +19,12 @@ It replaces all earlier packages; install only this one.
 | API run-through: purchase → batch/barcode → damage → purchase return; sale (cash/UPI/credit/walk-in) → confirm; transfer between companies → receive; bulk split | all OK; batch totals = stock |
 
 ## 00. Update 2 — one location per company, simpler commission
+
+**Page numbers on every list, always visible, with "Rows per page" (update 55)** — no migration
+- Checked every list: Customers, Suppliers, Sales, Purchases, Users, Sales/Purchase returns, Rentals, Products, Advance orders, Backorders, Purchase orders, Transfers, Bulk splits, Stock counts, Damage entries, Production, Receipt/Payment history, Loyalty, Access requests — all already loaded page by page, but the page bar **hid itself when everything fitted on one page**, so it looked missing.
+- The page bar now always shows "1–25 of 140", page buttons and **Rows per page** (10 / 25 / 50 / 100). Changing it goes back to page 1.
+- Added paging where there was none: **Receivables** (Money from Customers) and **Payables** (Pay Suppliers) lists, **rent bills** on a rental page (10 a page), **batches** on a product page (12 a page). Report tables also get the bar.
+- Server: Customers/Suppliers purchase history, Loyalty and Access requests now allow up to 100 rows a page (was 50 or fixed 25), so "100" really shows 100.
 
 **Stock ledger hides inactive products (update 54)** — no migration
 - Stock → Stock Levels → Stock ledger now lists **active products only** by default. New filter **Products shown**: Active products only / Inactive products only / All. The Product list follows it (inactive ones marked "(inactive)"). Export CSV follows the same filter.
