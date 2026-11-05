@@ -25,6 +25,8 @@ class SalesReturnResource extends JsonResource
             'tax_total'     => (float) $this->tax_total,
             'round_off'     => (float) $this->round_off,
             'grand_total'   => (float) $this->grand_total,
+            'owes_reduced'     => $this->owes_reduced !== null ? (float) $this->owes_reduced : null,
+            'advance_credited' => $this->advance_credited !== null ? (float) $this->advance_credited : null,
             'status'        => $this->status,
             'notes'         => $this->notes,
             'confirmed_at'  => optional($this->confirmed_at)->toIso8601String(),

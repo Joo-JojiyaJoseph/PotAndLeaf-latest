@@ -39,6 +39,8 @@ This guide shows every screen of Pot & Leaf, step by step, with a picture and a 
 After signing in you see the **Dashboard**. It shows today's key numbers and shortcut buttons for daily jobs.
 
 - **Top cards:** sales of the last 30 days, money customers owe you (receivables), money you owe suppliers (payables) and the value of your stock.
+  - **Sales (30 days)** is what customers were billed (GST included, points discount taken off). It is the same number as **Reports → Overview → Sales**, and the split by payment mode adds up to it. The line under it shows **today's** bills, the number of bills in the 30 days and goods returned. So "Sales (30 days)" is bigger than today's bill list — it adds up the last 30 days.
+  - **Your incentive cards** (staff): **My sales today** is only the bills **you** made today, before GST (an admin who makes no bills does not see these cards). **Total incentive** = Commission + Bonuses, then minus commission taken back for returns, plus manager or supervisor commission. The small line under Total incentive shows these extra parts so the cards add up.
 - **Quick actions:** New sale, Receive money, New purchase, Pay supplier, Stock levels, Add product.
 - **Yellow strip:** how many products are at or below their reorder level. Click it to see them.
 - **Recent sales:** the last bills made.
@@ -302,9 +304,9 @@ There is no HSN code box any more. Codes saved earlier are kept and still print 
 
 **Why this field is needed.** Bills made in this app are counted automatically. Old unpaid bills are not in the app, so without this number the app would think the customer owes nothing: the **Owes you** total, the credit-limit check, the Customer Account report and dues reminders would all be wrong. Type the old amount once, and from then on it is part of what the customer owes.
 
-The **Outstanding** box always shows what is **still unpaid** of that old amount. When the customer pays it (section 4.3, **On account / outstanding from before**), it goes down by itself; the edit form shows the working, for example *Entered ₹5,000 − received ₹2,000 = ₹3,000 still to receive*. On the customer page, **Owes you now (all bills)** is the full amount (old outstanding + unpaid bills in the app), and **Outstanding (from before)** is just the old part.
+The **Outstanding** box always shows what is **still unpaid** of that old amount. When the customer pays it (section 4.3, **On account (oldest first)**), it goes down by itself; the edit form shows the working, for example *Entered ₹5,000 − received ₹2,000 = ₹3,000 still to receive*. On the customer page, **Owes you now (all bills)** is the full amount (old outstanding + unpaid bills in the app), and **Outstanding (from before)** is just the old part. Under it you see the working, e.g. *from before ₹500 + unpaid on bills ₹1,050 − paid on account ₹200 = ₹1,350*, and the purchase history has a **Still to pay** column for each bill. If the stored figure does not match this working (bills made before the fixes), a yellow note says **Does not match the bills** with a button **Set to ₹…** to correct it. To check every customer at once, the server admin can run `php artisan customers:check-owes` (add `--fix` to correct them). Any bill paid only in part counts — credit, or cash / card / UPI where the customer paid less than the bill.
 
-> Example: Ravi owed ₹5,000 on old bills. Type 5,000 in Outstanding. He buys ₹2,000 on credit in the app → **Owes you ₹7,000**. He pays ₹2,000 "On account / outstanding from before" → Outstanding (from before) **₹3,000**, Owes you **₹5,000** (₹3,000 old + ₹2,000 bill).
+> Example: Ravi owed ₹5,000 on old bills. Type 5,000 in Outstanding. He buys ₹2,000 on credit in the app → **Owes you ₹7,000**. He pays ₹2,000 "On account (oldest first)" → Outstanding (from before) **₹3,000**, Owes you **₹5,000** (₹3,000 old + ₹2,000 bill). If he then pays ₹4,000 on account, ₹3,000 clears the old part and ₹1,000 goes on the bill (₹1,000 left on it).
 
 ![New customer](img/11-customer-new.jpg#1920x1200)
 
@@ -576,7 +578,7 @@ The selling path is: New sale → Save → Confirm (stock goes out, money and po
 
 **Request shortage** (on a saved draft bill) appears only when an item needs more than is in stock; the line shows *Short by …*. It makes a waiting order (backorder) for the missing pieces. When all items are in stock, the button is hidden.
 7. If the customer wants to use loyalty points, type the points.
-8. Type **Amount paid** (leave blank if they pay the full bill now).
+8. Type **Amount paid**. Cash / card / UPI: leave blank if they pay the full bill now. **Credit:** leave blank if they pay nothing now — the whole bill goes to what the customer owes; type an amount only if they pay part now.
 9. Click **Save**, check the totals, then click **Confirm**.
 
 ![New sale](img/28-sale-new.jpg#1503x1091)
@@ -639,7 +641,7 @@ From the bill you can **Print**, save a **PDF** or send it on **WhatsApp**.
 2. Type the amount and mode (cash, card, UPI, bank, cheque).
 3. Save. What they owe goes down. Extra money becomes their **advance**.
 4. **Apply advance** settles a bill from money they paid earlier.
-5. Money for old dues (the customer's **Outstanding** from before): leave **Against invoice** as **On account / outstanding from before**. It reduces the old outstanding first. The form shows *Owes you* and *Outstanding from before still unpaid* when you pick the customer.
+5. Money without picking a bill: leave **Against invoice** as **On account (oldest first)**. It pays the customer's **outstanding from before first**, then the **oldest unpaid bills** — the same as supplier payments. Under the amount the form shows where it goes, e.g. *Goes to: INV-000002 ₹760.00*, and those bills show the money as paid. Picking the bill yourself does the same for that one bill.
 6. **The amount cannot be more than is owed.** On account: up to what the customer owes in all. Against an invoice: up to what is left on that bill. The box shows the limit (*Up to ₹2,000.00 (what they owe)*). Extra money — a deposit for later, or paying in advance — is recorded by ticking **Record as customer advance**. So *Owes you* never goes below zero.
 
 > Example: the customer owes ₹805. They pay ₹805 against that bill → they owe ₹0.
@@ -656,6 +658,12 @@ The **Receipt history** tab shows every receipt. Voiding a receipt undoes it, in
 ![New sales return](img/31-sales-return-new.jpg#1503x1091)
 
 Rate, discount and GST come from the original bill. You cannot return more than was sold. The discount is shared by quantity.
+
+**Where the money goes (like a purchase return).** When you confirm, the return value first comes off what is still unpaid on that bill (*Owes you*). The rest — money the customer already paid — goes to the customer's **advance**, for any payment mode (credit, cash, card, UPI). The return page shows *Taken off “Owes you”* and *Added to advance*. A return with no customer (walk-in) gives the money back at the counter.
+
+**Using the advance on the next bill.** On **New sale**, pick the customer. If they have an advance, a box **Customer advance** appears: type the amount in **Pay from advance** (or click **Use max**). The totals show *From advance −₹…* and **Amount due** is what is left. "Amount paid" blank = the rest is paid now (or, on Credit, owed). The advance is taken when you **Confirm** the bill; cancelling the bill puts it back.
+
+> Example: a ₹1,000 cash bill, ₹500 of plants come back → ₹500 goes to the advance. Next bill ₹1,500: Pay from advance ₹500 → Amount due ₹1,000.
 
 > Example: 2 of the 4 pots from the bill above come back.
 >

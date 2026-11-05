@@ -35,6 +35,7 @@ class StoreSaleRequest extends FormRequest
             'payment_mode'  => ['required', 'in:cash,card,upi,credit'],
             'bill_kind'     => ['nullable', 'in:tax_invoice,proforma,complimentary'],
             'amount_paid'               => ['nullable', 'numeric', 'min:0'],
+            'use_advance'               => ['nullable', 'numeric', 'min:0'],
             'loyalty_points_redeemed'   => ['nullable', 'integer', 'min:0'],
             'notes'                     => ['nullable', 'string', 'max:2000'],
             'items'                     => ['required', 'array', 'min:1'],

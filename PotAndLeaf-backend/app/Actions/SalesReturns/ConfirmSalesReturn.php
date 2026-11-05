@@ -100,17 +100,20 @@ class ConfirmSalesReturn
                 $customer = Customer::forCompany($return->company_id)->lockForUpdate()->find($return->customer_id);
                 if ($customer) {
                     $sale = $return->sale;
-                    if ($sale && $sale->payment_mode === 'credit') {
-                        // "Owes you" goes down only by what is still unpaid on this bill
-                        // (and never below 0). Value beyond that was already paid, so it
-                        // becomes the customer's advance (credit for the next bill)
-                        // instead of being lost.
-                        $earlierReturns = (float) \App\Models\SalesReturn::query()
-                            ->where('sale_id', $sale->id)
-                            ->where('status', 'confirmed')
-                            ->whereKeyNot($return->id)
-                            ->sum('grand_total');
-                        $unpaid = max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount - (float) $sale->amount_paid - $earlierReturns);
+                    // Like a purchase return: the value first comes off what is still
+                    // unpaid on this bill ("Owes you", never below 0); the rest goes
+                    // to the customer's advance, to use on a future bill. Same for
+                    // credit, cash, card and UPI bills.
+                    {
+                        $unpaid = max(0, (float) $customer->outstanding);
+                        if ($sale) {
+                            $earlierReturns = (float) \App\Models\SalesReturn::query()
+                                ->where('sale_id', $sale->id)
+                                ->where('status', 'confirmed')
+                                ->whereKeyNot($return->id)
+                                ->sum('grand_total');
+                            $unpaid = max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount - (float) $sale->amount_paid - $earlierReturns);
+                        }
                         $value = (float) $return->grand_total;
                         $reduce = round(min($value, $unpaid, max(0, (float) $customer->outstanding)), 2);
                         $credit = round($value - $reduce, 2);

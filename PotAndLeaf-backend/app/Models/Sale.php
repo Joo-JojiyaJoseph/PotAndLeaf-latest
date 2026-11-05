@@ -16,7 +16,7 @@ class Sale extends Model
     protected $fillable = [
         'company_id', 'customer_id', 'location_id', 'customer_name', 'sale_no', 'sale_date',
             'is_interstate', 'payment_mode', 'bill_kind', 'converted_from_sale_id', 'subtotal', 'tax_total', 'round_off',
-            'grand_total', 'amount_paid', 'loyalty_points_redeemed', 'loyalty_discount',
+            'grand_total', 'amount_paid', 'use_advance', 'loyalty_points_redeemed', 'loyalty_discount',
             'status', 'notes', 'confirmed_at',
             'cancel_requested_at', 'cancel_requested_by', 'cancel_reason',
             'cancel_reviewed_at', 'cancel_reviewed_by', 'cancel_rejection_reason',
@@ -33,6 +33,7 @@ class Sale extends Model
             'round_off'               => 'decimal:2',
             'grand_total'             => 'decimal:2',
             'amount_paid'             => 'decimal:2',
+            'use_advance'             => 'decimal:2',
             'loyalty_points_redeemed' => 'integer',
             'loyalty_discount'        => 'decimal:2',
             'confirmed_at'            => 'datetime',

@@ -83,6 +83,9 @@ export default function Dashboard() {
     retry: false,
   });
 
+  const inc = incentiveQ.data;
+  // A super admin who sells nothing gets no row of ₹0.00 cards.
+  const showIncentive = canIncentive && inc && !(isSuperAdmin && ['sales_total', 'total_incentive', 'sales_commission'].every((k) => !Number(inc[k])));
   const rep = repQ.data;
   const cards = dashQ.data?.cards ?? [];
   const lowStock = cards.find((c) => c.key === 'low_stock')?.value ?? 0;
@@ -108,7 +111,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4 2xl:grid-cols-4">
                 <StatCard
                   label="Sales (30 days)" value={rep ? formatCurrency(rep.sales.total) : '—'}
-                  sub={rep ? salesSub(rep.sales) : 'Loading…'}
+                  sub={rep ? salesSub(rep.sales, { days: 30 }) : 'Loading…'}
                   tone="good"
                   icon={BanknotesIcon}
                 />
@@ -131,9 +134,9 @@ export default function Dashboard() {
               </div>
             )}
 
-            {canIncentive && incentiveQ.data && (
+            {showIncentive && (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <StatCard label="Today's sales" value={formatCurrency(incentiveQ.data.sales_total)} sub="your bills, before GST" />
+                <StatCard label="My sales today" value={formatCurrency(incentiveQ.data.sales_total)} sub="bills you made, before GST" />
                 <StatCard label="Commission" value={formatCurrency(incentiveQ.data.sales_commission)} tone="good" />
                 <StatCard label="Bonuses" value={formatCurrency((incentiveQ.data.daily_target_bonus || 0) + (incentiveQ.data.promotion_bonus || 0))} />
                 <StatCard
@@ -144,7 +147,7 @@ export default function Dashboard() {
                 />
               </div>
             )}
-            {canIncentive && incentiveQ.data && (
+            {showIncentive && (
               <Link to="/my-commission" className="-mt-2 inline-block text-sm font-medium text-leaf-hover hover:underline">
                 See my commission for the month →
               </Link>

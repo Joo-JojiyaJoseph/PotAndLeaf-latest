@@ -52,7 +52,7 @@ export default function SalesReturnsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Sales returns</h1>
-          <p className="text-sm text-muted">Items customers bring back. When confirmed, the stock comes back and the customer owes less{companyHint}.</p>
+          <p className="text-sm text-muted">Items customers bring back. When confirmed, the stock comes back and the customer owes less; anything already paid goes to the customer’s advance for their next bill{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />

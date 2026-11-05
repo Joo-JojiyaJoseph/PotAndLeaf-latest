@@ -46,10 +46,11 @@ class SaleController extends Controller
         $customers = Customer::forCompany($company->id)->where('status', 'active')
             ->when($request->user()->seesOnlyOwn('customers', $company->id), fn ($q) => $q->where('created_by', $request->user()->id))
             ->orderBy('name')
-            ->get(['id', 'name', 'type', 'loyalty_points'])
+            ->get(['id', 'name', 'type', 'loyalty_points', 'advance_balance'])
             ->map(fn ($c) => [
                 'id' => $c->id, 'name' => $c->name, 'type' => $c->type?->value,
                 'loyalty_points' => (int) $c->loyalty_points,
+                'advance_balance' => round((float) $c->advance_balance, 2),
             ]);
 
         $settings = app(\App\Services\SettingsService::class)->all($company->id);

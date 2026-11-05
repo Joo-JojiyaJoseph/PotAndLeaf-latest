@@ -69,3 +69,32 @@ it('keeps the API shape the dashboard page reads', function () {
     $this->getJson('/api/reports/dashboard', $this->apiHeaders())->assertOk()
         ->assertJsonStructure(['data' => ['sales' => ['total', 'count', 'returns', 'net', 'by_mode', 'trend'], 'receivables', 'payables', 'inventory']]);
 });
+
+it('shows today\'s bills under the 30-day card', function () {
+    dashSale($this, 'cash', 2);
+    $from = now()->subDays(29)->toDateString();
+    $d = app(ReportService::class)->dashboard($this->company->id, $from, now()->toDateString());
+    expect($d['sales']['last_day']['total'])->toBe(1000.0)->and($d['sales']['last_day']['count'])->toBe(1);
+});
+
+it('a credit bill with no amount paid is not paid: the customer owes it and no receipt is made', function () {
+    $sale = app(CreateSale::class)->handle($this->company->id, [
+        'customer_id' => $this->customer->id, 'sale_date' => now()->toDateString(), 'payment_mode' => 'credit', 'is_interstate' => false,
+        'items' => [['product_id' => $this->product->id, 'qty' => 2, 'rate' => 500, 'gst_rate' => 0]],
+    ], $this->user->id);
+    expect((float) $sale->amount_paid)->toBe(0.0);
+    app(ConfirmSale::class)->handle($sale, $this->user->id);
+    expect((float) $this->customer->fresh()->outstanding)->toBe(1000.0)
+        ->and(\App\Models\CustomerReceipt::where('sale_id', $sale->id)->exists())->toBeFalse();
+
+    $d = app(ReportService::class)->dashboard($this->company->id, now()->toDateString(), now()->toDateString());
+    expect($d['receivables'])->toBe(1000.0);
+});
+
+it('a cash bill with no amount paid is still paid in full', function () {
+    $sale = app(CreateSale::class)->handle($this->company->id, [
+        'customer_id' => $this->customer->id, 'sale_date' => now()->toDateString(), 'payment_mode' => 'cash', 'is_interstate' => false,
+        'items' => [['product_id' => $this->product->id, 'qty' => 2, 'rate' => 500, 'gst_rate' => 0]],
+    ], $this->user->id);
+    expect((float) $sale->amount_paid)->toBe(1000.0);
+});

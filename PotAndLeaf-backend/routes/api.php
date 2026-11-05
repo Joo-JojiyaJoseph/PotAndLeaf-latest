@@ -215,6 +215,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('customers/{customer}/purchase-history', [CustomerController::class, 'purchaseHistory']);
         Route::get('customers/{customer}', [CustomerController::class, 'show']);
         Route::put('customers/{customer}', [CustomerController::class, 'update']);
+        Route::post('customers/{customer}/recalculate-owes', [CustomerController::class, 'recalculateOwes']);
         Route::delete('customers/{customer}', [CustomerController::class, 'destroy']);
 
         // Products master (CRUD)

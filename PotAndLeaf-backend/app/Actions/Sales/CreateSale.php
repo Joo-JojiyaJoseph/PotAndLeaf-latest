@@ -67,6 +67,25 @@ class CreateSale
         // Money taken cannot be more than the bill (after points). Change given
         // back is not "paid" — over-paying would leave the customer owing a minus amount.
         $payable = max(0, $billTotal - $loyaltyDiscount);
+
+        // Pay part (or all) of the bill from the customer's advance — e.g. money
+        // from an earlier sales return. Taken from the advance when confirmed.
+        $useAdvance = round(max(0, (float) ($data['use_advance'] ?? 0)), 2);
+        if ($useAdvance > 0.005) {
+            if (! $customer) {
+                throw ValidationException::withMessages(['use_advance' => 'Select a customer to pay from their advance.']);
+            }
+            $available = round((float) $customer->advance_balance, 2);
+            if ($useAdvance > $available + 0.005) {
+                throw ValidationException::withMessages(['use_advance' => sprintf('Only ₹%.2f advance is available for %s.', $available, $customer->name)]);
+            }
+            if ($useAdvance > $payable + 0.005) {
+                throw ValidationException::withMessages(['use_advance' => sprintf('Advance used (₹%.2f) cannot be more than the bill (₹%.2f).', $useAdvance, $payable)]);
+            }
+        }
+        $data['use_advance'] = $useAdvance;
+        $payable = max(0, round($payable - $useAdvance, 2));
+
         if (isset($data['amount_paid']) && $data['amount_paid'] !== '' && (float) $data['amount_paid'] > $payable + 0.005) {
             throw ValidationException::withMessages([
                 'amount_paid' => sprintf('Amount paid (₹%.2f) cannot be more than the bill total (₹%.2f). Enter the bill amount and give the change back.', (float) $data['amount_paid'], $payable),
@@ -83,7 +102,7 @@ class CreateSale
 
         return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind, $userId, $retailOnly) {
             $t = $computed['totals'];
-            $due = max(0, $billTotal - $loyaltyDiscount);
+            $due = max(0, round($billTotal - $loyaltyDiscount - (float) $data['use_advance'], 2));
             $sale = $this->sales->create([
                 'company_id'              => $companyId,
                 'customer_id'             => $data['customer_id'] ?? null,
@@ -99,9 +118,11 @@ class CreateSale
                 'tax_total'               => $t['tax_total'],
                 'round_off'               => $t['round_off'],
                 'grand_total'             => $t['grand_total'],
-                'amount_paid'             => $data['amount_paid'] ?? $due,
+                // Not given: cash/card/UPI = paid in full; credit = nothing paid yet.
+                'amount_paid'             => (isset($data['amount_paid']) && $data['amount_paid'] !== '') ? $data['amount_paid'] : (($data['payment_mode'] ?? 'cash') === 'credit' ? 0 : $due),
                 'loyalty_points_redeemed' => $redeemPoints,
                 'loyalty_discount'        => $loyaltyDiscount,
+                'use_advance'             => $data['use_advance'],
                 'status'                  => 'draft',
                 'notes'                   => $data['notes'] ?? null,
             ]);

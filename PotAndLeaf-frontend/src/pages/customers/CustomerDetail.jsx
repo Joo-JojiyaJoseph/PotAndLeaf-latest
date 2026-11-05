@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { PencilSquareIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -36,6 +36,16 @@ export default function CustomerDetail() {
       .then((r) => r.data),
     enabled: Boolean(headerCompanyId && id),
     placeholderData: keepPreviousData,
+  });
+
+  const qc = useQueryClient();
+  const recalc = useMutation({
+    mutationFn: () => api.post(`/customers/${id}/recalculate-owes`, {}, withCompany(headerCompanyId)).then((r) => r.data.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['customer', headerCompanyId, id] });
+      qc.invalidateQueries({ queryKey: ['customer-purchase-history', headerCompanyId, id] });
+      qc.invalidateQueries({ queryKey: ['customers'] });
+    },
   });
 
   if (isLoading) return <DetailLoading />;
@@ -97,6 +107,7 @@ export default function CustomerDetail() {
           <InfoItem label="Advance balance" value={formatCurrency(c.advance_balance)} mono />
           <InfoItem label="Loyalty points" value={loyalty.balance ?? c.loyalty_points} mono />
         </InfoGrid>
+        {history?.owes_check && <OwesWorking check={history.owes_check} canFix={can('customers.update')} fixing={recalc.isPending} onFix={() => recalc.mutate()} />}
         {c.notes && <div className="mt-4 border-t border-line pt-4"><InfoItem label="Notes" value={c.notes} /></div>}
       </Section>
 
@@ -116,6 +127,7 @@ export default function CustomerDetail() {
                     <th className="microlabel px-4 py-2.5 font-semibold">Type</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Items</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Total</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Still to pay</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Payment</th>
                   </tr>
                 </thead>
@@ -129,7 +141,12 @@ export default function CustomerDetail() {
                       <td className="px-4 py-2.5"><Badge tone={typeTone[sale.bill_type] ?? 'default'}>{sale.bill_type || '—'}</Badge></td>
                       <td className="tnum px-4 py-2.5 text-right text-muted">{sale.items_count ?? '—'}</td>
                       <td className="tnum px-4 py-2.5 text-right">{formatCurrency(sale.grand_total)}</td>
-                      <td className="px-4 py-2.5"><Badge tone={payTone[sale.payment_status] ?? 'default'}>{sale.payment_status}</Badge></td>
+                      <td className="tnum px-4 py-2.5 text-right">{sale.status === 'confirmed' ? formatCurrency(sale.balance) : '—'}</td>
+                      <td className="px-4 py-2.5">
+                        {sale.status === 'confirmed'
+                          ? <Badge tone={payTone[sale.payment_status] ?? 'default'}>{sale.payment_status} · {sale.payment_mode}</Badge>
+                          : <Badge tone="default">{sale.status}</Badge>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -172,6 +189,30 @@ export default function CustomerDetail() {
           )}
         </Card>
       </Section>
+    </div>
+  );
+}
+/** How "Owes you now" is made up from the bills — and a fix when it does not match. */
+function OwesWorking({ check, canFix, fixing, onFix }) {
+  const parts = [];
+  if (check.from_before > 0) parts.push(`from before ${formatCurrency(check.from_before)}`);
+  parts.push(`unpaid on bills ${formatCurrency(check.unpaid_bills)}`);
+  if (check.on_account > 0) parts.push(`− paid on account ${formatCurrency(check.on_account)}`);
+  const working = `${parts.join(' + ').replace('+ −', '−')} = ${formatCurrency(check.expected)}`;
+  if (check.matches) {
+    return <p className="mt-3 text-xs text-muted">Owes you now: {working}</p>;
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-amber-soft px-3 py-2 text-xs text-amber">
+      <span className="min-w-0 flex-1">
+        <b>Does not match the bills.</b> Owes you now shows {formatCurrency(check.stored)}, but {working}.
+        This happens for bills made before the fixes (part-paid cash bills, or credit bills saved as paid).
+      </span>
+      {canFix && (
+        <Button size="sm" variant="outline" disabled={fixing} onClick={onFix}>
+          {fixing ? 'Fixing…' : `Set to ${formatCurrency(check.expected)}`}
+        </Button>
+      )}
     </div>
   );
 }

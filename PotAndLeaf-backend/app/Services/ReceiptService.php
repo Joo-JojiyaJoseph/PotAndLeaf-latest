@@ -49,6 +49,14 @@ class ReceiptService
             if (! $isAdvance) {
                 $this->assertNotMoreThanOwed($companyId, $data, $allocations);
             }
+            // On account (no bill picked): pays the outstanding from before first,
+            // then the oldest unpaid bills — worked out before this receipt exists.
+            $onAccountPlain = ! $isAdvance && $allocations === [] && empty($data['sale_id']);
+            $openingBefore = 0.0;
+            if ($onAccountPlain) {
+                $cust = Customer::forCompany($companyId)->find($data['customer_id']);
+                $openingBefore = $cust ? $this->openingLeft($cust) : 0.0;
+            }
 
             $receipt = CustomerReceipt::create([
                 'company_id'   => $companyId,
@@ -92,6 +100,10 @@ class ReceiptService
 
             if (! $isAdvance && $allocations === [] && ! empty($data['sale_id'])) {
                 $this->syncSalePaid($data['sale_id']);
+            }
+
+            if ($onAccountPlain) {
+                $this->applyToOldestBills($receipt, round((float) $data['amount'] - min((float) $data['amount'], $openingBefore), 2));
             }
 
             return $receipt->load(['customer:id,name', 'sale:id,sale_no', 'allocations']);
@@ -266,6 +278,16 @@ class ReceiptService
             CustomerReceipt::query()->whereIn('id', $advanceReceipts->pluck('id'))->update(['sale_id' => null]);
         }
 
+        // Customer advance used on this sale goes back to the advance.
+        $fromAdvance = (float) CustomerReceipt::query()->where('sale_id', $sale->id)->where('applied_from_advance', true)->sum('amount');
+        if ($fromAdvance > 0.005) {
+            $customer = Customer::forCompany($sale->company_id)->lockForUpdate()->find($sale->customer_id);
+            if ($customer) {
+                $customer->advance_balance = round((float) $customer->advance_balance + $fromAdvance, 2);
+                $customer->save();
+            }
+        }
+
         $receipts = CustomerReceipt::query()->where('sale_id', $sale->id)->get();
         foreach ($receipts as $receipt) {
             app(AccountingEngine::class)->cancelBySource('customer_receipt', $receipt->id);
@@ -355,6 +377,9 @@ class ReceiptService
                     $customer->outstanding = (float) $customer->outstanding + (float) $receipt->amount;
                 } elseif ($receipt->is_advance || $receipt->advance_order_id) {
                     $customer->advance_balance = max(0, (float) $customer->advance_balance - (float) $receipt->amount);
+                } elseif ($receipt->auto_applied) {
+                    // On-account money spread over bills: all of it was taken off "Owes you".
+                    $customer->outstanding = (float) $customer->outstanding + (float) $receipt->amount;
                 } else {
                     $allocated = (float) $receipt->allocations()->sum('amount');
                     $againstOutstanding = $allocated > 0.005 ? $allocated : (float) $receipt->amount;
@@ -432,14 +457,104 @@ class ReceiptService
         if ($opening <= 0.005) {
             return max(0, $opening);
         }
-        $onAccount = (float) CustomerReceipt::query()
+        $onAccount = $this->onAccountUnapplied($customer);
+
+        return round(max(0, min($opening - $onAccount, (float) $customer->outstanding)), 2);
+    }
+
+    /**
+     * Money received "on account" that did not go to a bill: plain on-account
+     * receipts, plus the part of an auto-applied one not spread over bills.
+     */
+    private function onAccountUnapplied(Customer $customer): float
+    {
+        $plain = (float) CustomerReceipt::query()
             ->where('customer_id', $customer->id)
             ->where('is_advance', false)
             ->whereNull('sale_id')
+            ->whereNull('advance_order_id')
+            ->where('auto_applied', false)
             ->whereDoesntHave('allocations')
             ->sum('amount');
+        $auto = CustomerReceipt::query()
+            ->where('customer_id', $customer->id)
+            ->where('auto_applied', true)
+            ->withSum('allocations as allocated', 'amount')
+            ->get(['id', 'amount']);
+        $autoLeft = (float) $auto->sum(fn ($r) => max(0, (float) $r->amount - (float) ($r->allocated ?? 0)));
 
-        return round(max(0, min($opening - $onAccount, (float) $customer->outstanding)), 2);
+        return round($plain + $autoLeft, 2);
+    }
+
+    /**
+     * Spread on-account money over the customer's unpaid bills, oldest first,
+     * so each bill shows what was paid on it. Bills whose "paid" figure is not
+     * backed by receipts (very old sales) are left alone.
+     */
+    public function applyToOldestBills(CustomerReceipt $receipt, float $amount): void
+    {
+        $receipt->forceFill(['auto_applied' => true])->save();
+        if ($amount <= 0.005) {
+            return;
+        }
+        $returned = \App\Models\SalesReturn::query()
+            ->where('customer_id', $receipt->customer_id)->where('status', 'confirmed')
+            ->selectRaw('sale_id, SUM(grand_total) as t')->groupBy('sale_id')->pluck('t', 'sale_id');
+        $sales = Sale::query()
+            ->where('company_id', $receipt->company_id)
+            ->where('customer_id', $receipt->customer_id)
+            ->where('status', 'confirmed')
+            ->withSum('customerReceipts as rec_sum', 'amount')
+            ->withSum('receiptAllocations as alloc_sum', 'amount')
+            ->orderBy('sale_date')->orderBy('created_at')
+            ->get();
+        foreach ($sales as $sale) {
+            if ($amount <= 0.005) {
+                break;
+            }
+            $backed = (float) ($sale->rec_sum ?? 0) + (float) ($sale->alloc_sum ?? 0);
+            if ((float) $sale->amount_paid > $backed + 0.005) {
+                continue;
+            }
+            $unpaid = round((float) $sale->grand_total - (float) $sale->loyalty_discount - (float) $sale->amount_paid - (float) ($returned[$sale->id] ?? 0), 2);
+            if ($unpaid <= 0.005) {
+                continue;
+            }
+            $part = round(min($unpaid, $amount), 2);
+            $receipt->allocations()->create(['sale_id' => $sale->id, 'amount' => $part]);
+            $this->syncSalePaid($sale->id);
+            $amount = round($amount - $part, 2);
+        }
+    }
+
+    /**
+     * "Owes you" worked out again from the records:
+     *   outstanding from before + still unpaid on confirmed bills (less returns)
+     *   − money received "on account" (no bill picked, not an advance).
+     * Used to spot and repair a customer whose stored "Owes you" does not match.
+     */
+    public function owesFromRecords(Customer $customer): array
+    {
+        $returned = \App\Models\SalesReturn::query()
+            ->where('customer_id', $customer->id)->where('status', 'confirmed')
+            ->selectRaw('sale_id, SUM(grand_total) as t')->groupBy('sale_id')->pluck('t', 'sale_id');
+        $unpaidBills = round((float) Sale::query()
+            ->where('company_id', $customer->company_id)
+            ->where('customer_id', $customer->id)->where('status', 'confirmed')
+            ->get(['id', 'grand_total', 'loyalty_discount', 'amount_paid'])
+            ->sum(fn ($s) => max(0, (float) $s->grand_total - (float) $s->loyalty_discount - (float) $s->amount_paid - (float) ($returned[$s->id] ?? 0))), 2);
+        $onAccount = $this->onAccountUnapplied($customer);
+        $opening = round(max(0, (float) $customer->opening_balance), 2);
+        $expected = round(max(0, $opening + $unpaidBills - $onAccount), 2);
+
+        return [
+            'from_before'  => $opening,
+            'unpaid_bills' => $unpaidBills,
+            'on_account'   => $onAccount,
+            'expected'     => $expected,
+            'stored'       => round((float) $customer->outstanding, 2),
+            'matches'      => abs($expected - (float) $customer->outstanding) < 0.01,
+        ];
     }
 
     private function nextReceiptNo(int|string $companyId): string

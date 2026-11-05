@@ -130,12 +130,42 @@ class CustomerController extends Controller
         $payload = \App\Http\Resources\SaleResource::collection($paginated);
         $response = $this->ok($payload);
         $body = $response->getData(true);
+        // "Owes you" worked out again from the bills and payments, so the page
+        // can show how it is made up and flag a customer whose figure is off.
+        $check = app(\App\Services\ReceiptService::class)->owesFromRecords($customer);
+        $body['unpaid_bills'] = $check['unpaid_bills'];
+        $body['owes_check'] = $check;
         $body['loyalty'] = [
             'balance' => (int) $customer->loyalty_points,
             'ledger'  => $ledger,
         ];
 
         return response()->json($body);
+    }
+
+    /** Set "Owes you" to what the bills and payments say (see owesFromRecords). */
+    public function recalculateOwes(Request $request, Customer $customer): JsonResponse
+    {
+        $this->allow($request, 'customers.update');
+        $this->assertRecordCompany($request, $customer);
+
+        $check = \Illuminate\Support\Facades\DB::transaction(function () use ($customer, $request) {
+            $c = Customer::query()->lockForUpdate()->findOrFail($customer->id);
+            $check = app(\App\Services\ReceiptService::class)->owesFromRecords($c);
+            if (! $check['matches']) {
+                $before = (float) $c->outstanding;
+                $c->outstanding = $check['expected'];
+                $c->save();
+                app(\App\Services\ActivityLogService::class)->log(
+                    $c->company_id, $request->user()->id, 'recalculate_owes', 'customers', 'customer', $c->id,
+                    sprintf('Owes you %.2f → %.2f', $before, $check['expected']),
+                );
+            }
+
+            return app(\App\Services\ReceiptService::class)->owesFromRecords($c->fresh());
+        });
+
+        return $this->ok($check);
     }
 
     private function company(Request $request)

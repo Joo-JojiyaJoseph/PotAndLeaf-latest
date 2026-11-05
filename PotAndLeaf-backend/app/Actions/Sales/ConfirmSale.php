@@ -131,15 +131,20 @@ class ConfirmSale
                 $customer = Customer::forCompany($sale->company_id)->lockForUpdate()->find($sale->customer_id);
                 if ($customer) {
                     $due = max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount);
-                    if ($sale->payment_mode === 'credit' && $due > 0) {
+                    // Whatever is left unpaid on the bill is owed — on a credit bill,
+                    // and also on a cash/card/UPI bill where only part was paid.
+                    $unpaid = round($due - (float) $sale->amount_paid, 2);
+                    if ($due > 0 && ($sale->payment_mode === 'credit' || $unpaid > 0.005)) {
                         $newOutstanding = (float) $customer->outstanding + ($due - (float) $sale->amount_paid);
                         // Credit limit (0 = no limit) was saved but never enforced.
                         $limit = (float) $customer->credit_limit;
-                        if ($limit > 0 && $newOutstanding > $limit + 0.005) {
+                        // Part paid from advance right after confirm is not credit.
+                        $afterAdvance = $newOutstanding - min((float) $sale->use_advance, max(0, (float) $customer->advance_balance));
+                        if ($limit > 0 && $afterAdvance > $limit + 0.005) {
                             throw ValidationException::withMessages([
                                 'payment_mode' => sprintf(
                                     'Credit limit exceeded for %s: limit %.2f, already owed %.2f, this bill would make it %.2f. Collect payment or raise the limit.',
-                                    $customer->name, $limit, (float) $customer->outstanding, $newOutstanding,
+                                    $customer->name, $limit, (float) $customer->outstanding, $afterAdvance,
                                 ),
                             ]);
                         }
@@ -171,6 +176,18 @@ class ConfirmSale
             $this->receipts->consumeAdvanceOrderAdvance($sale->fresh());
 
             $this->receipts->recordFromConfirmedSale($sale->fresh(), $userId);
+
+            // Part of the bill paid from the customer's advance (e.g. a sales return).
+            $useAdvance = (float) $sale->use_advance;
+            if ($useAdvance > 0.005 && $sale->customer_id) {
+                $cust = Customer::forCompany($sale->company_id)->find($sale->customer_id);
+                $amount = round(min($useAdvance, max(0, (float) ($cust?->advance_balance ?? 0))), 2);
+                if ($amount > 0.005) {
+                    $this->receipts->applyAdvance($sale->company_id, [
+                        'customer_id' => $sale->customer_id, 'sale_id' => $sale->id, 'amount' => $amount,
+                    ], $userId);
+                }
+            }
             // Walk-in sale money goes straight to the cash / bank book.
             app(\App\Services\AccountingEngine::class)->postWalkInSale($sale->fresh());
 

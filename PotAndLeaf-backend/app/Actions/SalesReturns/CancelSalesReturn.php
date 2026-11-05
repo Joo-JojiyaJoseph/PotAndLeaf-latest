@@ -56,7 +56,7 @@ class CancelSalesReturn
                     $customer = Customer::forCompany($return->company_id)->lockForUpdate()->find($return->customer_id);
                     if ($customer) {
                         $sale = $return->sale;
-                        if ($sale && $sale->payment_mode === 'credit') {
+                        if ($return->owes_reduced !== null || ($sale && $sale->payment_mode === 'credit')) {
                             if ($return->owes_reduced !== null) {
                                 // Undo exactly what confirming did. Advance already spent
                                 // cannot be taken back, so that part is owed again.

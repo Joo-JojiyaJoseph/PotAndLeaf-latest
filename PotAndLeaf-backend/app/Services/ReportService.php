@@ -354,9 +354,14 @@ class ReportService
             ->when($locationId, fn ($q) => $q->whereHas('sale', fn ($sq) => $sq->where('location_id', $locationId)))
             ->sum('grand_total'), 2);
 
+        // The last day of the range (today on the dashboard), for "Today ₹…" under the card.
+        $lastDay = (clone $base)->whereDate('sale_date', $to);
+        $lastDayTotal = round((float) (clone $lastDay)->selectRaw("SUM({$billed}) as t")->value('t'), 2);
+
         return [
             'total'      => $total,
             'count'      => (clone $base)->count(),
+            'last_day'   => ['date' => $to, 'total' => $lastDayTotal, 'count' => (clone $lastDay)->count()],
             'loyalty_discount' => round((float) (clone $base)->sum('loyalty_discount'), 2),
             'before_gst' => $beforeGst,
             'returns'    => $returns,
@@ -1107,18 +1112,19 @@ class ReportService
         Sale::forCompany($companyId)
             ->where('customer_id', $customerId)
             ->where('status', 'confirmed')
-            ->where('payment_mode', 'credit')
+            // Every bill (money taken at the counter is a receipt below, so a
+            // fully paid cash bill nets to zero).
             ->whereDate('sale_date', '>=', $from)
             ->whereDate('sale_date', '<=', $to)
             ->orderBy('sale_date')
-            ->get(['id', 'sale_no', 'sale_date', 'grand_total', 'loyalty_discount'])
+            ->get(['id', 'sale_no', 'sale_date', 'grand_total', 'loyalty_discount', 'payment_mode'])
             ->each(function (Sale $s) use ($rows) {
                 $rows->push([
                     'date'        => $s->sale_date->toDateString(),
                     'type'        => 'debit',
                     'reference'   => $s->sale_no,
                     'invoice'     => $s->sale_no,
-                    'description' => 'Credit sale',
+                    'description' => $s->payment_mode === 'credit' ? 'Credit sale' : 'Sale ('.$s->payment_mode.')',
                     'amount'      => round(max(0, (float) $s->grand_total - (float) $s->loyalty_discount), 2),
                     'debit'       => round(max(0, (float) $s->grand_total - (float) $s->loyalty_discount), 2),
                     'credit'      => 0,
@@ -1479,7 +1485,6 @@ class ReportService
         $sales = (float) Sale::forCompany($companyId)
             ->where('customer_id', $customerId)
             ->where('status', 'confirmed')
-            ->where('payment_mode', 'credit')
             ->whereDate('sale_date', '<=', $asOf)
             ->selectRaw('SUM(grand_total - loyalty_discount) as total')
             ->value('total');

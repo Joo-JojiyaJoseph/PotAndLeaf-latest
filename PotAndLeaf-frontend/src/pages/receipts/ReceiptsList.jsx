@@ -120,7 +120,7 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
         </Field>
         <Field label="Against invoice (optional)" error={err('sale_id')}>
           <Select value={form.sale_id} onChange={set('sale_id')} className={selectCls} disabled={!form.customer_id || form.is_advance}>
-            <option value="">On account / outstanding from before</option>
+            <option value="">On account (oldest first)</option>
             {invoices.map((r) => <option key={r.id} value={r.id}>{r.sale_no} · bal {formatCurrency(r.balance)}</option>)}
           </Select>
         </Field>
@@ -137,6 +137,20 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
                 {over
                   ? `More than ${bill ? 'is left on this invoice' : 'they owe'} (₹${max.toFixed(2)}). Enter up to ₹${max.toFixed(2)}, or tick “Record as customer advance”.`
                   : `Up to ₹${max.toFixed(2)} (${bill ? 'left on this invoice' : 'what they owe'}).`}
+                {!bill && !over && Number(form.amount) > 0 && (() => {
+                  // On account: outstanding from before first, then the oldest bills.
+                  let left = Number(form.amount);
+                  const parts = [];
+                  const opening = Math.min(left, Math.max(0, Number(customer.opening_left) || 0));
+                  if (opening > 0.005) { parts.push(`from before ${formatCurrency(opening)}`); left -= opening; }
+                  const oldestFirst = [...invoices].sort((a, b) => String(a.due_date ?? '').localeCompare(String(b.due_date ?? '')));
+                  for (const r of oldestFirst) {
+                    if (left <= 0.005) break;
+                    const part = Math.min(left, Number(r.balance) || 0);
+                    if (part > 0.005) { parts.push(`${r.sale_no} ${formatCurrency(part)}`); left -= part; }
+                  }
+                  return parts.length ? <span className="block">Goes to: {parts.join(' · ')}</span> : null;
+                })()}
               </span>
             );
           })()}

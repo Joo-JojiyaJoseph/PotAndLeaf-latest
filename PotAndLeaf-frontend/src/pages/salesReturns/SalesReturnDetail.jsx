@@ -63,7 +63,7 @@ export default function SalesReturnDetail() {
           </>
         }
       />
-      <NextStep>{(r.status === 'draft' ? 'Not final yet. Click “Confirm” — the items go back into stock and the customer’s balance is reduced.' : null)}</NextStep>
+      <NextStep>{(r.status === 'draft' ? (r.customer ? 'Not final yet. Click “Confirm” — the items go back into stock. The value first comes off what is still unpaid on the bill; the rest goes to the customer’s advance, to use on a future bill.' : 'Not final yet. Click “Confirm” — the items go back into stock. No customer on this return, so give the money back at the counter.') : null)}</NextStep>
 
       <Section title="Details">
         <InfoGrid cols={4}>
@@ -108,6 +108,12 @@ export default function SalesReturnDetail() {
             <div className="flex justify-between"><dt className="text-muted">Taxable</dt><dd className="tnum">{formatCurrency(r.subtotal)}</dd></div>
             <div className="flex justify-between"><dt className="text-muted">{r.is_interstate ? 'IGST' : 'CGST + SGST'}</dt><dd className="tnum">{formatCurrency(r.tax_total)}</dd></div>
             <div className="mt-2 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Credit note</dt><dd className="tnum">{formatCurrency(r.grand_total)}</dd></div>
+            {r.status === 'confirmed' && r.owes_reduced != null && (
+              <>
+                <div className="flex justify-between text-muted"><dt>Taken off “Owes you”</dt><dd className="tnum">{formatCurrency(r.owes_reduced)}</dd></div>
+                <div className="flex justify-between font-medium text-leaf-hover"><dt>Added to advance</dt><dd className="tnum">{formatCurrency(r.advance_credited)}</dd></div>
+              </>
+            )}
           </dl>
         </Card>
       </div>

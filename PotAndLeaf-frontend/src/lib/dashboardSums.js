@@ -1,8 +1,11 @@
 import { formatCurrency } from './format';
 
-/** "8 bills · ₹500 returned" — the total is the bill amount after points discount. */
-export function salesSub(sales) {
-  const parts = [`${sales.count} bill${sales.count === 1 ? '' : 's'}`];
+/** "Today ₹5,45,873 (5 bills) · 18 bills in 30 days · ₹500 returned" */
+export function salesSub(sales, { days } = {}) {
+  const plural = (n) => `${n} bill${n === 1 ? '' : 's'}`;
+  const parts = [];
+  if (sales.last_day && days) parts.push(`Today ${formatCurrency(sales.last_day.total)} (${plural(sales.last_day.count)})`);
+  parts.push(days ? `${plural(sales.count)} in ${days} days` : plural(sales.count));
   if (Number(sales.returns) > 0) parts.push(`${formatCurrency(sales.returns)} returned`);
   return parts.join(' · ');
 }

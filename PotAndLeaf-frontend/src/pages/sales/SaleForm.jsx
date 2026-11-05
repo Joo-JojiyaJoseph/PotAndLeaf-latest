@@ -53,7 +53,7 @@ function QtyControl({ value, onChange }) {
 export default function SaleForm() {
   const navigate = useNavigate();
   const { isSuperAdmin, companies, companyId, selectCompany, activeCompany } = useAuth();
-  const [header, setHeader] = useState({ customer_id: '', sale_date: today(), is_interstate: false, payment_mode: 'cash', bill_kind: 'tax_invoice', amount_paid: '', notes: '', loyalty_points_redeemed: '' });
+  const [header, setHeader] = useState({ customer_id: '', sale_date: today(), is_interstate: false, payment_mode: 'cash', bill_kind: 'tax_invoice', amount_paid: '', notes: '', loyalty_points_redeemed: '', use_advance: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [scanValue, setScanValue] = useState('');
   const [scanError, setScanError] = useState('');
@@ -133,7 +133,10 @@ export default function SaleForm() {
   const redeemPoints = Math.max(0, Number(header.loyalty_points_redeemed) || 0);
   const maxRedeem = Math.max(0, Math.min(balance, Math.floor((t.grand_total * (redeemCapPct / 100)) / redeemRate)));
   const loyaltyDiscount = Math.min(t.grand_total, redeemPoints * redeemRate);
-  const dueTotal = Math.max(0, t.grand_total - loyaltyDiscount);
+  const advanceAvailable = Math.max(0, Number(customer?.advance_balance) || 0);
+  const useAdvance = Math.min(Math.max(0, Number(header.use_advance) || 0), advanceAvailable, Math.max(0, t.grand_total - loyaltyDiscount));
+  // What is left to pay after points and advance.
+  const dueTotal = Math.max(0, t.grand_total - loyaltyDiscount - useAdvance);
   const err = (k) => errors[k]?.[0];
 
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -165,8 +168,10 @@ export default function SaleForm() {
         is_interstate: header.is_interstate,
         payment_mode: header.payment_mode,
         bill_kind: header.bill_kind,
-        amount_paid: header.amount_paid === '' ? dueTotal : Number(header.amount_paid),
+        // Blank: a cash/card/UPI bill is paid in full; a credit bill is not paid yet (the customer owes it).
+        amount_paid: header.amount_paid === '' ? (header.payment_mode === 'credit' ? 0 : dueTotal) : Number(header.amount_paid),
         loyalty_points_redeemed: redeemPoints || 0,
+        use_advance: useAdvance || 0,
         notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({
           product_id: l.product_id, product_batch_id: l.product_batch_id || undefined, qty: Number(l.qty) || 0, rate: Number(l.rate) || 0,
@@ -225,10 +230,26 @@ export default function SaleForm() {
               {BILL_KINDS.map((bk) => <option key={bk.value} value={bk.value}>{bk.label}</option>)}
             </Select>
           </Field>
-          <Field label="Amount paid (blank = full)" error={err('amount_paid')}>
-            <Input icon={CurrencyRupeeIcon} type="number" step="0.01" value={header.amount_paid} onChange={(e) => setHeader((h) => ({ ...h, amount_paid: e.target.value }))} placeholder={formatCurrency(dueTotal)} />
+          <Field label={header.payment_mode === 'credit' ? 'Paid now (blank = nothing, customer owes all)' : 'Amount paid (blank = full)'} error={err('amount_paid')}>
+            <Input icon={CurrencyRupeeIcon} type="number" step="0.01" value={header.amount_paid} onChange={(e) => setHeader((h) => ({ ...h, amount_paid: e.target.value }))} placeholder={formatCurrency(header.payment_mode === 'credit' ? 0 : dueTotal)} />
           </Field>
         </div>
+        {header.customer_id && advanceAvailable > 0.005 && (
+          <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl bg-info-soft/60 p-3 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-muted">Customer advance</p>
+              <p className="tnum text-base font-semibold">{formatCurrency(advanceAvailable)}</p>
+              <p className="text-xs text-muted">e.g. from a sales return</p>
+            </div>
+            <Field label="Pay from advance" error={err('use_advance')}>
+              <Input type="number" step="0.01" min="0" value={header.use_advance} onChange={(e) => setHeader((h) => ({ ...h, use_advance: e.target.value }))} placeholder="0.00" />
+            </Field>
+            <div className="flex flex-col justify-end gap-1">
+              <Button type="button" variant="outline" size="sm" onClick={() => setHeader((h) => ({ ...h, use_advance: String(Math.min(advanceAvailable, Math.max(0, t.grand_total - loyaltyDiscount)).toFixed(2)) }))}>Use max</Button>
+              {useAdvance > 0 && <p className="text-xs text-muted">Left to pay: {formatCurrency(dueTotal)}</p>}
+            </div>
+          </div>
+        )}
         {header.customer_id && (
           <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl bg-leaf-soft/50 p-3 sm:grid-cols-3">
             <div>
@@ -373,6 +394,9 @@ export default function SaleForm() {
             <div className="flex justify-between font-medium"><dt>Total</dt><dd className="tnum">{formatCurrency(t.grand_total)}</dd></div>
             {loyaltyDiscount > 0 && (
               <div className="flex justify-between text-leaf"><dt>Loyalty discount</dt><dd className="tnum">−{formatCurrency(loyaltyDiscount)}</dd></div>
+            )}
+            {useAdvance > 0 && (
+              <div className="flex justify-between text-leaf"><dt>From advance</dt><dd className="tnum">−{formatCurrency(useAdvance)}</dd></div>
             )}
             <div className="mt-1 flex items-center justify-between border-t border-white/60 pt-3 text-[15px] font-semibold">
               <dt className="inline-flex items-center gap-2 text-leaf-hover">

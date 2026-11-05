@@ -74,6 +74,11 @@ class CancelSale
                         if ($sale->payment_mode === 'credit') {
                             $customer->outstanding = (float) $customer->outstanding - ($due - (float) $sale->amount_paid);
                             $customer->save();
+                        } elseif ($due - (float) $sale->amount_paid > 0.005) {
+                            // Part-paid cash/card/UPI bill. Bills confirmed before update 60
+                            // never added this to "Owes you", so never take off more than is owed.
+                            $customer->outstanding = round(max(0, (float) $customer->outstanding - min($due - (float) $sale->amount_paid, max(0, (float) $customer->outstanding))), 2);
+                            $customer->save();
                         }
                         $this->loyalty->reverseForSale($customer, $sale);
                     }
