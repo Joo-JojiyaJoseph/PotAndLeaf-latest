@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { recordDetailPath, defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatDate } from '../../lib/format';
 import { ListToolbar, useListFilters } from '../../components/ListToolbar';
 import { exportList } from '../../lib/exportList';
 import Pagination from '../../components/Pagination';
@@ -56,7 +56,7 @@ export default function PurchaseOrdersList() {
       </div>
 
       <ListToolbar lf={lf} placeholder={'Search PO no. or supplier…'} withSearch={true}
-        onExport={() => exportList({ url: '/purchase-orders', params: { ...companyParams, status, ...lf.filters }, filename: 'purchase-orders', columns: [['PO no', (r) => r.po_no], ['Date', (r) => r.po_date], ['Expected', (r) => r.expected_date], ['Supplier', (r) => r.supplier_name], ['Items', (r) => r.items_count], ['Total', (r) => r.grand_total], ['Status', (r) => r.status]] })} />
+        onExport={() => exportList({ url: '/purchase-orders', params: { ...companyParams, status, ...lf.filters }, filename: 'purchase-orders', columns: [['PO no', (r) => r.po_no], ['Date', (r) => r.po_date], ['Expected', (r) => r.expected_date], ['Supplier', (r) => r.supplier_name], ['Items', (r) => r.items_count], ['Status', (r) => r.status]] })} />
 
       <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (
@@ -79,7 +79,6 @@ export default function PurchaseOrdersList() {
                   <th className="microlabel px-4 py-2.5 font-semibold">Supplier</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
                   <th className="microlabel px-4 py-2.5 text-right font-semibold">Items</th>
-                  <th className="microlabel px-4 py-2.5 text-right font-semibold">Total</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                 </tr></thead>
                 <tbody>
@@ -89,7 +88,6 @@ export default function PurchaseOrdersList() {
                       <td className="px-4 py-2.5 font-medium">{po.supplier_name}</td>
                       <td className="px-4 py-2.5 text-muted">{formatDate(po.po_date)}</td>
                       <td className="tnum px-4 py-2.5 text-right text-muted">{po.items_count ?? '—'}</td>
-                      <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(po.grand_total)}</td>
                       <td className="px-4 py-2.5"><Badge tone={tone[po.status] ?? 'default'}>{po.status}</Badge></td>
                     </tr>
                   ))}

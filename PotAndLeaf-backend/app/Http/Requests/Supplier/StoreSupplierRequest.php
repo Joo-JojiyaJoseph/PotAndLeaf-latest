@@ -39,7 +39,7 @@ class StoreSupplierRequest extends FormRequest
                 Rule::unique('suppliers', 'name')
                     ->where('company_id', $companyId),
             ],
-            'email'           => ['nullable', 'email', 'max:191'],
+            'email'           => ['nullable', ...\App\Support\Validation\Email::rules(), 'max:191'],
             'phone'           => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'gst_number'      => ['nullable', 'string', 'max:15', 'regex:'.IndianFormats::GSTIN,
                 IndianFormats::notDuplicateEncrypted(\App\Models\Supplier::class, $companyId, 'gst_number', null, 'Another supplier in this company already has this GST number.')],
@@ -67,6 +67,8 @@ class StoreSupplierRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'email.email' => \App\Support\Validation\Email::MESSAGE,
+            'email.regex' => \App\Support\Validation\Email::MESSAGE,
             'phone.regex'        => 'Enter a valid phone number (digits, and optionally + - ( ) spaces).',
             'name.unique'        => 'A supplier with this name already exists in this company.',
             'supplier_code.unique' => 'This supplier code is already used in this company.',

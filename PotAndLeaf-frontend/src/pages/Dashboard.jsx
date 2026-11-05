@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import useCompanyFilter from '../hooks/useCompanyFilter';
 import { Card, Spinner, StatCard, PageHeader } from '../components/ui';
 import { addCalendarDays, formatCurrency, formatDate, todayISO } from '../lib/format';
+import { incentiveParts, salesSub } from '../lib/dashboardSums';
 
 const daysAgo = (n) => addCalendarDays(todayISO(), -n);
 
@@ -25,6 +26,13 @@ const QUICK = [
   { label: 'Reports', desc: 'Sales, stock, GST and dues', to: '/reports', icon: ChartBarIcon },
   { label: 'Companies', desc: 'Your shops / companies', to: '/companies', icon: BuildingOffice2Icon },
 ];
+
+function incentiveSub(d) {
+  const extra = incentiveParts(d).filter(([k, v]) => !['commission', 'bonuses'].includes(k) && v !== 0);
+  const bits = extra.map(([k, v]) => `${v < 0 ? '−' : '+'} ${formatCurrency(Math.abs(v))} ${k}`);
+  if (d.daily_target) bits.push(`target ${formatCurrency(d.daily_target)}`);
+  return bits.length ? bits.join(' · ') : 'commission + bonuses';
+}
 
 export default function Dashboard() {
   const { activeCompany, isSuperAdmin, can, user } = useAuth();
@@ -100,7 +108,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 gap-4 2xl:grid-cols-4">
                 <StatCard
                   label="Sales (30 days)" value={rep ? formatCurrency(rep.sales.total) : '—'}
-                  sub={rep ? `${rep.sales.count} invoices` : 'Loading…'}
+                  sub={rep ? salesSub(rep.sales) : 'Loading…'}
                   tone="good"
                   icon={BanknotesIcon}
                 />
@@ -125,13 +133,13 @@ export default function Dashboard() {
 
             {canIncentive && incentiveQ.data && (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <StatCard label="Today's sales" value={formatCurrency(incentiveQ.data.sales_total)} />
+                <StatCard label="Today's sales" value={formatCurrency(incentiveQ.data.sales_total)} sub="your bills, before GST" />
                 <StatCard label="Commission" value={formatCurrency(incentiveQ.data.sales_commission)} tone="good" />
                 <StatCard label="Bonuses" value={formatCurrency((incentiveQ.data.daily_target_bonus || 0) + (incentiveQ.data.promotion_bonus || 0))} />
                 <StatCard
                   label="Total incentive"
                   value={formatCurrency(incentiveQ.data.total_incentive)}
-                  sub={incentiveQ.data.daily_target ? `Target ${formatCurrency(incentiveQ.data.daily_target)}` : null}
+                  sub={incentiveSub(incentiveQ.data)}
                   tone="good"
                 />
               </div>
@@ -198,7 +206,7 @@ export default function Dashboard() {
                           <span className="block truncate text-sm font-medium text-ink">{s.customer_name ?? 'Walk-in'}</span>
                           <span className="block text-xs text-muted">{s.sale_no} · {formatDate(s.sale_date)}</span>
                         </span>
-                        <span className="tnum text-sm font-semibold text-ink">{formatCurrency(s.grand_total)}</span>
+                        <span className="tnum text-sm font-semibold text-ink">{formatCurrency(Math.max(0, Number(s.grand_total) - Number(s.loyalty_discount || 0)))}</span>
                       </Link>
                     </li>
                   ))}

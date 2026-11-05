@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { emailHint } from '../../lib/email';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
@@ -270,14 +271,15 @@ export default function UsersList() {
           {(editing?.id || !isSuperAdmin || companyReady) && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Full name" required error={err('name')}><Input value={form.name} onChange={set('name')} /></Field>
-          <Field label="Email" required error={err('email')}><Input type="email" value={form.email} onChange={set('email')} /></Field>
+          <Field label="Email" required error={err('email')}><Input type="email" value={form.email} onChange={set('email')} />{emailHint(form.email) && <span className="mt-1 block text-xs text-danger">{emailHint(form.email)}</span>}</Field>
           <Field label={editing?.id ? 'New password (leave blank to keep)' : 'Password'} required={!editing?.id} error={err('password')}>
             <Input type="password" value={form.password} onChange={set('password')} placeholder="Min 8 characters" />
           </Field>
           <Field label="Phone / WhatsApp" error={err('phone')}><Input value={form.phone} onChange={set('phone')} /></Field>
-          <Field label="Role" error={err('role_id')}>
+          {/* Every user needs a role (only a super admin may have none). */}
+          <Field label="Role" required={!editing?.is_super_admin} error={err('role_id')}>
             <Select value={form.role_id} onChange={set('role_id')} className={selectCls}>
-              <option value="">No role</option>
+              <option value="">{editing?.is_super_admin ? 'No role (super admin)' : 'Select a role…'}</option>
               {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </Select>
           </Field>

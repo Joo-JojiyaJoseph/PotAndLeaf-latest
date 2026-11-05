@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { emailHint } from '../../lib/email';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MagnifyingGlassIcon, PencilSquareIcon, PlusIcon, TrashIcon, EyeIcon, PhotoIcon, UserIcon } from '@heroicons/react/24/outline';
@@ -241,7 +242,7 @@ export default function CustomersList() {
               <Field label="GST number" error={err('gst_number')}><Input value={form.gst_number || ''} onChange={set('gst_number')} /></Field>
               <Field label="Phone" error={err('phone')}><Input value={form.phone || ''} onChange={set('phone')} /></Field>
               <Field label="WhatsApp" error={err('whatsapp')}><Input value={form.whatsapp || ''} onChange={set('whatsapp')} /></Field>
-              <Field label="Email" error={err('email')}><Input value={form.email || ''} onChange={set('email')} /></Field>
+              <Field label="Email" error={err('email')}><Input type="email" value={form.email || ''} onChange={set('email')} />{emailHint(form.email) && <span className="mt-1 block text-xs text-danger">{emailHint(form.email)}</span>}</Field>
               <Field label="City" error={err('city')}><Input value={form.city || ''} onChange={set('city')} /></Field>
               <Field label="State" error={err('state')}><Input value={form.state || ''} onChange={set('state')} /></Field>
               <Field label="PIN code" error={err('pincode')}><Input inputMode="numeric" maxLength={6} value={form.pincode || ''} onChange={set('pincode')} placeholder="e.g. 682001" /></Field>

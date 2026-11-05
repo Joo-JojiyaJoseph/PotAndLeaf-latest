@@ -50,11 +50,15 @@ class PurchaseController extends Controller
             ->where('status', 'active')
             ->with('unit:id,short_name,name')
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'hsn_code', 'gst_rate', 'cost_price', 'unit_id', 'length_cm', 'width_cm', 'height_cm'])
+            ->get(['id', 'name', 'sku', 'hsn_code', 'gst_rate', 'cost_price', 'retail_price', 'wholesale_price', 'dealer_price', 'unit_id', 'length_cm', 'width_cm', 'height_cm'])
             ->map(fn ($p) => [
                 'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku,
                 'hsn_code' => $p->hsn_code, 'gst_rate' => (float) $p->gst_rate,
                 'cost_price' => (float) $p->cost_price,
+                // Selling prices, so a line can warn when the new cost is above them.
+                'retail_price' => (float) $p->retail_price,
+                'wholesale_price' => (float) $p->wholesale_price,
+                'dealer_price' => (float) $p->dealer_price,
                 'unit' => $p->unit?->short_name ?? $p->unit?->name,
                 'length_cm' => (float) $p->length_cm,
                 'width_cm' => (float) $p->width_cm,

@@ -56,7 +56,7 @@ class SettingsController extends Controller
             'dead_stock_days'              => ['sometimes', 'integer', 'min:30', 'max:730'],
             'eod_management_enabled'       => ['sometimes', 'in:0,1,true,false'],
             'eod_management_whatsapp_phones' => ['sometimes', 'string', 'max:2000'],
-            'eod_management_email_recipients' => ['sometimes', 'string', 'max:2000'],
+            'eod_management_email_recipients' => ['sometimes', 'nullable', 'string', 'max:2000', \App\Support\Validation\Email::list()],
             'eod_management_send_time'       => ['sometimes', 'date_format:H:i'],
             'eod_commission_send_time'       => ['sometimes', 'date_format:H:i'],
             'company_timezone'               => ['sometimes', 'timezone'],

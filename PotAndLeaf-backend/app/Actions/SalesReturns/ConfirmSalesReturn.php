@@ -17,7 +17,8 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Confirming a sales return: stock back in, reduce customer outstanding on
- * credit sales, reverse a pro-rata loyalty earn.
+ * credit sales (only by what is still unpaid on that bill; the rest becomes
+ * customer advance), reverse a pro-rata loyalty earn.
  */
 class ConfirmSalesReturn
 {
@@ -100,8 +101,26 @@ class ConfirmSalesReturn
                 if ($customer) {
                     $sale = $return->sale;
                     if ($sale && $sale->payment_mode === 'credit') {
-                        $customer->outstanding = max(0, (float) $customer->outstanding - (float) $return->grand_total);
+                        // "Owes you" goes down only by what is still unpaid on this bill
+                        // (and never below 0). Value beyond that was already paid, so it
+                        // becomes the customer's advance (credit for the next bill)
+                        // instead of being lost.
+                        $earlierReturns = (float) \App\Models\SalesReturn::query()
+                            ->where('sale_id', $sale->id)
+                            ->where('status', 'confirmed')
+                            ->whereKeyNot($return->id)
+                            ->sum('grand_total');
+                        $unpaid = max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount - (float) $sale->amount_paid - $earlierReturns);
+                        $value = (float) $return->grand_total;
+                        $reduce = round(min($value, $unpaid, max(0, (float) $customer->outstanding)), 2);
+                        $credit = round($value - $reduce, 2);
+                        $customer->outstanding = round((float) $customer->outstanding - $reduce, 2);
+                        if ($credit > 0.005) {
+                            $customer->advance_balance = round((float) $customer->advance_balance + $credit, 2);
+                        }
                         $customer->save();
+                        // Remembered so cancelling this return undoes exactly this.
+                        $return->forceFill(['owes_reduced' => $reduce, 'advance_credited' => max(0, $credit)])->save();
                     }
 
                     // Take back the share of points this sale really earned

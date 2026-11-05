@@ -18,10 +18,11 @@ class UpdateUserRequest extends FormRequest
 
         return [
             'name'      => ['required', 'string', 'max:150'],
-            'email'     => ['required', 'email', 'max:150', Rule::unique('users', 'email')->ignore($this->route('user')->id)],
+            'email'     => ['required', ...\App\Support\Validation\Email::rules(), 'max:150', Rule::unique('users', 'email')->ignore($this->route('user')->id)],
             'password'  => ['nullable', 'string', 'min:8'],
             'phone'     => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
-            'role_id'   => ['nullable', 'uuid', Rule::exists('roles', 'id')],
+            // A normal user keeps a role; only a super admin may have none.
+            'role_id'   => [Rule::requiredIf(fn () => ! $this->route('user')->is_super_admin), 'nullable', 'uuid', Rule::exists('roles', 'id')],
             'is_active' => ['boolean'],
             'target_company_id' => [
                 Rule::prohibitedIf(fn () => ! $this->user()->is_super_admin),
@@ -34,6 +35,9 @@ class UpdateUserRequest extends FormRequest
     {
         return [
             'phone.regex' => 'Enter a valid phone number (digits, and optionally + - ( ) spaces).',
+            'email.email' => \App\Support\Validation\Email::MESSAGE,
+            'email.regex' => \App\Support\Validation\Email::MESSAGE,
+            'role_id.required' => 'Choose a role for this user. A user without a role cannot do anything.',
         ];
     }
 }

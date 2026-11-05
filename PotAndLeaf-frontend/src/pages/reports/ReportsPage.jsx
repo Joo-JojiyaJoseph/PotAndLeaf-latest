@@ -1,3 +1,4 @@
+import { salesSub } from '../../lib/dashboardSums';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import api from '../../lib/api';
@@ -610,7 +611,7 @@ export default function ReportsPage() {
             : (
               <>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-5">
-                  <StatCard label="Sales" value={formatCurrency(dashQ.data.sales.total)} sub={`${dashQ.data.sales.count} invoices`} />
+                  <StatCard label="Sales" value={formatCurrency(dashQ.data.sales.total)} sub={salesSub(dashQ.data.sales)} />
                   <StatCard label="Purchases" value={formatCurrency(dashQ.data.purchases.total)} sub={`${dashQ.data.purchases.count} GRNs`} />
                   <StatCard label="Receivables" value={formatCurrency(dashQ.data.receivables)} sub="owed by customers" />
                   <StatCard label="Payables" value={formatCurrency(dashQ.data.payables)} sub="owed to suppliers" />

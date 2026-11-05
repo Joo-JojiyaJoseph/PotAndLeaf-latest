@@ -130,6 +130,14 @@ export default function ProductForm() {
     if (form.cost_price === '' || form.cost_price == null || Number.isNaN(Number(form.cost_price))) {
       clientErrors.cost_price = ['Cost price is required.'];
     }
+    // A selling price below the cost loses money on every piece (empty = not used).
+    const costNum = Number(form.cost_price) || 0;
+    [['retail_price', 'Retail price'], ['wholesale_price', 'Wholesale price'], ['dealer_price', 'Dealer price']].forEach(([k, label]) => {
+      const v = Number(form[k]) || 0;
+      if (costNum > 0 && v > 0 && v < costNum - 0.001) {
+        clientErrors[k] = [`${label} (₹${v}) is below the cost price (₹${costNum}). You would lose money on every piece.`];
+      }
+    });
     if (Object.keys(clientErrors).length) {
       setErrors(clientErrors);
       toast.error('Please fix the highlighted fields.');
@@ -322,9 +330,9 @@ export default function ProductForm() {
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Field label="Cost price" required error={err('cost_price')}><Input type="number" step="0.01" value={form.cost_price} onChange={set('cost_price')} /></Field>
               <Field label="MRP"><Input type="number" step="0.01" value={form.mrp} onChange={set('mrp')} /></Field>
-              <Field label="Retail price"><Input type="number" step="0.01" value={form.retail_price} onChange={set('retail_price')} /></Field>
-              <Field label="Wholesale price"><Input type="number" step="0.01" value={form.wholesale_price} onChange={set('wholesale_price')} /></Field>
-              <Field label="Dealer price"><Input type="number" step="0.01" value={form.dealer_price} onChange={set('dealer_price')} /></Field>
+              <Field label="Retail price" error={err('retail_price')}><Input type="number" step="0.01" value={form.retail_price} onChange={set('retail_price')} /></Field>
+              <Field label="Wholesale price" error={err('wholesale_price')}><Input type="number" step="0.01" value={form.wholesale_price} onChange={set('wholesale_price')} /></Field>
+              <Field label="Dealer price" error={err('dealer_price')}><Input type="number" step="0.01" value={form.dealer_price} onChange={set('dealer_price')} /></Field>
             </div>
           </div>
 

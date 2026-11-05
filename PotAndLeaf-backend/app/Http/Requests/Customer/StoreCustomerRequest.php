@@ -26,7 +26,7 @@ class StoreCustomerRequest extends FormRequest
                 Rule::unique('customers', 'name')->where('company_id', $companyId)->ignore($customerId),
             ],
             'type'            => ['required', 'in:retail,wholesale,dealer'],
-            'email'           => ['nullable', 'email', 'max:150'],
+            'email'           => ['nullable', ...\App\Support\Validation\Email::rules(), 'max:150'],
             'phone'           => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'whatsapp'        =>['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'whatsapp_opt_in' => ['sometimes', 'boolean'],
@@ -50,6 +50,8 @@ class StoreCustomerRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'email.email' => \App\Support\Validation\Email::MESSAGE,
+            'email.regex' => \App\Support\Validation\Email::MESSAGE,
             'customer_code.unique' => 'This customer code is already used by another customer in this company.',
             'name.unique'          => 'A customer with this name already exists in this company.',
             'gst_number.unique'    => 'Another customer in this company already has this GST number.',

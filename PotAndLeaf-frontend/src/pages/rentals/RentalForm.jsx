@@ -8,7 +8,7 @@ import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
-import { formatCurrency, todayISO as today } from '../../lib/format';
+import { formatCurrency, todayISO as today, minDate } from '../../lib/format';
 const emptyLine = () => ({ product_id: '', qty: '1', rate_per_cycle: '' });
 const CYCLE_DAYS = { daily: 1, weekly: 7, monthly: 30 };
 const cycleRate = (product, cycle) => {
@@ -146,9 +146,12 @@ export default function RentalForm() {
               <option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option>
             </Select>
           </Field>
-          <Field label="Start date" required error={err('start_date')}><Input type="date" value={header.start_date} onChange={(e) => setHeader((h) => ({ ...h, start_date: e.target.value }))} /></Field>
-          <Field label="Expected end (optional)" error={err('expected_end_date')}><Input type="date" value={header.expected_end_date} onChange={(e) => setHeader((h) => ({ ...h, expected_end_date: e.target.value }))} /></Field>
-          <Field label="Security deposit (₹)" error={err('deposit')}><Input type="number" step="0.01" value={header.deposit} onChange={(e) => setHeader((h) => ({ ...h, deposit: e.target.value }))} /></Field>
+          <Field label="Start date" required error={err('start_date')}><Input type="date" min={minDate(header.start_date)} value={header.start_date} onChange={(e) => setHeader((h) => ({ ...h, start_date: e.target.value }))} /></Field>
+          <Field label="Expected end (optional)" error={err('expected_end_date')}><Input type="date" min={minDate(header.expected_end_date, header.start_date)} value={header.expected_end_date} onChange={(e) => setHeader((h) => ({ ...h, expected_end_date: e.target.value }))} /></Field>
+          <Field label="Security deposit (₹, optional)" error={err('deposit')}>
+            <Input type="number" step="0.01" min="0" placeholder="No deposit" value={header.deposit} onChange={(e) => setHeader((h) => ({ ...h, deposit: e.target.value }))} />
+            <span className="mt-1 block text-xs text-muted">Money the customer leaves with you as a guarantee. At the end, unpaid rent and any damaged or missing plants come off it and the rest is refunded. Leave blank for no deposit.</span>
+          </Field>
           <Field label="Auto-bill on cycle">
             <label className="flex h-10 items-center gap-2 text-sm">
               <input type="checkbox" checked={header.auto_bill} onChange={(e) => setHeader((h) => ({ ...h, auto_bill: e.target.checked }))} className="size-4 rounded border-line" />

@@ -46,6 +46,10 @@ class ReceiptService
                 ]);
             }
 
+            if (! $isAdvance) {
+                $this->assertNotMoreThanOwed($companyId, $data, $allocations);
+            }
+
             $receipt = CustomerReceipt::create([
                 'company_id'   => $companyId,
                 'customer_id'  => $data['customer_id'],
@@ -441,6 +445,61 @@ class ReceiptService
     private function nextReceiptNo(int|string $companyId): string
     {
         return \App\Support\Numbering\DocumentNumber::next(CustomerReceipt::query()->where('company_id', $companyId), 'receipt_no', 'RCP-', 6);
+    }
+
+    /**
+     * Money that is not an advance cannot be more than is owed, so "Owes you"
+     * never goes below zero:
+     *  - On account (no bill chosen): up to what the customer owes in all.
+     *  - Against a bill: up to what is left to pay on that bill.
+     * Extra money should be recorded as a customer advance.
+     */
+    private function assertNotMoreThanOwed(int|string $companyId, array $data, array $allocations): void
+    {
+        $amount = round((float) ($data['amount'] ?? 0), 2);
+        $tip = ' Tick “Record as customer advance” to keep extra money as advance.';
+        $left = function (string $saleId) use ($companyId, $data): float {
+            $sale = Sale::forCompany($companyId)->find($saleId);
+            if (! $sale || (string) $sale->customer_id !== (string) $data['customer_id']) {
+                throw ValidationException::withMessages(['sale_id' => 'This invoice does not belong to the selected customer.']);
+            }
+
+            return round(max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount - (float) $sale->amount_paid), 2);
+        };
+
+        if ($allocations !== []) {
+            foreach ($allocations as $i => $row) {
+                $max = $left($row['sale_id']);
+                if ((float) $row['amount'] > $max + 0.005) {
+                    throw ValidationException::withMessages([
+                        "allocations.{$i}.amount" => 'Only ₹'.number_format($max, 2).' is left to pay on this invoice.',
+                    ]);
+                }
+            }
+
+            return;
+        }
+
+        if (filled($data['sale_id'] ?? null)) {
+            $max = $left($data['sale_id']);
+            if ($amount > $max + 0.005) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Only ₹'.number_format($max, 2).' is left to pay on this invoice. Enter up to ₹'.number_format($max, 2).'.'.$tip,
+                ]);
+            }
+
+            return;
+        }
+
+        $customer = Customer::forCompany($companyId)->find($data['customer_id']);
+        $owed = round(max(0, (float) ($customer?->outstanding ?? 0)), 2);
+        if ($amount > $owed + 0.005) {
+            throw ValidationException::withMessages([
+                'amount' => $owed > 0
+                    ? ($customer->name.' owes you ₹'.number_format($owed, 2).'. Enter up to ₹'.number_format($owed, 2).'.'.$tip)
+                    : ($customer?->name.' owes you nothing now.'.$tip),
+            ]);
+        }
     }
 
     private function syncSalePaid(string $saleId): void

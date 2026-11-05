@@ -82,10 +82,36 @@ function billPreview(rental, from, to) {
 }
 
 function settlePreview(rental, settleLines, settleDate, damageCharge) {
-  const days = inclusiveDays(rental.start_date, settleDate);
+  // Same sums as the server (RentalService::settle): rent per plant —
+  // plants still out up to the return date, plants brought back earlier only
+  // up to the day they came back — minus rent already billed.
   const cycleDays = { daily: 1, weekly: 7, monthly: 30 }[rental.billing_cycle] ?? 30;
-  const cycles = Math.max(1, Math.ceil(days / cycleDays));
-  const rentalCharge = (rental.items ?? []).reduce((s, it) => s + Number(it.qty) * Number(it.rate_per_cycle) * cycles, 0);
+  const cyclesTo = (until) => Math.max(1, Math.ceil(inclusiveDays(rental.start_date, until) / cycleDays));
+  const days = inclusiveDays(rental.start_date, settleDate);
+  const cycles = cyclesTo(settleDate);
+  let outQty = 0;
+  let outRent = 0;
+  let earlierQty = 0;
+  let earlierRent = 0;
+  (rental.items ?? []).forEach((it) => {
+    const rate = Number(it.rate_per_cycle) || 0;
+    const out = Math.max(0, Number(it.outstanding_qty) || 0);
+    outQty += out;
+    outRent += out * rate * cycles;
+    let dated = 0;
+    (it.returned_earlier ?? []).forEach((r) => {
+      earlierQty += Number(r.qty);
+      earlierRent += Number(r.qty) * rate * cyclesTo(r.date);
+      dated += Number(r.qty);
+    });
+    // Returned before return days were recorded: counted to the return date, as before.
+    const undated = Math.max(0, (Number(it.returned_qty) || 0) - dated);
+    earlierQty += undated;
+    earlierRent += undated * rate * cycles;
+  });
+  const rentalCharge = outRent + earlierRent;
+  const alreadyBilled = (rental.invoices ?? []).reduce((t, inv) => t + (Number(inv.amount) || 0), 0);
+  const rentStillDue = Math.max(0, rentalCharge - alreadyBilled);
   let autoDamage = 0;
   let missingCharge = 0;
   (rental.items ?? []).forEach((it) => {
@@ -95,12 +121,18 @@ function settlePreview(rental, settleLines, settleDate, damageCharge) {
     missingCharge += line.missing * retail;
   });
   const damage = damageCharge === '' ? autoDamage : Number(damageCharge) || 0;
-  const total = rentalCharge + damage + missingCharge;
+  const total = rentStillDue + damage + missingCharge;
   const deposit = Number(rental.deposit) || 0;
   return {
     days,
     cycles,
+    outQty,
+    outRent,
+    earlierQty,
+    earlierRent,
     rentalCharge,
+    alreadyBilled,
+    rentStillDue,
     damage,
     missingCharge,
     total,
@@ -420,8 +452,10 @@ export default function RentalDetail() {
       >
         <p className="mb-3 text-sm text-muted">
           Enter what came back, what's damaged, and what's missing. Quantities cannot exceed plants still out.
-          Unallocated qty is billed as missing. Rental, damage, and missing charges are deducted from the
-          deposit of {formatCurrency(r.deposit)} and the balance refunded. Missing items are billed at retail; damaged items default to 50% of retail.
+          Unallocated qty is billed as missing. Rent is charged only for plants still out (plants returned
+          earlier only up to the day they came back), minus rent already billed.
+          {Number(r.deposit) > 0 ? <> Charges come off the deposit of {formatCurrency(r.deposit)} and the rest is refunded.</> : ' There is no deposit on this rental.'}
+          {' '}Missing items are billed at retail; damaged items default to 50% of retail.
         </p>
         <div className="mb-4">
           <Field label="Return date"><Input type="date" value={settleDate} onChange={(e) => setSettleDate(e.target.value)} /></Field>
@@ -455,8 +489,18 @@ export default function RentalDetail() {
         <div className="mt-4 rounded-xl border border-line bg-paper/60 px-3 py-3 text-sm">
           <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-faint">Settlement preview</p>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-            <dt className="text-muted">Rental ({preview.cycles} {r.billing_cycle === 'daily' ? (preview.cycles === 1 ? 'day' : 'days') : `cycle${preview.cycles === 1 ? '' : 's'}`})</dt>
-            <dd className="tnum text-right">{formatCurrency(preview.rentalCharge)}</dd>
+            <dt className="text-muted">Rent — {preview.outQty} plant{preview.outQty === 1 ? '' : 's'} still out ({preview.cycles} {r.billing_cycle === 'daily' ? (preview.cycles === 1 ? 'day' : 'days') : `cycle${preview.cycles === 1 ? '' : 's'}`})</dt>
+            <dd className="tnum text-right">{formatCurrency(preview.outRent)}</dd>
+            {preview.earlierQty > 0 && (<>
+              <dt className="text-muted">Rent — {preview.earlierQty} returned earlier (only up to the day they came back)</dt>
+              <dd className="tnum text-right">{formatCurrency(preview.earlierRent)}</dd>
+            </>)}
+            {preview.alreadyBilled > 0 && (<>
+              <dt className="text-muted">Rent already billed</dt>
+              <dd className="tnum text-right">− {formatCurrency(Math.min(preview.alreadyBilled, preview.rentalCharge))}</dd>
+              <dt className="text-muted">Rent still due</dt>
+              <dd className="tnum text-right">{formatCurrency(preview.rentStillDue)}</dd>
+            </>)}
             <dt className="text-muted">Damage</dt>
             <dd className="tnum text-right">{formatCurrency(preview.damage)}</dd>
             <dt className="text-muted">Missing</dt>

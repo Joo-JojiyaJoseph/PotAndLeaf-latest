@@ -318,24 +318,51 @@ class ReportService
             ->sum(DB::raw('stock_ledger_entries.qty * COALESCE(stock_ledger_entries.unit_cost, 0)'));
     }
 
+    /**
+     * Sales for the dashboard cards. Every figure here is the bill amount the
+     * customer has to pay — the invoice total less any loyalty-points discount —
+     * so the headline total, the payment-mode split, the trend and the top
+     * customers all add up to the same number. Returns in the range are shown
+     * next to it (not hidden inside it).
+     */
     private function sales(int|string|null $companyId, string $from, string $to, ?string $locationId = null): array
     {
-        $base = Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')->whereBetween('sale_date', [$from, $to])
+        $base = Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')
+            ->whereNotIn('bill_kind', ['proforma'])
+            ->whereDate('sale_date', '>=', $from)->whereDate('sale_date', '<=', $to)
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId));
+        $billed = 'grand_total - COALESCE(loyalty_discount, 0)';
 
-        $byMode = (clone $base)->selectRaw('payment_mode, SUM(grand_total) as total')
+        $byMode = (clone $base)->selectRaw("payment_mode, SUM({$billed}) as total")
             ->groupBy('payment_mode')->pluck('total', 'payment_mode')
             ->map(fn ($v) => round((float) $v, 2));
 
-        $trend = (clone $base)->selectRaw('sale_date as d, SUM(grand_total) as total')
+        $trend = (clone $base)->selectRaw("sale_date as d, SUM({$billed}) as total")
             ->groupBy('sale_date')->orderBy('sale_date')->get()
-            ->map(fn ($r) => ['date' => Carbon::parse($r->d)->toDateString(), 'total' => round((float) $r->total, 2)]);
+            ->groupBy(fn ($r) => Carbon::parse($r->d)->toDateString())
+            ->map(fn ($rows, $d) => ['date' => $d, 'total' => round((float) $rows->sum('total'), 2)])
+            ->values();
+
+        $total = round((float) (clone $base)->selectRaw("SUM({$billed}) as t")->value('t'), 2);
+        $beforeGst = round((float) (clone $base)->where('bill_kind', '!=', 'complimentary')
+            ->selectRaw('SUM(subtotal - COALESCE(loyalty_discount, 0)) as t')->value('t'), 2);
+
+        $returns = round((float) \App\Models\SalesReturn::query()
+            ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->where('status', 'confirmed')
+            ->whereDate('return_date', '>=', $from)->whereDate('return_date', '<=', $to)
+            ->when($locationId, fn ($q) => $q->whereHas('sale', fn ($sq) => $sq->where('location_id', $locationId)))
+            ->sum('grand_total'), 2);
 
         return [
-            'total'   => round((float) (clone $base)->sum('grand_total'), 2),
-            'count'   => (clone $base)->count(),
-            'by_mode' => $byMode,
-            'trend'   => $trend,
+            'total'      => $total,
+            'count'      => (clone $base)->count(),
+            'loyalty_discount' => round((float) (clone $base)->sum('loyalty_discount'), 2),
+            'before_gst' => $beforeGst,
+            'returns'    => $returns,
+            'net'        => round($total - $returns, 2),
+            'by_mode'    => $byMode,
+            'trend'      => $trend,
         ];
     }
 
@@ -374,9 +401,11 @@ class ReportService
 
     private function topCustomers(int|string|null $companyId, string $from, string $to, ?string $locationId = null): array
     {
-        return Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')->whereBetween('sale_date', [$from, $to])
+        return Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'confirmed')
+            ->whereNotIn('bill_kind', ['proforma'])
+            ->whereDate('sale_date', '>=', $from)->whereDate('sale_date', '<=', $to)
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
-            ->selectRaw('customer_name, SUM(grand_total) as revenue')
+            ->selectRaw('customer_name, SUM(grand_total - COALESCE(loyalty_discount, 0)) as revenue')
             ->groupBy('customer_name')->orderByDesc('revenue')->limit(5)->get()
             ->map(fn ($r) => ['name' => $r->customer_name, 'revenue' => round((float) $r->revenue, 2)])
             ->all();

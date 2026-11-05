@@ -56,6 +56,21 @@ class StoreProductRequest extends FormRequest
         };
     }
 
+    /**
+     * A selling price may not be below the cost price (you would lose money on
+     * every piece). An empty / 0 price is "not used" and is not checked.
+     */
+    protected function notBelowCost(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) {
+            $cost = (float) $this->input('cost_price');
+            if ($cost > 0 && is_numeric($value) && (float) $value > 0 && (float) $value < $cost - 0.001) {
+                $label = ucfirst(str_replace('_', ' ', $attribute));
+                $fail("{$label} (₹{$value}) is below the cost price (₹{$cost}). You would lose money on every piece.");
+            }
+        };
+    }
+
     /** Shared field rules, reused by the update request. */
     protected function baseRules(int|string $companyId, ?string $ignoreId): array
     {
@@ -82,9 +97,9 @@ class StoreProductRequest extends FormRequest
             }],
             'mrp'             => ['nullable', 'numeric', 'min:0'],
             'cost_price'      => ['required', 'numeric', 'min:0'],
-            'dealer_price'    => ['nullable', 'numeric', 'min:0', $this->notAboveMrp()],
-            'wholesale_price' => ['nullable', 'numeric', 'min:0', $this->notAboveMrp()],
-            'retail_price'    => ['nullable', 'numeric', 'min:0', $this->notAboveMrp()],
+            'dealer_price'    => ['nullable', 'numeric', 'min:0', $this->notAboveMrp(), $this->notBelowCost()],
+            'wholesale_price' => ['nullable', 'numeric', 'min:0', $this->notAboveMrp(), $this->notBelowCost()],
+            'retail_price'    => ['nullable', 'numeric', 'min:0', $this->notAboveMrp(), $this->notBelowCost()],
             'length_cm'       => ['nullable', 'numeric', 'min:0'],
             'width_cm'        => ['nullable', 'numeric', 'min:0'],
             'height_cm'       => ['nullable', 'numeric', 'min:0'],

@@ -20,12 +20,23 @@ class StoreBackorderRequest extends FormRequest
             'customer_id'   => ['required', 'uuid', Rule::exists('customers', 'id')->where('company_id', $companyId)],
             'location_id'   => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)],
             'order_date'    => ['required', 'date'],
-            'expected_date' => ['nullable', 'date', 'after_or_equal:order_date'],
+            'expected_date' => ['nullable', 'date', 'after_or_equal:order_date', $this->notPast()],
             'notes'         => ['nullable', 'string', 'max:2000'],
             'items'         => ['required', 'array', 'min:1'],
             'items.*.product_id'   => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],
             'items.*.ordered_qty'  => ['required', 'numeric', 'gt:0'],
             'items.*.rate'         => ['nullable', 'numeric', 'min:0'],
         ];
+    }
+
+    /** A date that looks ahead (expected / start) cannot be a day before today on a new record. */
+    protected function notPast(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) {
+            if ($this->isMethod('POST') && filled($value) && strtotime((string) $value) !== false
+                && date('Y-m-d', strtotime((string) $value)) < now()->toDateString()) {
+                $fail('Choose today or a later date.');
+            }
+        };
     }
 }

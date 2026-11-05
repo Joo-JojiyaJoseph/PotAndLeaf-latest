@@ -18,10 +18,11 @@ class StoreUserRequest extends FormRequest
 
         return [
             'name'      => ['required', 'string', 'max:150'],
-            'email'     => ['required', 'email', 'max:150', Rule::unique('users', 'email')],
+            'email'     => ['required', ...\App\Support\Validation\Email::rules(), 'max:150', Rule::unique('users', 'email')],
             'password'  => ['required', 'string', 'min:8'],
             'phone'     => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
-            'role_id'   => ['nullable', 'uuid', Rule::exists('roles', 'id')],
+            // Every new user needs a role (what they may see and do).
+            'role_id'   => ['required', 'uuid', Rule::exists('roles', 'id')],
             'is_active' => ['boolean'],
         ];
     }
@@ -30,6 +31,9 @@ class StoreUserRequest extends FormRequest
     {
         return [
             'phone.regex' => 'Enter a valid phone number (digits, and optionally + - ( ) spaces).',
+            'email.email' => \App\Support\Validation\Email::MESSAGE,
+            'email.regex' => \App\Support\Validation\Email::MESSAGE,
+            'role_id.required' => 'Choose a role for this user. A user without a role cannot do anything.',
         ];
     }
 }

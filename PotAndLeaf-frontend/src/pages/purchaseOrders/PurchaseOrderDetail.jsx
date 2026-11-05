@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { recordDetailPath } from '../../lib/recordCompany';
 import { Badge, Button } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
-import { formatCurrency, formatDate } from '../../lib/format';
+import { formatDate } from '../../lib/format';
 import { downloadPdf } from '../../lib/pdfDownload';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
@@ -90,7 +90,7 @@ export default function PurchaseOrderDetail() {
           <InfoItem label="Address" value={[po.supplier?.address_line1, po.supplier?.city, po.supplier?.state].filter(Boolean).join(', ') || po.supplier?.address} />
           <InfoItem label="PO date" value={formatDate(po.po_date)} />
           <InfoItem label="Expected" value={po.expected_date ? formatDate(po.expected_date) : null} />
-          <InfoItem label="Est. total" value={formatCurrency(po.grand_total)} mono />
+          <InfoItem label="Items" value={`${(po.items ?? []).length} products · ${(po.items ?? []).reduce((t, it) => t + (Number(it.qty) || 0), 0)} pieces`} />
           <InfoItem label="Prepared by" value={po.created_by_name} />
           <InfoItem label="Notes" value={po.notes} />
         </InfoGrid>
@@ -99,32 +99,23 @@ export default function PurchaseOrderDetail() {
       <Section title="Items">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
+            {/* A purchase order is what and how many; rates and GST come on the supplier's bill. */}
             <thead><tr className="border-b border-line text-left text-faint">
               <th className="microlabel py-2 pr-3 font-semibold">Product</th>
               <th className="microlabel px-3 py-2 font-semibold">SKU</th>
-              <th className="microlabel px-3 py-2 text-right font-semibold">Qty</th>
-              <th className="microlabel px-3 py-2 text-right font-semibold">Rate</th>
-              <th className="microlabel px-3 py-2 text-right font-semibold">GST %</th>
-              <th className="microlabel px-3 py-2 text-right font-semibold">Taxable</th>
-              <th className="microlabel py-2 pl-3 text-right font-semibold">Total</th>
+              <th className="microlabel py-2 pl-3 text-right font-semibold">Qty</th>
             </tr></thead>
             <tbody>
               {(po.items ?? []).map((it) => (
                 <tr key={it.id} className="border-b border-line/60 last:border-0">
                   <td className="py-2 pr-3 font-medium">{it.product_name}</td>
                   <td className="px-3 py-2 text-muted">{it.sku || '—'}</td>
-                  <td className="tnum px-3 py-2 text-right text-muted">{it.qty}</td>
-                  <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(it.rate)}</td>
-                  <td className="tnum px-3 py-2 text-right text-muted">{it.gst_rate}%</td>
-                  <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(it.taxable_value)}</td>
-                  <td className="tnum py-2 pl-3 text-right font-medium">{formatCurrency(it.line_total)}</td>
+                  <td className="tnum py-2 pl-3 text-right">{it.qty}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t border-line"><td colSpan="5" /><td className="px-3 py-1.5 text-right text-muted">Subtotal</td><td className="tnum py-1.5 pl-3 text-right">{formatCurrency(po.subtotal)}</td></tr>
-              <tr><td colSpan="5" /><td className="px-3 py-1.5 text-right text-muted">Tax</td><td className="tnum py-1.5 pl-3 text-right">{formatCurrency(po.tax_total)}</td></tr>
-              <tr><td colSpan="5" /><td className="px-3 py-1.5 text-right font-semibold">Grand total</td><td className="tnum py-1.5 pl-3 text-right font-semibold">{formatCurrency(po.grand_total)}</td></tr>
+              <tr className="border-t border-line"><td colSpan="2" className="py-1.5 pr-3 text-right font-semibold">Total pieces</td><td className="tnum py-1.5 pl-3 text-right font-semibold">{(po.items ?? []).reduce((t, it) => t + (Number(it.qty) || 0), 0)}</td></tr>
             </tfoot>
           </table>
         </div>

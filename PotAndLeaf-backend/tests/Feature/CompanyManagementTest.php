@@ -123,6 +123,8 @@ it('super admin can move a user to another company', function () {
             'email'     => $user->email,
             'is_active' => true,
             'target_company_id' => $to->id,
+            // Every user needs a role (update 56): the role they get in the new company.
+            'role_id'   => \App\Models\Role::create(['name' => 'Cashier', 'slug' => 'cashier-move-test', 'is_system' => false])->id,
         ]);
 
     $response->assertOk();

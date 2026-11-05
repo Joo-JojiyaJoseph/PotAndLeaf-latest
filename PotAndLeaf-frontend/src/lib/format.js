@@ -60,3 +60,15 @@ export function startOfIstWeek(isoDate = todayISO()) {
 export function classNames(...parts) {
   return parts.filter(Boolean).join(' ');
 }
+
+/**
+ * Earliest day a date picker allows: today (or a later "from" date), so past
+ * days are greyed out. An already-saved earlier value stays allowed, so old
+ * records can still be opened and saved.
+ *   minDate(form.expected_date)              → today
+ *   minDate(form.end_date, form.start_date)  → the start date, if after today
+ */
+export function minDate(currentValue, ...floors) {
+  const floor = [todayISO(), ...floors.filter(Boolean)].sort().pop();
+  return currentValue && currentValue < floor ? currentValue : floor;
+}

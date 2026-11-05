@@ -7,7 +7,7 @@ import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { useConfirm } from '../../lib/confirm';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
-import { formatCurrency, formatDate, todayISO } from '../../lib/format';
+import { formatCurrency, formatDate, todayISO, minDate } from '../../lib/format';
 import PagedTable from '../../components/PagedTable';
 import { TYPE_LABEL, STATUS_LABEL, describeRule, n, rupees } from '../../lib/commissionText';
 
@@ -465,8 +465,8 @@ function PromotionModal({ open, onClose, products, categories, editing }) {
           </Field>
         )}
         {form.applies === 'all' && <div />}
-        <Field label="From" error={err('start_date')}><Input type="date" value={form.start_date} onChange={set('start_date')} /></Field>
-        <Field label="To" error={err('end_date')}><Input type="date" value={form.end_date} onChange={set('end_date')} /></Field>
+        <Field label="From" error={err('start_date')}><Input type="date" min={minDate(form.start_date)} value={form.start_date} onChange={set('start_date')} /></Field>
+        <Field label="To" error={err('end_date')}><Input type="date" min={minDate(form.end_date, form.start_date)} value={form.end_date} onChange={set('end_date')} /></Field>
         <Field label="Extra ₹ per piece sold" error={err('bonus_per_unit')}><Input type="number" min="0" step="0.01" value={form.bonus_per_unit} onChange={set('bonus_per_unit')} placeholder="e.g. 10" /></Field>
         <Field label="Extra % of its price" error={err('bonus_percent')}><Input type="number" min="0" step="0.01" value={form.bonus_percent} onChange={set('bonus_percent')} placeholder="e.g. 1" /></Field>
         <Field label="Fixed extra ₹ per bill line" error={err('bonus_fixed')}><Input type="number" min="0" step="0.01" value={form.bonus_fixed} onChange={set('bonus_fixed')} placeholder="0" /></Field>
@@ -616,8 +616,8 @@ function ManagerModal({ open, onClose, managers, editing, takenIds }) {
           {!editing && choices.length === 0 && <p className="mt-1 text-xs text-muted">No manager left without a share. Only users with a Manager role are listed.</p>}
         </Field>
         <Field label="% of the shop’s sales"><Input type="number" min="0" step="0.01" value={form.percent} onChange={set('percent')} /></Field>
-        <Field label="From (optional)"><Input type="date" value={form.effective_from} onChange={set('effective_from')} /></Field>
-        <Field label="To (optional)"><Input type="date" value={form.effective_to} onChange={set('effective_to')} /></Field>
+        <Field label="From (optional)"><Input type="date" min={minDate(form.effective_from)} value={form.effective_from} onChange={set('effective_from')} /></Field>
+        <Field label="To (optional)"><Input type="date" min={minDate(form.effective_to, form.effective_from)} value={form.effective_to} onChange={set('effective_to')} /></Field>
         <Example>Example: shop sells {rupees(500000)} in a month (after returns and loyalty discounts) → manager gets <b className="text-ink">{rupees(500000 * n(form.percent) / 100)}</b>.</Example>
         {error && <p className="text-sm text-danger sm:col-span-2">{error}</p>}
       </div>

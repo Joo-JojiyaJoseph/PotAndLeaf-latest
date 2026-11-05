@@ -391,6 +391,20 @@ export default function PurchaseForm() {
                           type="number" step="0.01" className={numInput}
                           value={line.rate} onChange={(e) => setLine(i, { rate: e.target.value })}
                         />
+                        {(() => {
+                          // Warn when one piece now costs more than a selling price of the product.
+                          const prod = (formData?.products ?? []).find((p) => String(p.id) === String(line.product_id));
+                          const cost = Number(c.landed_unit_cost) || 0;
+                          if (!prod || cost <= 0) return null;
+                          const low = [['Retail', prod.retail_price], ['Wholesale', prod.wholesale_price], ['Dealer', prod.dealer_price]]
+                            .filter(([, v]) => Number(v) > 0 && Number(v) < cost - 0.001);
+                          if (!low.length) return null;
+                          return (
+                            <span className="mt-1 block max-w-[220px] text-[11px] leading-snug text-warning">
+                              Cost ₹{cost.toFixed(2)} a piece is above the {low.map(([k, v]) => `${k.toLowerCase()} price ₹${Number(v).toFixed(2)}`).join(', ')}. Raise the selling price on the product.
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-2">
                         <input

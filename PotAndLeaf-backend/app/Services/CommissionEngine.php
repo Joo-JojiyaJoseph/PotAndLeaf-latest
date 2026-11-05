@@ -174,6 +174,9 @@ class CommissionEngine
             'promotion_bonus'       => round((float) $tx->where('commission_type', 'promotion')->sum('amount'), 2),
             'supervisor_commission' => $supervisorAmount,
             'manager_commission'    => $managerAmount,
+            // Commission taken back for returned items (negative). Shown so the
+            // parts on the dashboard add up to total_incentive.
+            'returns_reversed'      => round((float) $tx->where('commission_type', 'reversal')->sum('amount'), 2),
             'total_incentive'       => round((float) $incentiveTx->sum('amount') + $supervisorAmount, 2),
             'daily_target'          => $topTarget,
             'target_achievement_pct'=> $targetPct,

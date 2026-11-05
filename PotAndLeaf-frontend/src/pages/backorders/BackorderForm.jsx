@@ -9,7 +9,7 @@ import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 import { useToast } from '../../lib/toast';
 import { parseShortageResponse, shortageNavigatePath } from '../../lib/shortageResult';
 import { apiMessage, fieldError } from '../../lib/formErrors';
-import { todayISO as today } from '../../lib/format';
+import { todayISO as today, minDate } from '../../lib/format';
 const emptyLine = () => ({ product_id: '', ordered_qty: '', rate: '' });
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 const numInput = 'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
@@ -168,7 +168,7 @@ export default function BackorderForm() {
             </Select>
           </Field>
           <Field label="Order date" required error={err('order_date')}><Input type="date" value={header.order_date} onChange={(e) => setHeader((h) => ({ ...h, order_date: e.target.value }))} /></Field>
-          <Field label="Expected date" error={err('expected_date')}><Input type="date" value={header.expected_date} onChange={(e) => setHeader((h) => ({ ...h, expected_date: e.target.value }))} /></Field>
+          <Field label="Expected date" error={err('expected_date')}><Input type="date" min={minDate(header.expected_date, header.order_date)} value={header.expected_date} onChange={(e) => setHeader((h) => ({ ...h, expected_date: e.target.value }))} /></Field>
         </div>
       </Card>
 

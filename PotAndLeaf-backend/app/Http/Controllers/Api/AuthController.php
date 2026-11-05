@@ -71,7 +71,7 @@ class AuthController extends Controller
         $user = $request->user();
         $data = $request->validate([
             'name'             => ['required', 'string', 'max:150'],
-            'email'            => ['required', 'email', 'max:190', Rule::unique('users', 'email')->ignore($user->id)],
+            'email'            => ['required', ...\App\Support\Validation\Email::rules(), 'max:190', Rule::unique('users', 'email')->ignore($user->id)],
             'phone'            => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'current_password' => ['nullable', 'required_with:password', 'current_password'],
             'password'         => ['nullable', 'string', 'min:8', 'confirmed'],

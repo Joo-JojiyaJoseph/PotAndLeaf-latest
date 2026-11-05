@@ -133,8 +133,10 @@ Do these once, in this order: company → users → categories and units → set
 
 1. Click **Add user**.
 2. Type Full name, Email, Phone / WhatsApp and a password.
-3. Choose the **Company** and the **Role in this company** (for example Cashier or Salesman).
+3. Choose the **Company** and the **Role in this company** (for example Cashier or Salesman). **A role is required** — a user without a role cannot do anything, so the app will not save one. (Only a super admin may have no role.)
 4. Click **Save**. Give the person their email and password.
+
+Email addresses are checked everywhere (users, customers, suppliers, companies, your profile, the EOD email list): they must look like **name@example.com** — no spaces, and a dot after the @ (e.g. `ravi@gmail` is refused).
 
 ![Users list](img/04-users.jpg#1503x1091)
 
@@ -268,7 +270,7 @@ To add one:
 1. Click **New product**.
 2. Choose the **Company**.
 3. Type **Name**, choose **Category** (and Subcategory, Unit) and **GST %**. The SKU (item code) is made automatically.
-4. Under **Pricing**, type **Cost price**, **MRP** and the three selling prices: **Retail**, **Wholesale** and **Dealer**.
+4. Under **Pricing**, type **Cost price**, **MRP** and the three selling prices: **Retail**, **Wholesale** and **Dealer**. **A selling price cannot be below the cost price** (you would lose money on every piece) — the app says which one is too low. Leave a price empty if you don't use it; an empty Wholesale or Dealer price uses the Retail price on the bill.
 5. **Reorder level** (warn me when stock falls to this) is filled with the company default from Settings (for example 10); change it if you like, or leave it. Add photos if you want.
 6. Click **Save**.
 
@@ -283,6 +285,8 @@ There is no HSN code box any more. Codes saved earlier are kept and still print 
 **Price helper — "Suggest from cost + margin":** type a margin % and click **Apply**. Retail price = cost × (1 + margin ÷ 100).
 
 > Example: cost ₹200, margin 40% → 200 × 1.40 = **₹280** retail. If MRP is empty, it is also set to ₹280.
+
+**Why a selling price can end up below cost.** The usual reasons are: (1) new stock was bought at a higher price than you sell for — the purchase bill now warns on that line: *Cost ₹500 a piece is above the retail price ₹380. Raise the selling price on the product*; (2) a bulk split made big sizes that cost more than the lot's wholesale/dealer price — those prices are now left empty for such sizes, so the bill uses the size's retail price. Prices saved earlier are not changed by themselves: open the product and correct them.
 
 **Barcodes:** you do not type a barcode on the product. Each purchase lot (batch) gets its own barcode when the purchase is confirmed (see section 3). Print them from **Batches & Barcodes** or **Products → Labels**.
 
@@ -397,9 +401,11 @@ The buying path is: (optional) Purchase order → Purchase bill → Confirm (sto
 A purchase order is the list you send to the supplier before goods arrive. It does not change stock or money.
 
 1. **Buying → Purchase Orders → New PO.**
-2. Choose the company and supplier, add items, quantities and rates.
+2. Choose the company and supplier, add the items and quantities. (No rates or GST — the supplier's bill gives those. **Expected date** cannot be a day before today.)
 3. Save. Status is **Draft**. Send the PDF to the supplier, then click **Mark sent**.
-4. When the goods arrive, open the order and click **Convert to purchase**. The purchase bill is filled in for you. A **draft** order cannot be converted — it must be **sent** first.
+4. When the goods arrive, open the order and click **Convert to purchase**. The purchase bill is filled in for you with each product's usual cost and GST — check them against the supplier's bill. A **draft** order cannot be converted — it must be **sent** first.
+
+The purchase order page, its PDF and the list show **products and quantities only** (no rate, GST or total).
 5. If the supplier cannot deliver, click **Cancel**.
 
 ![A sent purchase order, ready to convert](img/67-po-sent.jpg#1503x1091)
@@ -634,6 +640,7 @@ From the bill you can **Print**, save a **PDF** or send it on **WhatsApp**.
 3. Save. What they owe goes down. Extra money becomes their **advance**.
 4. **Apply advance** settles a bill from money they paid earlier.
 5. Money for old dues (the customer's **Outstanding** from before): leave **Against invoice** as **On account / outstanding from before**. It reduces the old outstanding first. The form shows *Owes you* and *Outstanding from before still unpaid* when you pick the customer.
+6. **The amount cannot be more than is owed.** On account: up to what the customer owes in all. Against an invoice: up to what is left on that bill. The box shows the limit (*Up to ₹2,000.00 (what they owe)*). Extra money — a deposit for later, or paying in advance — is recorded by ticking **Record as customer advance**. So *Owes you* never goes below zero.
 
 > Example: the customer owes ₹805. They pay ₹805 against that bill → they owe ₹0.
 
@@ -660,6 +667,10 @@ Rate, discount and GST come from the original bill. You cannot return more than 
 > | Customer now owes | 805 − 531 | ₹274 |
 > | Points taken back | 531 ÷ 100 = 5.31 | 5 points |
 > | Used points given back | 300 × 531 ÷ 2,105 = 75.68 | 75 points |
+
+**What a return does to "Owes you" (credit bills).** It takes off only what is still unpaid on that bill. If the bill was already paid (fully or partly), the rest of the return value becomes the customer's **advance** — money they have with you, used on their next bill or given back. Nothing is lost and *Owes you* never goes below zero.
+
+> Example: a credit bill of ₹2,000; the customer paid ₹1,500 against it (₹500 still owed). Goods worth ₹1,000 come back → *Owes you* goes down by ₹500 to **₹0**, and the other **₹500 becomes advance**.
 
 On Confirm the goods go back into stock and the salesperson's commission is reduced in the same proportion.
 
@@ -694,14 +705,14 @@ A backorder is an item a customer wanted that was out of stock.
 ### 5.3 Plant rental — step by step
 
 1. **Selling → Plant Rental → New rental.**
-2. Choose company, **Customer**, **Billing cycle** (Daily, Weekly or Monthly = 30 days) and **Start date**.
+2. Choose company, **Customer**, **Billing cycle** (Daily, Weekly or Monthly = 30 days) and **Start date** (today or later; the expected end cannot be before the start).
 3. Add the plants, **Qty** and **Rate / cycle** (rent for one plant for one cycle). Only products with **This product can be rented** ticked (on the product form, with a daily rate) appear in the list.
-4. **Security deposit:** type it, or leave it empty — then deposit = full retail price of the plants.
+4. **Security deposit (optional):** money the customer leaves with you as a guarantee. At the end, unpaid rent and any damaged or missing plants come off it and the rest is refunded. **Leave it empty for no deposit** — nothing is filled in by itself.
 5. Keep **Generate invoices automatically** ticked if a rent bill should be made each cycle by itself.
 6. **Save draft**, then **Activate** when the plants leave. Stock goes down.
 7. Each cycle a rent bill is made (or click **Generate invoice**). It is due 7 days after the cycle ends. Click **Mark paid** when paid. A rent bill cannot be deleted.
 8. Plants can come back a few at a time with **Return**.
-9. At the end click **Return & settle**. Mark each plant **good**, **damaged** or **missing**.
+9. At the end click **Return & settle**. Mark each plant still out as **good**, **damaged** or **missing**. Plants already brought back with **Return** are charged rent only **up to the day they came back**; the window shows them on their own line.
 
 ![New rental](img/34-rental-new.jpg#1503x1091)
 
@@ -718,7 +729,7 @@ A backorder is an item a customer wanted that was out of stock.
 | Charge | How it is worked out |
 | --- | --- |
 | Cycles | Days rented ÷ days in a cycle, **rounded up** (any part of a cycle counts as a full cycle) |
-| Rent | plants × rate per cycle × cycles |
+| Rent | for each plant: rate per cycle × cycles up to the day it came back (plants still out: up to the settle date) |
 | Rent still due at settle | total rent − rent bills already made |
 | Damaged plant | half its retail price (or an amount you type) |
 | Missing plant | full retail price |
@@ -727,13 +738,15 @@ A backorder is an item a customer wanted that was out of stock.
 
 > Example: 10 medium palms, monthly, rent ₹150 per plant per month, retail price ₹250.
 >
-> 1. Deposit (left empty) = 10 × 250 = **₹2,500**.
+> 1. Deposit typed: **₹2,500**.
 > 2. First month's rent bill = 10 × 150 = **₹1,500**.
 > 3. Returned after 45 days: 8 good, 1 damaged, 1 missing. Cycles = 45 ÷ 30 = 1.5 → **2**.
 > 4. Total rent = 10 × 150 × 2 = 3,000. Already billed 1,500 → rent still due **₹1,500**.
 > 5. Damaged = 250 ÷ 2 = **₹125**. Missing = **₹250**.
 > 6. Charges = 1,500 + 125 + 250 = **₹1,875**.
 > 7. Deposit 2,500 − 1,875 = **refund ₹625** to the customer. The 8 good palms go back into stock.
+>
+> **With plants returned earlier:** same rental, but 4 palms came back with **Return** on day 10 and the other 6 at settlement on day 45. Rent = 4 × 150 × 1 (day 10 = 1 month) + 6 × 150 × 2 (day 45 = 2 months) = 600 + 1,800 = **₹2,400** (not 10 × 150 × 2 = ₹3,000). Already billed 1,500 → rent still due **₹900**.
 
 ## 6. Looking after stock
 
@@ -743,7 +756,7 @@ A backorder is an item a customer wanted that was out of stock.
 
 | Tab | Shows |
 | --- | --- |
-| Stock levels | For each item: on hand, promised on open transfer requests, available, reorder level, cost of one, status (Low / OK) |
+| Stock levels | For each item: on hand, promised on open transfer requests, available, reorder level, **unit cost** (what one piece cost you), **unit price** (retail selling price), status (Low / OK) |
 | Stock ledger | Every movement in and out, with date and reason. Shows **active products only**; use **Products shown** to see inactive ones or all. |
 | Valuation | What your stock is worth |
 | Fast / slow / dead | Which items sell quickly, slowly, or not at all |
@@ -752,6 +765,7 @@ A backorder is an item a customer wanted that was out of stock.
 
 The sums:
 
+- **Unit cost** shows **—** for people whose role is not allowed to see cost prices (permission *View cost price*). **Unit price** is shown to everyone.
 - **Available = on hand − quantity promised on open transfer requests** (already promised to another shop).
 - **Low** = on hand at or below the reorder level.
 - **Stock value = pieces in stock × cost of one.** Example: 23 pots × ₹123.31 = **₹2,836.13**.
@@ -1294,5 +1308,11 @@ Every list (Sales, Purchases, Returns, Orders, Rentals, Receipts, Payments, Prod
 **A supplier is missing from the list in a form.** Each form lists only the suppliers of the company chosen in that form. Check the **Company** box at the top of the form.
 
 **I need a page that is not in my menu.** Use **Request Access** (Help menu), tick what you need and say why. The bell tells you when the admin answers.
+
+**"Owes you" showed a minus amount.** That happened when money was received on account beyond what the customer owed. The update moves such amounts to the customer's **advance** (it is their money with you) and sets *Owes you* to 0; from now on the receipt form will not take more than is owed — tick **Record as customer advance** for extra money.
+
+**I cannot pick an earlier date in the calendar.** Dates that look ahead — a purchase order's, advance order's or backorder's **Expected date**, a rental's **Start** and **Expected end**, and the **Starts / Ends on** of loyalty and commission offers — cannot be before today (and an end cannot be before its start). Dates of things that already happened (bill, payment, return dates) can still be earlier.
+
+**The app says a price is below the cost price.** One piece would sell for less than it cost you. Raise the Retail / Wholesale / Dealer price, or leave Wholesale / Dealer empty to use the Retail price.
 
 **An export file is empty.** Choose one company at the top of Reports (and a customer or supplier when the report asks), or other dates, then export again.

@@ -6,7 +6,7 @@ import api, { withCompany } from '../../lib/api';
 import { downloadWithParams } from '../../lib/pdfDownload';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Select, Spinner } from '../../components/ui';
-import { formatCurrency, todayISO as today } from '../../lib/format';
+import { formatCurrency, todayISO as today, minDate } from '../../lib/format';
 const numInput = 'h-9 w-full max-w-[7rem] rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
 const selectCls = 'h-9 w-full min-w-[10rem] rounded-[10px] border border-line bg-surface px-2 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30';
 
@@ -292,7 +292,7 @@ export default function PurchaseOrderReorderPage() {
           <Card className="p-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field label="PO date" required><Input type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} /></Field>
-              <Field label="Expected date"><Input type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} /></Field>
+              <Field label="Expected date"><Input type="date" min={minDate(expectedDate, poDate)} value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} /></Field>
               <Field label="Notes"><Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" /></Field>
             </div>
           </Card>

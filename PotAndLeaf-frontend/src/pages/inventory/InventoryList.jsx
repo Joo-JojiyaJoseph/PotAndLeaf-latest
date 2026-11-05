@@ -26,6 +26,7 @@ function LevelsTab({ onViewLedger, companyParams }) {
   const [lowOnly, setLowOnly] = useState(false);
   const [stockStatus, setStockStatus] = useState('active');
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
   const companyKey = JSON.stringify(companyParams);
   useEffect(() => { setPage(1); }, [debounced, lowOnly, stockStatus, companyKey]);
 
@@ -35,8 +36,8 @@ function LevelsTab({ onViewLedger, companyParams }) {
   }, [search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['inventory', 'stock', activeCompany?.id, companyParams, debounced, lowOnly, stockStatus, page],
-    queryFn: () => api.get('/inventory/stock', { params: { ...companyParams, search: debounced, low_only: lowOnly ? 1 : 0, status: stockStatus, page, per_page: 25 } }).then((r) => r.data),
+    queryKey: ['inventory', 'stock', activeCompany?.id, companyParams, debounced, lowOnly, stockStatus, page, perPage],
+    queryFn: () => api.get('/inventory/stock', { params: { ...companyParams, search: debounced, low_only: lowOnly ? 1 : 0, status: stockStatus, page, per_page: perPage } }).then((r) => r.data),
     placeholderData: (prev) => prev,
   });
   const { data: alerts } = useQuery({
@@ -83,7 +84,8 @@ function LevelsTab({ onViewLedger, companyParams }) {
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Draft transfers</th>
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Available</th>
                 <th className="microlabel px-4 py-2.5 text-right font-semibold">Reorder</th>
-                <th className="microlabel px-4 py-2.5 text-right font-semibold">Unit cost</th>
+                <th className="microlabel px-4 py-2.5 text-right font-semibold" title="What one piece cost you. Shown only to people allowed to see cost.">Unit cost</th>
+                <th className="microlabel px-4 py-2.5 text-right font-semibold" title="Retail selling price of one piece">Unit price</th>
                 <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                 <th className="microlabel px-4 py-2.5" />
               </tr></thead>
@@ -96,7 +98,8 @@ function LevelsTab({ onViewLedger, companyParams }) {
                     <td className="tnum px-4 py-2.5 text-right text-muted">{p.draft_transfer_qty ?? 0}</td>
                     <td className="tnum px-4 py-2.5 text-right">{p.available_qty ?? p.current_stock}</td>
                     <td className="tnum px-4 py-2.5 text-right text-muted">{p.reorder_level}</td>
-                    <td className="tnum px-4 py-2.5 text-right text-muted">{p.cost_price != null ? formatCurrency(p.cost_price) : '—'}</td>
+                    <td className="tnum px-4 py-2.5 text-right text-muted">{p.cost_price != null ? formatCurrency(p.cost_price) : <span title="Hidden: your role cannot see cost prices">—</span>}</td>
+                    <td className="tnum px-4 py-2.5 text-right">{Number(p.retail_price) > 0 ? formatCurrency(p.retail_price) : '—'}</td>
                     <td className="px-4 py-2.5">{p.is_low_stock ? <Badge tone="warning">Low</Badge> : <Badge tone="active">OK</Badge>}</td>
                     <td className="px-4 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -115,7 +118,7 @@ function LevelsTab({ onViewLedger, companyParams }) {
             </table>
             </div>
           )}
-        <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={setPage} /></div>
+        <div className="border-t border-line px-3"><Pagination meta={data?.meta} onPage={setPage} onPerPage={(n) => { setPerPage(n); setPage(1); }} /></div>
       </Card>
     </div>
   );

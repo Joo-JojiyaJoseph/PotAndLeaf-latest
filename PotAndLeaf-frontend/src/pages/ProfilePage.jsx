@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { emailHint } from '../lib/email';
 import { UserCircleIcon } from '@heroicons/react/24/outline';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
@@ -51,7 +52,7 @@ export default function ProfilePage() {
         <h2 className="mb-4 text-sm font-semibold">Account details</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Name" required error={err('name')}><Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} /></Field>
-          <Field label="Email" required error={err('email')}><Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} /></Field>
+          <Field label="Email" required error={err('email')}><Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />{emailHint(form.email) && <span className="mt-1 block text-xs text-danger">{emailHint(form.email)}</span>}</Field>
           <Field label="Phone" error={err('phone')}><Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} /></Field>
         </div>
       </Card>

@@ -19,7 +19,7 @@ class StoreAdvanceOrderRequest extends FormRequest
         return [
             'customer_id'    => ['required', 'uuid', Rule::exists('customers', 'id')->where('company_id', $companyId)],
             'order_date'     => ['required', 'date'],
-            'expected_date'  => ['nullable', 'date', 'after_or_equal:order_date'],
+            'expected_date'  => ['nullable', 'date', 'after_or_equal:order_date', $this->notPast()],
             'advance_amount' => ['nullable', 'numeric', 'min:0'],
             'advance_mode'   => ['nullable', 'in:cash,bank,upi,cheque,card'],
             'notes'          => ['nullable', 'string', 'max:1000'],
@@ -29,5 +29,16 @@ class StoreAdvanceOrderRequest extends FormRequest
             'items.*.rate'         => ['required', 'numeric', 'min:0'],
             'items.*.gst_rate'     => ['nullable', 'numeric', 'min:0', 'max:100'],
         ];
+    }
+
+    /** A date that looks ahead (expected / start) cannot be a day before today on a new record. */
+    protected function notPast(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) {
+            if ($this->isMethod('POST') && filled($value) && strtotime((string) $value) !== false
+                && date('Y-m-d', strtotime((string) $value)) < now()->toDateString()) {
+                $fail('Choose today or a later date.');
+            }
+        };
     }
 }

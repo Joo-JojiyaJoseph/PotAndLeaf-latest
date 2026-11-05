@@ -124,7 +124,23 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
             {invoices.map((r) => <option key={r.id} value={r.id}>{r.sale_no} · bal {formatCurrency(r.balance)}</option>)}
           </Select>
         </Field>
-        <Field label="Amount" required error={err('amount')}><Input type="number" step="0.01" value={form.amount} onChange={set('amount')} /></Field>
+        <Field label="Amount" required error={err('amount')}>
+          <Input type="number" step="0.01" value={form.amount} onChange={set('amount')} />
+          {(() => {
+            // Money that is not an advance cannot be more than is owed.
+            if (!customer || form.is_advance) return null;
+            const bill = form.sale_id ? invoices.find((r) => String(r.id) === String(form.sale_id)) : null;
+            const max = Math.max(0, Number(bill ? bill.balance : customer.outstanding) || 0);
+            const over = Number(form.amount) > max + 0.005;
+            return (
+              <span className={'mt-1 block text-xs ' + (over ? 'text-danger' : 'text-muted')}>
+                {over
+                  ? `More than ${bill ? 'is left on this invoice' : 'they owe'} (₹${max.toFixed(2)}). Enter up to ₹${max.toFixed(2)}, or tick “Record as customer advance”.`
+                  : `Up to ₹${max.toFixed(2)} (${bill ? 'left on this invoice' : 'what they owe'}).`}
+              </span>
+            );
+          })()}
+        </Field>
         <Field label="Mode" error={err('mode')}>
           <Select value={form.mode} onChange={set('mode')} className={selectCls}>
             <option value="cash">Cash</option><option value="bank">Bank</option><option value="upi">UPI</option><option value="cheque">Cheque</option><option value="card">Card</option>

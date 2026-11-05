@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatDateTime } from '../../lib/format';
+import { formatDateTime, minDate } from '../../lib/format';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { SparklesIcon, PlusIcon } from '@heroicons/react/24/outline';
@@ -367,8 +367,8 @@ export default function LoyaltyPage() {
                 </Select>
               </Field>
               <Field label="Max points per bill (optional)" error={ruleErr('max_points_per_transaction')}><Input type="number" min="1" value={ruleForm.max_points_per_transaction} onChange={setR('max_points_per_transaction')} placeholder="no limit" /></Field>
-              <Field label="Starts on (optional)" error={ruleErr('effective_from')}><Input type="date" value={ruleForm.effective_from} onChange={setR('effective_from')} /></Field>
-              <Field label="Ends on (optional)" error={ruleErr('effective_to')}><Input type="date" value={ruleForm.effective_to} onChange={setR('effective_to')} /></Field>
+              <Field label="Starts on (optional)" error={ruleErr('effective_from')}><Input type="date" min={minDate(ruleForm.effective_from)} value={ruleForm.effective_from} onChange={setR('effective_from')} /></Field>
+              <Field label="Ends on (optional)" error={ruleErr('effective_to')}><Input type="date" min={minDate(ruleForm.effective_to, ruleForm.effective_from)} value={ruleForm.effective_to} onChange={setR('effective_to')} /></Field>
               <Field label="Priority (optional)" error={ruleErr('priority')}>
                 <Input type="number" min="0" value={ruleForm.priority} onChange={setR('priority')} placeholder="0" />
                 <p className="mt-1 text-xs text-muted">Only one Spend-based / Customer-tier rule counts per bill — the highest priority one that fits the customer.</p>

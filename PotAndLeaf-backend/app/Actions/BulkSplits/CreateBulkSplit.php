@@ -96,6 +96,12 @@ class CreateBulkSplit
                 $unitCostLine = (float) $a['unit_cost'];
                 $suggested = round($unitCostLine * (1 + $marginPct / 100), 2);
                 $retail = isset($line['retail_price']) ? (float) $line['retail_price'] : $suggested;
+                // A selling price below what one piece costs would lose money on every piece.
+                if ($retail > 0 && $retail < $unitCostLine - 0.001) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'lines' => "Retail price ₹{$retail} for \"{$label}\" is below its cost ₹".number_format($unitCostLine, 2, '.', '').'. You would lose money on every piece.',
+                    ]);
+                }
 
                 $productName = $productId
                     ? ($names[$productId] ?? 'Item')

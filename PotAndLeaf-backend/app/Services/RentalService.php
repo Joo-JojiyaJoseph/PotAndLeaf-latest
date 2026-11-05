@@ -95,16 +95,7 @@ class RentalService
         return DB::transaction(function () use ($rental, $userId) {
             $rental->loadMissing('items');
 
-            // Security deposit defaults to the full value of the rented goods.
-            if ((float) $rental->deposit <= 0) {
-                $prices = Product::forCompany($rental->company_id)
-                    ->whereIn('id', $rental->items->pluck('product_id')->filter())
-                    ->pluck('retail_price', 'id');
-                $deposit = $rental->items->sum(fn ($i) => (float) $i->qty * (float) ($prices[$i->product_id] ?? 0));
-                if ($deposit > 0) {
-                    $rental->deposit = round($deposit, 2);
-                }
-            }
+            // The security deposit is what was typed on the rental; left blank = no deposit.
 
             foreach ($rental->items as $item) {
                 if (! $item->product_id) {
@@ -158,6 +149,11 @@ class RentalService
 
         return DB::transaction(function () use ($rental, $lines, $return, $damageCharge, $userId) {
             $rental->loadMissing('items');
+            // Before anything changes: plants brought back earlier (with the day each
+            // came back) and plants still out. Rent is per plant, up to when it came back.
+            $earlier = $this->earlierReturns($rental);
+            $outBefore = $rental->items->mapWithKeys(fn ($i) => [$i->id => max(0.0, (float) $i->qty - (float) $i->returned_qty - (float) $i->damaged_qty - (float) $i->missing_qty)]);
+            $returnedBefore = $rental->items->mapWithKeys(fn ($i) => [$i->id => (float) $i->returned_qty]);
             $prices = Product::forCompany($rental->company_id)
                 ->whereIn('id', $rental->items->pluck('product_id')->filter())
                 ->pluck('retail_price', 'id');
@@ -203,12 +199,25 @@ class RentalService
                 ]);
             }
 
-            // Rental charge for the whole period (start → return date).
+            // Rent per plant: plants still out are charged up to the return date;
+            // plants already brought back are charged only up to the day they came back.
             $from = Carbon::parse($rental->start_date);
-            $days = max(1, $from->diffInDays($return) + 1);
             $cycleDays = ['daily' => 1, 'weekly' => 7, 'monthly' => 30][$rental->billing_cycle] ?? 30;
-            $cycles = max(1, (int) ceil($days / $cycleDays));
-            $rentalCharge = round($rental->items->sum(fn ($i) => (float) $i->qty * (float) $i->rate_per_cycle * $cycles), 2);
+            $cyclesTo = fn (Carbon $until) => max(1, (int) ceil(max(1, $from->diffInDays($until) + 1) / $cycleDays));
+            $cycles = $cyclesTo($return);
+            $rentalCharge = 0.0;
+            foreach ($rental->items as $item) {
+                $rate = (float) $item->rate_per_cycle;
+                $allocated = 0.0;
+                foreach ($earlier[$item->id] ?? [] as [$qty, $date]) {
+                    $rentalCharge += $qty * $rate * $cyclesTo(Carbon::parse($date));
+                    $allocated += $qty;
+                }
+                // Returned earlier but with no return day on record (old data): as before, to the return date.
+                $rentalCharge += max(0.0, $returnedBefore[$item->id] - $allocated) * $rate * $cycles;
+                $rentalCharge += $outBefore[$item->id] * $rate * $cycles;
+            }
+            $rentalCharge = round($rentalCharge, 2);
 
             // Rent already invoiced by the billing cycle (and already added to
             // the customer's outstanding) must not be charged again here.
@@ -264,6 +273,41 @@ class RentalService
 
             return $rental->refresh()->load(['items', 'invoices', 'customer:id,name,type']);
         });
+    }
+
+    /**
+     * Plants already brought back with "Return", with the day each came back,
+     * read from the stock record that every return writes:
+     *   [rental item id => [[qty, 'Y-m-d'], ...]]
+     */
+    public function earlierReturns(Rental $rental): array
+    {
+        $rental->loadMissing('items');
+        $room = $rental->items->mapWithKeys(fn ($i) => [$i->id => (float) $i->returned_qty])->all();
+        $out = [];
+        $entries = \App\Models\StockLedgerEntry::query()
+            ->where('reference_type', 'rental-return')
+            ->where('reference_id', $rental->id)
+            ->where('direction', 'in')
+            ->orderBy('occurred_at')->orderBy('id')
+            ->get(['product_id', 'qty', 'occurred_at']);
+        foreach ($entries as $e) {
+            $qty = (float) $e->qty;
+            foreach ($rental->items as $item) {
+                if ($qty <= 0) {
+                    break;
+                }
+                if ((string) $item->product_id !== (string) $e->product_id || ($room[$item->id] ?? 0) <= 0) {
+                    continue;
+                }
+                $take = min($qty, $room[$item->id]);
+                $out[$item->id][] = [$take, optional($e->occurred_at)->toDateString() ?? now()->toDateString()];
+                $room[$item->id] -= $take;
+                $qty -= $take;
+            }
+        }
+
+        return $out;
     }
 
     /** Return some or all rented units; stock comes back. Closes when everything is back. */

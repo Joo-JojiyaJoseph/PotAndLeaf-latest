@@ -57,7 +57,8 @@ class InvoicePdfController extends Controller
         $this->assertRecordCompany($request, (string) $purchaseOrder->company_id);
 
         $purchaseOrder->load([
-            'items.product:id,sku,name',
+            'items.product:id,sku,name,unit_id',
+            'items.product.unit:id,name,short_name',
             'supplier',
             'company:id,name,legal_name,gst_number,address,phone,email,state,state_code,logo',
             'createdBy:id,name',

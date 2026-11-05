@@ -5,7 +5,7 @@ import { ArrowLeftIcon, PlusIcon, TrashIcon, SparklesIcon } from '@heroicons/rea
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
-import { todayISO } from '../../lib/format';
+import { todayISO, minDate } from '../../lib/format';
 import { useConfirm } from '../../lib/confirm';
 
 const today = todayISO;
@@ -171,7 +171,7 @@ export default function PurchaseOrderForm() {
             </Select>
           </Field>
           <Field label="PO date" required error={err('po_date')}><Input type="date" value={header.po_date} onChange={(e) => setHeader((h) => ({ ...h, po_date: e.target.value }))} /></Field>
-          <Field label="Expected date" error={err('expected_date')}><Input type="date" value={header.expected_date} onChange={(e) => setHeader((h) => ({ ...h, expected_date: e.target.value }))} /></Field>
+          <Field label="Expected date" error={err('expected_date')}><Input type="date" min={minDate(header.expected_date, header.po_date)} value={header.expected_date} onChange={(e) => setHeader((h) => ({ ...h, expected_date: e.target.value }))} /></Field>
         </div>
       </Card>
 

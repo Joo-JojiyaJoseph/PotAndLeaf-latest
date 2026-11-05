@@ -35,7 +35,7 @@ class StoreCompanyRequest extends FormRequest
             'state_code'  => ['nullable', 'string', 'regex:'.IndianFormats::STATE_CODE],
             'address'     => ['nullable', 'string', 'max:500'],
             'phone'       => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
-            'email'       => ['nullable', 'email', 'max:150'],
+            'email'       => ['nullable', ...\App\Support\Validation\Email::rules(), 'max:150'],
             'logo'        => ['nullable', 'string', 'max:500'],
             'photo'       => ['nullable', 'string', 'max:500'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -47,6 +47,8 @@ class StoreCompanyRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'email.email' => \App\Support\Validation\Email::MESSAGE,
+            'email.regex' => \App\Support\Validation\Email::MESSAGE,
             'phone.regex'     => 'Enter a valid phone number (digits, and optionally + - ( ) spaces).',
             'name.required'   => 'Company name is required.',
             'name.unique'       => 'A company with this name already exists.',

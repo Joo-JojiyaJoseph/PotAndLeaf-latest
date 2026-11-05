@@ -103,7 +103,8 @@ it('syncs sale amount_paid when receipt is allocated to invoice', function () {
 
 it('builds cash book with opening balance and movements', function () {
     phaseCSetting($this, 'cash_opening_balance', '1000');
-    $customer = $this->createCustomer();
+    // The customer owes 500 (a receipt cannot be more than is owed — update 57).
+    $customer = $this->createCustomer(['outstanding' => 500]);
     $supplier = Supplier::create([
         'company_id' => $this->company->id,
         'supplier_code' => 'SUP-001',

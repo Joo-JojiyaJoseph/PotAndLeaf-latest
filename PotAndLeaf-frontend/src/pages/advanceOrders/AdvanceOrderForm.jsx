@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
-import { formatCurrency, todayISO as today } from '../../lib/format';
+import { formatCurrency, todayISO as today, minDate } from '../../lib/format';
 import { FormCompanyField, useFormCompany } from '../../components/FormCompanyField';
 
 const emptyLine = () => ({ product_id: '', qty: '', rate: '', gst_rate: '' });
@@ -79,7 +79,7 @@ export default function AdvanceOrderForm() {
             </Field>
           </div>
           <Field label="Order date" required error={err('order_date')}><Input type="date" value={header.order_date} onChange={(e) => setHeader((h) => ({ ...h, order_date: e.target.value }))} /></Field>
-          <Field label="Expected date" error={err('expected_date')}><Input type="date" value={header.expected_date} onChange={(e) => setHeader((h) => ({ ...h, expected_date: e.target.value }))} /></Field>
+          <Field label="Expected date" error={err('expected_date')}><Input type="date" min={minDate(header.expected_date, header.order_date)} value={header.expected_date} onChange={(e) => setHeader((h) => ({ ...h, expected_date: e.target.value }))} /></Field>
         </div>
       </Card>
 

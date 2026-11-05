@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { emailHint } from '../../lib/email';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -301,7 +302,7 @@ export default function CompaniesList() {
           <Field label="State" error={err('state')}><Input value={form.state || ''} onChange={set('state')} /></Field>
           <Field label="State code" error={err('state_code')}><Input value={form.state_code || ''} onChange={set('state_code')} placeholder="32" /></Field>
           <Field label="Phone" error={err('phone')}><Input value={form.phone || ''} onChange={set('phone')} /></Field>
-          <Field label="Email" error={err('email')}><Input value={form.email || ''} onChange={set('email')} /></Field>
+          <Field label="Email" error={err('email')}><Input type="email" value={form.email || ''} onChange={set('email')} />{emailHint(form.email) && <span className="mt-1 block text-xs text-danger">{emailHint(form.email)}</span>}</Field>
           <div className="sm:col-span-2">
             <Field label="Address" error={err('address')}><Input value={form.address || ''} onChange={set('address')} /></Field>
           </div>

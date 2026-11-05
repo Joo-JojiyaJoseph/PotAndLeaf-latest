@@ -124,6 +124,7 @@ class ConfirmBulkSplit
                     $target->retail_price = $item->retail_price;
                     $target->mrp = max((float) $target->mrp, (float) $item->retail_price);
                 }
+                $this->clearPricesBelowCost($target);
                 $target->save();
 
                 $this->createUnitBarcodes($split, $item, $target);
@@ -178,8 +179,10 @@ class ConfirmBulkSplit
             'gst_rate'          => $source->gst_rate,
             'mrp'               => $source->mrp,
             'cost_price'        => $item->unit_cost,
-            'dealer_price'      => $source->dealer_price,
-            'wholesale_price'   => $source->wholesale_price,
+            // Copied from the big lot only when not below this size's cost; else left
+            // empty so the bill uses the retail price.
+            'dealer_price'      => (float) $source->dealer_price >= (float) $item->unit_cost - 0.001 ? $source->dealer_price : 0,
+            'wholesale_price'   => (float) $source->wholesale_price >= (float) $item->unit_cost - 0.001 ? $source->wholesale_price : 0,
             'retail_price'      => $item->retail_price ?? $source->retail_price,
             'reorder_level'     => $source->reorder_level,
             'opening_stock'     => 0,
@@ -257,5 +260,16 @@ class ConfirmBulkSplit
         );
 
         return $code;
+    }
+
+    /** Wholesale / dealer prices below the cost are cleared (the bill then uses retail). */
+    private function clearPricesBelowCost(\App\Models\Product $product): void
+    {
+        $cost = (float) $product->cost_price;
+        foreach (['dealer_price', 'wholesale_price'] as $field) {
+            if ($cost > 0 && (float) $product->{$field} > 0 && (float) $product->{$field} < $cost - 0.001) {
+                $product->{$field} = 0;
+            }
+        }
     }
 }

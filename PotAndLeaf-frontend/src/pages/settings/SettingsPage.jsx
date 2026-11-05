@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { badEmails } from '../../lib/email';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -284,6 +285,9 @@ export default function SettingsPage() {
                     />
                   )}
                   {field.help && <p className="mt-1.5 text-xs leading-relaxed text-muted">{field.help}</p>}
+                  {field.key === 'eod_management_email_recipients' && badEmails(form[field.key]).length > 0 && (
+                    <p className="mt-1 text-xs text-danger">Not a valid email address: {badEmails(form[field.key]).join(', ')}</p>
+                  )}
                 </Field>
               ))}
             </div>

@@ -109,7 +109,7 @@ class StorefrontController extends Controller
             'customer'              => ['required', 'array'],
             'customer.name'         => ['required', 'string', 'max:160'],
             'customer.phone'        => ['nullable', 'string', 'max:20'],
-            'customer.email'        => ['nullable', 'email'],
+            'customer.email'        => ['nullable', ...\App\Support\Validation\Email::rules()],
             'branch_id'             => ['nullable', 'uuid'],
             'payment_mode'          => ['nullable', 'in:cash,card,upi,bank,credit'],
             'items'                 => ['required', 'array', 'min:1'],

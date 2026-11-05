@@ -58,13 +58,19 @@ class RentalResource extends JsonResource
                 ? max(1, (int) ceil(($this->start_date->diffInDays($this->expected_end_date) + 1) / (['daily' => 1, 'weekly' => 7, 'monthly' => 30][$this->billing_cycle] ?? 30)))
                 : null,
             'billed_total'      => $this->whenLoaded('invoices', fn () => round($this->invoices->where('status', '!=', 'cancelled')->sum(fn ($i) => (float) $i->amount), 2)),
-            'items'             => $this->whenLoaded('items', fn () => $this->items->map(fn ($i) => [
-                'id' => $i->id, 'product_id' => $i->product_id, 'product_name' => $i->product_name,
-                'qty' => (float) $i->qty, 'rate_per_cycle' => (float) $i->rate_per_cycle,
-                'retail_price' => $i->relationLoaded('product') ? (float) ($i->product?->retail_price ?? 0) : null,
-                'returned_qty' => (float) $i->returned_qty, 'damaged_qty' => (float) $i->damaged_qty, 'missing_qty' => (float) $i->missing_qty,
-                'outstanding_qty' => (float) $i->qty - (float) $i->returned_qty - (float) $i->damaged_qty - (float) $i->missing_qty,
-            ])->values()),
+            // Plants already brought back, with the day each came back (for the settlement preview).
+            'items'             => $this->whenLoaded('items', function () {
+                $earlier = $this->status === 'active' ? app(\App\Services\RentalService::class)->earlierReturns($this->resource) : [];
+
+                return $this->items->map(fn ($i) => [
+                    'id' => $i->id, 'product_id' => $i->product_id, 'product_name' => $i->product_name,
+                    'qty' => (float) $i->qty, 'rate_per_cycle' => (float) $i->rate_per_cycle,
+                    'retail_price' => $i->relationLoaded('product') ? (float) ($i->product?->retail_price ?? 0) : null,
+                    'returned_qty' => (float) $i->returned_qty, 'damaged_qty' => (float) $i->damaged_qty, 'missing_qty' => (float) $i->missing_qty,
+                    'outstanding_qty' => (float) $i->qty - (float) $i->returned_qty - (float) $i->damaged_qty - (float) $i->missing_qty,
+                    'returned_earlier' => collect($earlier[$i->id] ?? [])->map(fn ($r) => ['qty' => (float) $r[0], 'date' => $r[1]])->values(),
+                ])->values();
+            }),
             'invoices'          => $this->whenLoaded('invoices', fn () => $this->invoices->map(fn ($inv) => [
                 'id' => $inv->id, 'invoice_no' => $inv->invoice_no,
                 'period_from' => optional($inv->period_from)->toDateString(), 'period_to' => optional($inv->period_to)->toDateString(),

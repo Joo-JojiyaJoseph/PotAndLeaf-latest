@@ -19,7 +19,7 @@ class StoreRentalRequest extends FormRequest
         return [
             'customer_id'       => ['required', 'uuid', Rule::exists('customers', 'id')->where('company_id', $companyId)],
             'location_id'       => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)],
-            'start_date'        => ['required', 'date'],
+            'start_date'        => ['required', 'date', $this->notPast()],
             'expected_end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'billing_cycle'     => ['required', 'in:daily,weekly,monthly'],
             'auto_bill'         => ['nullable', 'boolean'],
@@ -37,5 +37,16 @@ class StoreRentalRequest extends FormRequest
         return [
             'items.*.product_id.exists' => 'This product is not set for rent. Tick "This product can be rented" on the product first.',
         ];
+    }
+
+    /** A date that looks ahead (expected / start) cannot be a day before today on a new record. */
+    protected function notPast(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) {
+            if ($this->isMethod('POST') && filled($value) && strtotime((string) $value) !== false
+                && date('Y-m-d', strtotime((string) $value)) < now()->toDateString()) {
+                $fail('Choose today or a later date.');
+            }
+        };
     }
 }

@@ -84,35 +84,25 @@
       <th>Product</th>
       <th>SKU</th>
       <th class="r">Qty</th>
-      <th class="r">Rate</th>
-      <th class="r">GST %</th>
-      <th class="r">Taxable</th>
-      <th class="r">Tax</th>
-      <th class="r">Total</th>
+      <th>Unit</th>
     </tr>
   </thead>
   <tbody>
+    {{-- A purchase order lists what and how many; the supplier's bill gives rates and GST. --}}
     @foreach($po->items as $i => $it)
-      @php $tax = (float) $it->line_total - (float) $it->taxable_value; @endphp
       <tr>
         <td class="c">{{ $i + 1 }}</td>
         <td>{{ $it->product_name }}</td>
         <td>{{ $it->product?->sku }}</td>
-        <td class="r">{{ $it->qty }}</td>
-        <td class="r">{{ $money($it->rate) }}</td>
-        <td class="r">{{ number_format((float) $it->gst_rate, 2) }}</td>
-        <td class="r">{{ $money($it->taxable_value) }}</td>
-        <td class="r">{{ $money($tax) }}</td>
-        <td class="r">{{ $money($it->line_total) }}</td>
+        <td class="r">{{ rtrim(rtrim(number_format((float) $it->qty, 3, '.', ''), '0'), '.') }}</td>
+        <td>{{ $it->product?->unit?->short_name ?? $it->product?->unit?->name }}</td>
       </tr>
     @endforeach
   </tbody>
 </table>
 
 <table class="totals">
-  <tr><td>Subtotal</td><td class="r">{{ $money($po->subtotal) }}</td></tr>
-  <tr><td>Tax / GST</td><td class="r">{{ $money($po->tax_total) }}</td></tr>
-  <tr class="grand"><td>Grand total</td><td class="r">{{ $money($po->grand_total) }}</td></tr>
+  <tr class="grand"><td>Total items</td><td class="r">{{ $po->items->count() }} products · {{ rtrim(rtrim(number_format((float) $po->items->sum('qty'), 3, '.', ''), '0'), '.') }} pieces</td></tr>
 </table>
 
 @if($po->notes)

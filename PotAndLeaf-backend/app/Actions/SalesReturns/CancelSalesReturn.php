@@ -57,7 +57,17 @@ class CancelSalesReturn
                     if ($customer) {
                         $sale = $return->sale;
                         if ($sale && $sale->payment_mode === 'credit') {
-                            $customer->outstanding = (float) $customer->outstanding + (float) $return->grand_total;
+                            if ($return->owes_reduced !== null) {
+                                // Undo exactly what confirming did. Advance already spent
+                                // cannot be taken back, so that part is owed again.
+                                $credited = (float) $return->advance_credited;
+                                $takeBack = min($credited, max(0, (float) $customer->advance_balance));
+                                $customer->advance_balance = round((float) $customer->advance_balance - $takeBack, 2);
+                                $customer->outstanding = round((float) $customer->outstanding + (float) $return->owes_reduced + ($credited - $takeBack), 2);
+                            } else {
+                                // Returns confirmed before update 57.
+                                $customer->outstanding = (float) $customer->outstanding + (float) $return->grand_total;
+                            }
                             $customer->save();
                         }
 
