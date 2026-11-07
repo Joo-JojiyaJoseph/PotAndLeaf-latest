@@ -134,6 +134,7 @@ export default function App() {
             <Route path="sales" element={<PermissionRoute permission="sales.view"><SalesList /></PermissionRoute>} />
             <Route path="sales/new" element={<PermissionRoute permission="sales.create"><SaleForm /></PermissionRoute>} />
             <Route path="sales/:id" element={<PermissionRoute permission="sales.view"><SaleDetail /></PermissionRoute>} />
+            <Route path="sales/:id/edit" element={<PermissionRoute permission="sales.create"><SaleForm /></PermissionRoute>} />
             <Route path="sales-returns" element={<PermissionRoute permission="sales_returns.view"><SalesReturnsList /></PermissionRoute>} />
             <Route path="sales-returns/new" element={<PermissionRoute permission="sales_returns.create"><SalesReturnForm /></PermissionRoute>} />
             <Route path="sales-returns/:id" element={<PermissionRoute permission="sales_returns.view"><SalesReturnDetail /></PermissionRoute>} />

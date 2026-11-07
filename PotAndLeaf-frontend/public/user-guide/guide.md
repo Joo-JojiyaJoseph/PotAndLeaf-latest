@@ -580,7 +580,7 @@ The selling path is: New sale → Save → Confirm (stock goes out, money and po
 
 **Request shortage** (on a saved draft bill) appears only when an item needs more than is in stock; the line shows *Short by …*. It makes a waiting order (backorder) for the missing pieces. When all items are in stock, the button is hidden.
 7. If the customer wants to use loyalty points, type the points.
-8. Type **Amount paid**. Cash / card / UPI: leave blank if they pay the full bill now. **Credit:** leave blank if they pay nothing now — the whole bill goes to what the customer owes; type an amount only if they pay part now.
+8. Under the items and the total, type **Amount paid now**. **Blank = ₹0** (nothing paid now — the customer owes the bill). Click **Paid in full** to fill the whole amount due. The line beside it shows *Still to pay*. A walk-in (no customer) must pay in full.
 9. Click **Save**, check the totals, then click **Confirm**.
 
 ![New sale](img/28-sale-new.jpg#1503x1091)
@@ -662,6 +662,10 @@ The **Receipt history** tab shows every receipt. Voiding a receipt undoes it, in
 Rate, discount and GST come from the original bill. You cannot return more than was sold. The discount is shared by quantity.
 
 **Where the money goes (like a purchase return).** When you confirm, the return value first comes off what is still unpaid on that bill (*Owes you*). The rest — money the customer already paid — goes to the customer's **advance**, for any payment mode (credit, cash, card, UPI). The return page shows *Taken off “Owes you”* and *Added to advance*. A return with no customer (walk-in) gives the money back at the counter.
+
+**Seeing a customer's advance.** On the customer page, the **Advance** section lists every change: *Advance received*, *Booking advance*, *Sales return*, *Extra money kept as advance* (+) and *Used on bill* (−), each with what is *Left* after it, newest first, with page buttons and *Rows per page*. The top line shows *In*, *Used* and *Left*. Any amount from before these records shows as *Earlier balance / adjustment*, so *Left* always matches the advance on the page. Suppliers have the same list in their **Advance** section.
+
+**Changing a bill before Confirm.** A **draft** bill has an **Edit** button on its page: change the customer, items, quantities, prices, amount paid — anything — and click **Save changes** (the bill number stays the same). Once you click **Confirm**, the bill can no longer be edited; use a sales return or ask for cancellation instead.
 
 **Using the advance on the next bill.** On **New sale**, pick the customer. If they have an advance, a box **Customer advance** appears: type the amount in **Pay from advance** (or click **Use max**). The totals show *From advance −₹…* and **Amount due** is what is left. "Amount paid" blank = the rest is paid now (or, on Credit, owed). The advance is taken when you **Confirm** the bill; cancelling the bill puts it back.
 

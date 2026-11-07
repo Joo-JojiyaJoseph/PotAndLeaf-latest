@@ -7,8 +7,10 @@ import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { mediaUrl } from '../../components/media';
-import { formatCurrency, formatDateTime } from '../../lib/format';
+import { formatCurrency, formatDate, formatDateTime } from '../../lib/format';
 import Pagination from '../../components/Pagination';
+import PagedTable from '../../components/PagedTable';
+import usePaged from '../../hooks/usePaged';
 
 const typeTone = { retail: 'info', wholesale: 'active', dealer: 'pending' };
 const statusTone = { active: 'active', inactive: 'inactive', blocked: 'blocked' };
@@ -28,6 +30,15 @@ export default function CustomerDetail() {
     queryFn: () => api.get(`/customers/${id}`, withCompany(headerCompanyId)).then((r) => r.data.data),
     enabled: Boolean(headerCompanyId && id),
   });
+
+  // Every change to the customer's advance (received, used, from returns).
+  const { data: advance } = useQuery({
+    queryKey: ['customer-advance-history', headerCompanyId, id],
+    queryFn: () => api.get(`/customers/${id}/advance-history`, withCompany(headerCompanyId)).then((r) => r.data.data),
+    enabled: Boolean(headerCompanyId && id),
+  });
+  const [advPer, setAdvPer] = useState(10);
+  const advPage = usePaged(advance?.rows ?? [], advPer, `${advance?.rows?.length ?? 0}|${advPer}`);
 
   const { data: history, isLoading: histLoading } = useQuery({
     queryKey: ['customer-purchase-history', headerCompanyId, id, histPage],
@@ -157,11 +168,57 @@ export default function CustomerDetail() {
         </Card>
       </Section>
 
+      <Section
+        title="Advance"
+        actions={Number(c.advance_balance) > 0 && can('receipts.create') ? <Button size="sm" variant="outline" onClick={() => navigate('/receipts')}>Use advance on a bill</Button> : null}
+      >
+        <p className="-mt-1 mb-3 text-xs text-muted">Money held for this customer: where it came from (advance received, sales returns, extra paid) and which bills it was used on, with what is left after each.</p>
+        <Card className="overflow-hidden">
+          {!advance ? (
+            <div className="flex justify-center py-8"><Spinner className="size-5" /></div>
+          ) : advance.rows.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-muted">No advance for this customer.</div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-x-6 gap-y-1 border-b border-line px-4 py-2.5 text-xs text-muted">
+                <span>In <b className="tnum text-leaf-hover">{formatCurrency(advance.total_in)}</b></span>
+                <span>Used <b className="tnum text-danger">{formatCurrency(advance.total_out)}</b></span>
+                <span>Left <b className="tnum text-ink">{formatCurrency(advance.balance)}</b></span>
+              </div>
+              <ul className="divide-y divide-line/60">
+                {advPage.pageRows.map((m, i) => (
+                  <li key={i} className="flex items-start justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">
+                        {m.sale_id
+                          ? <button type="button" onClick={() => navigate(`/sales/${m.sale_id}`)} className="text-left hover:text-leaf">{m.label}</button>
+                          : m.sales_return_id
+                            ? <button type="button" onClick={() => navigate(`/sales-returns/${m.sales_return_id}`)} className="text-left hover:text-leaf">{m.label}</button>
+                            : m.label}
+                      </p>
+                      <p className="text-xs text-muted">{[m.date ? formatDate(m.date) : null, m.ref].filter(Boolean).join(' · ') || '—'}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className={`tnum text-sm font-semibold ${m.in > 0 ? 'text-leaf-hover' : 'text-danger'}`}>
+                        {m.in > 0 ? `+ ${formatCurrency(m.in)}` : `− ${formatCurrency(m.out)}`}
+                      </p>
+                      <p className="tnum text-xs text-muted">Left {formatCurrency(m.balance)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="border-t border-line px-3"><Pagination meta={advPage.meta} onPage={advPage.setPage} onPerPage={(n) => { setAdvPer(n); advPage.setPage(1); }} /></div>
+            </>
+          )}
+        </Card>
+      </Section>
+
       <Section title="Loyalty ledger">
         <Card className="overflow-hidden">
           {(loyalty.ledger ?? []).length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted">No loyalty transactions yet.</div>
           ) : (
+            <PagedTable rows={loyalty.ledger} perPage={10}>{(ledgerRows) => (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -174,7 +231,7 @@ export default function CustomerDetail() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loyalty.ledger.map((e) => (
+                  {ledgerRows.map((e) => (
                     <tr key={e.id} className="border-b border-line/60 last:border-0">
                       <td className="tnum px-4 py-2.5 text-xs text-muted">{e.created_at ? formatDateTime(e.created_at) : '—'}</td>
                       <td className="px-4 py-2.5"><Badge tone={ledgerTone[e.type] ?? 'default'}>{e.type}</Badge></td>
@@ -186,6 +243,7 @@ export default function CustomerDetail() {
                 </tbody>
               </table>
             </div>
+            )}</PagedTable>
           )}
         </Card>
       </Section>

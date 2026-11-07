@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircleIcon, XCircleIcon, PrinterIcon, BanknotesIcon, ChatBubbleLeftRightIcon, ArrowPathIcon, ClockIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, PencilSquareIcon, XCircleIcon, PrinterIcon, BanknotesIcon, ChatBubbleLeftRightIcon, ArrowPathIcon, ClockIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Textarea } from '../../components/ui';
@@ -163,6 +163,11 @@ export default function SaleDetail() {
                 <XCircleIcon className="size-4" /> Reject
               </Button>
             </>
+          )}
+          {s.can?.edit && (
+            <Button variant="outline" size="sm" onClick={() => navigate(`/sales/${s.id}/edit`)}>
+              <PencilSquareIcon className="size-4" /> Edit
+            </Button>
           )}
           {s.can?.confirm && (
             <Button size="sm" onClick={() => confirmM.mutate()} disabled={confirmM.isPending}>

@@ -44,8 +44,10 @@ export default function SupplierDetail() {
     placeholderData: keepPreviousData,
   });
 
-  const payPage = usePaged(account?.payments ?? [], 10);
-  const advPage = usePaged(account?.advance ?? [], 10);
+  const [payPer, setPayPer] = useState(10);
+  const [advPer, setAdvPer] = useState(10);
+  const payPage = usePaged(account?.payments ?? [], payPer, `${account?.payments?.length ?? 0}|${payPer}`);
+  const advPage = usePaged(account?.advance ?? [], advPer, `${account?.advance?.length ?? 0}|${advPer}`);
 
   if (isLoading) return <DetailLoading />;
   if (isError || !data) return <DetailError backTo="/suppliers" />;
@@ -165,7 +167,7 @@ export default function SupplierDetail() {
                 </li>
               ))}
             </ul>
-            <div className="border-t border-line px-3"><Pagination meta={payPage.meta} onPage={payPage.setPage} /></div>
+            <div className="border-t border-line px-3"><Pagination meta={payPage.meta} onPage={payPage.setPage} onPerPage={(n) => { setPayPer(n); payPage.setPage(1); }} /></div>
             </>
           )}
         </Card>
@@ -199,7 +201,7 @@ export default function SupplierDetail() {
                 </li>
               ))}
             </ul>
-            <div className="border-t border-line px-3"><Pagination meta={advPage.meta} onPage={advPage.setPage} /></div>
+            <div className="border-t border-line px-3"><Pagination meta={advPage.meta} onPage={advPage.setPage} onPerPage={(n) => { setAdvPer(n); advPage.setPage(1); }} /></div>
             </>
           )}
         </Card>

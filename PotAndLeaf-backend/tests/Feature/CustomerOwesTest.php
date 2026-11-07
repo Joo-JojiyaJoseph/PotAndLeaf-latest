@@ -218,3 +218,44 @@ it('cannot use more advance than the customer has', function () {
         'items' => [['product_id' => $this->product->id, 'qty' => 1, 'rate' => 500, 'gst_rate' => 0]],
     ], $this->user->id))->toThrow(\Illuminate\Validation\ValidationException::class);
 });
+
+it('a credit bill with goods brought back asks only for what is left (update 65)', function () {
+    $sale = owesCreditSale($this, 4, 500); // ₹2,000 unpaid
+    $ret = app(CreateSalesReturn::class)->handle($this->company->id, [
+        'sale_id' => $sale->id, 'return_date' => now()->toDateString(),
+        'items' => [['sale_item_id' => $sale->items->first()->id, 'qty' => 1]],
+    ], $this->user->id);
+    app(ConfirmSalesReturn::class)->handle($ret, $this->user->id); // ₹500 back
+
+    $res = (new \App\Http\Resources\SaleResource($sale->fresh()))->toArray(request());
+    expect($res['returned'])->toBe(500.0)->and($res['balance'])->toBe(1500.0)->and($res['payment_status'])->toBe('unpaid');
+    $row = collect(app(\App\Services\ReceiptService::class)->receivables($this->company->id, $this->customer->id))->firstWhere('id', $sale->id);
+    expect($row['returned'])->toBe(500.0)->and($row['balance'])->toBe(1500.0);
+    expect((float) $this->customer->fresh()->outstanding)->toBe(1500.0);
+
+    owesReceipt($this, ['amount' => 2000, 'sale_id' => $sale->id])->assertStatus(422);
+    owesReceipt($this, ['amount' => 1500, 'sale_id' => $sale->id])->assertCreated();
+    $res = (new \App\Http\Resources\SaleResource($sale->fresh()))->toArray(request());
+    expect($res['balance'])->toBe(0.0)->and($res['payment_status'])->toBe('paid')
+        ->and((float) $this->customer->fresh()->outstanding)->toBe(0.0);
+});
+
+it('lists every change to the customer advance with a running balance (update 67)', function () {
+    $this->customer->fresh()->forceFill(['advance_balance' => 100, 'created_by' => $this->user->id])->save(); // from before the records
+    owesReceipt($this, ['amount' => 700, 'is_advance' => true])->assertCreated();
+    $sale = owesSaleMode($this, 'cash', 2, 1000); // paid cash bill
+    $ret = app(CreateSalesReturn::class)->handle($this->company->id, [
+        'sale_id' => $sale->id, 'return_date' => now()->toDateString(),
+        'items' => [['sale_item_id' => $sale->items->first()->id, 'qty' => 1]],
+    ], $this->user->id);
+    app(ConfirmSalesReturn::class)->handle($ret, $this->user->id); // +500 to advance
+    $credit = owesCreditSale($this, 1, 500);
+    app(\App\Services\ReceiptService::class)->applyAdvance($this->company->id, ['customer_id' => $this->customer->id, 'sale_id' => $credit->id, 'amount' => 300], $this->user->id);
+
+    $res = $this->getJson("/api/customers/{$this->customer->id}/advance-history", $this->apiHeaders())->assertOk();
+    $rows = collect($res->json('data.rows'));
+    expect((float) $res->json('data.balance'))->toBe(1000.0)          // 100 + 700 + 500 − 300
+        ->and((float) $rows->first()['balance'])->toBe(1000.0)          // newest first
+        ->and($rows->pluck('label')->all())->toContain('Advance received', 'Sales return', 'Used on bill', 'Earlier balance / adjustment')
+        ->and((float) $res->json('data.total_out'))->toBe(300.0);
+});

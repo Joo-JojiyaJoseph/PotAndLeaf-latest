@@ -329,7 +329,8 @@ class ReceiptService
             if ($already <= 0.005) {
                 $already = (float) $sale->amount_paid;
             }
-            $balance = round($invoice - $already, 2);
+            // Goods brought back (sales returns) are not paid for.
+            $balance = round(max(0, $invoice - $already - $sale->returnedTotal()), 2);
             if ($amount > $balance + 1e-6) {
                 throw ValidationException::withMessages([
                     'amount' => "Amount cannot exceed the remaining invoice balance ({$balance}).",
@@ -413,6 +414,7 @@ class ReceiptService
             ->with('customer:id,name,credit_days,advance_balance,outstanding')
             ->withSum('customerReceipts as received_sum', 'amount')
             ->withSum('receiptAllocations as allocated_sum', 'amount')
+            ->withSum(['salesReturns as returned_sum' => fn ($q) => $q->where('status', 'confirmed')], 'grand_total')
             ->orderByDesc('sale_date')
             ->get()
             ->map(function (Sale $s) {
@@ -422,7 +424,8 @@ class ReceiptService
                 if ($received <= 0.005) {
                     $received = (float) $s->amount_paid;
                 }
-                $balance = round($invoice - $received, 2);
+                $returned = round((float) ($s->returned_sum ?? 0), 2);
+                $balance = round(max(0, $invoice - $received - $returned), 2);
                 $due = $s->sale_date?->copy()->addDays((int) ($s->customer->credit_days ?? 0));
 
                 return [
@@ -436,6 +439,7 @@ class ReceiptService
                     'invoice_total'    => $invoice,
                     'credit_amount' => $invoice,
                     'received'      => round($received, 2),
+                    'returned'      => $returned,
                     'balance'       => $balance,
                     'status'        => $balance <= 0.005 ? 'paid' : ($received <= 0.005 ? 'unpaid' : 'partial'),
                     'due_date'      => $due?->toDateString(),
@@ -579,7 +583,7 @@ class ReceiptService
                 throw ValidationException::withMessages(['sale_id' => 'This invoice does not belong to the selected customer.']);
             }
 
-            return round(max(0, (float) $sale->grand_total - (float) $sale->loyalty_discount - (float) $sale->amount_paid), 2);
+            return $sale->balanceDue();
         };
 
         if ($allocations !== []) {

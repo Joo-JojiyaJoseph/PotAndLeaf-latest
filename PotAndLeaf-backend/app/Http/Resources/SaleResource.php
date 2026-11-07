@@ -41,7 +41,10 @@ class SaleResource extends JsonResource
             'round_off'     => (float) $this->round_off,
             'grand_total'             => (float) $this->grand_total,
             'amount_paid'             => (float) $this->amount_paid,
-            'balance'                 => round(max(0, (float) $this->grand_total - (float) $this->loyalty_discount - (float) $this->amount_paid), 2),
+            'use_advance'             => (float) $this->use_advance,
+            // Goods brought back (confirmed sales returns) are not paid for.
+            'returned'                => $this->resource->returnedTotal(),
+            'balance'                 => $this->resource->balanceDue(),
             'loyalty_points_redeemed' => (int) $this->loyalty_points_redeemed,
             'loyalty_discount'        => (float) $this->loyalty_discount,
             'payment_status'          => $this->paymentStatus(),
@@ -62,6 +65,8 @@ class SaleResource extends JsonResource
             'short_items'   => $shortItems = $this->shortItems(),
             'can'           => [
                 'confirm'         => $this->status === 'draft' && $user?->hasPermission('sales.confirm', $companyId),
+                // A draft bill can be changed; once confirmed it cannot.
+                'edit'            => $this->status === 'draft' && $user?->hasPermission('sales.create', $companyId),
                 // Only when some item is short of stock and there is a customer to wait for it.
                 'request_shortage' => $this->status === 'draft' && $this->customer_id && $shortItems !== [],
                 'cancel'          => $this->status !== 'cancelled'

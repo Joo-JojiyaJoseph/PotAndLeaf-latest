@@ -22,6 +22,7 @@ class SaleItemResource extends JsonResource
             'rate'          => (float) $this->rate,
             'discount'      => (float) $this->discount,
             'gst_rate'      => (float) $this->gst_rate,
+            'price_level'   => $this->price_level,
             'taxable_value' => (float) $this->taxable_value,
             'cgst_amount'   => (float) $this->cgst_amount,
             'sgst_amount'   => (float) $this->sgst_amount,

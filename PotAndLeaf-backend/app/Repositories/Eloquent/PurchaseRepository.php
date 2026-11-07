@@ -15,6 +15,7 @@ class PurchaseRepository implements PurchaseRepositoryInterface
         return Purchase::query()
             ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->with('supplier:id,name,supplier_code')
+            ->withSum(['purchaseReturns as returned_sum' => fn ($q) => $q->where('status', 'confirmed')], 'grand_total')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
             ->when(filled($filters['supplier_id'] ?? null), fn ($q) => $q->where('supplier_id', $filters['supplier_id']))
             ->listFilters($filters, 'purchase_date', ['purchase_no', 'invoice_no'], ['supplier' => 'name'])

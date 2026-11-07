@@ -82,6 +82,27 @@ class Sale extends Model
         return $this->hasMany(SaleItem::class);
     }
 
+    public function salesReturns(): HasMany
+    {
+        return $this->hasMany(SalesReturn::class, 'sale_id');
+    }
+
+    /** Value of confirmed sales returns against this bill (goods brought back). */
+    public function returnedTotal(): float
+    {
+        if (array_key_exists('returned_sum', $this->getAttributes())) {
+            return round((float) $this->getAttributes()['returned_sum'], 2);
+        }
+
+        return round((float) $this->salesReturns()->where('status', 'confirmed')->sum('grand_total'), 2);
+    }
+
+    /** Still to pay on this bill: bill − points discount − paid − returned. */
+    public function balanceDue(): float
+    {
+        return round(max(0, (float) $this->grand_total - (float) $this->loyalty_discount - (float) $this->amount_paid - $this->returnedTotal()), 2);
+    }
+
     public function customerReceipts(): HasMany
     {
         return $this->hasMany(CustomerReceipt::class);
@@ -122,8 +143,12 @@ class Sale extends Model
         if ($this->status !== 'confirmed') {
             return 'n/a';
         }
-        $due = max(0, (float) $this->grand_total - (float) $this->loyalty_discount);
+        // Goods brought back are not paid for: settled when paid + returned covers it.
+        $due = max(0, (float) $this->grand_total - (float) $this->loyalty_discount - $this->returnedTotal());
         $paid = (float) $this->amount_paid;
+        if ($due <= 0.01) {
+            return 'paid';
+        }
         if ($paid <= 0) {
             return 'unpaid';
         }

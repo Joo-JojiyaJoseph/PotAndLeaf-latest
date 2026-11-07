@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeftIcon, PlusIcon, TrashIcon, BuildingOffice2Icon, UserIcon, CreditCardIcon, DocumentTextIcon, CurrencyRupeeIcon, QrCodeIcon, CubeIcon, TagIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
@@ -52,6 +52,8 @@ function QtyControl({ value, onChange }) {
 
 export default function SaleForm() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
   const { isSuperAdmin, companies, companyId, selectCompany, activeCompany } = useAuth();
   const [header, setHeader] = useState({ customer_id: '', sale_date: today(), is_interstate: false, payment_mode: 'cash', bill_kind: 'tax_invoice', amount_paid: '', notes: '', loyalty_points_redeemed: '', use_advance: '' });
   const [lines, setLines] = useState([emptyLine()]);
@@ -93,6 +95,35 @@ export default function SaleForm() {
     queryFn: () => api.get('/sales/form-data').then((r) => r.data.data),
     enabled: Boolean(activeCompany),
   });
+  // Editing a draft bill: load it once.
+  const existingQ = useQuery({
+    queryKey: ['sale', id, 'edit'],
+    queryFn: () => api.get(`/sales/${id}`).then((r) => r.data.data),
+    enabled: isEdit,
+  });
+  const existing = existingQ.data;
+  const [loadedId, setLoadedId] = useState(null);
+  useEffect(() => {
+    if (!existing || !data || loadedId === existing.id) return;
+    setLoadedId(existing.id);
+    setHeader({
+      customer_id: existing.customer_id ?? '', sale_date: existing.sale_date, is_interstate: Boolean(existing.is_interstate),
+      payment_mode: existing.payment_mode ?? 'cash', bill_kind: existing.bill_kind ?? 'tax_invoice',
+      amount_paid: Number(existing.amount_paid) ? String(existing.amount_paid) : '',
+      notes: existing.notes ?? '', loyalty_points_redeemed: existing.loyalty_points_redeemed ? String(existing.loyalty_points_redeemed) : '',
+      use_advance: Number(existing.use_advance) ? String(existing.use_advance) : '',
+    });
+    setLines((existing.items ?? []).map((it) => {
+      const gross = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+      return {
+        product_id: it.product_id, product_batch_id: it.product_batch_id ?? '', barcode: '', batch_no: it.batch_no ?? '',
+        qty: String(it.qty), rate: String(it.rate), rate_manual: true,
+        // The Disc. box is a percentage; the bill stores rupees.
+        discount: gross > 0 && Number(it.discount) > 0 ? String(Math.round((Number(it.discount) / gross) * 10000) / 100) : '',
+        gst_rate: String(it.gst_rate ?? ''), price_level: it.price_level ?? 'retail',
+      };
+    }).concat(existing.items?.length ? [] : [emptyLine()]));
+  }, [existing, data, loadedId]);
   const products = data?.products ?? [];
   const customers = data?.customers ?? [];
   const productsById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
@@ -107,7 +138,10 @@ export default function SaleForm() {
   // A retail customer always buys at the retail tier — the tier box is locked.
   const tierLocked = customer?.type === 'retail';
 
-  useEffect(() => { setHeader((h) => ({ ...h, customer_id: '', loyalty_points_redeemed: '' })); setLines([emptyLine()]); setErrors({}); }, [activeCompany?.id]);
+  useEffect(() => {
+    if (isEdit) return;
+    setHeader((h) => ({ ...h, customer_id: '', loyalty_points_redeemed: '' })); setLines([emptyLine()]); setErrors({});
+  }, [activeCompany?.id, isEdit]);
 
   // Customer picked after the items: switch untouched lines to that customer's price level.
   useEffect(() => {
@@ -160,16 +194,21 @@ export default function SaleForm() {
 
   async function save() {
     setErrors({});
+    // A walk-in (no customer) cannot owe money: the bill must be paid now.
+    if (!header.customer_id && header.bill_kind !== 'complimentary' && dueTotal > 0.005 && (Number(header.amount_paid) || 0) + 0.005 < dueTotal) {
+      setErrors({ amount_paid: [`A walk-in bill must be paid in full (${formatCurrency(dueTotal)}). Click “Paid in full”, or pick a customer to leave part unpaid.`] });
+      return;
+    }
     setSaving(true);
     try {
-      const res = await api.post('/sales', {
+      const body = {
         customer_id: header.customer_id || null,
         sale_date: header.sale_date,
         is_interstate: header.is_interstate,
         payment_mode: header.payment_mode,
         bill_kind: header.bill_kind,
-        // Blank: a cash/card/UPI bill is paid in full; a credit bill is not paid yet (the customer owes it).
-        amount_paid: header.amount_paid === '' ? (header.payment_mode === 'credit' ? 0 : dueTotal) : Number(header.amount_paid),
+        // Blank = nothing paid now (₹0). Use "Paid in full" to fill the whole amount.
+        amount_paid: header.amount_paid === '' ? 0 : Number(header.amount_paid),
         loyalty_points_redeemed: redeemPoints || 0,
         use_advance: useAdvance || 0,
         notes: header.notes || null,
@@ -178,7 +217,8 @@ export default function SaleForm() {
           price_level: l.price_level || 'retail',
           discount: discountAmount(l), gst_rate: Number(l.gst_rate) || 0,
         })),
-      });
+      };
+      const res = isEdit ? await api.put(`/sales/${id}`, body) : await api.post('/sales', body);
       navigate(`/sales/${res.data.data.id}`);
     } catch (e) {
       setErrors(e.response?.data?.errors ?? { _: [e.response?.data?.message ?? 'Could not save the sale.'] });
@@ -187,15 +227,26 @@ export default function SaleForm() {
     }
   }
 
-  if (isLoading) return <div className="flex h-full items-center justify-center"><Spinner className="size-6" /></div>;
+  if (isLoading || (isEdit && existingQ.isLoading)) return <div className="flex h-full items-center justify-center"><Spinner className="size-6" /></div>;
+  if (isEdit && existing && existing.status !== 'draft') {
+    return (
+      <div className="p-6">
+        <Card className="p-6 text-sm">
+          <p className="font-medium text-ink">{existing.sale_no} is {existing.status} and cannot be edited.</p>
+          <p className="mt-1 text-muted">Only a draft bill can be changed. For a confirmed bill, make a sales return or ask for cancellation.</p>
+          <Button className="mt-4" variant="outline" size="sm" onClick={() => navigate(`/sales/${id}`)}>Back to the bill</Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 p-4 sm:p-6">
       <PageHeader
         icon={LeafGlyph}
-        title="New Sale"
-        subtitle="POS billing with GST; confirm to post stock and update the customer."
-        actions={<Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate('/sales')}><ArrowLeftIcon className="size-4" /> Back</Button>}
+        title={isEdit ? `Edit ${existing?.sale_no ?? 'bill'}` : 'New Sale'}
+        subtitle={isEdit ? 'Draft bill — change anything, then save. After Confirm it can no longer be edited.' : 'POS billing with GST; confirm to post stock and update the customer.'}
+        actions={<Button variant="outline" size="sm" className="rounded-full" onClick={() => navigate(isEdit ? `/sales/${id}` : '/sales')}><ArrowLeftIcon className="size-4" /> Back</Button>}
       />
 
       {errors._ && <div className="rounded-2xl bg-danger-soft px-4 py-3 text-sm text-danger">{errors._[0]}</div>}
@@ -229,9 +280,6 @@ export default function SaleForm() {
             <Select icon={DocumentTextIcon} value={header.bill_kind} onChange={(e) => setHeader((h) => ({ ...h, bill_kind: e.target.value }))} className={selectCls}>
               {BILL_KINDS.map((bk) => <option key={bk.value} value={bk.value}>{bk.label}</option>)}
             </Select>
-          </Field>
-          <Field label={header.payment_mode === 'credit' ? 'Paid now (blank = nothing, customer owes all)' : 'Amount paid (blank = full)'} error={err('amount_paid')}>
-            <Input icon={CurrencyRupeeIcon} type="number" step="0.01" value={header.amount_paid} onChange={(e) => setHeader((h) => ({ ...h, amount_paid: e.target.value }))} placeholder={formatCurrency(header.payment_mode === 'credit' ? 0 : dueTotal)} />
           </Field>
         </div>
         {header.customer_id && advanceAvailable > 0.005 && (
@@ -406,7 +454,20 @@ export default function SaleForm() {
               <dd className="tnum text-leaf-hover">{formatCurrency(dueTotal)}</dd>
             </div>
           </dl>
-          <Button className="mt-5 w-full rounded-full" onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
+          <div className="mt-4 border-t border-white/60 pt-4">
+            <Field label="Amount paid now (blank = ₹0)" error={err('amount_paid')}>
+              <Input icon={CurrencyRupeeIcon} type="number" step="0.01" min="0" value={header.amount_paid} onChange={(e) => setHeader((h) => ({ ...h, amount_paid: e.target.value }))} placeholder="0.00" />
+            </Field>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setHeader((h) => ({ ...h, amount_paid: dueTotal.toFixed(2) }))}>Paid in full</Button>
+              <span className="text-xs text-muted">
+                {Number(header.amount_paid) > dueTotal + 0.005
+                  ? <span className="text-danger">More than the amount due</span>
+                  : <>Still to pay: <b className="tnum text-ink">{formatCurrency(Math.max(0, dueTotal - (Number(header.amount_paid) || 0)))}</b>{header.customer_id ? ' (customer owes it)' : ' — walk-in must pay in full'}</>}
+              </span>
+            </div>
+          </div>
+          <Button className="mt-5 w-full rounded-full" onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : (isEdit ? 'Save changes' : 'Save draft')}</Button>
         </Card>
       </div>
     </div>

@@ -259,7 +259,8 @@ class PaymentService
                     'outstanding'     => round((float) ($p->supplier?->outstanding ?? 0), 2),
                     'invoice_total' => $total,
                     'paid'          => round($paid, 2),
-                    'balance'       => $balance,
+                    'returned'      => round((float) ($p->returned_sum ?? 0), 2),
+                    'balance'       => max(0, $balance),
                     'status'        => $status,
                     'due_date'      => $due?->toDateString(),
                 ];

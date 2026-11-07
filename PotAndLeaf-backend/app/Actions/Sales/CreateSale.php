@@ -22,8 +22,15 @@ class CreateSale
     ) {}
 
     /** @param array<string,mixed> $data */
-    public function handle(int|string $companyId, array $data, ?int $userId = null): Sale
+    /**
+     * Make a draft bill — or, with $existing, change a draft bill (same bill
+     * number). A confirmed or cancelled bill cannot be changed.
+     */
+    public function handle(int|string $companyId, array $data, ?int $userId = null, ?Sale $existing = null): Sale
     {
+        if ($existing && $existing->status !== 'draft') {
+            throw ValidationException::withMessages(['sale' => 'Only a draft bill can be edited. A confirmed bill cannot be changed — make a sales return or ask for cancellation.']);
+        }
         $billKind = $data['bill_kind'] ?? 'tax_invoice';
         if (! in_array($billKind, ['tax_invoice', 'proforma', 'complimentary'], true)) {
             throw ValidationException::withMessages(['bill_kind' => 'Invalid bill type.']);
@@ -86,6 +93,11 @@ class CreateSale
         $data['use_advance'] = $useAdvance;
         $payable = max(0, round($payable - $useAdvance, 2));
 
+        // A walk-in (no customer) cannot owe money.
+        if (empty($data['customer_id']) && $billKind !== 'complimentary' && isset($data['amount_paid']) && $data['amount_paid'] !== ''
+            && (float) $data['amount_paid'] + 0.005 < $payable) {
+            throw ValidationException::withMessages(['amount_paid' => sprintf('A walk-in bill must be paid in full (₹%.2f). Pick a customer to leave part unpaid.', $payable)]);
+        }
         if (isset($data['amount_paid']) && $data['amount_paid'] !== '' && (float) $data['amount_paid'] > $payable + 0.005) {
             throw ValidationException::withMessages([
                 'amount_paid' => sprintf('Amount paid (₹%.2f) cannot be more than the bill total (₹%.2f). Enter the bill amount and give the change back.', (float) $data['amount_paid'], $payable),
@@ -100,10 +112,10 @@ class CreateSale
         // A retail customer always gets the retail price tier (it cannot be changed on the bill).
         $retailOnly = $customer && ($customer->type?->value ?? $customer->type) === 'retail';
 
-        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind, $userId, $retailOnly) {
+        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind, $userId, $retailOnly, $existing) {
             $t = $computed['totals'];
             $due = max(0, round($billTotal - $loyaltyDiscount - (float) $data['use_advance'], 2));
-            $sale = $this->sales->create([
+            $fields = [
                 'company_id'              => $companyId,
                 'customer_id'             => $data['customer_id'] ?? null,
                 'location_id'             => $data['location_id'] ?? null,
@@ -125,7 +137,19 @@ class CreateSale
                 'use_advance'             => $data['use_advance'],
                 'status'                  => 'draft',
                 'notes'                   => $data['notes'] ?? null,
-            ]);
+            ];
+            if ($existing) {
+                $sale = Sale::query()->lockForUpdate()->findOrFail($existing->id);
+                if ($sale->status !== 'draft') {
+                    throw ValidationException::withMessages(['sale' => 'Only a draft bill can be edited.']);
+                }
+                // Keep the bill number, who made it and its company.
+                unset($fields['sale_no'], $fields['created_by'], $fields['company_id']);
+                $sale->fill($fields)->save();
+                $sale->items()->delete();
+            } else {
+                $sale = $this->sales->create($fields);
+            }
 
             $rows = [];
             foreach ($data['items'] as $i => $item) {

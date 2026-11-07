@@ -91,13 +91,26 @@ class Purchase extends Model
         return (float) ($this->supplier_payable ?? $this->grand_total);
     }
 
+    /** Value of confirmed purchase returns against this bill (goods sent back). */
+    public function returnedTotal(): float
+    {
+        if (array_key_exists('returned_sum', $this->getAttributes())) {
+            return round((float) $this->getAttributes()['returned_sum'], 2);
+        }
+
+        return round((float) $this->purchaseReturns()->where('status', 'confirmed')->sum('grand_total'), 2);
+    }
+
     public function paymentStatus(): string
     {
         if ($this->status !== 'confirmed') {
             return 'n/a';
         }
         $paid = (float) $this->amount_paid;
-        $total = $this->supplierPayable();
+        // Goods sent back are not paid for: the bill is settled when
+        // paid + returned covers it.
+        $total = max(0, $this->supplierPayable() - $this->returnedTotal());
+        if ($total <= 0.01) return 'paid';
         if ($paid <= 0) return 'unpaid';
         if ($paid + 0.01 < $total) return 'partial';
         return 'paid';

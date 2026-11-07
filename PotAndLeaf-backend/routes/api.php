@@ -186,6 +186,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('sales', [SaleController::class, 'store']);
         Route::get('sales/{sale}/invoice.pdf', [InvoicePdfController::class, 'sale']);
         Route::get('sales/{sale}', [SaleController::class, 'show']);
+        Route::put('sales/{sale}', [SaleController::class, 'update']);
         Route::post('sales/{sale}/confirm', [SaleController::class, 'confirm']);
         Route::post('sales/{sale}/cancel-request', [SaleController::class, 'requestCancellation']);
         Route::post('sales/{sale}/cancel-approve', [SaleController::class, 'approveCancellation']);
@@ -213,6 +214,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::delete('loyalty/rules/{loyaltyRule}', [LoyaltyController::class, 'destroyRule']);
         Route::post('customers', [CustomerController::class, 'store']);
         Route::get('customers/{customer}/purchase-history', [CustomerController::class, 'purchaseHistory']);
+        Route::get('customers/{customer}/advance-history', [CustomerController::class, 'advanceHistory']);
         Route::get('customers/{customer}', [CustomerController::class, 'show']);
         Route::put('customers/{customer}', [CustomerController::class, 'update']);
         Route::post('customers/{customer}/recalculate-owes', [CustomerController::class, 'recalculateOwes']);

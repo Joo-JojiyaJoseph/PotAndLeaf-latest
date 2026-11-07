@@ -36,7 +36,9 @@ class PurchaseResource extends JsonResource
             'supplier_payable'  => $payable,
             // Freight / loading paid to a transporter, not to this supplier.
             'freight_to_transporter' => round(max(0, (float) $this->grand_total - $payable), 2),
-            'balance'           => round($payable - (float) $this->amount_paid, 2),
+            // Goods sent back (confirmed purchase returns) are not paid for.
+            'returned'          => $this->resource->returnedTotal(),
+            'balance'           => round(max(0, $payable - (float) $this->amount_paid - $this->resource->returnedTotal()), 2),
             'payment_status'    => $this->paymentStatus(),
             'status'            => $this->status,
             'notes'             => $this->notes,

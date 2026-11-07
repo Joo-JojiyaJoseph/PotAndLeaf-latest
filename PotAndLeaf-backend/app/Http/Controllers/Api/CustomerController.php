@@ -96,6 +96,16 @@ class CustomerController extends Controller
         return $this->message('Customer deleted.');
     }
 
+    /** Every change to the customer's advance, with a running balance. */
+    public function advanceHistory(Request $request, Customer $customer): JsonResponse
+    {
+        $this->allow($request, 'customers.view');
+        $this->assertRecordCompany($request, $customer);
+        abort_if($request->user()->seesOnlyOwn('customers', $customer->company_id) && (int) $customer->created_by !== (int) $request->user()->id, 403, 'You can only see the customers you added.');
+
+        return $this->ok(app(\App\Services\AdvanceHistoryService::class)->customer($customer));
+    }
+
     public function purchaseHistory(Request $request, Customer $customer): JsonResponse
     {
         $this->allow($request, 'customers.view');

@@ -108,6 +108,17 @@ class SaleController extends Controller
         return $this->created(new SaleResource($sale), 'Sale saved as draft.');
     }
 
+    /** Change a draft bill. A confirmed bill cannot be edited. */
+    public function update(StoreSaleRequest $request, Sale $sale): JsonResponse
+    {
+        $this->assertRecordCompany($request, $sale, writable: true);
+        $this->assertOwnSale($request, $sale);
+        $updated = app(\App\Actions\Sales\CreateSale::class)
+            ->handle($sale->company_id, $request->validated(), $request->user()->id, $sale);
+
+        return $this->ok(new SaleResource($updated), 'Draft bill updated.');
+    }
+
     public function show(Request $request, Sale $sale): JsonResponse
     {
         $this->allow($request, 'sales.view');
