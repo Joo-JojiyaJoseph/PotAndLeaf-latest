@@ -131,8 +131,8 @@ export default function SaleDetail() {
             </Button>
           )}
           {s.status === 'confirmed' && s.customer_id && ['unpaid', 'partial'].includes(s.payment_status) && (
-            <Button size="sm" onClick={() => navigate('/receipts', { state: { prefill: { key: s.id, customer_id: s.customer_id, customer_name: s.customer_name, sale_id: s.id, sale_no: s.sale_no, balance: s.balance ?? +(s.grand_total - s.amount_paid).toFixed(2), company_id: s.company_id } } })}>
-              <BanknotesIcon className="size-4" /> Record receipt · {formatCurrency(s.balance ?? (s.grand_total - s.amount_paid))} due
+            <Button size="sm" onClick={() => navigate('/receipts', { state: { prefill: { key: s.id, customer_id: s.customer_id, customer_name: s.customer_name, sale_id: s.id, sale_no: s.sale_no, balance: s.balance, company_id: s.company_id } } })}>
+              <BanknotesIcon className="size-4" /> Record receipt · {formatCurrency(s.balance)} due
             </Button>
           )}
           <Badge tone={statusTone[s.status] ?? 'default'}>{s.status}</Badge>
@@ -191,6 +191,8 @@ export default function SaleDetail() {
           <InfoItem label="Bill type" value={billKindLabel[s.bill_kind] ?? s.bill_kind} />
           <InfoItem label="Payment mode" value={s.payment_mode} />
           <InfoItem label="Amount paid" value={formatCurrency(s.amount_paid)} mono />
+          {Number(s.returned) > 0 && <InfoItem label="Returned (sales return)" value={`−${formatCurrency(s.returned)}`} mono />}
+          {s.status === 'confirmed' && <InfoItem label="Still to pay" value={formatCurrency(s.balance)} mono />}
           <InfoItem label="Tax type" value={s.is_interstate ? 'Inter-state (IGST)' : 'Intra-state (CGST + SGST)'} />
           <InfoItem label="Confirmed at" value={s.confirmed_at ? formatDate(s.confirmed_at) : null} />
           <InfoItem label="Entered by" value={s.entered_by} />

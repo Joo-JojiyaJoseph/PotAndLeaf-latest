@@ -511,6 +511,8 @@ Rate, discount and GST come from the original bill — you only type the quantit
 
 On Confirm, stock goes down (broken goods already left stock when the damage was entered). If you owed the supplier nothing, the amount is kept as an **advance** with that supplier.
 
+**Paying a bill that had a return.** The bill's **Balance** is what is left after the return: *Bill − returned − paid*. The purchase page shows a **Returned (purchase return)** line, the **Pay** button and **Pay Suppliers → Payables** (new **Returned** column) use the same balance, and you cannot pay more than it. Example: ₹1,000 bill, ₹400 of goods sent back, nothing paid → pay **₹600**; then the bill shows **Paid**.
+
 ### 3.7 Paying a supplier
 
 **Buying → Pay Suppliers.** The **Payables** tab lists every unpaid bill with what was paid, the balance, the **Due date** and status (Unpaid, Partial, Paid).
@@ -664,6 +666,8 @@ Rate, discount and GST come from the original bill. You cannot return more than 
 **Using the advance on the next bill.** On **New sale**, pick the customer. If they have an advance, a box **Customer advance** appears: type the amount in **Pay from advance** (or click **Use max**). The totals show *From advance −₹…* and **Amount due** is what is left. "Amount paid" blank = the rest is paid now (or, on Credit, owed). The advance is taken when you **Confirm** the bill; cancelling the bill puts it back.
 
 > Example: a ₹1,000 cash bill, ₹500 of plants come back → ₹500 goes to the advance. Next bill ₹1,500: Pay from advance ₹500 → Amount due ₹1,000.
+
+**Receiving money on a bill that had a return.** The bill's **Still to pay** is *Bill − returned − received*. The sale page shows *Returned (sales return)* and *Still to pay*; the **Record receipt** button, **Money from Customers → Receivables** (new **Returned** column) and the receipt form use the same figure, and you cannot receive more than it. Example: ₹2,000 credit bill, ₹500 of plants come back → receive **₹1,500**; then the bill shows **Paid**.
 
 > Example: 2 of the 4 pots from the bill above come back.
 >

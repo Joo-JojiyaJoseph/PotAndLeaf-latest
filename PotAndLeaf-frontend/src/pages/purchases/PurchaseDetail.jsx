@@ -233,6 +233,7 @@ export default function PurchaseDetail() {
             {p.status === 'confirmed' && (
               <>
                 <div className="flex justify-between text-muted"><dt>Paid</dt><dd className="tnum">{formatCurrency(p.amount_paid)}</dd></div>
+                {Number(p.returned) > 0 && <div className="flex justify-between text-muted"><dt>Returned (purchase return)</dt><dd className="tnum">−{formatCurrency(p.returned)}</dd></div>}
                 <div className="flex justify-between font-medium"><dt>Balance</dt><dd className="tnum">{formatCurrency(p.balance)}</dd></div>
               </>
             )}

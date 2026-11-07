@@ -137,6 +137,9 @@ function RecordReceiptModal({ open, onClose, prefill, filterCompanyId, companyPa
                 {over
                   ? `More than ${bill ? 'is left on this invoice' : 'they owe'} (₹${max.toFixed(2)}). Enter up to ₹${max.toFixed(2)}, or tick “Record as customer advance”.`
                   : `Up to ₹${max.toFixed(2)} (${bill ? 'left on this invoice' : 'what they owe'}).`}
+                {bill && (
+                  <span className="block">Bill {formatCurrency(bill.invoice_total)}{Number(bill.returned) > 0 ? ` − returned ${formatCurrency(bill.returned)}` : ''} − received {formatCurrency(bill.received)} = {formatCurrency(bill.balance)} left</span>
+                )}
                 {!bill && !over && Number(form.amount) > 0 && (() => {
                   // On account: outstanding from before first, then the oldest bills.
                   let left = Number(form.amount);
@@ -353,6 +356,7 @@ export default function ReceiptsList() {
                     <th className="microlabel px-4 py-2.5 font-semibold">Invoice</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Customer</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Credit</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Returned</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Received</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Due</th>
@@ -365,6 +369,7 @@ export default function ReceiptsList() {
                         <td className="tnum px-4 py-2.5 text-xs">{r.sale_no}</td>
                         <td className="px-4 py-2.5 font-medium">{r.customer_name}</td>
                         <td className="tnum px-4 py-2.5 text-right">{formatCurrency(r.credit_amount)}</td>
+                        <td className="tnum px-4 py-2.5 text-right text-muted">{Number(r.returned) > 0 ? `−${formatCurrency(r.returned)}` : '—'}</td>
                         <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(r.received)}</td>
                         <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(r.balance)}</td>
                         <td className="px-4 py-2.5 text-muted">{r.due_date ? formatDate(r.due_date) : '—'}</td>

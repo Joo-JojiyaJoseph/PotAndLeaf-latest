@@ -158,7 +158,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
             const bill = (payables ?? []).find((p) => String(p.id) === String(form.purchase_id));
             return bill ? (
               <span className="mt-1 block text-xs text-muted">
-                Bill {formatCurrency(bill.invoice_total)} − paid {formatCurrency(bill.paid)} = <b className="text-ink">{formatCurrency(bill.balance)}</b> left
+                Bill {formatCurrency(bill.invoice_total)}{Number(bill.returned) > 0 ? <> − returned {formatCurrency(bill.returned)}</> : null} − paid {formatCurrency(bill.paid)} = <b className="text-ink">{formatCurrency(bill.balance)}</b> left
               </span>
             ) : null;
           })()}
@@ -391,6 +391,7 @@ export default function PaymentsList() {
                     <th className="microlabel px-4 py-2.5 font-semibold">Purchase bill</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Supplier</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Invoice</th>
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Returned</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Paid</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Due</th>
@@ -403,6 +404,7 @@ export default function PaymentsList() {
                         <td className="tnum px-4 py-2.5 text-xs">{p.purchase_no}</td>
                         <td className="px-4 py-2.5 font-medium">{p.supplier_name}</td>
                         <td className="tnum px-4 py-2.5 text-right">{formatCurrency(p.invoice_total)}</td>
+                        <td className="tnum px-4 py-2.5 text-right text-muted">{Number(p.returned) > 0 ? `−${formatCurrency(p.returned)}` : '—'}</td>
                         <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(p.paid)}</td>
                         <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(p.balance)}</td>
                         <td className="px-4 py-2.5 text-muted">{p.due_date ? formatDate(p.due_date) : '—'}</td>
