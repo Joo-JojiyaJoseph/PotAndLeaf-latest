@@ -20,6 +20,8 @@ const TABS = [{ value: 'payables', label: 'Payables' }, { value: 'history', labe
 const payStatusTone = { paid: 'active', partial: 'warning', unpaid: 'blocked' };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 
+const PAID_FOR_LABEL = { bill: 'Bill', outstanding: 'Outstanding', advance: 'Advance' };
+
 function writeCompanyId(prefill, party, filterCompanyId) {
   return prefill?.company_id || party?.company_id || (filterCompanyId && filterCompanyId !== 'all' ? filterCompanyId : undefined);
 }
@@ -43,7 +45,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   const queryClient = useQueryClient();
   const toast = useToast();
   const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(filterCompanyId);
-  const [form, setForm] = useState({ supplier_id: '', purchase_id: '', amount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false });
+  const [form, setForm] = useState({ supplier_id: '', purchase_id: '', amount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false, payment_for: 'outstanding' });
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
 
@@ -65,16 +67,20 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   });
 
   if (open && prefill && applied !== prefill.key) {
-    setForm((f) => ({ ...f, supplier_id: String(prefill.supplier_id), purchase_id: prefill.purchase_id ?? '', amount: prefill.balance != null ? String(prefill.balance) : '' }));
+    setForm((f) => ({ ...f, supplier_id: String(prefill.supplier_id), purchase_id: prefill.purchase_id ?? '', payment_for: prefill.purchase_id ? 'bill' : 'outstanding', is_advance: false, amount: prefill.balance != null ? String(prefill.balance) : '' }));
     setApplied(prefill.key);
   }
 
   const saveM = useMutation({
     mutationFn: () => {
       const party = (formData?.suppliers ?? []).find((s) => String(s.id) === String(form.supplier_id));
+      if (form.payment_for === 'bill' && !form.purchase_id) {
+        return Promise.reject({ response: { data: { message: 'Choose the purchase bill this payment is for.', errors: { purchase_id: ['Choose the purchase bill this payment is for.'] } } } });
+      }
       return api.post('/supplier-payments', {
         supplier_id: form.supplier_id,
-        purchase_id: form.is_advance ? null : (form.purchase_id || null),
+        purchase_id: form.payment_for === 'bill' ? (form.purchase_id || null) : null,
+        payment_for: form.payment_for,
         amount: Number(form.amount) || 0,
         mode: form.mode, payment_date: form.payment_date,
         reference: form.reference || null, notes: form.notes || null,
@@ -96,7 +102,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   });
 
   function handleClose() {
-    setForm({ supplier_id: '', purchase_id: '', amount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false });
+    setForm({ supplier_id: '', purchase_id: '', amount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false, payment_for: 'outstanding' });
     setErrors({}); setApplied(null); onClose();
   }
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -149,9 +155,20 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
           </Select>
           {supplier && <span className="mt-1 block text-xs text-muted">You owe: <b className="text-ink">{formatCurrency(owedInfo?.you_owe ?? supplier.outstanding)}</b> · Advance: {formatCurrency(supplier.advance_balance ?? 0)}</span>}
         </Field>
-        <Field label="Purchase bill being paid (optional)" error={err('purchase_id')}>
-          <Select value={form.purchase_id} onChange={set('purchase_id')} className={selectCls} disabled={!form.supplier_id || form.is_advance}>
-            <option value="">On account / outstanding from before</option>
+        <Field label="This payment is for" required error={err('payment_for')}>
+          <Select
+            value={form.payment_for}
+            onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, payment_for: v, is_advance: v === 'advance', purchase_id: v === 'bill' ? f.purchase_id : '' })); }}
+            className={selectCls}
+          >
+            <option value="bill">A purchase bill</option>
+            <option value="outstanding">Outstanding (old balance / on account)</option>
+            <option value="advance">Advance (paid before the bill)</option>
+          </Select>
+        </Field>
+        <Field label={form.payment_for === 'bill' ? 'Purchase bill being paid' : 'Purchase bill'} required={form.payment_for === 'bill'} error={err('purchase_id')}>
+          <Select value={form.purchase_id} onChange={set('purchase_id')} className={selectCls} disabled={!form.supplier_id || form.payment_for !== 'bill'}>
+            <option value="">{form.payment_for === 'bill' ? 'Select a bill' : '— not for one bill —'}</option>
             {grns.map((p) => <option key={p.id} value={p.id}>{p.purchase_no} · bal {formatCurrency(p.balance)}</option>)}
           </Select>
           {(() => {
@@ -200,10 +217,12 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
         <Field label="Payment date" required error={err('payment_date')}><Input type="date" value={form.payment_date} onChange={set('payment_date')} /></Field>
         <Field label="Reference (UTR / cheque)" error={err('reference')}><Input value={form.reference} onChange={set('reference')} /></Field>
         <div className="sm:col-span-2"><Field label="Notes" error={err('notes')}><Input value={form.notes} onChange={set('notes')} /></Field></div>
-        <label className="sm:col-span-2 flex items-start gap-2 text-sm">
-          <input type="checkbox" className="mt-0.5 size-4 rounded border-line text-leaf" checked={form.is_advance} onChange={(e) => setForm((f) => ({ ...f, is_advance: e.target.checked, purchase_id: e.target.checked ? '' : f.purchase_id }))} />
-          <span>This is an <b>advance</b> (paid before the bill). It is kept as the supplier's advance balance and does not reduce what you owe until you use <b>Apply advance</b> on a bill.</span>
-        </label>
+        {form.payment_for === 'advance' && (
+          <p className="sm:col-span-2 text-sm text-muted">An <b>advance</b> is kept as the supplier's advance balance and does not reduce what you owe until you use <b>Apply advance</b> on a bill.</p>
+        )}
+        {form.payment_for === 'outstanding' && (
+          <p className="sm:col-span-2 text-sm text-muted">Paid against what you owe. It clears the old balance first, then the oldest bills.</p>
+        )}
       </div>
     </Modal>
   );
@@ -429,7 +448,7 @@ export default function PaymentsList() {
 
       {tab === 'history' && (
         <ListToolbar lf={lf} placeholder={'Search payment no., reference or supplier…'}
-          onExport={() => exportList({ url: '/supplier-payments', params: { ...companyParams, ...lf.filters }, filename: 'supplier-payments', columns: [['Payment no', (r) => r.payment_no], ['Date', (r) => r.payment_date], ['Supplier', (r) => r.supplier_name], ['Purchase no', (r) => r.purchase_no], ['Amount', (r) => r.amount], ['Mode', (r) => r.mode], ['Reference', (r) => r.reference], ['Advance', (r) => r.is_advance ? "yes" : "no"]] })} />
+          onExport={() => exportList({ url: '/supplier-payments', params: { ...companyParams, ...lf.filters }, filename: 'supplier-payments', columns: [['Payment no', (r) => r.payment_no], ['Date', (r) => r.payment_date], ['Supplier', (r) => r.supplier_name], ['Paid for', (r) => PAID_FOR_LABEL[r.payment_for] ?? ''], ['Purchase no', (r) => r.purchase_no], ['Amount', (r) => r.amount], ['Mode', (r) => r.mode], ['Reference', (r) => r.reference], ['Advance', (r) => r.is_advance ? "yes" : "no"]] })} />
       )}
       {tab === 'history' && (
         <Card className="overflow-hidden">
@@ -442,6 +461,7 @@ export default function PaymentsList() {
                     <th className="microlabel px-4 py-2.5 font-semibold">No.</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Date</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Supplier</th>
+                    <th className="microlabel px-4 py-2.5 font-semibold">Paid for</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Purchase bill</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Mode</th>
                     <th className="microlabel px-4 py-2.5 font-semibold">Reference</th>
@@ -453,6 +473,7 @@ export default function PaymentsList() {
                         <td className="tnum px-4 py-2.5 text-xs">{p.payment_no}</td>
                         <td className="px-4 py-2.5 text-muted">{formatDate(p.payment_date)}</td>
                         <td className="px-4 py-2.5 font-medium">{p.supplier_name}</td>
+                        <td className="px-4 py-2.5"><Badge tone={p.payment_for === 'advance' ? 'warning' : p.payment_for === 'bill' ? 'active' : 'inactive'}>{PAID_FOR_LABEL[p.payment_for] ?? '—'}</Badge></td>
                         <td className="tnum px-4 py-2.5 text-xs text-muted">{p.purchase_no ?? '—'}</td>
                         <td className="px-4 py-2.5"><Badge tone={p.is_advance ? 'warning' : p.applied_from_advance ? 'info' : 'info'}>{p.is_advance ? 'advance' : p.applied_from_advance ? 'applied' : p.mode}</Badge></td>
                         <td className="px-4 py-2.5 text-muted">{p.reference || '—'}</td>

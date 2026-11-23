@@ -86,6 +86,39 @@ class Purchase extends Model
      * (see ConfirmPurchase). Older rows fall back to grand_total, which is
      * what was added for them.
      */
+    /**
+     * Payments that reduced this bill. `kind`: 'bill' (paid for this bill),
+     * 'outstanding' (outstanding payment applied to it, oldest bill first) or
+     * 'advance' (supplier advance used on it).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function paymentRows(): array
+    {
+        $rows = [];
+        foreach ($this->supplierPayments as $p) {
+            $rows[] = [
+                'id' => 'p'.$p->id, 'payment_no' => $p->payment_no, 'payment_date' => optional($p->payment_date)->toDateString(),
+                'mode' => $p->applied_from_advance ? null : $p->mode, 'reference' => $p->reference,
+                'amount' => (float) $p->amount, 'kind' => $p->applied_from_advance ? 'advance' : 'bill',
+            ];
+        }
+        foreach ($this->paymentAllocations as $a) {
+            $p = $a->payment;
+            if (! $p) {
+                continue;
+            }
+            $rows[] = [
+                'id' => 'a'.$a->id, 'payment_no' => $p->payment_no, 'payment_date' => optional($p->payment_date)->toDateString(),
+                'mode' => $p->mode, 'reference' => $p->reference,
+                'amount' => (float) $a->amount, 'kind' => $a->auto_applied ? 'outstanding' : 'bill',
+            ];
+        }
+        usort($rows, fn ($x, $y) => [$x['payment_date'], $x['payment_no']] <=> [$y['payment_date'], $y['payment_no']]);
+
+        return $rows;
+    }
+
     public function supplierPayable(): float
     {
         return (float) ($this->supplier_payable ?? $this->grand_total);

@@ -172,6 +172,88 @@ export default function PurchaseDetail() {
         </div>
       </Section>
 
+      <div className="flex justify-end">
+        <Card className="w-full max-w-xs p-5">
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between"><dt className="text-muted">Subtotal</dt><dd className="tnum">{formatCurrency(p.subtotal)}</dd></div>
+            {interstate ? (
+              <div className="flex justify-between"><dt className="text-muted">IGST</dt><dd className="tnum">{formatCurrency(p.tax_total)}</dd></div>
+            ) : (
+              <>
+                <div className="flex justify-between"><dt className="text-muted">CGST</dt><dd className="tnum">{formatCurrency(p.tax_total / 2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted">SGST</dt><dd className="tnum">{formatCurrency(p.tax_total / 2)}</dd></div>
+              </>
+            )}
+            <div className="flex justify-between text-muted"><dt>Landed cost</dt><dd className="tnum">{formatCurrency(p.landed_cost_total)}</dd></div>
+            {Number(p.freight_to_transporter) > 0 ? (
+              <>
+                <div className="mt-2 flex justify-between border-t border-line pt-2 font-medium"><dt>Bill total</dt><dd className="tnum">{formatCurrency(p.grand_total)}</dd></div>
+                <div className="flex justify-between text-muted"><dt>Freight paid to transporter</dt><dd className="tnum">− {formatCurrency(p.freight_to_transporter)}</dd></div>
+                <div className="mt-1 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Owed to supplier</dt><dd className="tnum">{formatCurrency(p.supplier_payable)}</dd></div>
+                <p className="mt-1 text-xs text-muted">Pay the transporter from the Cash Book or Bank Book.</p>
+              </>
+            ) : (
+              <div className="mt-2 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Payable</dt><dd className="tnum">{formatCurrency(p.grand_total)}</dd></div>
+            )}
+            {p.status === 'confirmed' && (
+              <>
+                <div className="flex justify-between text-muted"><dt>Paid</dt><dd className="tnum">{formatCurrency(p.amount_paid)}</dd></div>
+                <div className="flex justify-between font-medium"><dt>Balance</dt><dd className="tnum">{formatCurrency(p.balance)}</dd></div>
+              </>
+            )}
+          </dl>
+        </Card>
+      </div>
+
+      {p.status === 'confirmed' && (
+        <Section title="Payment details">
+          {(p.payments ?? []).length === 0 ? (
+            <p className="text-sm text-muted">No payment has been made on this bill yet. Balance to pay: <b className="text-ink">{formatCurrency(p.balance)}</b>.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-faint">
+                    <th className="microlabel py-2 pr-3 font-semibold">Payment no.</th>
+                    <th className="microlabel px-3 py-2 font-semibold">Date</th>
+                    <th className="microlabel px-3 py-2 font-semibold">Paid for</th>
+                    <th className="microlabel px-3 py-2 font-semibold">Mode</th>
+                    <th className="microlabel px-3 py-2 font-semibold">Reference</th>
+                    <th className="microlabel py-2 pl-3 text-right font-semibold">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {p.payments.map((x) => (
+                    <tr key={x.id} className="border-b border-line/60 last:border-0">
+                      <td className="tnum py-2 pr-3 text-xs">{x.payment_no}</td>
+                      <td className="px-3 py-2 text-muted">{x.payment_date ? formatDate(x.payment_date) : '—'}</td>
+                      <td className="px-3 py-2">
+                        <Badge tone={x.kind === 'bill' ? 'active' : x.kind === 'advance' ? 'warning' : 'inactive'}>
+                          {x.kind === 'bill' ? 'This bill' : x.kind === 'advance' ? 'Advance used' : 'Outstanding (applied here)'}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 capitalize text-muted">{x.mode ?? '—'}</td>
+                      <td className="px-3 py-2 text-muted">{x.reference || '—'}</td>
+                      <td className="tnum py-2 pl-3 text-right font-medium">{formatCurrency(x.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-line font-medium">
+                    <td colSpan={5} className="py-2 pr-3 text-right text-muted">Paid</td>
+                    <td className="tnum py-2 pl-3 text-right">{formatCurrency(p.amount_paid)}</td>
+                  </tr>
+                  <tr className="font-semibold">
+                    <td colSpan={5} className="py-1 pr-3 text-right text-muted">Balance</td>
+                    <td className="tnum py-1 pl-3 text-right">{formatCurrency(p.balance)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </Section>
+      )}
+
       {p.status === 'confirmed' && batches.length > 0 && (
         <Section
           title="Batch barcodes"
@@ -206,39 +288,6 @@ export default function PurchaseDetail() {
           </div>
         </Section>
       )}
-
-      <div className="flex justify-end">
-        <Card className="w-full max-w-xs p-5">
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between"><dt className="text-muted">Subtotal</dt><dd className="tnum">{formatCurrency(p.subtotal)}</dd></div>
-            {interstate ? (
-              <div className="flex justify-between"><dt className="text-muted">IGST</dt><dd className="tnum">{formatCurrency(p.tax_total)}</dd></div>
-            ) : (
-              <>
-                <div className="flex justify-between"><dt className="text-muted">CGST</dt><dd className="tnum">{formatCurrency(p.tax_total / 2)}</dd></div>
-                <div className="flex justify-between"><dt className="text-muted">SGST</dt><dd className="tnum">{formatCurrency(p.tax_total / 2)}</dd></div>
-              </>
-            )}
-            <div className="flex justify-between text-muted"><dt>Landed cost</dt><dd className="tnum">{formatCurrency(p.landed_cost_total)}</dd></div>
-            {Number(p.freight_to_transporter) > 0 ? (
-              <>
-                <div className="mt-2 flex justify-between border-t border-line pt-2 font-medium"><dt>Bill total</dt><dd className="tnum">{formatCurrency(p.grand_total)}</dd></div>
-                <div className="flex justify-between text-muted"><dt>Freight paid to transporter</dt><dd className="tnum">− {formatCurrency(p.freight_to_transporter)}</dd></div>
-                <div className="mt-1 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Owed to supplier</dt><dd className="tnum">{formatCurrency(p.supplier_payable)}</dd></div>
-                <p className="mt-1 text-xs text-muted">Pay the transporter from the Cash Book or Bank Book.</p>
-              </>
-            ) : (
-              <div className="mt-2 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Payable</dt><dd className="tnum">{formatCurrency(p.grand_total)}</dd></div>
-            )}
-            {p.status === 'confirmed' && (
-              <>
-                <div className="flex justify-between text-muted"><dt>Paid</dt><dd className="tnum">{formatCurrency(p.amount_paid)}</dd></div>
-                <div className="flex justify-between font-medium"><dt>Balance</dt><dd className="tnum">{formatCurrency(p.balance)}</dd></div>
-              </>
-            )}
-          </dl>
-        </Card>
-      </div>
     </div>
   );
 }

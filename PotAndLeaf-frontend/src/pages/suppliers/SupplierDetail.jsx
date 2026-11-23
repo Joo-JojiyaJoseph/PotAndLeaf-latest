@@ -109,10 +109,8 @@ export default function SupplierDetail() {
         </InfoGrid>
       </Section>
 
-      <Section title="Credit terms">
+      <Section title="Balance">
         <InfoGrid cols={3}>
-          <InfoItem label="Credit limit" value={s.credit_limit != null ? formatCurrency(s.credit_limit) : null} mono />
-          <InfoItem label="Credit days" value={s.credit_days != null ? `${s.credit_days} days` : null} mono />
           <InfoItem
             label="Outstanding (from before)"
             value={s.opening_balance != null

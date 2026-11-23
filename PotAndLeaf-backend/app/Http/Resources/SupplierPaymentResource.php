@@ -28,6 +28,8 @@ class SupplierPaymentResource extends JsonResource
             'reference'     => $this->reference,
             'notes'         => $this->notes,
             'is_advance'    => (bool) $this->is_advance,
+            // 'bill' | 'outstanding' | 'advance'
+            'payment_for'   => $this->payment_for ?? ($this->is_advance ? 'advance' : ($this->purchase_id ? 'bill' : 'outstanding')),
             'applied_from_advance' => (bool) $this->applied_from_advance,
             'allocations'   => $this->whenLoaded('allocations', fn () => $this->allocations->map(fn ($a) => [
                 'purchase_id' => $a->purchase_id,

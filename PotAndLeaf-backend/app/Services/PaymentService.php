@@ -37,7 +37,8 @@ class PaymentService
     {
         $payment = DB::transaction(function () use ($companyId, $data, $userId) {
             $amount = (float) $data['amount'];
-            $isAdvance = (bool) ($data['is_advance'] ?? false);
+            $paymentFor = $data['payment_for'] ?? null;
+            $isAdvance = (bool) ($data['is_advance'] ?? false) || $paymentFor === 'advance';
             $allocations = array_values(array_filter(
                 $data['allocations'] ?? [],
                 fn ($row) => (float) ($row['amount'] ?? 0) > 0 && filled($row['purchase_id'] ?? null),
@@ -48,6 +49,17 @@ class PaymentService
                     'is_advance' => 'An advance cannot be allocated to a GRN in the same step. Record the advance, then apply it.',
                 ]);
             }
+
+            if ($paymentFor === 'bill' && $allocations === [] && blank($data['purchase_id'] ?? null)) {
+                throw ValidationException::withMessages(['purchase_id' => 'Choose the purchase bill this payment is for.']);
+            }
+            if ($paymentFor === 'outstanding' && ($allocations !== [] || filled($data['purchase_id'] ?? null))) {
+                throw ValidationException::withMessages(['payment_for' => 'A payment for the outstanding balance is not tied to one bill. Choose "A purchase bill" to pay a bill.']);
+            }
+            // Always stored, so lists can say whether money was for a bill, the outstanding or an advance.
+            $paymentFor = $isAdvance
+                ? 'advance'
+                : (($allocations !== [] || filled($data['purchase_id'] ?? null)) ? 'bill' : 'outstanding');
 
             $supplier = Supplier::where('company_id', $companyId)->lockForUpdate()->find($data['supplier_id']);
             if (! $supplier) {
@@ -72,6 +84,7 @@ class PaymentService
                 'payment_date' => $data['payment_date'],
                 'amount'       => $amount,
                 'mode'         => $data['mode'] ?? 'cash',
+                'payment_for'  => $paymentFor,
                 'reference'    => $data['reference'] ?? null,
                 'notes'        => $data['notes'] ?? null,
                 'is_advance'   => $isAdvance,
@@ -165,6 +178,7 @@ class PaymentService
                 'payment_date'         => now()->toDateString(),
                 'amount'               => $amount,
                 'mode'                 => 'cash',
+                'payment_for'          => 'bill',
                 'notes'                => 'Advance applied to '.$purchase->purchase_no,
                 'applied_from_advance' => true,
             ]);

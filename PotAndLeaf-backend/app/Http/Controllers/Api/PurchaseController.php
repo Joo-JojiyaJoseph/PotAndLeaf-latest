@@ -83,7 +83,7 @@ class PurchaseController extends Controller
         $this->allow($request, 'purchases.view');
         $this->assertRecordCompany($request, $purchase);
 
-        return $this->ok(new PurchaseResource($purchase->load(['supplier', 'items', 'purchaseOrder:id,purchase_id,po_no', 'createdBy:id,name', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
+        return $this->ok(new PurchaseResource($purchase->load(['supplier', 'items', 'supplierPayments', 'paymentAllocations.payment', 'purchaseOrder:id,purchase_id,po_no', 'createdBy:id,name', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
     }
 
     public function update(UpdatePurchaseRequest $request, Purchase $purchase): JsonResponse

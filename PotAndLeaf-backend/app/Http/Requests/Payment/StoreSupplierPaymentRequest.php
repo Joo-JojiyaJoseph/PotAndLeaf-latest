@@ -31,6 +31,8 @@ class StoreSupplierPaymentRequest extends FormRequest
             'reference'    => ['nullable', 'string', 'max:100'],
             'notes'        => ['nullable', 'string', 'max:1000'],
             'is_advance'   => ['sometimes', 'boolean'],
+            // What this money is for: a purchase bill, the outstanding balance, or an advance.
+            'payment_for'  => ['nullable', 'in:bill,outstanding,advance'],
             'allocations'                  => ['nullable', 'array'],
             'allocations.*.purchase_id'    => ['required_with:allocations', 'uuid', Rule::exists('purchases', 'id')->where('company_id', $companyId)],
             'allocations.*.amount'         => ['required_with:allocations', 'numeric', 'gt:0'],

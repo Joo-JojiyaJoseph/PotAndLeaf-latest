@@ -20,5 +20,4 @@ interface PurchaseRepositoryInterface
 
     public function nextPurchaseNo(int|string $companyId): string;
 
-    public function nextInvoiceNo(int|string $companyId): string;
 }

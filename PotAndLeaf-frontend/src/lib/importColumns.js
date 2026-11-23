@@ -49,8 +49,6 @@ export const SUPPLIER_COLUMNS = [
   { key: 'city', label: 'City', example: 'Aluva', help: 'City or town' },
   { key: 'state', label: 'State', example: 'Kerala', help: 'State' },
   { key: 'pincode', label: 'PIN code', example: '683101', help: 'PIN code' },
-  { key: 'credit_days', label: 'Credit days', example: '30', help: 'Days you get to pay their bills' },
-  { key: 'credit_limit', label: 'Credit limit', example: '0', help: 'Most you may owe them' },
   { key: 'opening_balance', label: 'Outstanding', aliases: ['Opening balance'], example: '0', help: 'Amount you already owe them from before' },
   { key: 'bank_name', label: 'Bank', example: '', help: 'Bank name for payments' },
   { key: 'bank_account_no', label: 'Account no.', example: '', help: 'Bank account number' },

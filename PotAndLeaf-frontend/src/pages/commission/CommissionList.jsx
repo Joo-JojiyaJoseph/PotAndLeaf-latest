@@ -702,7 +702,10 @@ function PayoutModal({ open, onClose, staff: allStaff, editing }) {
           <Line label={c.has_ledger ? 'Commission on their sales' : `Commission (${c.base_percent}% of sales)`} value={c.base_amount} />
           {c.has_ledger
             ? n(c.bonus) > 0 && <Line label="Good-day (daily) bonuses" value={c.bonus} />
-            : n(c.target) > 0 && <Line label={`Monthly target ${rupees(c.target)} ${c.target_met ? '— reached ✓' : '— not reached'}`} value={c.bonus} muted={!c.target_met} />}
+            : <>
+                {n(c.daily_target_bonus) > 0 && <Line label="Good-day (daily) bonuses" value={c.daily_target_bonus} />}
+                {n(c.target) > 0 && <Line label={`Monthly target ${rupees(c.target)} ${c.target_met ? '— reached ✓' : '— not reached'}`} value={c.monthly_target_bonus} muted={!c.target_met} />}
+              </>}
           {n(c.promotion_bonus) > 0 && <Line label="Product offer bonuses" value={c.promotion_bonus} />}
           {n(c.manager_commission) > 0 && <Line label="Manager share of shop sales" value={c.manager_commission} />}
           {n(c.supervisor_from_production) !== 0 && <Line label="Bonus for pieces they made" value={c.supervisor_from_production} />}

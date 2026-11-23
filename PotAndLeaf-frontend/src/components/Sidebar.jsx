@@ -53,7 +53,6 @@ const GROUPS = [
     label: 'Main',
     items: [
       { key: 'dashboard', label: 'Dashboard', to: '/', icon: HomeIcon, end: true, anyOf: ['reports.view', 'sales.view', 'commission.view', 'commission.view_own', 'inventory.view'] },
-      { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
     ],
   },
   {
@@ -121,6 +120,7 @@ const GROUPS = [
     items: [
       { key: 'help', label: 'Help & User Guide', to: '/help', icon: QuestionMarkCircleIcon, everyone: true },
       { key: 'request-access', label: 'Request Access', to: '/request-access', icon: KeyIcon, everyone: true, notSuperAdmin: true },
+      { key: 'reports', label: 'Reports', to: '/reports', icon: ChartBarIcon, permission: 'reports.view' },
     ],
   },
 ];

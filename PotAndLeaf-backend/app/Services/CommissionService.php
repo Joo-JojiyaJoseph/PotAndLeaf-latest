@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CommissionDailyTargetTier;
 use App\Models\CommissionPayout;
 use App\Models\CommissionRule;
 use App\Models\CommissionTransaction;
@@ -107,7 +108,11 @@ class CommissionService
             ? $ledgerSales
             : round($netSales * $basePercent / 100, 2);
         $targetMet = $target > 0 && $netSales >= $target;
-        $bonus = $hasLedger ? $ledgerDaily : ($targetMet ? $bonusRule : 0.0);
+        // No ledger rows yet: the good-day (daily) bonus must still be counted,
+        // otherwise a day over the target is paid as plain commission only.
+        $fallbackDaily = $hasLedger ? 0.0 : $this->dailyBonusFromSales($companyId, $userId, $rule, $year, $month);
+        $monthlyBonus = $targetMet ? $bonusRule : 0.0;
+        $bonus = $hasLedger ? $ledgerDaily : round($fallbackDaily + $monthlyBonus, 2);
         $promotionBonus = $hasLedger ? $ledgerPromo : 0.0;
 
         $supervisorEntries = SupervisorCommissionEntry::forCompany($companyId)
@@ -134,8 +139,8 @@ class CommissionService
             'target_met'            => $targetMet,
             'bonus'                 => $bonus,
             // Display only: which kind of bonus the "bonus" figure above is.
-            'daily_target_bonus'    => $hasLedger ? $bonus : 0.0,
-            'monthly_target_bonus'  => $hasLedger ? 0.0 : $bonus,
+            'daily_target_bonus'    => $hasLedger ? $bonus : $fallbackDaily,
+            'monthly_target_bonus'  => $hasLedger ? 0.0 : $monthlyBonus,
             'promotion_bonus'       => $promotionBonus,
             'manager_commission'    => $ledgerManager,
             'ledger_reversals'      => $ledgerReversals,
@@ -155,6 +160,56 @@ class CommissionService
                 'reference_type'=> $e->reference_type,
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * Good-day (daily target) bonus worked out straight from confirmed sales,
+     * used when no commission ledger rows exist. Mirrors CommissionEngine:
+     * every tier a day reaches is paid (fixed amount + optional % of the day).
+     */
+    private function dailyBonusFromSales(int|string $companyId, int $userId, ?CommissionRule $rule, int $year, int $month): float
+    {
+        if (! $rule) {
+            return 0.0;
+        }
+        $tiers = CommissionDailyTargetTier::where('commission_rule_id', $rule->id)->orderBy('min_amount')->get();
+        if ($tiers->isEmpty()) {
+            return 0.0;
+        }
+
+        $salesByDay = Sale::forCompany($companyId)
+            ->where('created_by', $userId)
+            ->where('status', 'confirmed')
+            ->whereYear('sale_date', $year)
+            ->whereMonth('sale_date', $month)
+            ->get()
+            ->groupBy(fn (Sale $s) => Carbon::parse($s->sale_date)->toDateString())
+            ->map(fn ($rows) => (float) $rows->sum(fn (Sale $s) => $this->engine->netSalesBase($s)));
+
+        $returnsByDay = SalesReturn::forCompany($companyId)
+            ->where('status', 'confirmed')
+            ->whereYear('return_date', $year)
+            ->whereMonth('return_date', $month)
+            ->whereHas('sale', fn ($q) => $q->where('created_by', $userId))
+            ->get()
+            ->groupBy(fn (SalesReturn $r) => Carbon::parse($r->return_date)->toDateString())
+            ->map(fn ($rows) => (float) $rows->sum('subtotal'));
+
+        $total = 0.0;
+        foreach ($salesByDay->keys() as $day) {
+            $dayTotal = ($rule->target_scope === 'branch')
+                ? $this->engine->branchNetSales($companyId, $day, $day, $rule->location_id)
+                : max(0.0, round($salesByDay[$day] - ($returnsByDay[$day] ?? 0.0), 2));
+
+            foreach ($tiers as $tier) {
+                $bonus = round((float) $tier->bonus_amount + $dayTotal * (float) ($tier->bonus_percent ?? 0) / 100, 2);
+                if ($dayTotal >= (float) $tier->min_amount && $bonus > 0) {
+                    $total += $bonus;
+                }
+            }
+        }
+
+        return round($total, 2);
     }
 
     /** Ledger summary and per-day breakdown for an arbitrary date range. */

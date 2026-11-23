@@ -164,7 +164,7 @@ export default function PurchaseForm() {
     const payload = {
       supplier_id: header.supplier_id,
       purchase_date: header.purchase_date,
-      invoice_no: isEdit ? (header.invoice_no || null) : null,
+      invoice_no: header.invoice_no?.trim() || null,
       invoice_date: header.invoice_date || null,
       is_interstate: header.is_interstate,
       landed_cost_total: Number(header.landed_cost_total) || 0,
@@ -316,10 +316,10 @@ export default function PurchaseForm() {
           </Field>
           <Field label="Invoice no." error={fieldErrors.invoice_no}>
             <Input
-              value={isEdit ? (header.invoice_no || '') : ''}
-              readOnly
-              placeholder="Auto-generated on save"
-              className="bg-paper text-muted"
+              value={header.invoice_no || ''}
+              onChange={(e) => setHeader((h) => ({ ...h, invoice_no: e.target.value }))}
+              placeholder="Supplier's bill number"
+              maxLength={100}
             />
           </Field>
           <Field label="Invoice date" error={fieldErrors.invoice_date}>

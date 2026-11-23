@@ -57,6 +57,12 @@ class PurchaseResource extends JsonResource
                 'supplier_code' => $this->supplier?->supplier_code,
             ]),
             'items'             => PurchaseItemResource::collection($this->whenLoaded('items')),
+            // Every payment that went to this bill: paid for the bill directly, an
+            // outstanding payment that was applied to it (oldest first), or advance used on it.
+            'payments'          => $this->when(
+                $this->relationLoaded('supplierPayments') && $this->relationLoaded('paymentAllocations'),
+                fn () => $this->paymentRows(),
+            ),
             'can'               => [
                 'update'  => $this->status === 'draft' && $user?->hasPermission('purchases.update', $companyId),
                 'confirm' => $this->status === 'draft' && $user?->hasPermission('purchases.confirm', $companyId),
