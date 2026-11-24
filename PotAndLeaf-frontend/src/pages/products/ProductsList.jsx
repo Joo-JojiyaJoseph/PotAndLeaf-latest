@@ -59,6 +59,20 @@ export default function ProductsList() {
     enabled: Boolean(activeCompany),
   });
 
+  // Dropdown lists for the Excel import template, taken from this company's own setup.
+  const importDropdowns = (() => {
+    const cats = formData?.categories ?? [];
+    const mains = cats.filter((c) => !c.parent_id);
+    const byParent = {};
+    mains.forEach((m) => { byParent[m.name] = cats.filter((c) => c.parent_id === m.id).map((c) => c.name); });
+    const subs = cats.filter((c) => c.parent_id).map((c) => c.name);
+    return {
+      category: { values: mains.map((c) => c.name) },
+      subcategory: { dependsOn: 'category', byParent, all: subs },
+      unit: { values: (formData?.units ?? []).map((u) => u.short_name || u.name) },
+    };
+  })();
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['products', activeCompany?.id, filterCompanyId, debounced, page, status, categoryId, lowOnly, perPage],
     queryFn: () => api.get('/products', {
@@ -118,7 +132,7 @@ export default function ProductsList() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
-          <ImportExportButtons entity="products" title="Import products from a spreadsheet" columns={PRODUCT_COLUMNS} exportColumns={productExport}
+          <ImportExportButtons entity="products" title="Import products from a spreadsheet" columns={PRODUCT_COLUMNS} exportColumns={productExport} dropdowns={importDropdowns}
             exportParams={{ ...companyParams, search: debounced || undefined, status: status || undefined, category_id: categoryId || undefined, low_only: lowOnly ? 1 : undefined }}
             canImport={can('products.create')} onDone={() => queryClient.invalidateQueries({ queryKey: ['products'] })} />
           {can('products.create') && (

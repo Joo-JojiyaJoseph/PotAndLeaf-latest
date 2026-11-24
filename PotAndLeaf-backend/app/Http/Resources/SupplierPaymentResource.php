@@ -15,6 +15,7 @@ class SupplierPaymentResource extends JsonResource
             'id'            => $this->id,
             'payment_no'    => $this->payment_no,
             'payment_date'  => optional($this->payment_date)->toDateString(),
+            'company_id'    => $this->company_id,
             'supplier_id'   => $this->supplier_id,
             'supplier_name' => $this->supplier?->name,
             'purchase_id'   => $this->purchase_id,

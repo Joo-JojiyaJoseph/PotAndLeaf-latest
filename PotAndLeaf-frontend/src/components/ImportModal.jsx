@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowDownTrayIcon, CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import api from '../lib/api';
 import { downloadCsv, parseCsv } from '../lib/csv';
+import { downloadXlsxTemplate, readXlsxFile } from '../lib/xlsxTemplate';
 import { Button, Modal, Spinner } from './ui';
 import { FormCompanyField, useFormCompany } from './FormCompanyField';
 
@@ -13,7 +14,7 @@ import { FormCompanyField, useFormCompany } from './FormCompanyField';
  *
  * columns: [{ key, label, required, example, help }]
  */
-export default function ImportModal({ open, onClose, entity, title, columns, onDone }) {
+export default function ImportModal({ open, onClose, entity, title, columns, onDone, dropdowns }) {
   const { formCompanyId, setFormCompanyId, companyRequest } = useFormCompany();
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState([]);
@@ -26,8 +27,19 @@ export default function ImportModal({ open, onClose, entity, title, columns, onD
   function reset() { setFileName(''); setRows([]); setUnknown([]); setCheck(null); setResult(null); setError(''); }
   function close() { reset(); onClose(); }
 
-  function template() {
-    downloadCsv(`${entity}-import-template`, [Object.fromEntries(columns.map((c) => [c.key, c.example ?? '']))]);
+  // With dropdown lists the template is an Excel file (a CSV cannot hold dropdowns).
+  const hasDropdowns = Boolean(dropdowns && Object.keys(dropdowns).length);
+  async function template() {
+    if (!hasDropdowns) {
+      downloadCsv(`${entity}-import-template`, [Object.fromEntries(columns.map((c) => [c.key, c.example ?? '']))]);
+      return;
+    }
+    setError('');
+    try {
+      await downloadXlsxTemplate({ filename: `${entity}-import-template`, sheetName: title?.replace(/^Import\s+/i, '').split(' ')[0] || entity, columns, dropdowns });
+    } catch {
+      setError('Could not make the Excel template. Try again.');
+    }
   }
 
   async function chooseFile(e) {
@@ -36,8 +48,14 @@ export default function ImportModal({ open, onClose, entity, title, columns, onD
     e.target.value = '';
     if (!file) return;
     setFileName(file.name);
-    if (!/\.csv$/i.test(file.name)) { setError('Please choose a .csv file. In Excel: File → Save As → “CSV UTF-8 (Comma delimited)”.'); return; }
-    const { headers, rows: parsed } = parseCsv(await file.text());
+    const isXlsx = /\.xlsx$/i.test(file.name);
+    if (!isXlsx && !/\.csv$/i.test(file.name)) { setError('Please choose the filled template (.xlsx) or a .csv file. In Excel you can also use File → Save As → “CSV UTF-8 (Comma delimited)”.'); return; }
+    let headers; let parsed;
+    try {
+      ({ headers, rows: parsed } = isXlsx ? await readXlsxFile(file) : parseCsv(await file.text()));
+    } catch {
+      setError('Could not read this file. Make sure it is the template you downloaded, saved as .xlsx or .csv.'); return;
+    }
     // Accept either the column key (cost_price) or its label (Cost price).
     const lookup = Object.fromEntries(columns.flatMap((c) => [[c.key.toLowerCase(), c.key], [c.label.toLowerCase(), c.key], ...(c.aliases ?? []).map((x) => [x.toLowerCase(), c.key])]));
     const map = Object.fromEntries(headers.map((h) => [h, lookup[h.toLowerCase().trim()] ?? null]));
@@ -90,7 +108,9 @@ export default function ImportModal({ open, onClose, entity, title, columns, onD
           <li>
             <b>1. Get the template.</b>{' '}
             <button type="button" onClick={template} className="inline-flex items-center gap-1 font-medium text-leaf hover:underline"><ArrowDownTrayIcon className="size-4" /> Download template</button>
-            <p className="mt-1 text-xs text-muted">Open it in Excel, fill one row per {entity.replace(/s$/, '')}, then Save As “CSV UTF-8”. Required: {required.join(', ')}.</p>
+            <p className="mt-1 text-xs text-muted">{hasDropdowns
+              ? <>Open it in Excel, delete the example row and fill one row per {entity.replace(/s$/, '')}. Columns with an arrow give a dropdown of your own list. Upload the same .xlsx file here. Required: {required.join(', ')}.</>
+              : <>Open it in Excel, fill one row per {entity.replace(/s$/, '')}, then Save As “CSV UTF-8”. Required: {required.join(', ')}.</>}</p>
             <details className="mt-1 text-xs text-muted">
               <summary className="cursor-pointer text-leaf">What goes in each column?</summary>
               <ul className="mt-1 space-y-0.5">
@@ -101,9 +121,9 @@ export default function ImportModal({ open, onClose, entity, title, columns, onD
           <li>
             <b>2. Choose your file.</b>
             <label className="mt-1 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-dashed border-line px-3 py-3 hover:border-leaf/50">
-              <span className="truncate text-muted">{fileName || 'Click to choose a .csv file'}</span>
+              <span className="truncate text-muted">{fileName || (hasDropdowns ? 'Click to choose your .xlsx or .csv file' : 'Click to choose a .csv file')}</span>
               <span className="shrink-0 rounded-lg bg-leaf-soft px-2 py-1 text-xs font-medium text-leaf-hover">Browse</span>
-              <input type="file" accept=".csv,text/csv" className="hidden" onChange={chooseFile} />
+              <input type="file" accept={hasDropdowns ? '.xlsx,.csv,text/csv' : '.csv,text/csv'} className="hidden" onChange={chooseFile} />
             </label>
             {rows.length > 0 && <p className="mt-1 text-xs text-muted">{rows.length} rows found.{unknown.length > 0 && <> These columns are not used and will be ignored: {unknown.join(', ')}.</>}</p>}
           </li>

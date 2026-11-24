@@ -6,10 +6,9 @@
 
 export const PRODUCT_COLUMNS = [
   { key: 'name', label: 'Name', required: true, example: 'Areca Palm (Indoor)', help: 'Product name, as shown on bills' },
-  { key: 'sku', label: 'SKU', example: 'PLT-ARECA', help: 'Your item code. Leave empty to number it automatically' },
-  { key: 'category', label: 'Category', required: true, example: 'Indoor Plants', help: 'Category name. A new one is added if it does not exist' },
-  { key: 'subcategory', label: 'Subcategory', example: 'Palms', help: 'Optional. Subcategory under that category. Added if new' },
-  { key: 'unit', label: 'Unit', example: 'Nos', help: 'Unit name or short name (Nos, kg, bag). Added if new' },
+  { key: 'category', label: 'Category', required: true, example: 'Indoor Plants', help: 'Pick from the list (your categories). A new one is added if you type a new name' },
+  { key: 'subcategory', label: 'Subcategory', example: 'Palms', help: 'Optional. Pick from the list for that category. Added if new' },
+  { key: 'unit', label: 'Unit', example: 'Nos', help: 'Pick from the list (your units). Added if new' },
   { key: 'gst_rate', label: 'GST %', example: '5', help: 'GST rate, e.g. 0, 5, 12, 18' },
   { key: 'cost_price', label: 'Cost price', required: true, example: '200', help: 'What you pay per piece' },
   { key: 'mrp', label: 'MRP', example: '450', help: 'Printed maximum price' },
@@ -66,7 +65,7 @@ export const productExport = [
     if (c.key === 'unit') return nameOf(r.unit);
     return r[c.key];
   }]),
-  ['current_stock', (r) => r.current_stock], ['status', (r) => r.status],
+  ['sku', (r) => r.sku], ['current_stock', (r) => r.current_stock], ['status', (r) => r.status],
 ];
 export const customerExport = [
   // "Outstanding" (from before) is exported as what is still unpaid.

@@ -6,7 +6,7 @@ import { exportList } from '../lib/exportList';
 import { useToast } from '../lib/toast';
 
 /** Import + Export buttons for the master lists (products, customers, suppliers). */
-export default function ImportExportButtons({ entity, title, columns, exportColumns, exportParams, canImport, onDone }) {
+export default function ImportExportButtons({ entity, title, columns, exportColumns, exportParams, canImport, onDone, dropdowns }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
@@ -27,7 +27,7 @@ export default function ImportExportButtons({ entity, title, columns, exportColu
       <Button variant="outline" size="sm" onClick={runExport} disabled={busy} title="Download the list (with the filters you chose) as a spreadsheet that opens in Excel">
         {busy ? <Spinner className="size-4" /> : <ArrowDownTrayIcon className="size-4" />} Export
       </Button>
-      {canImport && <ImportModal open={open} onClose={() => setOpen(false)} entity={entity} title={title} columns={columns} onDone={onDone} />}
+      {canImport && <ImportModal open={open} onClose={() => setOpen(false)} entity={entity} title={title} columns={columns} onDone={onDone} dropdowns={dropdowns} />}
     </>
   );
 }

@@ -8,23 +8,37 @@ import { Button, Card, Spinner, Select } from '../../components/ui';
 import { formatCurrency } from '../../lib/format';
 import { printBarcodeSheet, expandLabels } from '../../lib/barcodeSheet';
 import PagedTable from '../../components/PagedTable';
+import useCompanyFilter from '../../hooks/useCompanyFilter';
 
 const numInput = 'h-8 w-20 rounded-[8px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
 
 export default function BarcodeLabelsPage() {
   const navigate = useNavigate();
   const { activeCompany } = useAuth();
+  // Super admins pick the company here (same choice as on Products, kept for the session).
+  const { companyParams, viewingCompany, isSuperAdmin, Filter } = useCompanyFilter();
   const [copies, setCopies] = useState({});
   const [columns, setColumns] = useState(4);
+  const [showAll, setShowAll] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['products-for-labels', activeCompany?.id],
-    queryFn: () => api.get('/products', { params: { per_page: 500, company_id: activeCompany?.id } }).then((r) => r.data),
+    queryKey: ['products-for-labels', activeCompany?.id, companyParams],
+    // The server returns at most 100 products a page, so read every page.
+    queryFn: async () => {
+      const params = { per_page: 100, company_id: activeCompany?.id, ...companyParams };
+      const first = (await api.get('/products', { params })).data;
+      const all = [...(first?.data ?? [])];
+      const last = Number(first?.meta?.last_page ?? 1);
+      for (let page = 2; page <= last; page += 1) {
+        all.push(...((await api.get('/products', { params: { ...params, page } })).data?.data ?? []));
+      }
+      return { data: all };
+    },
     enabled: Boolean(activeCompany),
   });
   const { data: batchData } = useQuery({
-    queryKey: ['inventory-batches', activeCompany?.id, 'labels'],
-    queryFn: () => api.get('/inventory/batches', { params: { status: 'all', company_id: activeCompany?.id } }).then((r) => r.data.data),
+    queryKey: ['inventory-batches', activeCompany?.id, 'labels', companyParams],
+    queryFn: () => api.get('/inventory/batches', { params: { status: 'all', company_id: activeCompany?.id, ...companyParams } }).then((r) => r.data.data),
     enabled: Boolean(activeCompany),
   });
   const products = data?.data ?? [];
@@ -54,10 +68,10 @@ export default function BarcodeLabelsPage() {
     });
     // Printable rows first; hide products with nothing to print and nothing in stock.
     return out
-      .filter((r) => r.barcode || r.stock > 0)
+      .filter((r) => showAll || r.barcode || r.stock > 0)
       .sort((a, b) => Number(Boolean(b.barcode)) - Number(Boolean(a.barcode)))
       .map((r) => ({ ...r, copies: copies[r.id] ?? '' }));
-  }, [products, batchData, copies]);
+  }, [products, batchData, copies, showAll]);
 
   const totalLabels = rows.reduce((n, r) => n + (Math.max(0, Math.floor(Number(r.copies) || 0))), 0);
   const setCopy = (id, v) => setCopies((c) => ({ ...c, [id]: v }));
@@ -80,7 +94,8 @@ export default function BarcodeLabelsPage() {
           <h1 className="page-title">Barcode labels</h1>
           <p className="text-sm text-muted">One row per barcode (each purchase batch has its own). Set how many labels to print, then print the sheet.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Filter />
           <Button variant="outline" size="sm" onClick={() => navigate('/products')}><ArrowLeftIcon className="size-4" /> Back</Button>
           <Button size="sm" onClick={print} disabled={totalLabels === 0}><PrinterIcon className="size-4" /> Print {totalLabels || ''} labels</Button>
         </div>
@@ -91,7 +106,11 @@ export default function BarcodeLabelsPage() {
         <Button variant="ghost" size="sm" onClick={setAllOne}>1 each</Button>
         <Button variant="ghost" size="sm" onClick={fillFromStock}>Match stock</Button>
         <Button variant="ghost" size="sm" onClick={clearAll}>Clear</Button>
-        <span className="ml-auto text-sm text-muted">Columns</span>
+        <label className="ml-auto flex items-center gap-2 text-sm text-muted">
+          <input type="checkbox" className="size-4 rounded border-line text-leaf" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+          Show products with no barcode / stock
+        </label>
+        <span className="text-sm text-muted">Columns</span>
         <Select value={columns} onChange={(e) => setColumns(Number(e.target.value))} className="h-8 rounded-lg border border-line bg-surface px-2 text-sm">
           {[2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
         </Select>
@@ -108,6 +127,21 @@ export default function BarcodeLabelsPage() {
             <th className="microlabel px-4 py-2.5 text-right font-semibold">Labels</th>
           </tr></thead>
           <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-muted">
+                {products.length === 0
+                  ? 'No products found for this company.'
+                  : (
+                    <>
+                      No labels to print yet. A barcode is created when stock comes in (purchase, opening stock, split or transfer). Products with no barcode and no stock are not listed.
+                      <div className="mt-2 text-xs text-faint">
+                        Company: {isSuperAdmin ? viewingCompany : (activeCompany?.name ?? '—')} · {products.length} products · {(batchData?.batches ?? []).filter((b) => Number(b.remaining_qty || 0) > 0).length} batches in stock · {products.filter((p) => Number(p.current_stock || 0) > 0).length} products with stock.
+                        If stock shows on another company, choose it in the company filter above.
+                      </div>
+                    </>
+                  )}
+              </td></tr>
+            )}
             {pg.map((r) => (
               <tr key={r.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                 <td className="px-4 py-2 font-medium">

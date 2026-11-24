@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
@@ -419,7 +419,9 @@ export default function PaymentsList() {
                   <tbody>
                     {pageRows.map((p) => (
                       <tr key={p.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
-                        <td className="tnum px-4 py-2.5 text-xs">{p.purchase_no}</td>
+                        <td className="tnum px-4 py-2.5 text-xs">
+                          <Link to={`/purchases/${p.id}${p.company_id ? `?company_id=${p.company_id}` : ''}`} className="font-medium text-leaf hover:underline" title="Open this purchase bill">{p.purchase_no}</Link>
+                        </td>
                         <td className="px-4 py-2.5 font-medium">{p.supplier_name}</td>
                         <td className="tnum px-4 py-2.5 text-right">{formatCurrency(p.invoice_total)}</td>
                         <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(p.paid)}</td>
@@ -474,7 +476,11 @@ export default function PaymentsList() {
                         <td className="px-4 py-2.5 text-muted">{formatDate(p.payment_date)}</td>
                         <td className="px-4 py-2.5 font-medium">{p.supplier_name}</td>
                         <td className="px-4 py-2.5"><Badge tone={p.payment_for === 'advance' ? 'warning' : p.payment_for === 'bill' ? 'active' : 'inactive'}>{PAID_FOR_LABEL[p.payment_for] ?? '—'}</Badge></td>
-                        <td className="tnum px-4 py-2.5 text-xs text-muted">{p.purchase_no ?? '—'}</td>
+                        <td className="tnum px-4 py-2.5 text-xs text-muted">
+                          {p.purchase_id && p.purchase_no
+                            ? <Link to={`/purchases/${p.purchase_id}${p.company_id ? `?company_id=${p.company_id}` : ''}`} className="font-medium text-leaf hover:underline" title="Open this purchase bill">{p.purchase_no}</Link>
+                            : (p.purchase_no ?? '—')}
+                        </td>
                         <td className="px-4 py-2.5"><Badge tone={p.is_advance ? 'warning' : p.applied_from_advance ? 'info' : 'info'}>{p.is_advance ? 'advance' : p.applied_from_advance ? 'applied' : p.mode}</Badge></td>
                         <td className="px-4 py-2.5 text-muted">{p.reference || '—'}</td>
                         <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(p.amount)}</td>
