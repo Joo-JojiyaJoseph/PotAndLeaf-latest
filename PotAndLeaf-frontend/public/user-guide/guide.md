@@ -1178,6 +1178,162 @@ Cost of goods sold = pieces sold × the cost of one from the batch they left (sc
 
 > Example: sold at ₹280, cost ₹200 → profit ₹80 → margin = 80 ÷ 280 × 100 = **28.6%**.
 
+### Every report, one by one
+
+Open **Main → Reports**. The icons are grouped as in the table above. For each report this page tells you **what it shows**, **where the figures come from**, and an **example**.
+
+**Rules that apply to every report**
+
+- Only **Confirmed** bills count. Drafts and cancelled bills never appear in any figure.
+- The dates you pick (7D, 30D, 90D, This FY or Custom) include both the first and the last day.
+- **Before GST** means the price of the goods only. **With GST** means the bill total the customer pays. Each report below says which one it uses.
+- **Cost** is the real cost of the batch the pieces left from (the scanned batch, or the oldest batch first). It is not today's cost price.
+- A report shows the company chosen at the top. Head office can choose **All companies** for most reports; some reports need one company.
+- **Export** (top right) gives every row of the report in Excel, not only the page on screen.
+
+![Reports — Profit & Margin](img/74-report-margin.jpg#1734x1026)
+
+#### Sales & profit
+
+**Overview (Dashboard report)** — the business at a glance for the dates you pick.
+
+- **Sales** = total of all confirmed bills **with GST**, split by how customers paid (cash, card, UPI, credit) and shown day by day.
+- **Purchases** = total of confirmed purchase bills in the dates.
+- **Stock value** = pieces in stock × the cost of each batch. **Low stock** = products at or below their reorder level.
+- **Receivables** = everything customers still owe you today. **Payables** = everything you still owe suppliers today. These two are as of today, not for the dates.
+- **Top 5 products** (by sales value) and **top 5 customers** (by bill total).
+- Also: production orders completed, rentals out and overdue, transfers in transit.
+
+> Example: confirmed bills in the month add up to ₹1,18,000 (including ₹18,000 GST) → Sales shows **₹1,18,000**.
+
+**Sales details** — how sales moved, in more detail.
+
+- **Gross sales** = bills **with GST**.
+- **Net sales** = bills before GST − points used − goods returned in the period. It never goes below zero. Proforma (quotation) bills and free (Complimentary) bills are left out.
+- **Discounts** = discount typed on bill lines + loyalty points used. **Tax** = GST on the bills.
+- **Invoices** = number of bills. **Customers** = different customers who bought. **Quantity sold** = pieces.
+- Comparison views: **this month against last month**, **this month against the same month last year**, **this financial year so far against last year**, and the **last 12 months** trend.
+
+> Example: bills ₹1,18,000 with GST ₹18,000 → ₹1,00,000 before GST. Points used ₹2,000 and returns ₹3,000 → net sales = 1,00,000 − 2,000 − 3,000 = **₹95,000**.
+
+**Profit by product (Margin)** — which products make money.
+
+- **Revenue** = the bill price **before GST** of what was sold. **Cost** = what those pieces cost, from the batch they left. **Margin** = revenue − cost. **Margin %** = margin ÷ revenue × 100.
+- Sorted with the best margin % first. Head office can also group by shop.
+
+> Example (from the screen above): test product sold for ₹18,000, cost ₹15,000 → margin ₹3,000 → 3,000 ÷ 18,000 × 100 = **16.67%**.
+
+**Approx. profit** — the shop's profit for the period: sales before GST (after points) − cost of goods sold − daily expense × days. Choose day, week, month or year to see the trend, and see profit shop by shop. The worked example is in *The report sums* above. The daily expense is set in Settings.
+
+**Owner estimate (Internal)** — owner only. Not GST. See *Internal Estimate (owner only)* below.
+
+**Sales by price type (Price Tier)** — how much sold at **Retail**, **Wholesale** and **Dealer / Landscaper** price.
+
+- For each price type: number of bills, pieces and sales value (the bill line totals, with GST).
+- A bill line counts under the price type it was sold at.
+
+> Example: Retail 40 bills, ₹3,10,000; Wholesale 12 bills, ₹1,85,000; Dealer 4 bills, ₹90,000 → total **₹5,85,000**.
+
+#### Money: cash, bank, dues, GST
+
+**GST** — the GST to pay. Output GST on sales − GST on sales returns − (input GST on purchases − GST on purchase returns). Details and examples are in *The report sums* above.
+
+**Cash book** — every rupee of **cash** in and out, with a running balance.
+
+- **Opening balance** = the opening cash you entered in Settings + all cash movements before the first date.
+- **In** = customer receipts and bills paid in cash. **Out** = supplier payments in cash and commission paid in cash. Manual journal entries on the cash account are included.
+- Advance used on a bill is **not** listed, because no new cash moved.
+- **Closing balance** = opening + in − out.
+
+> Example: opening ₹10,000 + cash received ₹6,000 − cash paid to suppliers ₹2,500 − commission paid in cash ₹1,000 = closing **₹12,500**.
+
+**Bank book** — the same as the Cash book for **bank transfers, UPI, card and cheque**. It starts from the opening bank balance in Settings.
+
+**Customer account (Customer dues)** — pick a customer to see their full statement.
+
+- **Opening balance** = what they owed before the first date. **Credit sales** (bills left unpaid) add to it. **Receipts** and advance applied reduce it.
+- **Closing balance** = opening + credit sales − receipts. The top also shows what they **owe now** and their **advance balance**.
+
+> Example: owed ₹2,000; credit bill ₹5,000; receipt ₹3,000 → 2,000 + 5,000 − 3,000 = **₹4,000**.
+
+**Supplier account (Supplier dues)** — the same for a supplier: purchase bills add to what you owe, payments reduce it.
+
+> Example: you owed ₹10,000; new bill ₹5,000; you paid ₹4,000 → 10,000 + 5,000 − 4,000 = **₹11,000**.
+
+**Customer dues by age / Supplier dues by age** — who owes you, and who you owe, grouped by how late.
+
+- Only bills with something still unpaid are listed.
+- Age = days past the bill's **due date** (bill date + credit days). Groups: **Current** (not yet due), **1–30**, **31–60**, **61–90**, **91–180** and **180+** days.
+- Each group shows the total and the number of bills, and the table lists every bill.
+
+> Example: a ₹5,000 bill was due on 10 Nov. On 24 Nov it is 14 days late → it sits in **1–30 days**.
+
+#### Stock & production
+
+**Fast / slow / dead stock (Stock Move)** — which products sell fast, slowly or not at all.
+
+- Choose how many days to look back (30 by default).
+- Add up the pieces each product sold in those days. Take the **average of the products that sold**. A product at or above the average is **Fast**; below it is **Slow**.
+- **Dead** = nothing sold for the number of days in Settings (**Dead stock days**, 180 by default) or never sold.
+
+> Example (30 days): A sold 40, B sold 10, C sold 4. Average = (40 + 10 + 4) ÷ 3 = 18. A is **Fast**; B and C are **Slow**. A product with no sale for 180 days is **Dead**.
+
+**What to buy (Reorder)** — products at or below their reorder level.
+
+- Listed when **stock + already on an open purchase order ≤ reorder level** (and the reorder level is above 0).
+- **Suggested quantity** = 2 × reorder level − stock − already on order.
+- **Rate** = the supplier's agreed price, else the last purchase rate, else the product's cost price. The supplier is the product's main supplier, else the one it was last bought from.
+
+> Example: reorder level 10, stock 4, nothing on order → suggested = 2 × 10 − 4 − 0 = **16**. If 6 are already on a draft order → 20 − 4 − 6 = **10**.
+
+**Production total** — items made in the dates (completed production orders only).
+
+- **Total cost** = the cost of everything used. **Avg cost per piece** = total cost ÷ pieces made.
+- **Selling value** = pieces made × the product's retail price. **Approx. profit** = selling value − total cost. It is approximate: it is not profit from real sales.
+
+> Example: 100 pots made, input cost ₹3,000, retail price ₹60 → selling value ₹6,000, approx. profit **₹3,000**, cost per piece ₹30.
+
+**Production by item** — for each product made: number of runs, pieces made, total cost, cost per piece. **Production by supervisor** — the same, for each supervisor. **Production batches** — each batch made, with its barcode.
+
+**Stock transfers** — the number of transfers by status: received, on the way, waiting for approval, and between companies or inside one company. Choose a company to see transfers it sent or received. **Transfers on the way (In Transit)** — sent but not yet received: the pieces and the **days in transit** since dispatch.
+
+#### Plant rental
+
+**Rentals sent out (Rental Delivery)** — rentals handed over to customers in the dates (from the day they were activated), whether still out or already back. A rental still out past its expected end date is marked **Overdue**.
+
+**Rent earned (Rental Income)** — rent bills whose rent period **starts** in the dates: number of bills, amount, and paid or unpaid. Group by day, week or month, and by shop.
+
+> Example: rent bills of ₹1,500, ₹900 and ₹600 in the dates → total **₹3,000**.
+
+**Rentals by staff** — rentals that **started** in the dates, grouped by the staff member who made them: count, rent charged and balance due.
+
+**Plants out on rent now (Currently Rented)** — a live list of what is with customers today, with no date filter.
+
+- **Pieces still out** = pieces sent − returned − damaged − missing.
+- **Days** = days since delivery. **Overdue** if past the expected end date.
+
+> Example: 10 sent, 4 returned, 1 damaged, 0 missing → **5** still out.
+
+**One customer's rentals (Customer Rentals)** — choose a customer to see all their rentals, past and current, with rent bills and balance.
+
+#### Staff & customers
+
+**Best staff (Leaderboard)** — staff ranked by net sales, bills or commission. See *The report sums* above for the formula and an example.
+
+**Commission** — what each staff member earned in the dates, from the commission ledger.
+
+- **Salesman commission** (rate or slab on sales), **Good-day bonus** (target reached on a day), **Promotion** bonus, **Manager commission**.
+- **Taken back for returns** is shown as a minus. **Total** = all of these added up. **Supervisor commission** is listed separately.
+- It shows what was **earned**; payments are made under **Commission**.
+
+> Example: salesman commission ₹3,000 + good-day bonus ₹1,000 − taken back ₹200 = **₹3,800**.
+
+**Loyalty points** — points earned, used and left for each customer. Points earned = (bill total − points used) ÷ 100, whole points only; up to 50% of a bill can be paid with points. See *Loyalty points* in chapter 9.
+
+**WhatsApp sent** — the messages sent to customers and staff, and any that failed.
+
+**End-of-day summary (EOD)** — the daily message sent to head office. It holds the day's sales (gross, net, returns, discounts, GST, bills, customers and shop by shop), production, stock value, low stock and the first items to reorder, cash and bank collected, receivables, payables and dues by age, the top 5 staff, and transfers. **Preview** shows it on screen; **Send** sends it to the people set in Settings.
+
 ### Internal Estimate (owner only)
 
 Where: **Reports → Internal** tile ("Internal Estimate (owner only)"). Only the owner — the super admin or a user with full access — can see this tile. Other users do not see it at all.
