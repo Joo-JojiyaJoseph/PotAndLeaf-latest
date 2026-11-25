@@ -559,9 +559,9 @@ The selling path is: New sale → Save → Confirm (stock goes out, money and po
 
 1. **Selling → Sales / Billing → New sale.**
 2. Choose **Billing for company**.
-3. Choose the **Customer**, or leave it as **Walk-in** for a counter customer.
+3. Choose the **Customer**, or leave it as **Walk-in** for a counter customer. A new customer? Click **New** next to the box, type the name (and phone), and the customer is added and chosen for this bill.
 4. Choose the **Bill type**: **Tax invoice** (normal bill), **Proforma** (a quotation — nothing moves) or **Complimentary** (free gift).
-5. Choose **Payment mode**: Cash, Card, UPI or Credit (pay later).
+5. **Payment mode** (Cash, Card, UPI or Credit — pay later), **Amount paid** and loyalty points are at the **bottom** of the bill, after the items. Fill them in last.
 6. Add items: scan the batch barcode in **Scan barcode**, or pick the product. Under the product, the **Batch** box lists its batches with how many are left (and the cost of one, if you may see cost). Leave it on **oldest first (automatic)**, or choose the batch you are selling from. Type the **Qty**. The **Rate** fills in from the price tier. Type a **Disc. %** if you give a discount.
 
 ![Choosing the batch on a sale line](img/68-sale-batch.jpg#1500x900)
@@ -569,8 +569,8 @@ The selling path is: New sale → Save → Confirm (stock goes out, money and po
 > Example: Money Plant has batch GRN-000001-01 (50 left, ₹45 each) and GRN-000004-01 (40 left, ₹52 each). Choose GRN-000004-01 and sell 10 → that batch goes to 30, the bill uses the Money Plant retail price, and profit uses ₹52 each. If you type more than the batch has, the line says *Only 40 in batch GRN-000004-01*.
 
 **Request shortage** (on a saved draft bill) appears only when an item needs more than is in stock; the line shows *Short by …*. It makes a waiting order (backorder) for the missing pieces. When all items are in stock, the button is hidden.
-7. If the customer wants to use loyalty points, type the points.
-8. Type **Amount paid** (leave blank if they pay the full bill now).
+7. If the customer wants to use loyalty points, type the points (the box appears at the bottom once a customer is chosen).
+8. Check **Amount paid**. It fills in with the amount due. Change it if they pay only part; clear it (or type 0) if nothing is paid now. On a **Credit** bill it starts at 0. On a Cash, Card or UPI bill, nothing paid is not accepted — enter the amount received or choose Credit.
 9. Click **Save**, check the totals, then click **Confirm**.
 
 ![New sale](img/28-sale-new.jpg#1503x1091)

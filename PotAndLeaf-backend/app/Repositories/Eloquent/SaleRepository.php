@@ -17,6 +17,7 @@ class SaleRepository implements SaleRepositoryInterface
             ->with('customer:id,name')
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
+            ->when(filled($filters['bill_kind'] ?? null), fn ($q) => $q->where('bill_kind', $filters['bill_kind']))
             ->when(filled($filters['created_by'] ?? null), fn ($q) => $q->where('created_by', $filters['created_by']))
             ->listFilters($filters, 'sale_date', ['sale_no', 'customer_name'])
             ->when(filled($filters['customer_id'] ?? null), fn ($q) => $q->where('customer_id', $filters['customer_id']))

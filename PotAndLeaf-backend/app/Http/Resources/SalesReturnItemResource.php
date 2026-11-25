@@ -26,6 +26,7 @@ class SalesReturnItemResource extends JsonResource
             'sgst_amount'   => (float) $this->sgst_amount,
             'igst_amount'   => (float) $this->igst_amount,
             'line_total'    => (float) $this->line_total,
+            'reason'        => $this->reason,
         ];
     }
 }

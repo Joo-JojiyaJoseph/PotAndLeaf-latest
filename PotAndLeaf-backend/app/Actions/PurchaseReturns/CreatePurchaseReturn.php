@@ -129,6 +129,7 @@ class CreatePurchaseReturn
                 'product_batch_id' => $batchId,
                 'damage_entry_id' => $damage?->id,
                 'from_damage' => (bool) $damage,
+                'reason' => filled($row['reason'] ?? null) ? trim($row['reason']) : null,
             ];
         }
 
@@ -175,6 +176,7 @@ class CreatePurchaseReturn
                     'igst_amount'      => $line['igst_amount'],
                     'line_total'       => $line['line_total'],
                     'unit_cost'        => $orig->landed_unit_cost,
+                    'reason'           => $entry['reason'] ?? null,
                 ];
             }
             $return->items()->createMany($rows);

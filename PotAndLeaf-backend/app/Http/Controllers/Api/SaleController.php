@@ -29,7 +29,7 @@ class SaleController extends Controller
     {
         abort_unless($request->user()->hasPermission('sales.view', $this->company($request)->id), 403);
 
-        $filters = $request->only(['search', 'status', 'per_page', 'from', 'to', 'customer_id', 'payment_mode']);
+        $filters = $request->only(['search', 'status', 'bill_kind', 'per_page', 'from', 'to', 'customer_id', 'payment_mode']);
         // Salesmen see only the bills they made.
         if ($request->user()->seesOnlyOwn('sales', $this->company($request)->id)) {
             $filters['created_by'] = $request->user()->id;

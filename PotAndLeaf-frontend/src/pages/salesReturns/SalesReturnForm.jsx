@@ -20,6 +20,7 @@ export default function SalesReturnForm() {
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [qtys, setQtys] = useState({});
+  const [lineReasons, setLineReasons] = useState({}); // sale_item_id -> reason for that product
   const [errors, setErrors] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -63,7 +64,12 @@ export default function SalesReturnForm() {
     setSaving(true);
     const items = sourceItems
       .filter((it) => Number(qtys[it.sale_item_id]) > 0)
-      .map((it) => ({ sale_item_id: it.sale_item_id, qty: Number(qtys[it.sale_item_id]) }));
+      .map((it) => {
+        const row = { sale_item_id: it.sale_item_id, qty: Number(qtys[it.sale_item_id]) };
+        const lineReason = (lineReasons[it.sale_item_id] || '').trim();
+        if (lineReason) row.reason = lineReason;
+        return row;
+      });
 
     try {
       const res = await api.post('/sales-returns', {
@@ -140,7 +146,7 @@ export default function SalesReturnForm() {
           <div className="px-4 py-12 text-center text-sm text-muted">No returnable quantity left on this sale.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-faint">
                   <th className="microlabel px-3 py-2 font-semibold">Product</th>
@@ -148,6 +154,7 @@ export default function SalesReturnForm() {
                   <th className="microlabel px-3 py-2 text-right font-semibold">Returned</th>
                   <th className="microlabel px-3 py-2 text-right font-semibold">Returnable</th>
                   <th className="microlabel px-3 py-2 text-right font-semibold">Return qty</th>
+                  <th className="microlabel px-3 py-2 font-semibold">Reason</th>
                   <th className="microlabel px-3 py-2 text-right font-semibold">Rate</th>
                   <th className="microlabel px-3 py-2 text-right font-semibold">Line</th>
                 </tr>
@@ -172,6 +179,16 @@ export default function SalesReturnForm() {
                           className={numInput}
                           value={qtys[it.sale_item_id] ?? ''}
                           onChange={(e) => setQtys((q) => ({ ...q, [it.sale_item_id]: e.target.value }))}
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <Input
+                          value={lineReasons[it.sale_item_id] ?? ''}
+                          onChange={(e) => setLineReasons((r) => ({ ...r, [it.sale_item_id]: e.target.value }))}
+                          disabled={it.returnable <= 0}
+                          maxLength={255}
+                          placeholder="Why returned? e.g. wilted"
+                          className="min-w-[180px]"
                         />
                       </td>
                       <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(it.rate)}</td>

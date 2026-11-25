@@ -12,6 +12,7 @@ import { downloadPdf } from '../../lib/pdfDownload';
 import { useToast } from '../../lib/toast';
 import { parseShortageResponse, shortageNavigatePath } from '../../lib/shortageResult';
 import { useConfirm } from '../../lib/confirm';
+import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 
 const statusTone = { draft: 'inactive', proforma: 'info', confirmed: 'active', cancelled: 'blocked' };
 const billKindLabel = { tax_invoice: 'Tax invoice', proforma: 'Proforma', complimentary: 'Complimentary' };
@@ -85,9 +86,11 @@ export default function SaleDetail() {
     onSuccess: (res) => { invalidate(); toast.success(res?.data?.message || 'WhatsApp sent.'); },
     onError: (err) => toast.error(err.response?.data?.message || 'Could not send WhatsApp.'),
   });
+  const [shortageOpen, setShortageOpen] = useState(false);
   const backorderM = useMutation({
     mutationFn: () => api.post(`/sales/${id}/backorder`, {}, withCompany(recordCompanyId)),
     onSuccess: (res) => {
+      setShortageOpen(false);
       invalidate();
       const parsed = parseShortageResponse(res);
       toast.success(parsed.message || 'Shortage request saved.');
@@ -121,7 +124,7 @@ export default function SaleDetail() {
           <Button variant="outline" size="sm" onClick={downloadInvoicePdf}><PrinterIcon className="size-4" /> PDF</Button>
           {/* Only when an item is short of stock (and there is a customer to wait for it). */}
           {s.can?.request_shortage && (
-            <Button variant="outline" size="sm" onClick={() => backorderM.mutate()} disabled={backorderM.isPending}>
+            <Button variant="outline" size="sm" onClick={() => setShortageOpen(true)} disabled={backorderM.isPending}>
               <ClockIcon className="size-4" /> Request shortage
             </Button>
           )}
@@ -267,6 +270,30 @@ export default function SaleDetail() {
               {cancelRejectM.isPending ? <Spinner className="border-white/40 border-t-white" /> : 'Reject request'}
             </Button>
           </div>
+        </div>
+      </Modal>
+      <Modal
+        open={shortageOpen}
+        onClose={() => setShortageOpen(false)}
+        title="Request shortage"
+        size="xl"
+        footer={(
+          <>
+            <Button variant="outline" onClick={() => setShortageOpen(false)} disabled={backorderM.isPending}>Cancel</Button>
+            <Button onClick={() => backorderM.mutate()} disabled={backorderM.isPending}>{backorderM.isPending ? 'Requesting…' : 'Request stock'}</Button>
+          </>
+        )}
+      >
+        <p className="text-sm text-muted">
+          These items are short on this bill. Check whether another company has them. Stock at another company becomes a transfer request to that company; a backorder is created only for what no company can supply.
+        </p>
+        <div className="mt-4 space-y-4">
+          {(s.items ?? []).filter((it) => Number(s.short_items?.[it.id]) > 0).map((it) => (
+            <div key={it.id}>
+              <p className="mb-1.5 text-sm font-medium">{it.product_name} <span className="font-normal text-danger">· short by {s.short_items[it.id]}</span></p>
+              <CrossBranchStockPanel productId={it.product_id} companyId={recordCompanyId} shortage />
+            </div>
+          ))}
         </div>
       </Modal>
     </div>

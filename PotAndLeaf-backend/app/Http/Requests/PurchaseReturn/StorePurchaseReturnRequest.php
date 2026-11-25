@@ -30,6 +30,7 @@ class StorePurchaseReturnRequest extends FormRequest
             'items'                      => ['required', 'array', 'min:1'],
             'items.*.purchase_item_id'   => ['required', 'uuid'],
             'items.*.qty'                => ['required', 'numeric', 'gt:0'],
+            'items.*.reason'             => ['nullable', 'string', 'max:255'],
             'items.*.product_batch_id'   => ['nullable', 'uuid', Rule::exists('product_batches', 'id')->where('company_id', $companyId)],
             'items.*.damage_entry_id'    => ['nullable', 'uuid', Rule::exists('damage_entries', 'id')->where('company_id', $companyId)],
         ];

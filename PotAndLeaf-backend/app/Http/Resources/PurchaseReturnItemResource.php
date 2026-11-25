@@ -28,6 +28,7 @@ class PurchaseReturnItemResource extends JsonResource
             'igst_amount'      => (float) $this->igst_amount,
             'line_total'       => (float) $this->line_total,
             'unit_cost'        => (float) $this->unit_cost,
+            'reason'           => $this->reason,
         ];
     }
 }

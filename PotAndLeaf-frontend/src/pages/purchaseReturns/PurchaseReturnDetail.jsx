@@ -82,6 +82,7 @@ export default function PurchaseReturnDetail() {
             <thead>
               <tr className="border-b border-line text-left text-faint">
                 <th className="microlabel py-2 pr-3 font-semibold">Product</th>
+                <th className="microlabel px-3 py-2 font-semibold">Reason</th>
                 <th className="microlabel px-3 py-2 text-right font-semibold">Qty</th>
                 <th className="microlabel px-3 py-2 text-right font-semibold">Rate</th>
                 <th className="microlabel px-3 py-2 text-right font-semibold">GST</th>
@@ -92,6 +93,7 @@ export default function PurchaseReturnDetail() {
               {(r.items ?? []).map((it) => (
                 <tr key={it.id} className="border-b border-line/60 last:border-0">
                   <td className="py-2 pr-3 font-medium">{it.product_name}</td>
+                  <td className="px-3 py-2 text-muted">{it.reason || '—'}</td>
                   <td className="tnum px-3 py-2 text-right text-muted">{it.qty}</td>
                   <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(it.rate)}</td>
                   <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency((it.cgst_amount ?? 0) + (it.sgst_amount ?? 0) + (it.igst_amount ?? 0))} <span className="text-xs">({it.gst_rate}%)</span></td>

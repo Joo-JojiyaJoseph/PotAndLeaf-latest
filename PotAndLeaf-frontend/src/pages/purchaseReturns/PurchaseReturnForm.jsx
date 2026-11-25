@@ -21,6 +21,7 @@ export default function PurchaseReturnForm() {
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [qtys, setQtys] = useState({}); // purchase_item_id -> string
+  const [lineReasons, setLineReasons] = useState({}); // purchase_item_id -> reason for that product
   const [batchIds, setBatchIds] = useState({}); // purchase_item_id -> batch uuid
   const [damageIds, setDamageIds] = useState({});
   const [errors, setErrors] = useState([]);
@@ -45,6 +46,7 @@ export default function PurchaseReturnForm() {
 
   useEffect(() => {
     setQtys({});
+    setLineReasons({});
     setBatchIds({});
     setDamageIds({});
     setErrors([]);
@@ -105,6 +107,8 @@ export default function PurchaseReturnForm() {
         const row = { purchase_item_id: it.purchase_item_id, qty: Number(qtys[it.purchase_item_id]) };
         const damageId = damageIds[it.purchase_item_id];
         const batchId = batchIds[it.purchase_item_id];
+        const lineReason = (lineReasons[it.purchase_item_id] || '').trim();
+        if (lineReason) row.reason = lineReason;
         if (damageId) row.damage_entry_id = damageId;
         else if (batchId) row.product_batch_id = batchId;
         return row;
@@ -185,13 +189,14 @@ export default function PurchaseReturnForm() {
             <div className="px-4 py-12 text-center text-sm text-muted">Nothing left to return on this purchase.</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <thead>
                   <tr className="border-b border-line text-left font-mono text-[10px] uppercase tracking-wider text-muted">
                     <th className="px-4 py-2 font-medium">Product / batch</th>
                     <th className="px-4 py-2 text-right font-medium">Bought</th>
                     <th className="px-4 py-2 text-right font-medium">Returnable</th>
                     <th className="px-4 py-2 text-right font-medium">Return qty</th>
+                    <th className="px-4 py-2 font-medium">Reason</th>
                     <th className="px-4 py-2 text-right font-medium">Rate</th>
                     <th className="px-4 py-2 text-right font-medium">GST %</th>
                     <th className="px-4 py-2 text-right font-medium">Line total</th>
@@ -261,6 +266,16 @@ export default function PurchaseReturnForm() {
                             onChange={(e) =>
                               setQtys((q) => ({ ...q, [it.purchase_item_id]: e.target.value }))
                             }
+                          />
+                        </td>
+                        <td className="px-4 py-2">
+                          <Input
+                            value={lineReasons[it.purchase_item_id] ?? ''}
+                            onChange={(e) => setLineReasons((r) => ({ ...r, [it.purchase_item_id]: e.target.value }))}
+                            disabled={disabled}
+                            maxLength={255}
+                            placeholder="Why returned? e.g. damaged"
+                            className="min-w-[180px]"
                           />
                         </td>
                         <td className="tnum px-4 py-2 text-right text-muted">{formatCurrency(it.rate)}</td>

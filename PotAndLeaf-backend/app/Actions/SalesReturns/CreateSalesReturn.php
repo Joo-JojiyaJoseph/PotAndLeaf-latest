@@ -37,6 +37,7 @@ class CreateSalesReturn
 
         $calcInput = [];
         $meta = [];
+        $reasons = [];
         foreach ($data['items'] as $row) {
             $orig = $itemsById->get($row['sale_item_id']);
             if (! $orig) {
@@ -66,11 +67,12 @@ class CreateSalesReturn
                 'gst_rate' => (float) $orig->gst_rate,
             ];
             $meta[] = $orig;
+            $reasons[] = filled($row['reason'] ?? null) ? trim($row['reason']) : null;
         }
 
         $computed = $this->calculator->compute($calcInput, (bool) $sale->is_interstate);
 
-        return DB::transaction(function () use ($companyId, $data, $sale, $computed, $meta, $calcInput) {
+        return DB::transaction(function () use ($companyId, $data, $sale, $computed, $meta, $calcInput, $reasons) {
             $t = $computed['totals'];
             $return = $this->returns->create([
                 'company_id'    => $companyId,
@@ -99,6 +101,7 @@ class CreateSalesReturn
                 $inp = $calcInput[$i];
                 $rows[] = [
                     'sale_item_id'  => $orig->id,
+                    'reason'        => $reasons[$i] ?? null,
                     'product_id'    => $orig->product_id,
                     'product_name'  => $orig->product_name,
                     'hsn_code'      => $orig->hsn_code,

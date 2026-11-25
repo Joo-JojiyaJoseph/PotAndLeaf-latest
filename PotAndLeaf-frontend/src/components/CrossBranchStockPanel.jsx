@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import api from '../lib/api';
+import api, { withCompany } from '../lib/api';
 import { Card, Spinner } from './ui';
 
 /** Shows stock availability for the same SKU at other branches. */
-export default function CrossBranchStockPanel({ productId, sku, onUseQty }) {
+export default function CrossBranchStockPanel({ productId, sku, onUseQty, companyId, shortage = false }) {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['cross-branch-stock', productId, sku],
-    queryFn: () => api.get('/inventory/stock/cross-branch', { params: productId ? { product_id: productId } : { sku } }).then((r) => r.data.data),
+    queryKey: ['cross-branch-stock', productId, sku, companyId],
+    queryFn: () => api.get('/inventory/stock/cross-branch', withCompany(companyId, { params: productId ? { product_id: productId } : { sku } })).then((r) => r.data.data),
     enabled: Boolean(productId || sku),
   });
 
@@ -55,6 +55,9 @@ export default function CrossBranchStockPanel({ productId, sku, onUseQty }) {
           </tbody>
         </table>
       </div>
+      {shortage && others.length === 0 && (
+        <p className="mt-3 text-xs text-muted">No other company has this item available right now. A backorder (waiting order) will be created for it.</p>
+      )}
       {others.length > 0 && (
         <p className="mt-3 text-xs text-muted">
           Enter the quantity you need, then click Request stock. Stock at {others.map((b) => b.company_name).join(', ')} becomes an inter-company transfer request. A backorder is created only if no branch has qty.

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import InventoryLedgerTab from './InventoryLedgerTab';
-import { ExclamationTriangleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon, MagnifyingGlassIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import { useQuery } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
 import { Badge, Button, Card, Input, Spinner, StatCard } from '../../components/ui';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -238,6 +239,9 @@ function MovementTab({ companyParams }) {
 
 export default function InventoryList() {
   const { filterCompanyId, companyParams, companyHint, Filter } = useCompanyFilter();
+  const { can, companyId, isSuperAdmin } = useAuth();
+  const reorderCompanyId = defaultCreateCompanyId({ filterCompanyId, companyId: isSuperAdmin ? '' : companyId });
+  const reorderPath = reorderCompanyId && isSuperAdmin ? `/purchase-orders/reorder?company_id=${reorderCompanyId}` : '/purchase-orders/reorder';
   const [tab, setTab] = useState('levels');
   const [ledgerProductId, setLedgerProductId] = useState('');
 
@@ -259,8 +263,13 @@ export default function InventoryList() {
             How much of each item you have now, every stock movement, and what your stock is worth{companyHint}.
           </p>
         </div>
-        <div className="w-full min-w-0 sm:w-auto">
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
           <Filter />
+          {can('po.create') && (
+            <Link to={reorderPath}>
+              <Button variant="outline" size="sm"><SparklesIcon className="size-4" /> Reorder report</Button>
+            </Link>
+          )}
         </div>
       </div>
       <div className="flex gap-1 overflow-x-auto border-b border-line [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-1">

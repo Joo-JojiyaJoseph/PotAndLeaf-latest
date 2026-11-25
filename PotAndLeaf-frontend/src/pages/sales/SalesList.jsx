@@ -14,7 +14,7 @@ import Pagination from '../../components/Pagination';
 
 const STATUS_TABS = [
   { value: '', label: 'All' }, { value: 'draft', label: 'Draft' },
-  { value: 'proforma', label: 'Proforma' }, { value: 'confirmed', label: 'Confirmed' }, { value: 'cancelled', label: 'Cancelled' },
+  { value: 'proforma', label: 'Proforma' }, { value: 'kind:complimentary', label: 'Complimentary' }, { value: 'confirmed', label: 'Confirmed' }, { value: 'cancelled', label: 'Cancelled' },
 ];
 const statusTone = { draft: 'inactive', proforma: 'info', confirmed: 'active', cancelled: 'blocked' };
 const payTone = { cash: 'default', card: 'info', upi: 'info', credit: 'warning' };
@@ -26,11 +26,13 @@ export default function SalesList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('');
+  // The Complimentary tab filters by bill type (any status); the other tabs filter by status.
+  const tabParams = status.startsWith('kind:') ? { bill_kind: status.slice(5) } : { status };
   const lf = useListFilters();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['sales', activeCompany?.id, filterCompanyId, status, lf.key],
-    queryFn: () => api.get('/sales', { params: { ...companyParams, status, ...lf.params } }).then((r) => r.data),
+    queryFn: () => api.get('/sales', { params: { ...companyParams, ...tabParams, ...lf.params } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -54,7 +56,7 @@ export default function SalesList() {
       />
 
       <ListToolbar lf={lf} placeholder={'Search bill no. or customer…'} withSearch={true}
-        onExport={() => exportList({ url: '/sales', params: { ...companyParams, status, ...lf.filters }, filename: 'sales', columns: [['Bill no', (r) => r.sale_no], ['Date', (r) => r.sale_date], ['Customer', (r) => r.customer_name], ['Payment', (r) => r.payment_mode], ['Before GST', (r) => r.subtotal], ['GST', (r) => r.tax_total], ['Total', (r) => r.grand_total], ['Paid', (r) => r.amount_paid], ['Balance', (r) => r.balance], ['Status', (r) => r.status]] })} />
+        onExport={() => exportList({ url: '/sales', params: { ...companyParams, ...tabParams, ...lf.filters }, filename: 'sales', columns: [['Bill no', (r) => r.sale_no], ['Date', (r) => r.sale_date], ['Customer', (r) => r.customer_name], ['Payment', (r) => r.payment_mode], ['Before GST', (r) => r.subtotal], ['GST', (r) => r.tax_total], ['Total', (r) => r.grand_total], ['Paid', (r) => r.amount_paid], ['Balance', (r) => r.balance], ['Status', (r) => r.status]] })} />
 
       <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (

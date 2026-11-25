@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftIcon, PlusIcon, TrashIcon, BuildingOffice2Icon, UserIcon, CreditCardIcon, DocumentTextIcon, CurrencyRupeeIcon, QrCodeIcon, CubeIcon, TagIcon, BanknotesIcon } from '@heroicons/react/24/outline';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeftIcon, PlusIcon, TrashIcon, BuildingOffice2Icon, UserIcon, CreditCardIcon, DocumentTextIcon, CurrencyRupeeIcon, QrCodeIcon, CubeIcon, TagIcon, BanknotesIcon, UserPlusIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Textarea, Spinner, Select, PageHeader } from '../../components/ui';
 import { formatCurrency, todayISO as today } from '../../lib/format';
 import { computeSale, tierPrice, discountAmount } from '../../lib/saleCalc';
 import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
+import QuickCustomerModal from '../../components/QuickCustomerModal';
 
 const BILL_KINDS = [
   { value: 'tax_invoice', label: 'Tax invoice' },
@@ -87,6 +88,9 @@ export default function SaleForm() {
   }
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+  const queryClient = useQueryClient();
+  const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
+  const [amountTouched, setAmountTouched] = useState(false); // false = the box follows the amount due
 
   const { data, isLoading } = useQuery({
     queryKey: ['sale-form-data', activeCompany?.id],
@@ -134,6 +138,11 @@ export default function SaleForm() {
   const maxRedeem = Math.max(0, Math.min(balance, Math.floor((t.grand_total * (redeemCapPct / 100)) / redeemRate)));
   const loyaltyDiscount = Math.min(t.grand_total, redeemPoints * redeemRate);
   const dueTotal = Math.max(0, t.grand_total - loyaltyDiscount);
+  // The box holds real text. It follows the amount due until you edit it (nothing is pre-paid on a Credit,
+  // Proforma or Complimentary bill). Clearing the box means nothing was paid.
+  const defaultPaid = header.payment_mode === 'credit' || header.bill_kind !== 'tax_invoice' ? 0 : dueTotal;
+  const amountPaidText = amountTouched ? header.amount_paid : String(Math.round(defaultPaid * 100) / 100);
+  const paidNow = amountPaidText === '' ? 0 : Number(amountPaidText);
   const err = (k) => errors[k]?.[0];
 
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -157,6 +166,10 @@ export default function SaleForm() {
 
   async function save() {
     setErrors({});
+    if (header.bill_kind === 'tax_invoice' && header.payment_mode !== 'credit' && dueTotal > 0 && !(paidNow > 0)) {
+      setErrors({ amount_paid: ['Nothing is paid on a Cash / Card / UPI bill. Enter the amount received, or choose Credit.'] });
+      return;
+    }
     setSaving(true);
     try {
       const res = await api.post('/sales', {
@@ -165,7 +178,7 @@ export default function SaleForm() {
         is_interstate: header.is_interstate,
         payment_mode: header.payment_mode,
         bill_kind: header.bill_kind,
-        amount_paid: header.amount_paid === '' ? dueTotal : Number(header.amount_paid),
+        amount_paid: paidNow,
         loyalty_points_redeemed: redeemPoints || 0,
         notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({
@@ -205,52 +218,27 @@ export default function SaleForm() {
             </Field>
           </div>
         )}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Customer" error={err('customer_id')}>
-            <Select icon={UserIcon} value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
-              <option value="">Walk-in</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.type}</option>)}
-            </Select>
+            <div className="flex items-center gap-2">
+              <Select icon={UserIcon} value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
+                <option value="">Walk-in</option>
+                {customers.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.type}</option>)}
+              </Select>
+              <Button type="button" variant="outline" size="sm" className="h-10 shrink-0 rounded-[12px]" onClick={() => setQuickCustomerOpen(true)} title="Add a new customer">
+                <UserPlusIcon className="size-4" /> New
+              </Button>
+            </div>
           </Field>
           <Field label="Sale date" required error={err('sale_date')}>
             <Input type="date" value={header.sale_date} onChange={(e) => setHeader((h) => ({ ...h, sale_date: e.target.value }))} />
-          </Field>
-          <Field label="Payment mode" error={err('payment_mode')}>
-            <Select icon={CreditCardIcon} value={header.payment_mode} onChange={(e) => setHeader((h) => ({ ...h, payment_mode: e.target.value }))} className={selectCls}>
-              <option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="credit">Credit</option>
-            </Select>
           </Field>
           <Field label="Bill type" error={err('bill_kind')}>
             <Select icon={DocumentTextIcon} value={header.bill_kind} onChange={(e) => setHeader((h) => ({ ...h, bill_kind: e.target.value }))} className={selectCls}>
               {BILL_KINDS.map((bk) => <option key={bk.value} value={bk.value}>{bk.label}</option>)}
             </Select>
           </Field>
-          <Field label="Amount paid (blank = full)" error={err('amount_paid')}>
-            <Input icon={CurrencyRupeeIcon} type="number" step="0.01" value={header.amount_paid} onChange={(e) => setHeader((h) => ({ ...h, amount_paid: e.target.value }))} placeholder={formatCurrency(dueTotal)} />
-          </Field>
         </div>
-        {header.customer_id && (
-          <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl bg-leaf-soft/50 p-3 sm:grid-cols-3">
-            <div>
-              <p className="text-xs text-muted">Loyalty balance</p>
-              <p className="tnum text-base font-semibold">{balance} pts</p>
-            </div>
-            <Field label="Redeem points" error={err('loyalty_points_redeemed')}>
-              <Input
-                type="number"
-                min="0"
-                max={maxRedeem}
-                value={header.loyalty_points_redeemed}
-                onChange={(e) => setHeader((h) => ({ ...h, loyalty_points_redeemed: e.target.value }))}
-                placeholder={`Max ${maxRedeem}`}
-              />
-            </Field>
-            <div>
-              <p className="text-xs text-muted">Loyalty discount</p>
-              <p className="tnum text-base font-semibold">{formatCurrency(loyaltyDiscount)}</p>
-            </div>
-          </div>
-        )}
         <label className="mt-4 flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" checked={header.is_interstate} onChange={(e) => setHeader((h) => ({ ...h, is_interstate: e.target.checked }))} className="size-4 rounded border-line text-leaf focus:ring-leaf/40" />
           Inter-state supply (charge IGST instead of CGST + SGST)
@@ -353,11 +341,47 @@ export default function SaleForm() {
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="p-5 sm:p-6 lg:col-span-2">
-          <Field label={<span className="inline-flex items-center gap-1.5"><DocumentTextIcon className="size-4" /> Notes</span>}>
-            <Textarea rows={5} value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Optional" />
-          </Field>
-        </Card>
+        <div className="space-y-4 lg:col-span-2">
+          <Card className="p-5 sm:p-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="Payment mode" error={err('payment_mode')}>
+                <Select icon={CreditCardIcon} value={header.payment_mode} onChange={(e) => { setAmountTouched(false); setHeader((h) => ({ ...h, payment_mode: e.target.value, amount_paid: '' })); }} className={selectCls}>
+                  <option value="cash">Cash</option><option value="card">Card</option><option value="upi">UPI</option><option value="credit">Credit</option>
+                </Select>
+              </Field>
+              <Field label="Amount paid (blank = none)" error={err('amount_paid')}>
+                <Input icon={CurrencyRupeeIcon} type="number" step="0.01" min="0" value={amountPaidText} onChange={(e) => { setAmountTouched(true); setHeader((h) => ({ ...h, amount_paid: e.target.value })); }} />
+              </Field>
+            </div>
+          {header.customer_id && (
+            <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl bg-leaf-soft/50 p-3 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted">Loyalty balance</p>
+                <p className="tnum text-base font-semibold">{balance} pts</p>
+              </div>
+              <Field label="Redeem points" error={err('loyalty_points_redeemed')}>
+                <Input
+                  type="number"
+                  min="0"
+                  max={maxRedeem}
+                  value={header.loyalty_points_redeemed}
+                  onChange={(e) => setHeader((h) => ({ ...h, loyalty_points_redeemed: e.target.value }))}
+                  placeholder={`Max ${maxRedeem}`}
+                />
+              </Field>
+              <div>
+                <p className="text-xs text-muted">Loyalty discount</p>
+                <p className="tnum text-base font-semibold">{formatCurrency(loyaltyDiscount)}</p>
+              </div>
+            </div>
+          )}
+          </Card>
+          <Card className="p-5 sm:p-6">
+            <Field label={<span className="inline-flex items-center gap-1.5"><DocumentTextIcon className="size-4" /> Notes</span>}>
+              <Textarea rows={5} value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Optional" />
+            </Field>
+          </Card>
+        </div>
         <Card className="glass-card-strong p-5 sm:p-6">
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between"><dt className="text-muted">Subtotal</dt><dd className="tnum">{formatCurrency(t.subtotal)}</dd></div>
@@ -385,6 +409,17 @@ export default function SaleForm() {
           <Button className="mt-5 w-full rounded-full" onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
         </Card>
       </div>
+
+      <QuickCustomerModal
+        open={quickCustomerOpen}
+        onClose={() => setQuickCustomerOpen(false)}
+        companyId={isSuperAdmin ? companyId : undefined}
+        onCreated={async (created) => {
+          await queryClient.invalidateQueries({ queryKey: ['sale-form-data'] });
+          setQuickCustomerOpen(false);
+          if (created?.id) setHeader((h) => ({ ...h, customer_id: created.id }));
+        }}
+      />
     </div>
   );
 }

@@ -24,6 +24,7 @@ class StoreSalesReturnRequest extends FormRequest
             'items'                 => ['required', 'array', 'min:1'],
             'items.*.sale_item_id'  => ['required', 'uuid'],
             'items.*.qty'           => ['required', 'numeric', 'gt:0'],
+            'items.*.reason'        => ['nullable', 'string', 'max:255'],
         ];
     }
 }
