@@ -341,6 +341,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('reports/sales/ytd', [ReportController::class, 'salesYtd']);
         Route::get('reports/sales/twelve-month-trend', [ReportController::class, 'twelveMonthTrend']);
         Route::get('reports/gst-reconciliation', [ReportController::class, 'gstReconciliation']);
+        Route::get('reports/detailed/{type}', [ReportController::class, 'detailed']);
         Route::get('reports/accounting/tally-export', [ReportController::class, 'tallyExport']);
         Route::get('reports/commission', [ReportController::class, 'commissionReport']);
         Route::get('reports/leaderboard', [ReportController::class, 'leaderboard']);

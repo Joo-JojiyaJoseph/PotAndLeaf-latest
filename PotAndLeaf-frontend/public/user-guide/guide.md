@@ -1178,6 +1178,34 @@ Cost of goods sold = pieces sold × the cost of one from the batch they left (sc
 
 > Example: sold at ₹280, cost ₹200 → profit ₹80 → margin = 80 ÷ 280 × 100 = **28.6%**.
 
+### Detailed reports: invoice-wise, day-wise, month-wise
+
+Open **Main → Reports → Detailed reports**. There is one report for each kind of document:
+
+| Report | What it lists |
+|---|---|
+| **Sales details** | Confirmed bills (not quotations) |
+| **Purchase details** | Confirmed purchase bills |
+| **Sales return details** | Goods customers returned |
+| **Purchase return details** | Goods sent back to suppliers |
+| **Customer receipt details** | Money received from customers |
+| **Supplier payment details** | Money paid to suppliers |
+
+**Choose how to see it** with **View by**:
+
+- **Invoice-wise** — one row for every bill, with date, number (click it to open the bill), customer or supplier, payment mode, and the amounts.
+- **Day-wise, Week-wise, Month-wise, Year-wise** — the same documents added up for each day, week (Monday to Sunday), month or year. Each row shows how many documents, how many customers or suppliers, and the totals.
+
+**Choose the dates** at the top: **7D, 30D, 90D, Today, Week, Month**, or **Custom** for any two dates. Use the **Search** box to find one bill number or one customer or supplier, and the **payment mode** box to see only Cash, Card, UPI or Credit. The **Total** row at the bottom adds up everything shown, and **Export → Excel — this report as shown** downloads all rows.
+
+> Example: for November choose **Month** and **Month-wise** → one row, "November 2026", with the number of bills and the month's total. Switch to **Day-wise** → one row for every day of the month. Switch to **Invoice-wise** → every bill of the month.
+
+How the amounts are taken:
+
+- **Sales**: *Before GST* = the goods value. *GST* = tax on the bill. *Total* = bill total − loyalty points used. *Due* = Total − Paid.
+- **Purchases**: *Total* = the supplier's bill total. *Due* = what you still owe on that bill.
+- **Receipts and payments**: advance that was received or paid earlier and later used on a bill is not new money, so it is not listed again.
+
 ### Every report, one by one
 
 Open **Main → Reports**. The icons are grouped as in the table above. For each report this page tells you **what it shows**, **where the figures come from**, and an **example**.

@@ -277,8 +277,12 @@ export default function PurchaseOrderReorderPage() {
         </Card>
       ) : allLines.length === 0 ? (
         <Card className="p-12 text-center">
-          <p className="text-sm font-medium">All stocked up</p>
-          <p className="mt-1 text-sm text-muted">No products are at or below their reorder level.</p>
+          <p className="text-sm font-medium">Nothing to reorder right now</p>
+          <p className="mx-auto mt-1 max-w-xl text-sm text-muted">
+            A product is listed only when its <b>Reorder level</b> is above 0 and its stock is at or below that level
+            (stock already on an open purchase order counts as coming in). Products with no reorder level are never listed —
+            set it under <b>Setup → Products → edit</b>.
+          </p>
         </Card>
       ) : (
         <>

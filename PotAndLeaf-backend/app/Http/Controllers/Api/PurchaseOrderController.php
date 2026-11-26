@@ -14,6 +14,7 @@ use App\Services\PurchaseOrderService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
+use App\Support\Media\MediaUrl;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,9 +41,10 @@ class PurchaseOrderController extends Controller
         $suppliers = Supplier::forCompany($company->id)->where('status', 'active')->orderBy('name')->get(['id', 'name'])
             ->map(fn ($s) => ['id' => $s->id, 'name' => $s->name]);
         $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')
-            ->get(['id', 'sku', 'name', 'cost_price', 'gst_rate', 'length_cm', 'width_cm', 'height_cm'])
+            ->get(['id', 'sku', 'name', 'images', 'cost_price', 'gst_rate', 'length_cm', 'width_cm', 'height_cm'])
             ->map(fn ($p) => [
                 'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'cost_price' => (float) $p->cost_price, 'gst_rate' => (float) $p->gst_rate,
+                'image' => MediaUrl::resolveMany($p->images ?? [])[0] ?? null,
                 // Dimensions for CBM (container planning on import orders).
                 'length_cm' => (float) $p->length_cm, 'width_cm' => (float) $p->width_cm, 'height_cm' => (float) $p->height_cm,
             ]);
@@ -117,7 +119,7 @@ class PurchaseOrderController extends Controller
         $this->assertRecordCompany($request, $purchaseOrder);
 
         return $this->ok(new PurchaseOrderResource($purchaseOrder->load([
-            'items.product:id,sku,name',
+            'items.product:id,sku,name,images',
             'supplier',
             'createdBy:id,name',
         ])));

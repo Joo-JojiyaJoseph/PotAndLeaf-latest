@@ -5,6 +5,7 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { recordDetailPath } from '../../lib/recordCompany';
 import { Badge, Button } from '../../components/ui';
+import { MediaImg } from '../../components/media';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
 import { downloadPdf } from '../../lib/pdfDownload';
@@ -111,7 +112,14 @@ export default function PurchaseOrderDetail() {
             <tbody>
               {(po.items ?? []).map((it) => (
                 <tr key={it.id} className="border-b border-line/60 last:border-0">
-                  <td className="py-2 pr-3 font-medium">{it.product_name}</td>
+                  <td className="py-2 pr-3 font-medium">
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-leaf-soft">
+                        <MediaImg value={it.image} className="size-full object-cover" iconClassName="size-5 text-leaf/50" />
+                      </div>
+                      <span>{it.product_name}</span>
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-muted">{it.sku || '—'}</td>
                   <td className="tnum px-3 py-2 text-right text-muted">{it.qty}</td>
                   <td className="tnum px-3 py-2 text-right text-muted">{formatCurrency(it.rate)}</td>

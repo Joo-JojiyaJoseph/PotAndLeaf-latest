@@ -9,12 +9,13 @@ import { addCalendarDays, formatCurrency, formatDate, todayISO } from '../../lib
 import { downloadWithParams } from '../../lib/pdfDownload';
 import AccountingReportPanels from './AccountingReportPanels';
 import ReorderReportPanel from './ReorderReportPanel';
+import DetailedReportPanel from './DetailedReportPanel';
 import ReportsToolbar from './ReportsToolbar';
 import ReportNavGrid from './ReportNavGrid';
 import Pagination from '../../components/Pagination';
 import PagedTable from '../../components/PagedTable';
 import ReportEmptyState from './ReportEmptyState';
-import { REPORT_TABS, filterVisibleTabs, tabMeta } from './reportConfig';
+import { REPORT_TABS, DETAILED_TYPES, filterVisibleTabs, tabMeta } from './reportConfig';
 import { ShowAllRowsContext } from '../../components/PagedTable';
 import { tablesToCsv, downloadText } from '../../lib/tableExport';
 
@@ -514,7 +515,7 @@ export default function ReportsPage() {
         onToggleCustomDates={setShowCustomDates}
         exportOptions={exportOptions}
         onExport={(opt) => (opt.screen ? exportScreen() : exportFile(opt.path, opt.params, opt.file, opt.mime))}
-        showBusinessPeriods={isProductionTab || tab === 'profit'}
+        showBusinessPeriods={isProductionTab || tab === 'profit' || Boolean(DETAILED_TYPES[tab])}
         extraFilters={(
           <>
             {branchFilter(tab === 'sales_analytics' || tab === 'leaderboard' || isRentalTab || tab === 'gst_reconciliation' || tab === 'inventory_location')}
@@ -1478,6 +1479,10 @@ export default function ReportsPage() {
               </div>
             )}
         </Card>
+      )}
+
+      {DETAILED_TYPES[tab] && (
+        <DetailedReportPanel type={DETAILED_TYPES[tab]} range={range} companyParams={companyParams} />
       )}
 
       {tab === 'sales_analytics' && (

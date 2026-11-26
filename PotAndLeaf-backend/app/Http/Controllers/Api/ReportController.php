@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Location;
 use App\Models\Supplier;
+use App\Services\DetailedReportService;
 use App\Services\ReportExportService;
 use App\Services\ReportService;
 use App\Services\SalesAnalyticsService;
@@ -24,6 +25,7 @@ class ReportController extends Controller
         private readonly ReportExportService $export,
         private readonly SalesAnalyticsService $analytics,
         private readonly EodManagementSummaryService $eodManagement,
+        private readonly DetailedReportService $detailed,
     ) {}
 
     public function dashboard(Request $request): JsonResponse
@@ -34,6 +36,29 @@ class ReportController extends Controller
         $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
 
         return $this->ok($this->reports->dashboard($companyId, $from, $to, null));
+    }
+
+    /**
+     * Detailed report for one kind of document, by invoice or added up by day, week, month or year.
+     * GET /reports/detailed/{type}?view=invoice|day|week|month|year&from=&to=&search=&mode=
+     */
+    public function detailed(Request $request, string $type): JsonResponse
+    {
+        $this->allow($request, 'reports.view');
+        abort_unless(in_array($type, DetailedReportService::TYPES, true), 404);
+
+        $from = \App\Support\Http\DateRange::from($request, now()->subDays(29)->toDateString());
+        $to = \App\Support\Http\DateRange::to($request, now()->toDateString());
+
+        return $this->ok($this->detailed->build(
+            $type,
+            $this->reportCompanyId($request),
+            $from,
+            $to,
+            (string) $request->query('view', 'day'),
+            $request->filled('search') ? (string) $request->query('search') : null,
+            $request->filled('mode') ? (string) $request->query('mode') : null,
+        ));
     }
 
     public function formData(Request $request): JsonResponse

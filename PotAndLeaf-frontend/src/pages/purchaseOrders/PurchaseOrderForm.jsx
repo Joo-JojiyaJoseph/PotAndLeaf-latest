@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
 import { todayISO } from '../../lib/format';
 import { useConfirm } from '../../lib/confirm';
+import { MediaImg } from '../../components/media';
 
 const today = todayISO;
 const emptyLine = () => ({ product_id: '', qty: '', rate: '', gst_rate: '' });
@@ -193,10 +194,17 @@ export default function PurchaseOrderForm() {
               {lines.map((line, i) => (
                 <tr key={i} className="border-b border-line/60 last:border-0">
                   <td className="px-3 py-2">
-                    <Select value={line.product_id} onChange={(e) => onPickProduct(i, e.target.value)} className={selectCls}>
-                      <option value="">Select…</option>
-                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </Select>
+                    <div className="flex items-center gap-3">
+                      <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-leaf-soft">
+                        <MediaImg value={productMap[line.product_id]?.image} className="size-full object-cover" iconClassName="size-5 text-leaf/50" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <Select value={line.product_id} onChange={(e) => onPickProduct(i, e.target.value)} className={selectCls}>
+                          <option value="">Select…</option>
+                          {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </Select>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>
                   <td className="px-3 py-2"><button onClick={() => setLines((p) => (p.length === 1 ? p : p.filter((_, idx) => idx !== i)))} className="rounded-md p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button></td>

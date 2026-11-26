@@ -28,6 +28,7 @@ import { ChartBarIcon,
 /** Report sections, in the order shown. */
 export const REPORT_GROUPS = [
   { value: 'sales', label: 'Sales & profit' },
+  { value: 'detailed', label: 'Detailed reports: invoice, day, week, month, year' },
   { value: 'money', label: 'Money: cash, bank, dues, GST' },
   { value: 'stock', label: 'Stock & production' },
   { value: 'rental', label: 'Plant rental' },
@@ -35,7 +36,23 @@ export const REPORT_GROUPS = [
 ];
 
 /** Report catalog — icon, label, permission flags; group, plain name and one-line help for the menu. */
+/** Detailed report tabs and the kind of document each one lists. */
+export const DETAILED_TYPES = {
+  detail_sales: 'sales',
+  detail_purchases: 'purchases',
+  detail_sales_returns: 'sales_returns',
+  detail_purchase_returns: 'purchase_returns',
+  detail_receipts: 'receipts',
+  detail_payments: 'payments',
+};
+
 export const REPORT_TABS = [
+  { value: 'detail_sales', label: 'Sales (Detailed)', shortLabel: 'Sales detail', icon: DocumentTextIcon, group: 'detailed', help: 'Every bill, or sales added up by day, week, month or year.', plain: 'Sales details' },
+  { value: 'detail_purchases', label: 'Purchases (Detailed)', shortLabel: 'Purchases', icon: ClipboardDocumentListIcon, group: 'detailed', help: 'Every purchase bill, or purchases by day, week, month or year.', plain: 'Purchase details' },
+  { value: 'detail_sales_returns', label: 'Sales Returns (Detailed)', shortLabel: 'Sales returns', icon: ArrowsRightLeftIcon, group: 'detailed', help: 'Goods customers returned, return by return or by period.', plain: 'Sales return details' },
+  { value: 'detail_purchase_returns', label: 'Purchase Returns (Detailed)', shortLabel: 'Purch. returns', icon: ArrowsRightLeftIcon, group: 'detailed', help: 'Goods sent back to suppliers, return by return or by period.', plain: 'Purchase return details' },
+  { value: 'detail_receipts', label: 'Customer Receipts (Detailed)', shortLabel: 'Receipts', icon: BanknotesIcon, accounting: true, group: 'detailed', help: 'Money received from customers, receipt by receipt or by period.', plain: 'Customer receipt details' },
+  { value: 'detail_payments', label: 'Supplier Payments (Detailed)', shortLabel: 'Payments', icon: WalletIcon, accounting: true, group: 'detailed', help: 'Money paid to suppliers, payment by payment or by period.', plain: 'Supplier payment details' },
   { value: 'dashboard', label: 'Dashboard', shortLabel: 'Dashboard', icon: ChartBarIcon , group: 'sales', help: 'Sales, purchases, money owed and stock value for the dates you pick.', plain: 'Overview' },
   { value: 'sales_analytics', label: 'Sales Analytics', shortLabel: 'Sales', icon: ArrowTrendingUpIcon , group: 'sales', help: 'Sales by day, by payment mode, by product and this financial year.', plain: 'Sales details' },
   { value: 'leaderboard', label: 'Leaderboard', shortLabel: 'Leaderboard', icon: TrophyIcon , group: 'people', help: 'Staff ranked by sales, bills or commission.', plain: 'Best staff' },

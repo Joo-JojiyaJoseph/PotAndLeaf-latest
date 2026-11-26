@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\Concerns\ResolvesMediaUrls;
 use App\Models\PurchaseOrder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -9,6 +10,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin PurchaseOrder */
 class PurchaseOrderResource extends JsonResource
 {
+    use ResolvesMediaUrls;
+
     public function toArray(Request $request): array
     {
         $user = $request->user();
@@ -46,6 +49,7 @@ class PurchaseOrderResource extends JsonResource
             'items'         => $this->whenLoaded('items', fn () => $this->items->map(fn ($i) => [
                 'id' => $i->id, 'product_id' => $i->product_id, 'product_name' => $i->product_name,
                 'sku' => $i->product?->sku,
+                'image' => $this->mediaUrls($i->product?->images ?? [])[0] ?? null,
                 'qty' => (float) $i->qty, 'rate' => (float) $i->rate, 'gst_rate' => (float) $i->gst_rate,
                 'taxable_value' => (float) $i->taxable_value, 'line_total' => (float) $i->line_total,
             ])->values()),
