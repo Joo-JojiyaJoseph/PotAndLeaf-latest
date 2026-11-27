@@ -122,8 +122,10 @@ export default function PurchaseDetail() {
         <InfoGrid cols={4}>
           <InfoItem label="Supplier" value={p.supplier?.name} />
           <InfoItem label="Invoice no." value={p.invoice_no} mono />
+          {p.agent_code && <InfoItem label="Agent code" value={p.agent_code} mono />}
           <InfoItem label="Invoice date" value={p.invoice_date ? formatDate(p.invoice_date) : null} />
           <InfoItem label="Purchase date" value={formatDate(p.purchase_date)} />
+          <InfoItem label="Received into" value={p.location ? `${p.location.name} (${p.location.type === 'godown' ? 'Godown' : 'Branch'})` : null} />
           <InfoItem label="Tax type" value={interstate ? 'Inter-state (IGST)' : 'Intra-state (CGST + SGST)'} />
           <InfoItem label="Confirmed at" value={p.confirmed_at ? formatDate(p.confirmed_at) : null} />
           <InfoItem label="Entered by" value={p.entered_by} />
@@ -185,6 +187,7 @@ export default function PurchaseDetail() {
               </>
             )}
             <div className="flex justify-between text-muted"><dt>Landed cost</dt><dd className="tnum">{formatCurrency(p.landed_cost_total)}</dd></div>
+            {Number(p.final_discount) > 0 && <div className="flex justify-between text-leaf"><dt>Discount on final amount</dt><dd className="tnum">−{formatCurrency(p.final_discount)}</dd></div>}
             {Number(p.freight_to_transporter) > 0 ? (
               <>
                 <div className="mt-2 flex justify-between border-t border-line pt-2 font-medium"><dt>Bill total</dt><dd className="tnum">{formatCurrency(p.grand_total)}</dd></div>

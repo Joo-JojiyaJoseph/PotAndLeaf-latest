@@ -43,6 +43,80 @@ class SaleNotificationService
         return $result;
     }
 
+    /**
+     * "How to look after what you bought": lists the products and each category's care guide
+     * (Malayalam and English). Sent to the customer's WhatsApp after a sale.
+     *
+     * @return array{success: bool, message: string, provider?: string}
+     */
+    public function sendCareGuideWhatsApp(Sale $sale, bool $requireAutoSetting = false): array
+    {
+        $sale->loadMissing(['items', 'customer:id,name,phone,whatsapp', 'company:id,name']);
+        $company = $sale->company;
+        if (! $company) {
+            return ['success' => false, 'message' => 'Sale is missing company details.'];
+        }
+        if ($this->settings->get($company->id, 'whatsapp_enabled') !== '1') {
+            return ['success' => false, 'message' => 'WhatsApp sharing is disabled for this company.'];
+        }
+        if ($requireAutoSetting && $this->settings->get($company->id, 'sale_care_whatsapp') !== '1') {
+            return ['success' => false, 'message' => 'Care-guide WhatsApp is switched off.'];
+        }
+        if ($sale->status !== 'confirmed') {
+            return ['success' => false, 'message' => 'Only confirmed sales can send a care guide.'];
+        }
+        $to = $sale->customer?->whatsapp ?: $sale->customer?->phone;
+        if (! $to) {
+            return ['success' => false, 'message' => 'The customer has no phone number.'];
+        }
+        $message = $this->buildCareGuideMessage($company, $sale);
+        if ($message === null) {
+            return ['success' => false, 'message' => 'None of the products bought has a care guide.'];
+        }
+
+        return $this->whatsapp->sendMessage($to, $message);
+    }
+
+    /** Null when no purchased product's category has a care guide. */
+    public function buildCareGuideMessage(Company $company, Sale $sale): ?string
+    {
+        $productIds = $sale->items->pluck('product_id')->filter()->unique()->all();
+        $products = \App\Models\Product::query()->whereIn('id', $productIds)->get(['id', 'name', 'category_id'])->keyBy('id');
+        $categories = \App\Models\ProductCategory::query()->whereIn('id', $products->pluck('category_id')->filter()->unique()->all())->get()->keyBy('id');
+        $parentIds = $categories->pluck('parent_id')->filter()->unique()->diff($categories->keys())->all();
+        if ($parentIds) {
+            $categories = $categories->union(\App\Models\ProductCategory::query()->whereIn('id', $parentIds)->get()->keyBy('id'));
+        }
+
+        $lines = ["*Thank you for shopping with {$company->name}!*", '', 'What you bought and how to look after it:'];
+        $seen = [];
+        $any = false;
+        foreach ($sale->items as $item) {
+            $p = $products->get($item->product_id);
+            // The product's own (sub)category guide wins; fall back to its parent category's.
+            $cat = $p ? $categories->get($p->category_id) : null;
+            if ($cat && ! filled($cat->care_guide_en) && ! filled($cat->care_guide_ml) && $cat->parent_id) {
+                $cat = $categories->get($cat->parent_id) ?: $cat;
+            }
+            $lines[] = '';
+            $lines[] = "• *{$item->product_name}*";
+            if ($cat && (filled($cat->care_guide_en) || filled($cat->care_guide_ml)) && ! isset($seen[$cat->id])) {
+                $seen[$cat->id] = true;
+                $any = true;
+                if (filled($cat->care_guide_ml)) {
+                    $lines[] = trim($cat->care_guide_ml);
+                }
+                if (filled($cat->care_guide_en)) {
+                    $lines[] = trim($cat->care_guide_en);
+                }
+            } elseif ($cat && isset($seen[$cat->id])) {
+                $lines[] = "_(care as for {$cat->name} above)_";
+            }
+        }
+
+        return $any ? implode("\n", $lines) : null;
+    }
+
     public function buildInvoiceMessage(Company $company, Sale $sale): string
     {
         $money = fn ($n) => '₹'.number_format((float) $n, 2);

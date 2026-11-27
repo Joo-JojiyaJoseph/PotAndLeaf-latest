@@ -6,9 +6,10 @@ import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Field, Input, Textarea, Spinner, Select, PageHeader } from '../../components/ui';
 import { formatCurrency, todayISO as today } from '../../lib/format';
-import { computeSale, tierPrice, discountAmount } from '../../lib/saleCalc';
+import { computeSale, tierPrice, discountAmount, applyFinalDiscount } from '../../lib/saleCalc';
 import CrossBranchStockPanel from '../../components/CrossBranchStockPanel';
 import QuickCustomerModal from '../../components/QuickCustomerModal';
+import QuickStockFixModal from '../../components/QuickStockFixModal';
 
 const BILL_KINDS = [
   { value: 'tax_invoice', label: 'Tax invoice' },
@@ -54,7 +55,7 @@ function QtyControl({ value, onChange }) {
 export default function SaleForm() {
   const navigate = useNavigate();
   const { isSuperAdmin, companies, companyId, selectCompany, activeCompany } = useAuth();
-  const [header, setHeader] = useState({ customer_id: '', sale_date: today(), is_interstate: false, payment_mode: 'cash', bill_kind: 'tax_invoice', amount_paid: '', notes: '', loyalty_points_redeemed: '' });
+  const [header, setHeader] = useState({ salesman_id: '', discount_amount: '', location_id: '', customer_id: '', sale_date: today(), is_interstate: false, payment_mode: 'cash', bill_kind: 'tax_invoice', amount_paid: '', notes: '', loyalty_points_redeemed: '' });
   const [lines, setLines] = useState([emptyLine()]);
   const [scanValue, setScanValue] = useState('');
   const [scanError, setScanError] = useState('');
@@ -89,6 +90,7 @@ export default function SaleForm() {
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const queryClient = useQueryClient();
+  const [stockFix, setStockFix] = useState(null); // { product, qty } while the quick stock fix window is open
   const [quickCustomerOpen, setQuickCustomerOpen] = useState(false);
   const [amountTouched, setAmountTouched] = useState(false); // false = the box follows the amount due
 
@@ -97,7 +99,32 @@ export default function SaleForm() {
     queryFn: () => api.get('/sales/form-data').then((r) => r.data.data),
     enabled: Boolean(activeCompany),
   });
-  const products = data?.products ?? [];
+  // With several branches / godowns a bill sells from one branch, so show THAT branch's stock for each product.
+  const allLocations = data?.locations ?? [];
+  const branches = allLocations.filter((l) => l.type !== 'godown');
+  const sellFromOptions = branches.length ? branches : allLocations;
+  const locationStock = data?.location_stock ?? {};
+  const isMultiLocation = allLocations.length > 1;
+  const rawProducts = data?.products ?? [];
+  const products = useMemo(() => (isMultiLocation && header.location_id
+    ? rawProducts.map((p) => ({ ...p, current_stock: Number(locationStock[header.location_id]?.[p.id] ?? 0) }))
+    : rawProducts), [rawProducts, isMultiLocation, header.location_id, locationStock]);
+
+  // The salesman credited with the bill and its commission: start with the person entering it, but any staff member can be chosen.
+  const salesmen = data?.salesmen ?? [];
+  useEffect(() => {
+    if (header.salesman_id || !salesmen.length) return;
+    const mine = salesmen.find((u) => String(u.id) === String(data?.my_user_id));
+    if (mine) setHeader((h) => ({ ...h, salesman_id: String(mine.id) }));
+  }, [salesmen.length, data?.my_user_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Start on the person's own branch, else the main branch.
+  useEffect(() => {
+    if (header.location_id || sellFromOptions.length < 2) return;
+    const mine = data?.my_location_id;
+    const pick = sellFromOptions.find((l) => String(l.id) === String(mine)) ?? sellFromOptions.find((l) => l.is_default) ?? sellFromOptions[0];
+    setHeader((h) => ({ ...h, location_id: String(pick.id) }));
+  }, [sellFromOptions.length, data?.my_location_id]); // eslint-disable-line react-hooks/exhaustive-deps
   const customers = data?.customers ?? [];
   const productsById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products]);
   // Batches with stock, oldest first, grouped by product (to sell from a chosen batch).
@@ -125,11 +152,14 @@ export default function SaleForm() {
   }, [customerType]);
 
   // The Disc. box is a percentage; the server stores the line discount in rupees.
+  // A discount typed in rupees on the whole bill comes off the final amount (after GST and round-off).
+  const billDiscount = Math.max(0, Number(header.discount_amount) || 0);
   const computed = useMemo(
     () => computeSale(lines.map((l) => ({ ...l, discount: discountAmount(l) })), header.is_interstate),
     [lines, header.is_interstate],
   );
-  const t = computed.totals;
+  const billTotal = computed.totals.grand_total;
+  const t = useMemo(() => applyFinalDiscount(computed.totals, billDiscount), [computed, billDiscount]);
   const settings = data?.settings ?? {};
   const redeemRate = Number(settings.loyalty_redeem_rupees) || 1;
   const redeemCapPct = Number(settings.loyalty_redeem_cap_percent) ?? 50;
@@ -166,6 +196,14 @@ export default function SaleForm() {
 
   async function save() {
     setErrors({});
+    if (salesmen.length && !header.salesman_id) {
+      setErrors({ salesman_id: ['Choose the salesman for this bill.'] });
+      return;
+    }
+    if (!header.customer_id) {
+      setErrors({ customer_id: ['Choose a customer, or click New to add one (name needed, phone optional).'] });
+      return;
+    }
     if (header.bill_kind === 'tax_invoice' && header.payment_mode !== 'credit' && dueTotal > 0 && !(paidNow > 0)) {
       setErrors({ amount_paid: ['Nothing is paid on a Cash / Card / UPI bill. Enter the amount received, or choose Credit.'] });
       return;
@@ -179,6 +217,9 @@ export default function SaleForm() {
         payment_mode: header.payment_mode,
         bill_kind: header.bill_kind,
         amount_paid: paidNow,
+        salesman_id: header.salesman_id ? Number(header.salesman_id) : undefined,
+        discount_amount: billDiscount > 0 ? billDiscount : undefined,
+        location_id: header.location_id || undefined,
         loyalty_points_redeemed: redeemPoints || 0,
         notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({
@@ -219,10 +260,10 @@ export default function SaleForm() {
           </div>
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Customer" error={err('customer_id')}>
+          <Field label="Customer" required error={err('customer_id')}>
             <div className="flex items-center gap-2">
               <Select icon={UserIcon} value={header.customer_id} onChange={(e) => setHeader((h) => ({ ...h, customer_id: e.target.value }))} className={selectCls}>
-                <option value="">Walk-in</option>
+                <option value="">Select a customer…</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.type}</option>)}
               </Select>
               <Button type="button" variant="outline" size="sm" className="h-10 shrink-0 rounded-[12px]" onClick={() => setQuickCustomerOpen(true)} title="Add a new customer">
@@ -230,6 +271,19 @@ export default function SaleForm() {
               </Button>
             </div>
           </Field>
+          <Field label="Salesman" required error={err('salesman_id')}>
+            <Select icon={UserIcon} value={header.salesman_id} onChange={(e) => setHeader((h) => ({ ...h, salesman_id: e.target.value }))} className={selectCls}>
+              <option value="">Select the salesman…</option>
+              {salesmen.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </Select>
+          </Field>
+          {sellFromOptions.length > 1 && (
+            <Field label="Sell from (branch)" error={err('location_id')}>
+              <Select value={header.location_id} onChange={(e) => setHeader((h) => ({ ...h, location_id: e.target.value }))} className={selectCls}>
+                {sellFromOptions.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </Select>
+            </Field>
+          )}
           <Field label="Sale date" required error={err('sale_date')}>
             <Input type="date" value={header.sale_date} onChange={(e) => setHeader((h) => ({ ...h, sale_date: e.target.value }))} />
           </Field>
@@ -283,7 +337,7 @@ export default function SaleForm() {
                     <td className="px-1 py-1.5">
                       <Select icon={CubeIcon} value={line.product_id} onChange={(e) => pickProduct(i, e.target.value)} className={selectCls + ' min-w-[180px]'}>
                         <option value="">Select…</option>
-                        {products.map((pr) => <option key={pr.id} value={pr.id}>{pr.name} · stock {pr.current_stock}</option>)}
+                        {products.map((pr) => <option key={pr.id} value={pr.id} image={pr.image}>{pr.name} · stock {pr.current_stock}</option>)}
                       </Select>
                       {p && (batchesByProduct[p.id]?.length ?? 0) > 0 && (
                         <Select
@@ -306,7 +360,12 @@ export default function SaleForm() {
                       {(() => {
                         const b = line.product_batch_id ? (batchesByProduct[line.product_id] ?? []).find((x) => x.id === line.product_batch_id) : null;
                         if (b && Number(line.qty) > b.remaining_qty) return <span className="mt-1 block text-xs text-danger">Only {b.remaining_qty} in batch {b.batch_no}</span>;
-                        if (p && Number(line.qty) > p.current_stock) return <span className="mt-1 block text-xs text-danger">Only {p.current_stock} in stock</span>;
+                        if (p && Number(line.qty) > p.current_stock) return (
+                          <span className="mt-1 block text-xs text-danger">
+                            Only {p.current_stock} in stock.
+                            <button type="button" className="ml-1.5 font-medium text-leaf underline" onClick={() => setStockFix({ product: p, qty: Number(line.qty) })}>Plants are here? Fix the stock now</button>
+                          </span>
+                        );
                         return null;
                       })()}
                       {line.barcode && !batchesByProduct[line.product_id]?.length && <span className="mt-1 block text-[11px] text-muted">Batch {line.batch_no} · {line.barcode}</span>}
@@ -337,7 +396,7 @@ export default function SaleForm() {
       </Card>
 
       {stockCheckProductId && productsById[stockCheckProductId] && Number(lines.find((l) => l.product_id === stockCheckProductId)?.qty || 0) > (productsById[stockCheckProductId]?.current_stock ?? 0) && (
-        <CrossBranchStockPanel productId={stockCheckProductId} />
+        <CrossBranchStockPanel productId={stockCheckProductId} locationId={header.location_id} />
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -394,7 +453,23 @@ export default function SaleForm() {
               </>
             )}
             <div className="flex justify-between text-muted"><dt>Round off</dt><dd className="tnum">{formatCurrency(t.round_off)}</dd></div>
-            <div className="flex justify-between font-medium"><dt>Total</dt><dd className="tnum">{formatCurrency(t.grand_total)}</dd></div>
+            <div className="flex justify-between font-medium"><dt>{t.final_discount > 0 ? 'Bill total' : 'Total'}</dt><dd className="tnum">{formatCurrency(billTotal)}</dd></div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-muted">Discount on final amount (₹)</dt>
+              <dd>
+                <input
+                  type="number" min="0" step="0.01" inputMode="decimal"
+                  value={header.discount_amount}
+                  onChange={(e) => setHeader((h) => ({ ...h, discount_amount: e.target.value }))}
+                  className="h-8 w-28 rounded-[10px] glass-control px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30"
+                  placeholder="0.00" aria-label="Discount amount in rupees"
+                />
+              </dd>
+            </div>
+            {err('discount_amount') && <p className="text-xs text-danger">{err('discount_amount')}</p>}
+            {t.final_discount > 0 && (
+              <div className="flex justify-between font-medium"><dt>Total after discount</dt><dd className="tnum">{formatCurrency(t.grand_total)}</dd></div>
+            )}
             {loyaltyDiscount > 0 && (
               <div className="flex justify-between text-leaf"><dt>Loyalty discount</dt><dd className="tnum">−{formatCurrency(loyaltyDiscount)}</dd></div>
             )}
@@ -409,6 +484,19 @@ export default function SaleForm() {
           <Button className="mt-5 w-full rounded-full" onClick={save} disabled={saving}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
         </Card>
       </div>
+
+      <QuickStockFixModal
+        open={Boolean(stockFix)}
+        onClose={() => setStockFix(null)}
+        product={stockFix?.product}
+        neededQty={stockFix?.qty}
+        locationId={header.location_id}
+        locationName={allLocations.find((l) => String(l.id) === String(header.location_id))?.name}
+        onFixed={async () => {
+          await queryClient.invalidateQueries({ queryKey: ['sale-form-data'] });
+          setStockFix(null);
+        }}
+      />
 
       <QuickCustomerModal
         open={quickCustomerOpen}

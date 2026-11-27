@@ -53,7 +53,7 @@ class AccountingTransaction extends Model
 
     public function isManual(): bool
     {
-        return blank($this->source_type) || $this->source_type === 'manual';
+        return blank($this->source_type) || in_array($this->source_type, ['manual', 'expense'], true);
     }
 
     public function debitTotal(): float

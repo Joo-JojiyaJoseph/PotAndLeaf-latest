@@ -45,9 +45,9 @@ class BackorderController extends Controller
             ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'type' => $c->type?->value]);
 
         $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')
-            ->get(['id', 'sku', 'name', 'current_stock', 'retail_price', 'gst_rate'])
+            ->get(['id', 'sku', 'name', 'current_stock', 'retail_price', 'gst_rate', 'images'])
             ->map(fn ($p) => [
-                'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name,
+                'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'image' => \App\Support\Media\MediaUrl::resolveMany($p->images ?? [])[0] ?? null,
                 'current_stock' => (float) $p->current_stock,
                 'retail_price' => (float) $p->retail_price, 'gst_rate' => (float) $p->gst_rate,
             ]);

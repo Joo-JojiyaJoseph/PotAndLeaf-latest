@@ -16,6 +16,7 @@ class ProductionOrder extends Model
     protected $fillable = [
         'company_id', 'bom_id', 'output_product_id', 'location_id', 'supervisor_id', 'order_no',
         'order_date', 'output_quantity', 'commission_pending_qty', 'total_input_cost', 'output_unit_cost',
+        'setting_charge', 'misc_charge', 'margin_type', 'margin_value',
         'status', 'notes', 'completed_at',
     ];
 
@@ -27,6 +28,9 @@ class ProductionOrder extends Model
             'commission_pending_qty'  => 'decimal:3',
             'total_input_cost'        => 'decimal:2',
             'output_unit_cost'        => 'decimal:4',
+            'setting_charge'          => 'decimal:2',
+            'misc_charge'             => 'decimal:2',
+            'margin_value'            => 'decimal:2',
             'completed_at'            => 'datetime',
         ];
     }

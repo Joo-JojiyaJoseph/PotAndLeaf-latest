@@ -8,7 +8,7 @@ import { Badge, Button, Card, Field, Input, Modal, Spinner } from '../../compone
 import PagedTable from '../../components/PagedTable';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatCurrency, formatDate, todayISO as today } from '../../lib/format';
-import { printRentalInvoice } from '../../lib/invoicePrint';
+import { printRentalInvoice, printRentalEstimate } from '../../lib/invoicePrint';
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
 import { useConfirm } from '../../lib/confirm';
@@ -173,7 +173,13 @@ export default function RentalDetail() {
     onSuccess: () => { invalidate(); setBilling(false); toast.success('Invoice generated.'); },
     onError: (err) => toast.error(apiMessage(err, 'Could not generate invoice.')),
   });
-  const payM = useMutation({ mutationFn: (invId) => api.post(`/rental-invoices/${invId}/paid`, {}, withCompany(recordCompanyId)), onSuccess: invalidate });
+  // Marking a rent bill paid: an optional discount on the final amount clears the bill and goes to the accounts.
+  const [payingInv, setPayingInv] = useState(null);
+  const [payDiscount, setPayDiscount] = useState('');
+  const payM = useMutation({
+    mutationFn: ({ invId, discount }) => api.post(`/rental-invoices/${invId}/paid`, { discount_amount: discount > 0 ? discount : undefined }, withCompany(recordCompanyId)),
+    onSuccess: () => { invalidate(); setPayingInv(null); setPayDiscount(''); },
+  });
   const waM = useMutation({
     mutationFn: (invId) => api.post(`/rental-invoices/${invId}/whatsapp`, {}, withCompany(recordCompanyId)),
     onSuccess: (res) => toast.success(res.data?.message || 'WhatsApp message sent.'),
@@ -226,6 +232,9 @@ export default function RentalDetail() {
         backTo="/rentals"
         actions={<>
           <Badge tone={tone[r.status] ?? 'default'}>{r.status}</Badge>
+          {r.status !== 'cancelled' && (
+            <Button variant="outline" size="sm" onClick={() => printRentalEstimate(r)}><PrinterIcon className="size-4" /> Print estimate</Button>
+          )}
           {r.can?.cancel && <Button variant="ghost" size="sm" onClick={async () => { if (await confirm({ title: 'Cancel this rental', message: 'Cancel this draft rental? No plants have been issued yet.', confirmLabel: 'Yes, cancel', cancelLabel: 'Keep it' })) cancelM.mutate(); }} disabled={cancelM.isPending}><XCircleIcon className="size-4" /> Cancel</Button>}
           {r.can?.bill && <Button variant="outline" size="sm" onClick={openBill}><PlusIcon className="size-4" /> Generate invoice</Button>}
           {r.can?.return && <Button variant="outline" size="sm" onClick={openReturn}><ArrowUturnLeftIcon className="size-4" /> Return</Button>}
@@ -252,7 +261,7 @@ export default function RentalDetail() {
               <InfoItem label={`Rent per ${word}`} value={formatCurrency(r.rent_per_cycle)} mono />
               {r.expected_cycles != null && <InfoItem label={`Total till expected end (${r.expected_cycles} ${word}${r.expected_cycles === 1 ? '' : 's'})`} value={formatCurrency(r.rent_per_cycle * r.expected_cycles)} mono />}
               <InfoItem label="Billed so far" value={formatCurrency(r.billed_total ?? 0)} mono />
-              <InfoItem label="Security deposit" value={formatCurrency(r.deposit)} mono />
+              <InfoItem label="Security deposit" value={r.deposit == null ? 'None' : formatCurrency(r.deposit)} mono />
             </InfoGrid>
           </Section>
         );
@@ -265,7 +274,7 @@ export default function RentalDetail() {
           <InfoItem label="Auto billing" value={r.auto_bill ? 'On' : 'Off'} />
           <InfoItem label="Next bill date" value={r.next_bill_at ? formatDate(r.next_bill_at) : null} />
           <InfoItem label="Last billed to" value={r.last_billed_to ? formatDate(r.last_billed_to) : null} />
-          <InfoItem label="Deposit" value={formatCurrency(r.deposit)} mono />
+          <InfoItem label="Deposit" value={r.deposit == null ? 'None' : formatCurrency(r.deposit)} mono />
           <InfoItem label="Expected end" value={r.expected_end_date ? formatDate(r.expected_end_date) : null} />
           <InfoItem label="Activated" value={r.activated_at ? formatDate(r.activated_at) : null} />
           <InfoItem label="Returned" value={r.returned_at ? formatDate(r.returned_at) : null} />
@@ -277,7 +286,7 @@ export default function RentalDetail() {
         <Section title="Settlement">
           <InfoGrid cols={4}>
             <InfoItem label="Return date" value={r.return_date ? formatDate(r.return_date) : '—'} />
-            <InfoItem label="Deposit" value={formatCurrency(r.deposit)} mono />
+            <InfoItem label="Deposit" value={r.deposit == null ? 'None' : formatCurrency(r.deposit)} mono />
             <InfoItem label="Rental charge" value={formatCurrency(r.rental_charge)} mono />
             <InfoItem label="Damage charge" value={formatCurrency(r.damage_charge)} mono />
             <InfoItem label="Missing charge" value={formatCurrency(r.missing_charge)} mono />
@@ -344,7 +353,7 @@ export default function RentalDetail() {
                     <td className="px-3 py-2"><Badge tone={inv.status === 'paid' ? 'active' : 'warning'}>{inv.status}</Badge></td>
                     <td className="py-2 pl-3">
                       <div className="flex items-center justify-end gap-1.5">
-                        {inv.status !== 'paid' && r.can?.bill && <Button size="sm" variant="outline" onClick={() => payM.mutate(inv.id)} disabled={payM.isPending}>Mark paid</Button>}
+                        {inv.status !== 'paid' && r.can?.bill && <Button size="sm" variant="outline" onClick={() => { setPayingInv(inv); setPayDiscount(''); }} disabled={payM.isPending}>Mark paid</Button>}
                         <button onClick={() => printRentalInvoice(r, inv)} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink" title="Print"><PrinterIcon className="size-4" /></button>
                         {r.can?.bill && (
                           <button onClick={() => waM.mutate(inv.id)} disabled={waM.isPending} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-ink disabled:opacity-50" title="Send via WhatsApp">
@@ -475,6 +484,26 @@ export default function RentalDetail() {
         {settleM.isError && (
           <p className="mt-3 text-sm text-danger">{apiMessage(settleM.error, 'Could not settle this rental.')}</p>
         )}
+      </Modal>
+
+      <Modal open={Boolean(payingInv)} onClose={() => setPayingInv(null)} title={`Mark paid — ${payingInv?.invoice_no ?? ''}`}
+        footer={<>
+          <Button variant="ghost" size="sm" onClick={() => setPayingInv(null)}>Cancel</Button>
+          <Button size="sm" disabled={payM.isPending || Number(payDiscount) > Number(payingInv?.amount ?? 0)} onClick={() => payM.mutate({ invId: payingInv.id, discount: Number(payDiscount) || 0 })}>{payM.isPending ? 'Saving…' : 'Mark paid'}</Button>
+        </>}
+      >
+        <dl className="space-y-1.5 text-sm">
+          <div className="flex justify-between"><dt className="text-muted">Bill amount</dt><dd className="tnum">{formatCurrency(payingInv?.amount ?? 0)}</dd></div>
+          <div className="flex justify-between"><dt className="text-muted">Discount</dt><dd className="tnum">−{formatCurrency(Number(payDiscount) || 0)}</dd></div>
+          <div className="flex justify-between border-t border-line pt-1.5 font-semibold"><dt>Final amount received</dt><dd className="tnum">{formatCurrency(Math.max(0, Number(payingInv?.amount ?? 0) - (Number(payDiscount) || 0)))}</dd></div>
+        </dl>
+        <div className="mt-4">
+          <Field label="Discount on the final amount (₹)">
+            <Input type="number" step="0.01" min="0" value={payDiscount} onChange={(e) => setPayDiscount(e.target.value)} placeholder="0.00" />
+          </Field>
+          <p className="mt-1.5 text-xs text-muted">The discount is entered in the accounts as Discount Allowed. Leave it empty if there is none.</p>
+        </div>
+        {Number(payDiscount) > Number(payingInv?.amount ?? 0) && <p className="mt-2 text-sm text-danger">The discount cannot be more than the bill.</p>}
       </Modal>
     </div>
   );

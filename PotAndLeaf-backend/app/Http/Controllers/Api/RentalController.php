@@ -39,12 +39,13 @@ class RentalController extends Controller
         $this->allow($request, 'rental.create');
 
         $customers = Customer::forCompany($company->id)->where('status', 'active')->orderBy('name')
-            ->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name]);
+            ->get(['id', 'name', 'phone'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'phone' => $c->phone]);
         // Only products ticked "This product can be rented" can go on a rental.
         $products = Product::forCompany($company->id)->where('status', 'active')->where('is_rental', true)->orderBy('name')
-            ->get(['id', 'sku', 'name', 'retail_price', 'current_stock', 'is_rental', 'rental_daily_rate'])
+            ->get(['id', 'sku', 'name', 'retail_price', 'current_stock', 'is_rental', 'rental_daily_rate', 'images'])
             ->map(fn ($p) => [
                 'id'                => $p->id,
+                'image' => \App\Support\Media\MediaUrl::resolveMany($p->images ?? [])[0] ?? null,
                 'sku'               => $p->sku,
                 'name'              => $p->name,
                 'retail_price'      => (float) $p->retail_price,
@@ -55,7 +56,19 @@ class RentalController extends Controller
         $locations = Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'is_default'])->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'is_default' => (bool) $l->is_default]);
 
-        return $this->ok(['customers' => $customers, 'products' => $products, 'locations' => $locations]);
+        $settings = app(\App\Services\SettingsService::class);
+        $terms = trim((string) $settings->get($company->id, 'rental_terms'));
+
+        return $this->ok([
+            'customers' => $customers, 'products' => $products, 'locations' => $locations,
+            // For the estimate printed from the form, before the rental is saved.
+            'company'   => [
+                'name' => $company->name, 'legal_name' => $company->legal_name, 'gst_number' => $company->gst_number,
+                'address' => $company->address, 'phone' => $company->phone,
+            ],
+            'terms'               => $terms !== '' ? $terms : \App\Services\SettingsService::DEFAULTS['rental_terms'],
+            'estimate_valid_days' => (int) $settings->get($company->id, 'rental_estimate_valid_days'),
+        ]);
     }
 
     public function store(StoreRentalRequest $request): JsonResponse
@@ -71,7 +84,7 @@ class RentalController extends Controller
         $this->allow($request, 'rental.view');
         $this->assertRecordCompany($request, $rental);
 
-        return $this->ok(new RentalResource($rental->load(['items.product:id,retail_price', 'invoices', 'customer:id,name,type', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
+        return $this->ok(new RentalResource($rental->load(['items.product:id,retail_price', 'invoices', 'customer:id,name,type,phone', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
     }
 
     public function activate(Request $request, Rental $rental): JsonResponse
@@ -128,16 +141,17 @@ class RentalController extends Controller
         $this->assertRecordCompany($request, $rental, writable: true);
         $this->rentals->generateInvoice($this->company($request)->id, $rental, $request->validated(), $request->user()->id);
 
-        return $this->ok(new RentalResource($rental->fresh()->load(['items', 'invoices', 'customer:id,name,type'])), 'Rental invoice generated.');
+        return $this->ok(new RentalResource($rental->fresh()->load(['items', 'invoices', 'customer:id,name,type,phone'])), 'Rental invoice generated.');
     }
 
     public function markInvoicePaid(Request $request, RentalInvoice $rentalInvoice): JsonResponse
     {
         $this->allow($request, 'rental.bill');
         $this->assertRecordCompany($request, $rentalInvoice, writable: true);
-        $this->rentals->markInvoicePaid($rentalInvoice);
+        $discount = (float) ($request->validate(['discount_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999']])['discount_amount'] ?? 0);
+        $this->rentals->markInvoicePaid($rentalInvoice, $discount);
 
-        return $this->message('Invoice marked paid.');
+        return $this->message($discount > 0 ? 'Invoice marked paid with the discount.' : 'Invoice marked paid.');
     }
 
     public function sendInvoiceWhatsapp(Request $request, RentalInvoice $rentalInvoice, RentalNotificationService $notifications): JsonResponse

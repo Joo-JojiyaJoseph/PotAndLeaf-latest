@@ -49,6 +49,7 @@ export default function SaleDetail() {
       invalidate();
       const confirmed = res?.data?.data;
       toast.success(res?.data?.message || 'Sale confirmed.');
+      // The invoice can be printed straight after confirming, whether or not it is paid.
       if (confirmed && confirmed.status === 'confirmed') {
         try { printInvoice(confirmed); } catch { /* print blocked */ }
       }
@@ -81,6 +82,11 @@ export default function SaleDetail() {
     onSuccess: (res) => { invalidate(); toast.success(res?.data?.message || 'Converted to tax invoice draft.'); },
     onError: (err) => toast.error(err.response?.data?.message || 'Could not convert proforma.'),
   });
+  const careM = useMutation({
+    mutationFn: () => api.post(`/sales/${id}/care-guide`, {}, withCompany(recordCompanyId)),
+    onSuccess: (res) => toast.success(res?.data?.message || 'Care guide sent.'),
+    onError: (e) => toast.error(e.response?.data?.message || 'Could not send the care guide.'),
+  });
   const whatsappM = useMutation({
     mutationFn: () => api.post(`/sales/${id}/whatsapp`, {}, withCompany(recordCompanyId)),
     onSuccess: (res) => { invalidate(); toast.success(res?.data?.message || 'WhatsApp sent.'); },
@@ -112,6 +118,8 @@ export default function SaleDetail() {
   if (isLoading) return <DetailLoading />;
   if (isError || !data) return <DetailError backTo="/sales" />;
   const s = data;
+  // A quotation (proforma) can always be printed; an invoice once it is confirmed.
+  const canPrint = s.bill_kind === 'proforma' || s.status === 'confirmed';
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -120,8 +128,14 @@ export default function SaleDetail() {
         subtitle={`${s.customer_name} · ${formatDate(s.sale_date)}`}
         backTo="/sales"
         actions={<>
-          <Button variant="outline" size="sm" onClick={() => printInvoice(s)}><PrinterIcon className="size-4" /> Print</Button>
-          <Button variant="outline" size="sm" onClick={downloadInvoicePdf}><PrinterIcon className="size-4" /> PDF</Button>
+          {canPrint ? (
+            <>
+              <Button variant="outline" size="sm" onClick={() => printInvoice(s)}><PrinterIcon className="size-4" /> Print</Button>
+              <Button variant="outline" size="sm" onClick={downloadInvoicePdf}><PrinterIcon className="size-4" /> PDF</Button>
+            </>
+          ) : (
+            <span className="self-center text-xs text-muted">The invoice can be printed once the bill is confirmed.</span>
+          )}
           {/* Only when an item is short of stock (and there is a customer to wait for it). */}
           {s.can?.request_shortage && (
             <Button variant="outline" size="sm" onClick={() => setShortageOpen(true)} disabled={backorderM.isPending}>
@@ -131,6 +145,11 @@ export default function SaleDetail() {
           {s.can?.whatsapp && (
             <Button variant="outline" size="sm" onClick={() => whatsappM.mutate()} disabled={whatsappM.isPending}>
               <ChatBubbleLeftRightIcon className="size-4" /> WhatsApp
+            </Button>
+          )}
+          {s.can?.whatsapp && s.status === 'confirmed' && (
+            <Button variant="outline" size="sm" onClick={() => careM.mutate()} disabled={careM.isPending}>
+              <ChatBubbleLeftRightIcon className="size-4" /> Send care guide
             </Button>
           )}
           {s.status === 'confirmed' && s.customer_id && ['unpaid', 'partial'].includes(s.payment_status) && (
@@ -191,6 +210,9 @@ export default function SaleDetail() {
       <Section title="Details">
         <InfoGrid cols={4}>
           <InfoItem label="Customer" value={s.customer_name} />
+          <InfoItem label="Salesman" value={s.salesman?.name} />
+          {s.entered_by_name && s.entered_by !== s.created_by && <InfoItem label="Entered by" value={s.entered_by_name} />}
+          <InfoItem label="Sold from" value={s.location ? `${s.location.name} (${s.location.type === 'godown' ? 'Godown' : 'Branch'})` : null} />
           <InfoItem label="Bill type" value={billKindLabel[s.bill_kind] ?? s.bill_kind} />
           <InfoItem label="Payment mode" value={s.payment_mode} />
           <InfoItem label="Amount paid" value={formatCurrency(s.amount_paid)} mono />
@@ -238,8 +260,14 @@ export default function SaleDetail() {
         <Card className="w-full max-w-xs p-5">
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between"><dt className="text-muted">Subtotal</dt><dd className="tnum">{formatCurrency(s.subtotal)}</dd></div>
+            {Number(s.bill_discount) > 0 && (
+              <div className="flex justify-between text-leaf"><dt>Bill discount (already taken off the lines)</dt><dd className="tnum">−{formatCurrency(s.bill_discount)}</dd></div>
+            )}
             <div className="flex justify-between"><dt className="text-muted">{s.is_interstate ? 'IGST' : 'CGST + SGST'}</dt><dd className="tnum">{formatCurrency(s.tax_total)}</dd></div>
             <div className="flex justify-between text-muted"><dt>Round off</dt><dd className="tnum">{formatCurrency(s.round_off)}</dd></div>
+            {Number(s.final_discount) > 0 && (
+              <div className="flex justify-between text-leaf"><dt>Discount on final amount</dt><dd className="tnum">−{formatCurrency(s.final_discount)}</dd></div>
+            )}
             <div className="mt-2 flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Total</dt><dd className="tnum">{formatCurrency(s.grand_total)}</dd></div>
           </dl>
         </Card>

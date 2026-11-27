@@ -10,6 +10,8 @@ use App\Models\SalesReturn;
 use App\Repositories\Contracts\SalesReturnRepositoryInterface;
 use App\Services\CommissionEngine;
 use App\Services\InventoryService;
+use App\Services\LocationStockService;
+use App\Services\ReturnRefundService;
 use App\Services\LoyaltyService;
 use App\Services\PoolStockService;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +29,8 @@ class ConfirmSalesReturn
         private readonly LoyaltyService $loyalty,
         private readonly CommissionEngine $commissionEngine,
         private readonly PoolStockService $pool,
+        private readonly LocationStockService $locationStock,
+        private readonly ReturnRefundService $refunds,
     ) {}
 
     public function handle(SalesReturn $return, ?int $userId = null): SalesReturn
@@ -80,6 +84,7 @@ class ConfirmSalesReturn
                     productBatchId: $batchId,
                 );
                 $product->save();
+                $this->locationStock->adjust($return->company_id, $return->location_id, $product->id, 'in', (float) $item->qty);
 
                 if ($batchId) {
                     $batch = ProductBatch::query()->whereKey($batchId)->lockForUpdate()->first();
@@ -95,12 +100,16 @@ class ConfirmSalesReturn
                 }
             }
 
+            $applied = 0.0;          // part of the credit used against what the customer still owes
+            $settleCustomer = null;
             if ($return->customer_id) {
                 $customer = Customer::forCompany($return->company_id)->lockForUpdate()->find($return->customer_id);
                 if ($customer) {
+                    $settleCustomer = $customer;
                     $sale = $return->sale;
                     if ($sale && $sale->payment_mode === 'credit') {
-                        $customer->outstanding = max(0, (float) $customer->outstanding - (float) $return->grand_total);
+                        $applied = round(min(max((float) $customer->outstanding, 0.0), (float) $return->grand_total), 2);
+                        $customer->outstanding = round((float) $customer->outstanding - $applied, 2);
                         $customer->save();
                     }
 
@@ -136,6 +145,10 @@ class ConfirmSalesReturn
                     }
                 }
             }
+
+            // What is left of the credit after dues: kept as the customer's advance, or paid back now.
+            $settleCustomer?->refresh();
+            $this->refunds->settleSalesReturn($return, $settleCustomer, round((float) $return->grand_total - $applied, 2), $userId);
 
             $return->update(['status' => 'confirmed', 'confirmed_at' => now()]);
 

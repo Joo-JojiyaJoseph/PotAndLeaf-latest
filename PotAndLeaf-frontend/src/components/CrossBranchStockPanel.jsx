@@ -2,11 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import api, { withCompany } from '../lib/api';
 import { Card, Spinner } from './ui';
 
-/** Shows stock availability for the same SKU at other branches. */
-export default function CrossBranchStockPanel({ productId, sku, onUseQty, companyId, shortage = false }) {
+/** Shows where a product's stock sits across the branches and godowns of the company. */
+export default function CrossBranchStockPanel({ productId, sku, onUseQty, companyId, locationId, shortage = false }) {
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['cross-branch-stock', productId, sku, companyId],
-    queryFn: () => api.get('/inventory/stock/cross-branch', withCompany(companyId, { params: productId ? { product_id: productId } : { sku } })).then((r) => r.data.data),
+    queryKey: ['cross-branch-stock', productId, sku, companyId, locationId],
+    queryFn: () => api.get('/inventory/stock/cross-branch', withCompany(companyId, { params: { ...(productId ? { product_id: productId } : { sku }), location_id: locationId || undefined } })).then((r) => r.data.data),
     enabled: Boolean(productId || sku),
   });
 
@@ -17,12 +17,12 @@ export default function CrossBranchStockPanel({ productId, sku, onUseQty, compan
 
   return (
     <Card className="p-4">
-      <p className="text-sm font-medium">Stock across branches · {data.sku}</p>
+      <p className="text-sm font-medium">Stock at each branch and godown · {data.sku}</p>
       <p className="mt-0.5 text-xs text-muted">{data.product_name}</p>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[520px] text-sm">
           <thead><tr className="border-b border-line text-left text-faint">
-            <th className="microlabel py-1.5 pr-2 font-semibold">Branch</th>
+            <th className="microlabel py-1.5 pr-2 font-semibold">Location</th>
             <th className="microlabel px-2 py-1.5 text-right font-semibold">On hand</th>
             <th className="microlabel px-2 py-1.5 text-right font-semibold">Backorder res.</th>
             <th className="microlabel px-2 py-1.5 text-right font-semibold">In transit</th>
@@ -31,8 +31,8 @@ export default function CrossBranchStockPanel({ productId, sku, onUseQty, compan
           </tr></thead>
           <tbody>
             {data.branches.map((b) => (
-              <tr key={b.company_id} className={'border-b border-line/50 last:border-0 ' + (b.is_current_branch ? 'bg-leaf-soft/30' : '')}>
-                <td className="py-1.5 pr-2">{b.company_name}{b.is_current_branch ? ' (current)' : ''}</td>
+              <tr key={b.location_id ?? b.company_id} className={'border-b border-line/50 last:border-0 ' + (b.is_current_branch ? 'bg-leaf-soft/30' : '')}>
+                <td className="py-1.5 pr-2">{b.location_name ?? b.company_name} <span className="text-[11px] text-muted">({b.location_type === 'godown' ? 'Godown' : 'Branch'})</span>{b.is_current_branch ? ' (this one)' : ''}</td>
                 <td className="tnum px-2 py-1.5 text-right">{b.current_stock}</td>
                 <td className="tnum px-2 py-1.5 text-right text-muted">{b.backorder_pending}</td>
                 <td className="tnum px-2 py-1.5 text-right text-muted">{b.in_transit_in}</td>
@@ -56,11 +56,11 @@ export default function CrossBranchStockPanel({ productId, sku, onUseQty, compan
         </table>
       </div>
       {shortage && others.length === 0 && (
-        <p className="mt-3 text-xs text-muted">No other company has this item available right now. A backorder (waiting order) will be created for it.</p>
+        <p className="mt-3 text-xs text-muted">No other branch or godown has this item available right now. A backorder (waiting order) will be created for it.</p>
       )}
       {others.length > 0 && (
         <p className="mt-3 text-xs text-muted">
-          Enter the quantity you need, then click Request stock. Stock at {others.map((b) => b.company_name).join(', ')} becomes an inter-company transfer request. A backorder is created only if no branch has qty.
+          Enter the quantity you need, then click Request stock. Stock at {others.map((b) => b.location_name ?? b.company_name).join(', ')} becomes a stock transfer request to this branch. A backorder is created only if no branch has qty.
         </p>
       )}
     </Card>

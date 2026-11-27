@@ -9,7 +9,8 @@ import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../..
 import Pagination from '../../components/Pagination';
 import usePaged from '../../hooks/usePaged';
 
-const empty = { name: '', code: '', type: 'godown', is_default: false, is_active: true };
+const empty = { name: '', code: '', type: 'shop', is_default: false, is_active: true, is_landscape: false };
+const typeLabel = (t) => (t === 'godown' ? 'Godown' : 'Branch');
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 
 export default function LocationsList() {
@@ -21,6 +22,7 @@ export default function LocationsList() {
   const [form, setForm] = useState(empty);
   const [errors, setErrors] = useState({});
   const [deleting, setDeleting] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['locations', activeCompany?.id, filterCompanyId],
@@ -41,7 +43,8 @@ export default function LocationsList() {
   });
   const deleteM = useMutation({
     mutationFn: (id) => api.delete(`/locations/${id}`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['locations'] }); setDeleting(null); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['locations'] }); setDeleting(null); setDeleteError(''); },
+    onError: (err) => setDeleteError(err.response?.data?.message ?? 'Could not delete this location.'),
   });
 
   const openNew = () => { setForm(empty); setErrors({}); setFormCompanyId(filterCompanyId !== 'all' ? String(filterCompanyId) : formCompanyId); setEditing({}); };
@@ -56,7 +59,7 @@ export default function LocationsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Locations</h1>
-          <p className="text-sm text-muted">Godowns and shops that hold stock{companyHint}.</p>
+          <p className="text-sm text-muted">Branches and godowns that hold stock{companyHint}. Branches do everything; people based at a godown only work with stock transfers.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
@@ -75,7 +78,7 @@ export default function LocationsList() {
                   <th className="microlabel px-4 py-2.5 font-semibold">Code</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Name</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Type</th>
-                  <th className="microlabel px-4 py-2.5 font-semibold">Default</th>
+                  <th className="microlabel px-4 py-2.5 font-semibold">Main</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                   <th className="microlabel px-4 py-2.5" />
                 </tr></thead>
@@ -84,8 +87,8 @@ export default function LocationsList() {
                     <tr key={l.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                       <td className="tnum px-4 py-2.5 text-xs">{l.code}</td>
                       <td className="px-4 py-2.5 font-medium">{l.name}</td>
-                      <td className="px-4 py-2.5"><Badge tone={l.type === 'shop' ? 'info' : 'default'}>{l.type}</Badge></td>
-                      <td className="px-4 py-2.5">{l.is_default ? <Badge tone="active">default</Badge> : <span className="text-muted">—</span>}</td>
+                      <td className="px-4 py-2.5"><Badge tone={l.type === 'shop' ? 'info' : 'default'}>{typeLabel(l.type)}</Badge>{l.is_landscape && <Badge tone="active" className="ml-1.5">Landscape</Badge>}</td>
+                      <td className="px-4 py-2.5">{l.is_default ? <Badge tone="active">main</Badge> : <span className="text-muted">—</span>}</td>
                       <td className="px-4 py-2.5"><Badge tone={l.is_active ? 'active' : 'inactive'}>{l.is_active ? 'active' : 'inactive'}</Badge></td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1.5">
@@ -113,11 +116,16 @@ export default function LocationsList() {
           <Field label="Name" required error={err('name')}><Input value={form.name} onChange={set('name')} /></Field>
           <Field label="Code" required error={err('code')}><Input value={form.code} onChange={set('code')} placeholder="GDN" /></Field>
           <Field label="Type" error={err('type')}>
-            <Select value={form.type} onChange={set('type')} className={selectCls}><option value="godown">Godown</option><option value="shop">Shop</option></Select>
+            <Select value={form.type} onChange={set('type')} className={selectCls}><option value="shop">Branch</option><option value="godown">Godown</option></Select>
           </Field>
-          <Field label="Default location">
+          <Field label="Main location">
             <Select value={form.is_default ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_default: e.target.value === '1' }))} className={selectCls}><option value="0">No</option><option value="1">Yes</option></Select>
           </Field>
+          {form.type !== 'godown' && (
+            <Field label="Landscape division">
+              <Select value={form.is_landscape ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_landscape: e.target.value === '1' }))} className={selectCls}><option value="0">No</option><option value="1">Yes — handles landscaping projects</option></Select>
+            </Field>
+          )}
           <Field label="Status">
             <Select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}><option value="1">Active</option><option value="0">Inactive</option></Select>
           </Field>
@@ -127,9 +135,12 @@ export default function LocationsList() {
       <Modal open={Boolean(deleting)} onClose={() => setDeleting(null)} title="Delete location"
         footer={<>
           <Button variant="ghost" size="sm" onClick={() => setDeleting(null)}>Cancel</Button>
-          <Button variant="danger" size="sm" disabled={deleteM.isPending} onClick={() => deleteM.mutate(deleting.id)}>Delete</Button>
+          <Button variant="danger" size="sm" disabled={deleteM.isPending} onClick={() => { setDeleteError(''); deleteM.mutate(deleting.id); }}>Delete</Button>
         </>}
-      ><p className="text-sm text-muted">Delete <span className="font-medium text-ink">{deleting?.name}</span>?</p></Modal>
+      ><>
+          <p className="text-sm text-muted">Delete <span className="font-medium text-ink">{deleting?.name}</span>?</p>
+          {deleteError && <p className="mt-3 text-sm text-danger">{deleteError}</p>}
+        </></Modal>
     </div>
   );
 }

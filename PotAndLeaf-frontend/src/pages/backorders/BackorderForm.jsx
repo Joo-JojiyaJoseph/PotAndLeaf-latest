@@ -190,7 +190,7 @@ export default function BackorderForm() {
                     <td className="px-3 py-2">
                       <Select value={line.product_id} onChange={(e) => onPickProduct(i, e.target.value)} className={selectCls + ' min-w-[200px]'}>
                         <option value="">Select…</option>
-                        {products.map((pr) => <option key={pr.id} value={pr.id}>{pr.name} · {pr.sku}</option>)}
+                        {products.map((pr) => <option key={pr.id} value={pr.id} image={pr.image}>{pr.name} · {pr.sku}</option>)}
                       </Select>
                     </td>
                     <td className="tnum px-3 py-2 text-right text-muted">{p ? p.current_stock : '—'}</td>

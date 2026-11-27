@@ -25,6 +25,7 @@ class RentalResource extends JsonResource
             'rental_no'         => $this->rental_no,
             'customer_id'       => $this->customer_id,
             'customer_name'     => $this->customer?->name,
+            'customer_phone'    => $this->customer?->phone,
             'company'           => $this->whenLoaded('company', fn () => [
                 'name' => $this->company->name, 'legal_name' => $this->company->legal_name,
                 'gst_number' => $this->company->gst_number, 'address' => $this->company->address,
@@ -36,7 +37,7 @@ class RentalResource extends JsonResource
             'auto_bill'         => (bool) $this->auto_bill,
             'last_billed_to'    => optional($this->last_billed_to)->toDateString(),
             'next_bill_at'      => optional($this->next_bill_at)->toDateString(),
-            'deposit'           => (float) $this->deposit,
+            'deposit'           => $this->deposit === null ? null : (float) $this->deposit,
             'rental_charge'     => (float) $this->rental_charge,
             'damage_charge'     => (float) $this->damage_charge,
             'missing_charge'    => (float) $this->missing_charge,
@@ -48,6 +49,9 @@ class RentalResource extends JsonResource
             'display_status'    => $displayStatus,
             'is_overdue'        => $displayStatus === 'overdue',
             'notes'             => $this->notes,
+            // Printed on the estimate given to the customer (Settings → Rental estimate & terms).
+            'terms'             => $this->when($this->relationLoaded('items'), fn () => $this->termsText()),
+            'estimate_valid_days' => $this->when($this->relationLoaded('items'), fn () => (int) app(\App\Services\SettingsService::class)->get($this->company_id, 'rental_estimate_valid_days')),
             'activated_at'      => optional($this->activated_at)->toIso8601String(),
             'returned_at'       => optional($this->returned_at)->toIso8601String(),
             'items_count'       => $this->when($this->items_count !== null, $this->items_count),
@@ -71,7 +75,7 @@ class RentalResource extends JsonResource
                 'due_date' => optional($inv->due_date)->toDateString(),
                 'sent_at' => optional($inv->sent_at)->toIso8601String(),
                 'reminder_count' => (int) $inv->reminder_count,
-                'cycles' => (float) $inv->cycles, 'amount' => (float) $inv->amount, 'status' => $inv->status,
+                'cycles' => (float) $inv->cycles, 'amount' => (float) $inv->amount, 'discount_amount' => (float) ($inv->discount_amount ?? 0), 'status' => $inv->status,
             ])->values()),
             'can'               => [
                 'activate' => $this->status === 'draft' && $user?->hasPermission('rental.activate', $companyId),
@@ -82,5 +86,13 @@ class RentalResource extends JsonResource
                 'bill'     => $this->status === 'active' && $user?->hasPermission('rental.bill', $companyId),
             ],
         ];
+    }
+
+    /** The company's rental terms & conditions (a sensible default until it writes its own). */
+    private function termsText(): string
+    {
+        $text = trim((string) app(\App\Services\SettingsService::class)->get($this->company_id, 'rental_terms'));
+
+        return $text !== '' ? $text : \App\Services\SettingsService::DEFAULTS['rental_terms'];
     }
 }

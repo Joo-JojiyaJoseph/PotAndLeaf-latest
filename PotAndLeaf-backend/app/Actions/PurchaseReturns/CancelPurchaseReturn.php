@@ -5,6 +5,7 @@ namespace App\Actions\PurchaseReturns;
 use App\Models\Product;
 use App\Models\PurchaseReturn;
 use App\Services\InventoryService;
+use App\Services\LocationStockService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -14,7 +15,10 @@ use Illuminate\Validation\ValidationException;
  */
 class CancelPurchaseReturn
 {
-    public function __construct(private readonly InventoryService $inventory) {}
+    public function __construct(
+        private readonly InventoryService $inventory,
+        private readonly LocationStockService $locationStock,
+    ) {}
 
     public function handle(PurchaseReturn $return, ?int $userId = null): PurchaseReturn
     {
@@ -54,6 +58,7 @@ class CancelPurchaseReturn
                     );
 
                     $product->save();
+                    $this->locationStock->adjust($return->company_id, $return->purchase?->location_id, $product->id, 'in', (float) $item->qty);
                     if ($item->product_batch_id) {
                         $batch = \App\Models\ProductBatch::where('id', $item->product_batch_id)->lockForUpdate()->first();
                         if ($batch) {

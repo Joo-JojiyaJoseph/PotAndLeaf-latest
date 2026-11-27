@@ -39,6 +39,10 @@ class DamageEntryController extends Controller
             ->get(['id', 'product_id', 'batch_no', 'barcode', 'remaining_qty', 'cost_price']);
 
         return $this->ok([
+            'locations' => \App\Models\Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
+                ->get(['id', 'name', 'type', 'is_default'])
+                ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'type' => $l->type, 'is_default' => (bool) $l->is_default]),
+            'my_location_id' => $request->user()->is_super_admin ? null : $request->user()->locationIdFor($company->id),
             'batches' => $batches->map(fn ($b) => [
                 'id' => $b->id,
                 'product_id' => $b->product_id,

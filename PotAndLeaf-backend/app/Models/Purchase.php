@@ -16,7 +16,7 @@ class Purchase extends Model
     protected $fillable = [
         'company_id', 'supplier_id', 'location_id', 'purchase_no', 'invoice_no', 'invoice_date',
         'purchase_date', 'is_interstate', 'subtotal', 'discount_total', 'tax_total',
-        'landed_cost_total', 'grand_total', 'supplier_payable', 'amount_paid', 'status', 'notes', 'confirmed_at',
+        'landed_cost_total', 'agent_code', 'final_discount', 'grand_total', 'supplier_payable', 'amount_paid', 'status', 'notes', 'confirmed_at',
     ];
 
     protected function casts(): array
@@ -54,6 +54,11 @@ class Purchase extends Model
     public function supplierPayments(): HasMany
     {
         return $this->hasMany(SupplierPayment::class);
+    }
+
+    public function location(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Location::class);
     }
 
     public function paymentAllocations(): HasMany

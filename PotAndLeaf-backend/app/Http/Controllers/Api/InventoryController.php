@@ -55,6 +55,7 @@ class InventoryController extends Controller
             $company->id,
             $request->query('sku'),
             $request->query('product_id'),
+            $request->query('location_id'),
         );
 
         return $this->ok($data);

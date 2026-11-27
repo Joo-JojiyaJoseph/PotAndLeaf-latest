@@ -25,6 +25,8 @@ class StoreCustomerReceiptRequest extends FormRequest
             'mode'         => ['required', 'in:cash,bank,upi,cheque,card'],
             'reference'    => ['nullable', 'string', 'max:100'],
             'notes'        => ['nullable', 'string', 'max:1000'],
+            // A discount given while collecting: clears dues like money, but no cash moves.
+            'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'is_advance'   => ['sometimes', 'boolean'],
             'allocations'              => ['nullable', 'array'],
             'allocations.*.sale_id'    => ['required_with:allocations', 'uuid', Rule::exists('sales', 'id')->where('company_id', $companyId)],

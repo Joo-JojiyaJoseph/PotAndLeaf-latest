@@ -18,7 +18,7 @@ function DamageFormModal({ open, onClose }) {
   const queryClient = useQueryClient();
   const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany();
   const [form, setForm] = useState({
-    product_id: '', product_batch_id: '', barcode: '', batch_no: '', qty: '', reason: '', notes: '', photo: null, entry_date: today(),
+    location_id: '', product_id: '', product_batch_id: '', barcode: '', batch_no: '', qty: '', reason: '', notes: '', photo: null, entry_date: today(),
   });
   const [scanValue, setScanValue] = useState('');
   const [scanError, setScanError] = useState('');
@@ -81,6 +81,7 @@ function DamageFormModal({ open, onClose }) {
   const saveM = useMutation({
     mutationFn: () => api.post('/damage-entries', {
       product_id: form.product_id || null,
+      location_id: form.location_id || undefined,
       product_batch_id: form.product_batch_id || null,
       qty: Number(form.qty) || 0,
       reason: form.reason === 'Other' ? (form.notes || 'Other') : form.reason,
@@ -176,6 +177,13 @@ function DamageFormModal({ open, onClose }) {
         <Field label="Quantity" required error={err('qty')}>
           <Input type="number" step="0.001" min="0" value={form.qty} onChange={set('qty')} />
         </Field>
+        {(formData?.locations?.length ?? 0) > 1 && (
+          <Field label="Stock was at" error={err('location_id')}>
+            <Select value={form.location_id || String(formData?.my_location_id ?? formData?.locations?.find((l) => l.is_default)?.id ?? '')} onChange={set('location_id')} className={selectCls}>
+              {formData.locations.map((l) => <option key={l.id} value={l.id}>{l.name} ({l.type === 'godown' ? 'Godown' : 'Branch'})</option>)}
+            </Select>
+          </Field>
+        )}
         <Field label="Reason" required error={err('reason')}>
           <Select value={form.reason} onChange={set('reason')} className={selectCls}>
             <option value="">Select reason…</option>

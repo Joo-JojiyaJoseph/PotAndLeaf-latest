@@ -10,7 +10,7 @@ import { downloadWithParams } from '../../lib/pdfDownload';
 import AccountingReportPanels from './AccountingReportPanels';
 import ReorderReportPanel from './ReorderReportPanel';
 import DetailedReportPanel from './DetailedReportPanel';
-import ReportsToolbar from './ReportsToolbar';
+import ReportsToolbar, { ReportsFilterBar } from './ReportsToolbar';
 import ReportNavGrid from './ReportNavGrid';
 import Pagination from '../../components/Pagination';
 import PagedTable from '../../components/PagedTable';
@@ -508,6 +508,17 @@ export default function ReportsPage() {
         companyFilterValue={filterCompanyId}
         onCompanyChange={setFilterCompanyId}
         activeCompanyName={activeCompany?.name}
+      />
+
+      <ReportNavGrid
+        tabs={visibleTabs}
+        activeTab={tab}
+        onSelect={setTab}
+        search={reportSearch}
+        onSearchChange={setReportSearch}
+      />
+
+      <ReportsFilterBar
         range={range}
         onRangeChange={setRange}
         hideDateRange={hideDateRange}
@@ -585,14 +596,6 @@ export default function ReportsPage() {
             )}
           </>
         )}
-      />
-
-      <ReportNavGrid
-        tabs={visibleTabs}
-        activeTab={tab}
-        onSelect={setTab}
-        search={reportSearch}
-        onSearchChange={setReportSearch}
       />
 
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm text-muted">

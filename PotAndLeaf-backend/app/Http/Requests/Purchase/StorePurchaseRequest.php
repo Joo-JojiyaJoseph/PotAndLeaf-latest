@@ -33,6 +33,8 @@ class StorePurchaseRequest extends FormRequest
                     ->where('status', 'active'),
             ],
             'purchase_date' => ['required', 'date', BusinessRules::notFuture('Purchase date')],
+            // The branch or godown the goods are received into.
+            'location_id'   => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $billCompanyId)->where('is_active', true)],
             // The same supplier bill must not be entered twice.
             'invoice_no'    => ['nullable', 'string', 'max:100',
                 Rule::unique('purchases', 'invoice_no')
@@ -43,6 +45,8 @@ class StorePurchaseRequest extends FormRequest
             'invoice_date'  => ['nullable', 'date', BusinessRules::notFuture('Invoice date')],
             'is_interstate' => ['boolean'],
             'landed_cost_total' => ['nullable', 'numeric', 'min:0'],
+            'agent_code'    => ['nullable', 'string', 'max:60'],
+            'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'notes'         => ['nullable', 'string', 'max:2000'],
             'company_id'    => [
                 'sometimes', 'integer',
@@ -55,6 +59,10 @@ class StorePurchaseRequest extends FormRequest
             'items.*.rate'         => ['required', 'numeric', 'min:0'],
             'items.*.discount'     => ['nullable', 'numeric', 'min:0', BusinessRules::discountNotAboveLine(fn ($k) => $this->input($k))],
             'items.*.gst_rate'     => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'items.*.mrp'             => ['nullable', 'numeric', 'min:0'],
+            'items.*.retail_price'    => ['nullable', 'numeric', 'min:0'],
+            'items.*.wholesale_price' => ['nullable', 'numeric', 'min:0'],
+            'items.*.dealer_price'    => ['nullable', 'numeric', 'min:0'],
 
             'items.*.is_bulk'            => ['sometimes', 'boolean'],
             'items.*.sell_as'            => ['nullable', Rule::in(['set_only', 'split_only', 'both'])],

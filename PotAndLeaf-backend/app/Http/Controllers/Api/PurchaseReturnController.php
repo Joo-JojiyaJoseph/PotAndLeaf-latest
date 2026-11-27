@@ -9,6 +9,7 @@ use App\Models\Purchase;
 use App\Models\PurchaseReturn;
 use App\Repositories\Contracts\PurchaseReturnRepositoryInterface;
 use App\Services\PurchaseReturnService;
+use App\Services\ReturnRefundService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\AssertsRecordCompany;
 use App\Support\Api\ResolvesFilterCompany;
@@ -22,6 +23,7 @@ class PurchaseReturnController extends Controller
     public function __construct(
         private readonly PurchaseReturnService $returns,
         private readonly PurchaseReturnRepositoryInterface $returnRepo,
+        private readonly ReturnRefundService $refunds,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -43,7 +45,7 @@ class PurchaseReturnController extends Controller
         $this->allow($request, 'purchase_returns.create');
         $request->validate(['purchase_id' => ['required', 'uuid']]);
 
-        $purchase = Purchase::forCompany($company->id)->with('items')->find($request->query('purchase_id'));
+        $purchase = Purchase::forCompany($company->id)->with(['items.product:id,images'])->find($request->query('purchase_id'));
         abort_unless($purchase && $purchase->status === 'confirmed', 404);
 
         $returned = $this->returnRepo->returnedQtyByPurchaseItem($purchase->id);
@@ -95,6 +97,7 @@ class PurchaseReturnController extends Controller
                 'purchase_item_id' => $item->id,
                 'product_id'       => $item->product_id,
                 'product_name'     => $item->product_name,
+                'image'            => \App\Support\Media\MediaUrl::resolveMany($item->product?->images ?? [])[0] ?? null,
                 'qty'              => (float) $item->qty,
                 'returned'         => $already,
                 'returnable'       => $returnable,
@@ -130,7 +133,7 @@ class PurchaseReturnController extends Controller
         $this->assertRecordCompany($request, $purchaseReturn);
 
         return $this->ok(new PurchaseReturnResource(
-            $purchaseReturn->load(['supplier', 'purchase:id,purchase_no', 'items'])
+            $purchaseReturn->load(['supplier', 'purchase:id,purchase_no', 'items', 'refunds'])
         ));
     }
 
@@ -142,6 +145,26 @@ class PurchaseReturnController extends Controller
         return $this->ok(
             new PurchaseReturnResource($this->returns->confirm($purchaseReturn, $request->user()->id)),
             'Return confirmed and stock reversed.'
+        );
+    }
+
+    /** Mark credit held as supplier advance as really received back (it then shows in the Cash / Bank Book). */
+    public function refund(Request $request, PurchaseReturn $purchaseReturn): JsonResponse
+    {
+        $this->allow($request, 'purchase_returns.confirm');
+        $this->assertRecordCompany($request, $purchaseReturn, writable: true, writableMessage: 'Switch to the return company to record the refund.');
+        $data = $request->validate([
+            'amount'      => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
+            'mode'        => ['required', 'in:cash,upi,card,bank,cheque'],
+            'refund_date' => ['nullable', 'date', \App\Support\Validation\BusinessRules::notFuture('Refund date')],
+            'reference'   => ['nullable', 'string', 'max:100'],
+            'notes'       => ['nullable', 'string', 'max:500'],
+        ]);
+        $this->refunds->refundPurchaseReturn($purchaseReturn, $data, $request->user()->id);
+
+        return $this->ok(
+            new PurchaseReturnResource($purchaseReturn->refresh()->load(['supplier', 'purchase:id,purchase_no', 'items', 'refunds'])),
+            'Refund recorded. The money is in the accounts and the supplier advance is reduced.'
         );
     }
 

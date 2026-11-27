@@ -30,6 +30,8 @@ class StoreSupplierPaymentRequest extends FormRequest
             'mode'         => ['required', 'in:cash,bank,upi,cheque'],
             'reference'    => ['nullable', 'string', 'max:100'],
             'notes'        => ['nullable', 'string', 'max:1000'],
+            // A discount received while paying: clears dues like money, but no cash moves.
+            'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'is_advance'   => ['sometimes', 'boolean'],
             // What this money is for: a purchase bill, the outstanding balance, or an advance.
             'payment_for'  => ['nullable', 'in:bill,outstanding,advance'],

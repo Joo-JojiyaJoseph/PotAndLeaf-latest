@@ -21,7 +21,7 @@ class MasterDataController extends Controller
     use ApiResponse, ResolvesFilterCompany;
 
     private const TYPES = [
-        'categories' => [ProductCategory::class, ['name', 'code', 'description', 'parent_id', 'status'], true],
+        'categories' => [ProductCategory::class, ['name', 'code', 'description', 'care_guide_en', 'care_guide_ml', 'parent_id', 'status'], true],
         'brands'     => [ProductBrand::class, ['name', 'code', 'description', 'status'], false],
         'units'      => [ProductUnit::class, ['name', 'code', 'short_name', 'description', 'status'], false],
     ];
@@ -153,6 +153,10 @@ class MasterDataController extends Controller
             'status'      => ['nullable', 'in:active,inactive'],
             'company_id'  => ['sometimes', 'integer', Rule::exists('companies', 'id')],
         ];
+        if ($type === 'categories') {
+            $rules['care_guide_en'] = ['nullable', 'string', 'max:3000'];
+            $rules['care_guide_ml'] = ['nullable', 'string', 'max:3000'];
+        }
         if ($type === 'units') {
             $rules['short_name'] = ['nullable', 'string', 'max:20'];
         }
@@ -228,6 +232,8 @@ class MasterDataController extends Controller
             $out['short_name'] = $r->short_name;
         }
         if ($type === 'categories') {
+            $out['care_guide_en'] = $r->care_guide_en;
+            $out['care_guide_ml'] = $r->care_guide_ml;
             $out['parent_id'] = $r->parent_id;
             $out['parent_name'] = $r->parent_id ? ($parents[$r->parent_id] ?? null) : null;
         }

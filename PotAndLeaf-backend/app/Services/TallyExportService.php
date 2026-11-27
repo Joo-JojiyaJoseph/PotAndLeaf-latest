@@ -35,6 +35,8 @@ class TallyExportService
     public const INPUT_SGST = 'Input SGST';
     public const INPUT_IGST = 'Input IGST';
     public const ROUND_OFF = 'Round Off';
+    public const DISCOUNT_ALLOWED = 'Discount Allowed';
+    public const DISCOUNT_RECEIVED = 'Discount Received';
     public const LOYALTY = 'Loyalty Discount';
     public const FREIGHT = 'Freight & Loading Inward';
     public const FREIGHT_PAYABLE = 'Freight Payable';
@@ -53,6 +55,8 @@ class TallyExportService
         self::INPUT_SGST      => 'Duties & Taxes',
         self::INPUT_IGST      => 'Duties & Taxes',
         self::ROUND_OFF       => 'Indirect Expenses',
+        self::DISCOUNT_ALLOWED  => 'Indirect Expenses',
+        self::DISCOUNT_RECEIVED => 'Indirect Incomes',
         self::LOYALTY         => 'Indirect Expenses',
         self::FREIGHT         => 'Direct Expenses',
         self::FREIGHT_PAYABLE => 'Current Liabilities',
@@ -86,6 +90,7 @@ class TallyExportService
                 $vouchers[] = $this->voucher('Sales', $s->sale_no, $s->sale_date, "Sale {$s->sale_no}", [
                     [$party, $due],
                     [self::LOYALTY, (float) $s->loyalty_discount],
+                    [self::DISCOUNT_ALLOWED, (float) $s->final_discount],
                     [self::SALES, -(float) $s->subtotal],
                     [self::OUTPUT_CGST, -$tax['cgst']],
                     [self::OUTPUT_SGST, -$tax['sgst']],
@@ -125,6 +130,7 @@ class TallyExportService
                     [self::INPUT_SGST, $tax['sgst']],
                     [self::INPUT_IGST, $tax['igst']],
                     [self::FREIGHT, (float) $p->landed_cost_total],
+                    [self::DISCOUNT_RECEIVED, -(float) $p->final_discount],
                     [$party, -$payable],
                     // Freight paid to someone other than the supplier.
                     [self::FREIGHT_PAYABLE, -round((float) $p->grand_total - $payable, 2)],
@@ -155,7 +161,7 @@ class TallyExportService
                 $party = $r->customer?->name ?: self::WALK_IN;
                 $debtors[$party] = true;
                 $vouchers[] = $this->voucher('Receipt', $r->receipt_no, $r->receipt_date, $r->notes ?: "Receipt {$r->receipt_no}", [
-                    [$this->moneyLedger($r->mode), (float) $r->amount],
+                    [$r->mode === 'discount' ? self::DISCOUNT_ALLOWED : $this->moneyLedger($r->mode), (float) $r->amount],
                     [$party, -(float) $r->amount],
                 ]);
             });
@@ -168,7 +174,7 @@ class TallyExportService
                 $creditors[$party] = true;
                 $vouchers[] = $this->voucher('Payment', $p->payment_no, $p->payment_date, $p->notes ?: "Payment {$p->payment_no}", [
                     [$party, (float) $p->amount],
-                    [$this->moneyLedger($p->mode), -(float) $p->amount],
+                    [$p->mode === 'discount' ? self::DISCOUNT_RECEIVED : $this->moneyLedger($p->mode), -(float) $p->amount],
                 ]);
             });
 

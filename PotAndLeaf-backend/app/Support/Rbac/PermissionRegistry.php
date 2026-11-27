@@ -128,6 +128,16 @@ class PermissionRegistry
                 'accounts.update' => 'Edit accounting book entries',
                 'accounts.delete' => 'Cancel accounting book entries',
             ],
+            'Landscape' => [
+                'landscape.view'   => 'View landscaping projects',
+                'landscape.manage' => 'Add and change landscaping projects, estimates, work orders and daily work',
+                'landscape.finance' => 'See cost, profit and staff commission of landscaping projects',
+            ],
+            'Expenses' => [
+                'expenses.view'   => 'View expenses and other receipts of your branch / godown',
+                'expenses.create' => 'Add expenses (payments) and other receipts',
+                'expenses.delete' => 'Remove expense / receipt entries',
+            ],
             'Customer Receipts' => [
                 'receipts.view'   => 'View customer receipts',
                 'receipts.create' => 'Record customer receipts',
@@ -170,8 +180,8 @@ class PermissionRegistry
             ],
             'Stock Verification' => [
                 'stock_verifications.view'    => 'View stock counts',
-                'stock_verifications.create'  => 'Create & submit stock counts',
-                'stock_verifications.approve' => 'Approve or reject stock counts (HO)',
+                'stock_verifications.create'  => 'Create stock counts and update the stock from them',
+                'stock_verifications.approve' => 'Verify stock counts after the stock was updated (HO / admin)',
             ],
             'Categories'    => $crud('categories', 'categories'),
             'Subcategories' => $crud('subcategories', 'subcategories'),

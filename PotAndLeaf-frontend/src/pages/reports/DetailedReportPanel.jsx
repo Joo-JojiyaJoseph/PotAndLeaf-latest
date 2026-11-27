@@ -12,7 +12,7 @@ export const DETAILED_REPORTS = {
   sales: {
     title: 'Sales — bill by bill and period by period',
     no: 'Invoice no.', party: 'Customer', parties: 'Customers', path: (r) => `/sales/${r.id}`,
-    text: [['mode', 'Payment'], ['kind', 'Type'], ['staff', 'Staff']],
+    text: [['mode', 'Payment'], ['kind', 'Type'], ['staff', 'Salesman']],
     money: [['taxable', 'Before GST'], ['tax', 'GST'], ['points', 'Points used'], ['total', 'Total'], ['paid', 'Paid'], ['due', 'Due']],
     modes: [['cash', 'Cash'], ['card', 'Card'], ['upi', 'UPI'], ['credit', 'Credit']],
     note: 'Confirmed bills only. Total = bill total − loyalty points used. Due = total − paid.',
@@ -54,6 +54,32 @@ export const DETAILED_REPORTS = {
     modes: [['cash', 'Cash'], ['card', 'Card'], ['upi', 'UPI'], ['bank', 'Bank'], ['cheque', 'Cheque']],
     note: 'Advance applied to a bill is not new money, so it is not listed.',
   },
+};
+
+const ORDER_PATH = { 'Advance order': '/advance-orders', Backorder: '/backorders', 'Purchase order': '/purchase-orders' };
+
+DETAILED_REPORTS.cancelled_sales = {
+  title: 'Cancelled bills — bill by bill and period by period',
+  no: 'Invoice no.', party: 'Customer', parties: 'Customers', path: (r) => `/sales/${r.id}`,
+  text: [['kind', 'Type'], ['staff', 'Made by'], ['note', 'Reason'], ['cancelled_on', 'Cancelled on']],
+  money: [['total', 'Bill total']],
+  modes: [['cash', 'Cash'], ['card', 'Card'], ['upi', 'UPI'], ['credit', 'Credit']],
+  note: 'Sales bills that were cancelled. The date is the bill date.',
+};
+DETAILED_REPORTS.cancelled_purchases = {
+  title: 'Cancelled purchase bills — bill by bill and period by period',
+  no: 'Bill no.', party: 'Supplier', parties: 'Suppliers', path: (r) => `/purchases/${r.id}`,
+  text: [['ref', 'Supplier invoice'], ['note', 'Notes'], ['cancelled_on', 'Cancelled on']],
+  money: [['total', 'Bill total']],
+  note: 'Purchase bills that were cancelled. The date is the bill date.',
+};
+DETAILED_REPORTS.cancelled_orders = {
+  title: 'Cancelled orders — order by order and period by period',
+  no: 'Order no.', party: 'Customer / supplier', parties: 'Customers / suppliers',
+  path: (r) => (ORDER_PATH[r.kind] ? `${ORDER_PATH[r.kind]}/${r.id}` : null),
+  text: [['kind', 'Order type'], ['note', 'Notes'], ['cancelled_on', 'Cancelled on']],
+  money: [['total', 'Order value']],
+  note: 'Advance orders, backorders (waiting orders) and purchase orders that were cancelled. The date is the order date.',
 };
 
 const VIEWS = [
@@ -108,7 +134,7 @@ export default function DetailedReportPanel({ type, range, companyParams }) {
       <div className="space-y-3 border-b border-line p-4">
         <div>
           <h2 className="text-sm font-semibold">{cfg.title}</h2>
-          <p className="mt-0.5 text-xs text-muted">{formatDate(range.from)} – {formatDate(range.to)} · {cfg.note} Change the dates above for daily, monthly or custom ranges.</p>
+          <p className="mt-0.5 text-xs text-muted">{formatDate(range.from)} – {formatDate(range.to)} · {cfg.note} Change the dates in the filter bar for daily, monthly or custom ranges.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex overflow-hidden rounded-xl border border-line bg-white/70" role="group" aria-label="View by">
@@ -172,7 +198,7 @@ export default function DetailedReportPanel({ type, range, companyParams }) {
                       <td className="px-4 py-2">{r.party ?? '—'}</td>
                       {cfg.text.map(([k]) => (
                         <td key={k} className="px-4 py-2 text-muted">
-                          {k === 'kind' && r[k] ? <Badge tone="inactive">{r[k]}</Badge> : (r[k] ? <span className={k === 'mode' ? 'capitalize' : ''}>{r[k]}</span> : '—')}
+                          {k === 'kind' && r[k] ? <Badge tone="inactive">{r[k]}</Badge> : k === 'cancelled_on' ? (r[k] ? formatDate(r[k]) : '—') : (r[k] ? <span className={k === 'mode' ? 'capitalize' : ''}>{r[k]}</span> : '—')}
                         </td>
                       ))}
                       {cfg.money.map(([k]) => <td key={k} className="tnum px-4 py-2 text-right">{money(r[k])}</td>)}

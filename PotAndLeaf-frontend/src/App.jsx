@@ -4,6 +4,7 @@ import ProtectedRoute from './routes/ProtectedRoute';
 import PermissionRoute from './routes/PermissionRoute';
 import Login from './pages/Login';
 import { Spinner } from './components/Spinner';
+import { useAuth } from './context/AuthContext';
 
 const AppShell = lazy(() => import('./components/AppShell'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -38,6 +39,7 @@ const ReceiptsList = lazy(() => import('./pages/receipts/ReceiptsList'));
 const CommissionList = lazy(() => import('./pages/commission/CommissionList'));
 const MyCommissionPage = lazy(() => import('./pages/commission/MyCommissionPage'));
 const TransfersList = lazy(() => import('./pages/transfers/TransfersList'));
+const LocationsList = lazy(() => import('./pages/locations/LocationsList'));
 const TransferForm = lazy(() => import('./pages/transfers/TransferForm'));
 const HelpPage = lazy(() => import('./pages/help/HelpPage'));
 const RequestAccessPage = lazy(() => import('./pages/access/RequestAccessPage'));
@@ -65,6 +67,9 @@ const BackordersList = lazy(() => import('./pages/backorders/BackordersList'));
 const BackorderForm = lazy(() => import('./pages/backorders/BackorderForm'));
 const BackorderDetail = lazy(() => import('./pages/backorders/BackorderDetail'));
 const AccountingBookPage = lazy(() => import('./pages/accounting/AccountingBookPage'));
+const ExpensesPage = lazy(() => import('./pages/expenses/ExpensesPage'));
+const LandscapeProjectsPage = lazy(() => import('./pages/landscape/LandscapeProjectsPage'));
+const LandscapeProjectDetail = lazy(() => import('./pages/landscape/LandscapeProjectDetail'));
 const AccountingVoucherForm = lazy(() => import('./pages/accounting/AccountingVoucherForm'));
 const PurchasesList = lazy(() => import('./pages/purchases/PurchasesList'));
 const PurchaseForm = lazy(() => import('./pages/purchases/PurchaseForm'));
@@ -87,6 +92,13 @@ function RouteFallback() {
   );
 }
 
+/** A person based at a godown works with stock transfers only, so the home page is the transfer list. */
+function HomeGate({ children }) {
+  const { activeCompany, isSuperAdmin } = useAuth();
+  if (!isSuperAdmin && activeCompany?.location?.type === 'godown') return <Navigate to="/transfers" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
@@ -94,7 +106,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
-            <Route index element={<PermissionRoute anyOf={['reports.view', 'sales.view', 'commission.view', 'commission.view_own', 'inventory.view']}><Dashboard /></PermissionRoute>} />
+            <Route index element={<HomeGate><PermissionRoute anyOf={['reports.view', 'sales.view', 'commission.view', 'commission.view_own', 'inventory.view']}><Dashboard /></PermissionRoute></HomeGate>} />
             <Route path="suppliers" element={<PermissionRoute permission="suppliers.view"><SuppliersList /></PermissionRoute>} />
             <Route path="suppliers/:id" element={<PermissionRoute permission="suppliers.view"><SupplierDetail /></PermissionRoute>} />
             <Route path="products" element={<PermissionRoute permission="products.view"><ProductsList /></PermissionRoute>} />
@@ -145,8 +157,7 @@ export default function App() {
             <Route path="transfers/new" element={<PermissionRoute permission="transfers.create"><RequestStockForm /></PermissionRoute>} />
             <Route path="transfers/send" element={<PermissionRoute permission="transfers.create"><TransferForm /></PermissionRoute>} />
             <Route path="transfers/:id" element={<PermissionRoute permission="transfers.view"><TransferDetail /></PermissionRoute>} />
-            {/* One location per company (created with the company) — no Locations screen. */}
-            <Route path="locations" element={<Navigate to="/companies" replace />} />
+            <Route path="locations" element={<PermissionRoute permission="locations.view"><LocationsList /></PermissionRoute>} />
             <Route path="production" element={<PermissionRoute permission="production.view"><ProductionList /></PermissionRoute>} />
             <Route path="production/new" element={<PermissionRoute permission="production.create"><ProductionForm /></PermissionRoute>} />
             <Route path="production/:id/edit" element={<PermissionRoute permission="production.create"><ProductionForm /></PermissionRoute>} />
@@ -170,12 +181,14 @@ export default function App() {
             <Route path="accounting/cash-book" element={<PermissionRoute permission="accounts.view"><AccountingBookPage /></PermissionRoute>} />
             <Route path="accounting/cash-book/new" element={<PermissionRoute permission="accounts.create"><AccountingVoucherForm /></PermissionRoute>} />
             <Route path="accounting/cash-book/:id/edit" element={<PermissionRoute permission="accounts.update"><AccountingVoucherForm /></PermissionRoute>} />
+            <Route path="landscape" element={<PermissionRoute permission="landscape.view"><LandscapeProjectsPage /></PermissionRoute>} />
+            <Route path="landscape/:id" element={<PermissionRoute permission="landscape.view"><LandscapeProjectDetail /></PermissionRoute>} />
+            <Route path="expenses" element={<PermissionRoute permission="expenses.view"><ExpensesPage /></PermissionRoute>} />
             <Route path="accounting/bank-book" element={<PermissionRoute permission="accounts.view"><AccountingBookPage /></PermissionRoute>} />
             <Route path="accounting/bank-book/new" element={<PermissionRoute permission="accounts.create"><AccountingVoucherForm /></PermissionRoute>} />
             <Route path="accounting/bank-book/:id/edit" element={<PermissionRoute permission="accounts.update"><AccountingVoucherForm /></PermissionRoute>} />
-            <Route path="accounting/journal" element={<PermissionRoute permission="accounts.view"><AccountingBookPage /></PermissionRoute>} />
-            <Route path="accounting/journal/new" element={<PermissionRoute permission="accounts.create"><AccountingVoucherForm /></PermissionRoute>} />
-            <Route path="accounting/journal/:id/edit" element={<PermissionRoute permission="accounts.update"><AccountingVoucherForm /></PermissionRoute>} />
+            {/* The Journal is gone; an old bookmark opens the Cash Book. */}
+            <Route path="accounting/journal/*" element={<Navigate to="/accounting/cash-book" replace />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="soon/:module" element={<ComingSoon />} />
           </Route>

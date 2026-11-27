@@ -1,4 +1,5 @@
-import { ChartBarIcon,
+import { NoSymbolIcon,
+  ChartBarIcon,
   ArrowTrendingUpIcon,
   TrophyIcon,
   DocumentTextIcon,
@@ -44,9 +45,15 @@ export const DETAILED_TYPES = {
   detail_purchase_returns: 'purchase_returns',
   detail_receipts: 'receipts',
   detail_payments: 'payments',
+  detail_cancelled_sales: 'cancelled_sales',
+  detail_cancelled_purchases: 'cancelled_purchases',
+  detail_cancelled_orders: 'cancelled_orders',
 };
 
 export const REPORT_TABS = [
+  { value: 'detail_cancelled_sales', label: 'Cancelled Bills (Sales)', shortLabel: 'Cancelled bills', icon: NoSymbolIcon, group: 'detailed', help: 'Sales bills that were cancelled, with who made them and the reason.', plain: 'Cancelled sales bills' },
+  { value: 'detail_cancelled_purchases', label: 'Cancelled Purchases', shortLabel: 'Cancel. purch.', icon: NoSymbolIcon, group: 'detailed', help: 'Purchase bills that were cancelled.', plain: 'Cancelled purchase bills' },
+  { value: 'detail_cancelled_orders', label: 'Cancelled Orders', shortLabel: 'Cancel. orders', icon: NoSymbolIcon, group: 'detailed', help: 'Advance orders, backorders and purchase orders that were cancelled.', plain: 'Cancelled orders' },
   { value: 'detail_sales', label: 'Sales (Detailed)', shortLabel: 'Sales detail', icon: DocumentTextIcon, group: 'detailed', help: 'Every bill, or sales added up by day, week, month or year.', plain: 'Sales details' },
   { value: 'detail_purchases', label: 'Purchases (Detailed)', shortLabel: 'Purchases', icon: ClipboardDocumentListIcon, group: 'detailed', help: 'Every purchase bill, or purchases by day, week, month or year.', plain: 'Purchase details' },
   { value: 'detail_sales_returns', label: 'Sales Returns (Detailed)', shortLabel: 'Sales returns', icon: ArrowsRightLeftIcon, group: 'detailed', help: 'Goods customers returned, return by return or by period.', plain: 'Sales return details' },

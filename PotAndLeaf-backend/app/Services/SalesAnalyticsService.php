@@ -47,7 +47,7 @@ class SalesAnalyticsService
         $eligible = (clone $salesQ)->where('bill_kind', '!=', 'complimentary');
 
         $gross = round((float) (clone $salesQ)->sum('grand_total'), 2);
-        $net = round((float) (clone $eligible)->selectRaw('SUM(subtotal - loyalty_discount) as n')->value('n'), 2);
+        $net = round((float) (clone $eligible)->selectRaw('SUM(subtotal - loyalty_discount - final_discount) as n')->value('n'), 2);
         $tax = round((float) (clone $salesQ)->sum('tax_total'), 2);
         $loyaltyDiscount = round((float) (clone $eligible)->sum('loyalty_discount'), 2);
 
@@ -297,7 +297,7 @@ class SalesAnalyticsService
             $salesForUser = (float) Sale::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
                 ->where('created_by', $uid)->where('status', 'confirmed')
                 ->whereDate('sale_date', '>=', $from)->whereDate('sale_date', '<=', $to)
-                ->selectRaw('SUM(subtotal - loyalty_discount) as n')->value('n');
+                ->selectRaw('SUM(subtotal - loyalty_discount - final_discount) as n')->value('n');
 
             return [
                 'user_id'           => (int) $uid,
@@ -364,7 +364,7 @@ class SalesAnalyticsService
             ->whereDate('sale_date', '<=', $to)
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
             ->whereNotNull('created_by')
-            ->selectRaw('created_by as user_id, SUM(subtotal - loyalty_discount) as net_sales, COUNT(*) as invoices, SUM(1) as dummy')
+            ->selectRaw('created_by as user_id, SUM(subtotal - loyalty_discount - final_discount) as net_sales, COUNT(*) as invoices, SUM(1) as dummy')
             ->groupBy('created_by')
             ->orderByDesc('net_sales')
             ->get();
@@ -502,7 +502,7 @@ class SalesAnalyticsService
             ->whereDate('sale_date', '>=', $from)
             ->whereDate('sale_date', '<=', $to)
             ->when($locationId, fn ($q) => $q->where('location_id', $locationId))
-            ->selectRaw("DATE(sale_date) as d, SUM(grand_total) as gross, COUNT(*) as invoices, SUM(CASE WHEN bill_kind = 'complimentary' THEN 0 ELSE subtotal - loyalty_discount END) as net")
+            ->selectRaw("DATE(sale_date) as d, SUM(grand_total) as gross, COUNT(*) as invoices, SUM(CASE WHEN bill_kind = 'complimentary' THEN 0 ELSE subtotal - loyalty_discount - final_discount END) as net")
             ->groupByRaw('DATE(sale_date)')
             ->get();
 

@@ -206,6 +206,16 @@ class AccountingEngine
             return null;
         }
 
+        // A settlement discount moves no cash: Dr Discount Allowed / Cr Accounts Receivable.
+        if (($receipt->mode ?? '') === 'discount') {
+            return $this->postFromSource(
+                $receipt->company_id, 'customer_receipt', $receipt->id, 'journal',
+                optional($receipt->receipt_date)->toDateString() ?? now()->toDateString(),
+                (float) $receipt->amount, 'discount_allowed', 'ar',
+                $receipt->notes ?: "Discount allowed on {$receipt->receipt_no}",
+            );
+        }
+
         $isCash = ($receipt->mode ?? 'cash') === 'cash';
 
         return $this->postFromSource(
@@ -252,6 +262,16 @@ class AccountingEngine
     {
         if (! $this->ready() || $payment->applied_from_advance) {
             return null;
+        }
+
+        // A settlement discount moves no cash: Dr Accounts Payable / Cr Discount Received.
+        if (($payment->mode ?? '') === 'discount') {
+            return $this->postFromSource(
+                $payment->company_id, 'supplier_payment', $payment->id, 'journal',
+                optional($payment->payment_date)->toDateString() ?? now()->toDateString(),
+                (float) $payment->amount, 'ap', 'discount_received',
+                $payment->notes ?: "Discount received on {$payment->payment_no}",
+            );
         }
 
         $isCash = ($payment->mode ?? 'cash') === 'cash';

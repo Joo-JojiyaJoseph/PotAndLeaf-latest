@@ -19,7 +19,7 @@ class PurchaseCalculator
      * @param array<int, array{qty:mixed, rate:mixed, discount?:mixed, gst_rate?:mixed}> $items
      * @return array{items: array<int, array<string, float>>, totals: array<string, float>}
      */
-    public function compute(array $items, bool $isInterstate, float $landedCostTotal = 0.0): array
+    public function compute(array $items, bool $isInterstate, float $landedCostTotal = 0.0, float $finalDiscount = 0.0): array
     {
         $lines = [];
         $subtotal = 0.0;
@@ -85,6 +85,7 @@ class PurchaseCalculator
         unset($line);
 
         $taxTotal = round($taxTotal, 2);
+        $finalDiscountApplied = round(min(max(0.0, $finalDiscount), $subtotal + $taxTotal + round($landedCostTotal, 2)), 2);
 
         return [
             'items' => $lines,
@@ -93,7 +94,9 @@ class PurchaseCalculator
                 'discount_total' => round($discountTotal, 2),
                 'tax_total' => $taxTotal,
                 'landed_cost_total' => round($landedCostTotal, 2),
-                'grand_total' => round($subtotal + $taxTotal + round($landedCostTotal, 2), 2),
+                // A discount on the FINAL amount comes off after GST and the landed cost, and never below zero.
+                'final_discount' => $finalDiscountApplied,
+                'grand_total' => round($subtotal + $taxTotal + round($landedCostTotal, 2) - $finalDiscountApplied, 2),
             ],
         ];
     }

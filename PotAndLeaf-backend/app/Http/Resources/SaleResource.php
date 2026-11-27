@@ -22,6 +22,8 @@ class SaleResource extends JsonResource
             'company_id'    => $this->company_id,
             'sale_no'       => $this->sale_no,
             'sale_date'     => optional($this->sale_date)->toDateString(),
+            'location_id'   => $this->location_id,
+            'location'      => $this->whenLoaded('location', fn () => $this->location ? ['id' => $this->location->id, 'name' => $this->location->name, 'type' => $this->location->type] : null),
             'customer_id'   => $this->customer_id,
             'customer_name' => $this->customer_name,
             'company'       => $this->whenLoaded('company', fn () => [
@@ -41,6 +43,8 @@ class SaleResource extends JsonResource
             'round_off'     => (float) $this->round_off,
             'grand_total'             => (float) $this->grand_total,
             'amount_paid'             => (float) $this->amount_paid,
+            'bill_discount'           => (float) ($this->bill_discount ?? 0),
+            'final_discount'          => (float) ($this->final_discount ?? 0),
             'balance'                 => round(max(0, (float) $this->grand_total - (float) $this->loyalty_discount - (float) $this->amount_paid), 2),
             'loyalty_points_redeemed' => (int) $this->loyalty_points_redeemed,
             'loyalty_discount'        => (float) $this->loyalty_discount,
@@ -56,6 +60,9 @@ class SaleResource extends JsonResource
             'cancel_reviewed_by'      => $this->whenLoaded('cancelReviewedBy', fn () => $this->cancelReviewedBy?->name),
             'entered_by'    => $this->whenLoaded('createdBy', fn () => $this->createdBy?->name),
             'created_by'    => $this->created_by,
+            'entered_by'    => $this->entered_by,
+            'salesman'      => $this->whenLoaded('createdBy', fn () => $this->createdBy ? ['id' => $this->createdBy->id, 'name' => $this->createdBy->name] : null),
+            'entered_by_name' => $this->whenLoaded('enteredBy', fn () => $this->enteredBy?->name),
             'items_count'   => $this->when($this->items_count !== null, $this->items_count),
             'items'         => SaleItemResource::collection($this->whenLoaded('items')),
             // Draft lines that need more than is in stock now (for "Request shortage").

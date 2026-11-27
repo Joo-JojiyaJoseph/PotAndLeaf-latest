@@ -40,9 +40,16 @@ class ProductionService
             $productId = $data['product_id'] ?? null;
             if (! empty($data['new_product'])) {
                 $created = $this->createProduct->handle($companyId, [
-                    'sku'           => $data['new_product']['sku'],
+                    // The SKU is always numbered by the system (SKU-00001, …), like on the product form.
+                    'sku'           => null,
                     'name'          => $data['new_product']['name'],
                     'unit_id'       => $data['new_product']['unit_id'] ?? null,
+                    'category_id'   => $data['new_product']['category_id'] ?? null,
+                    'gst_rate'      => $data['new_product']['gst_rate'] ?? 0,
+                    'mrp'           => $data['new_product']['mrp'] ?? 0,
+                    'retail_price'  => $data['new_product']['retail_price'] ?? 0,
+                    'wholesale_price' => $data['new_product']['wholesale_price'] ?? 0,
+                    'dealer_price'  => $data['new_product']['dealer_price'] ?? 0,
                     'status'        => 'active',
                     'opening_stock' => 0,
                 ]);
@@ -208,7 +215,20 @@ class ProductionService
                 $bom->update(['name' => $productName]);
             }
 
+            // Existing product: save the prices typed on the production form when asked to.
+            if (! empty($data['update_prices']) && ! empty($data['prices']) && ! empty($bom->product_id)) {
+                $prices = collect($data['prices'])->only(['gst_rate', 'mrp', 'retail_price', 'wholesale_price', 'dealer_price'])
+                    ->filter(fn ($v) => $v !== null && $v !== '')->all();
+                if ($prices !== []) {
+                    Product::forCompany($companyId)->whereKey($bom->product_id)->update($prices);
+                }
+            }
+
             $orderPayload = [
+                'setting_charge'  => $data['setting_charge'] ?? 0,
+                'misc_charge'     => $data['misc_charge'] ?? 0,
+                'margin_type'     => $data['margin_type'] ?? 'percent',
+                'margin_value'    => $data['margin_value'] ?? 0,
                 'bom_id'          => $bom->id,
                 'output_quantity' => $data['output_quantity'],
                 'supervisor_id'   => $data['supervisor_id'] ?? null,
@@ -315,6 +335,10 @@ class ProductionService
             'order_no'          => $this->nextOrderNo($companyId),
             'order_date'        => $data['order_date'],
             'output_quantity'   => $data['output_quantity'],
+            'setting_charge'    => round((float) ($data['setting_charge'] ?? 0), 2),
+            'misc_charge'       => round((float) ($data['misc_charge'] ?? 0), 2),
+            'margin_type'       => $data['margin_type'] ?? 'percent',
+            'margin_value'      => round((float) ($data['margin_value'] ?? 0), 2),
             'status'            => 'draft',
             'notes'             => $data['notes'] ?? null,
         ]);
@@ -372,6 +396,10 @@ class ProductionService
             'supervisor_id'     => $data['supervisor_id'] ?? null,
             'order_date'        => $data['order_date'],
             'output_quantity'   => $data['output_quantity'],
+            'setting_charge'    => round((float) ($data['setting_charge'] ?? $order->setting_charge), 2),
+            'misc_charge'       => round((float) ($data['misc_charge'] ?? $order->misc_charge), 2),
+            'margin_type'       => $data['margin_type'] ?? $order->margin_type,
+            'margin_value'      => round((float) ($data['margin_value'] ?? $order->margin_value), 2),
             'notes'             => $data['notes'] ?? null,
         ]);
 
@@ -387,6 +415,36 @@ class ProductionService
         );
 
         return $order->load(['outputProduct:id,sku,name', 'bom:id,name', 'location:id,name', 'supervisor:id,name']);
+    }
+
+    /**
+     * Set the selling prices of the finished product (MRP, retail, wholesale, dealer).
+     * Used at the final "Complete" step, and any time afterwards. Blank / zero values are left alone.
+     *
+     * @param  array<string, mixed>  $prices
+     */
+    public function setOutputPrices(ProductionOrder $order, array $prices, ?int $userId = null): ProductionOrder
+    {
+        if ($order->status === 'cancelled') {
+            throw ValidationException::withMessages(['prices' => 'A deleted production cannot change prices.']);
+        }
+        if (! $order->output_product_id) {
+            throw ValidationException::withMessages(['prices' => 'This production has no finished product yet.']);
+        }
+
+        $update = collect($prices)->only(['mrp', 'retail_price', 'wholesale_price', 'dealer_price'])
+            ->filter(fn ($v) => $v !== null && $v !== '' && (float) $v > 0)
+            ->map(fn ($v) => round((float) $v, 2))->all();
+
+        if ($update !== []) {
+            Product::forCompany($order->company_id)->whereKey($order->output_product_id)->update($update);
+            app(\App\Services\ActivityLogService::class)->log(
+                $order->company_id, $userId, 'set_prices', 'production', 'production_order', $order->id,
+                "Prices set for the finished product of {$order->order_no}", $update,
+            );
+        }
+
+        return $order->fresh(['items', 'outputProduct:id,sku,name', 'bom:id,name', 'batches', 'location:id,name', 'supervisor:id,name']);
     }
 
     public function complete(ProductionOrder $order, ?int $userId = null): ProductionOrder
@@ -577,6 +635,8 @@ class ProductionService
     private function finalizeOrder(ProductionOrder $order, float $inputCost, ?int $userId): ProductionOrder
     {
         $outQty = (float) $order->output_quantity;
+        // The setting charge and miscellaneous costs belong to the finished goods too.
+        $inputCost = round($inputCost + (float) $order->setting_charge + (float) $order->misc_charge, 2);
         $unitCost = $outQty > 0 ? round($inputCost / $outQty, 4) : 0.0;
         $output = Product::forCompany($order->company_id)->lockForUpdate()->find($order->output_product_id);
         if ($output) {

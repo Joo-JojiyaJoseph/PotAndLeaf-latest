@@ -14,7 +14,7 @@ class SalesReturn extends Model
     use HasAuditColumns, HasFactory, HasUuids;
 
     protected $fillable = [
-        'company_id', 'sale_id', 'customer_id', 'location_id', 'return_no', 'return_date',
+        'company_id', 'sale_id', 'customer_id', 'location_id', 'refund_mode', 'advance_credit', 'advance_refunded', 'return_no', 'return_date',
         'is_interstate', 'reason', 'subtotal', 'tax_total', 'round_off', 'grand_total',
         'status', 'notes', 'confirmed_at',
     ];
@@ -40,6 +40,11 @@ class SalesReturn extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(CustomerRefund::class);
     }
 
     public function items(): HasMany

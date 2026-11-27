@@ -18,6 +18,7 @@ class LocationResource extends JsonResource
             'type'       => $this->type,
             'is_default' => (bool) $this->is_default,
             'is_active'  => (bool) $this->is_active,
+            'is_landscape' => (bool) ($this->is_landscape ?? false),
         ];
     }
 }

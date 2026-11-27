@@ -23,6 +23,8 @@ class StoreLocationRequest extends FormRequest
             'type'       => ['required', 'in:godown,shop'],
             'is_default' => ['boolean'],
             'is_active'  => ['boolean'],
+            // A landscaping division is always a branch (a godown only stores stock).
+            'is_landscape' => ['sometimes', 'boolean'],
         ];
     }
 }

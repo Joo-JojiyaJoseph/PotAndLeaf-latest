@@ -163,10 +163,38 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
 
         // Module 08 — Supplier payments
         // Accounting books — cash, bank, journal
+        // Landscape division — landscaping projects
+        Route::get('landscape/form-data', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'formData']);
+        Route::get('landscape/projects', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'index']);
+        Route::post('landscape/projects', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'store']);
+        Route::put('landscape/projects/{landscapeProject}', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'update']);
+        Route::delete('landscape/projects/{landscapeProject}', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'destroy']);
+        Route::get('landscape/projects/{landscapeProject}', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'show']);
+        Route::post('landscape/projects/{landscapeProject}/estimates', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'storeEstimate']);
+        Route::put('landscape/estimates/{landscapeEstimate}', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'updateEstimate']);
+        Route::delete('landscape/estimates/{landscapeEstimate}', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'deleteEstimate']);
+        Route::post('landscape/estimates/{landscapeEstimate}/send', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'sendEstimate']);
+        Route::post('landscape/estimates/{landscapeEstimate}/approve', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'approveEstimate']);
+        Route::put('landscape/projects/{landscapeProject}/work-order', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'updateWorkOrder']);
+        Route::post('landscape/projects/{landscapeProject}/start', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'start']);
+        Route::post('landscape/projects/{landscapeProject}/complete', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'complete']);
+        Route::post('landscape/projects/{landscapeProject}/entries', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'storeEntry']);
+        Route::put('landscape/entries/{landscapeWorkEntry}', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'updateEntry']);
+        Route::delete('landscape/entries/{landscapeWorkEntry}', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'deleteEntry']);
+        Route::post('landscape/projects/{landscapeProject}/commissions', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'storeCommission']);
+        Route::put('landscape/commissions/{landscapeCommission}', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'updateCommission']);
+        Route::delete('landscape/commissions/{landscapeCommission}', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'deleteCommission']);
+        Route::post('landscape/commissions/{landscapeCommission}/pay', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'payCommission']);
+
+        // Expenses & other receipts, per branch / godown
+        Route::get('expenses/form-data', [\App\Http\Controllers\Api\ExpenseController::class, 'formData']);
+        Route::get('expenses', [\App\Http\Controllers\Api\ExpenseController::class, 'index']);
+        Route::post('expenses', [\App\Http\Controllers\Api\ExpenseController::class, 'store']);
+        Route::delete('expenses/{accountingTransaction}', [\App\Http\Controllers\Api\ExpenseController::class, 'destroy']);
+
         Route::get('accounting/form-data', [AccountingController::class, 'formData']);
         Route::get('accounting/cash-book', [AccountingController::class, 'cashBook']);
         Route::get('accounting/bank-book', [AccountingController::class, 'bankBook']);
-        Route::get('accounting/journal', [AccountingController::class, 'journal']);
         Route::get('accounting/vouchers/{accountingTransaction}', [AccountingController::class, 'show']);
         Route::post('accounting/vouchers', [AccountingController::class, 'store']);
         Route::put('accounting/vouchers/{accountingTransaction}', [AccountingController::class, 'update']);
@@ -192,6 +220,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('sales/{sale}/cancel-reject', [SaleController::class, 'rejectCancellation']);
         Route::post('sales/{sale}/convert-proforma', [SaleController::class, 'convertProforma']);
         Route::post('sales/{sale}/whatsapp', [SaleController::class, 'sendWhatsapp']);
+        Route::post('sales/{sale}/care-guide', [SaleController::class, 'sendCareGuide']);
         Route::delete('sales/{sale}', [SaleController::class, 'destroy']);
 
         Route::get('sales-returns/source', [SalesReturnController::class, 'source']);
@@ -199,6 +228,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('sales-returns', [SalesReturnController::class, 'store']);
         Route::get('sales-returns/{salesReturn}', [SalesReturnController::class, 'show']);
         Route::post('sales-returns/{salesReturn}/confirm', [SalesReturnController::class, 'confirm']);
+        Route::post('sales-returns/{salesReturn}/refund', [SalesReturnController::class, 'refund']);
         Route::delete('sales-returns/{salesReturn}', [SalesReturnController::class, 'destroy']);
 
         // Module 12 — Customer master (CRUD)
@@ -372,6 +402,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('production/orders/{productionOrder}', [ProductionController::class, 'showOrder']);
         Route::put('production/orders/{productionOrder}', [ProductionController::class, 'updateOrder']);
         Route::post('production/orders/{productionOrder}/complete', [ProductionController::class, 'complete']);
+        Route::post('production/orders/{productionOrder}/prices', [ProductionController::class, 'setPrices']);
         Route::post('production/orders/{productionOrder}/stages/{productionOrderStage}/start', [ProductionController::class, 'startStage']);
         Route::post('production/orders/{productionOrder}/stages/{productionOrderStage}/complete', [ProductionController::class, 'completeStage']);
         Route::delete('production/orders/{productionOrder}', [ProductionController::class, 'destroyOrder']);
@@ -415,6 +446,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('purchase-returns', [PurchaseReturnController::class, 'store']);
         Route::get('purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'show']);
         Route::post('purchase-returns/{purchaseReturn}/confirm', [PurchaseReturnController::class, 'confirm']);
+        Route::post('purchase-returns/{purchaseReturn}/refund', [PurchaseReturnController::class, 'refund']);
         Route::delete('purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'destroy']);
 
         // Module 01 — Bulk splitting (cost redistribution + stock conversion)
@@ -430,7 +462,9 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::get('stock-verifications', [StockVerificationController::class, 'index']);
         Route::post('stock-verifications', [StockVerificationController::class, 'store']);
         Route::get('stock-verifications/{stockVerification}', [StockVerificationController::class, 'show']);
+        Route::post('stock-verifications/quick', [StockVerificationController::class, 'quick']);
         Route::post('stock-verifications/{stockVerification}/submit', [StockVerificationController::class, 'submit']);
+        Route::post('stock-verifications/{stockVerification}/verify', [StockVerificationController::class, 'verify']);
         Route::post('stock-verifications/{stockVerification}/approve', [StockVerificationController::class, 'approve']);
         Route::post('stock-verifications/{stockVerification}/reject', [StockVerificationController::class, 'reject']);
 

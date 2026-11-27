@@ -9,6 +9,8 @@ use App\Models\PurchaseReturn;
 use App\Models\Supplier;
 use App\Repositories\Contracts\PurchaseReturnRepositoryInterface;
 use App\Services\InventoryService;
+use App\Services\LocationStockService;
+use App\Services\ReturnRefundService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -23,6 +25,8 @@ class ConfirmPurchaseReturn
     public function __construct(
         private readonly PurchaseReturnRepositoryInterface $returns,
         private readonly InventoryService $inventory,
+        private readonly LocationStockService $locationStock,
+        private readonly ReturnRefundService $refunds,
     ) {}
 
     public function handle(PurchaseReturn $return, ?int $userId = null): PurchaseReturn
@@ -70,6 +74,8 @@ class ConfirmPurchaseReturn
                     ]);
                 }
 
+                // Goods go back from the location the purchase was received into.
+                $this->locationStock->assertAvailable($return->company_id, $return->purchase?->location_id, $product->id, (float) $item->qty, $product->name);
                 $this->inventory->post(
                     product: $product,
                     direction: 'out',
@@ -83,6 +89,7 @@ class ConfirmPurchaseReturn
                 );
 
                 $product->save();
+                $this->locationStock->adjust($return->company_id, $return->purchase?->location_id, $product->id, 'out', (float) $item->qty);
                 if ($item->product_batch_id) {
                     $batch = \App\Models\ProductBatch::where('id', $item->product_batch_id)->lockForUpdate()->first();
                     if ($batch) {
@@ -92,7 +99,7 @@ class ConfirmPurchaseReturn
                 }
             }
 
-            $this->creditSupplier($return);
+            $this->creditSupplier($return, $userId);
             $return->update(['status' => 'confirmed', 'confirmed_at' => now()]);
 
             return $return->refresh()->load(['supplier', 'purchase:id,purchase_no', 'items']);
@@ -136,7 +143,7 @@ class ConfirmPurchaseReturn
     }
 
     /** Reduce what we owe the supplier. Any credit beyond outstanding becomes advance. */
-    private function creditSupplier(PurchaseReturn $return): void
+    private function creditSupplier(PurchaseReturn $return, ?int $userId = null): void
     {
         if (! $return->supplier_id) {
             return;
@@ -152,10 +159,8 @@ class ConfirmPurchaseReturn
         $applied = round(min(max($outstanding, 0), $credit), 2);
         $supplier->outstanding = round($outstanding - $applied, 2);
         $excess = round($credit - $applied, 2);
-        if ($excess > 0.005) {
-            $supplier->advance_balance = round((float) $supplier->advance_balance + $excess, 2);
-            $return->update(['advance_credit' => $excess]);
-        }
+        // The credit beyond what we owed is kept as supplier advance, or received back as money.
+        $this->refunds->settlePurchaseReturn($return, $supplier, $excess, $userId);
         $supplier->save();
     }
 }

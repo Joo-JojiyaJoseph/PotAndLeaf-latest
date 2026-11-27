@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import useSubmitLock from '../../hooks/useSubmitLock';
 import { fieldError } from '../../lib/formErrors';
 import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../../components/ui';
+import LocationFormModal, { blankLocation } from './LocationFormModal';
 import { ImageUpload, mediaUrl } from '../../components/media';
 import StatusToggle from '../../components/StatusToggle';
 import { useToast } from '../../lib/toast';
@@ -57,6 +58,7 @@ export default function CompaniesList() {
   const [errors, setErrors] = useState({});
   const [uploadBusy, setUploadBusy] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [locModal, setLocModal] = useState({ open: false, companyId: null, initial: blankLocation('shop'), codes: [] });
   const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
@@ -235,6 +237,27 @@ export default function CompaniesList() {
                 </div>
               </div>
               <p className="mt-3 line-clamp-2 text-xs text-muted">{c.description || c.address || 'No description'}</p>
+              <div className="mt-3 border-t border-line pt-3" onClick={(e) => e.stopPropagation()}>
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1.5">
+                  <span className="microlabel text-faint">Branches &amp; godowns ({(c.locations ?? []).length})</span>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => setLocModal({ open: true, companyId: c.id, initial: blankLocation('shop'), codes: (c.locations ?? []).map((l) => l.code) })} className="rounded-lg border border-line px-2 py-1 text-[11px] font-medium text-leaf hover:bg-leaf-soft">+ Branch</button>
+                    <button type="button" onClick={() => setLocModal({ open: true, companyId: c.id, initial: blankLocation('godown'), codes: (c.locations ?? []).map((l) => l.code) })} className="rounded-lg border border-line px-2 py-1 text-[11px] font-medium text-leaf hover:bg-leaf-soft">+ Godown</button>
+                  </div>
+                </div>
+                {(c.locations ?? []).length === 0 ? <p className="text-xs text-muted">None yet.</p> : (
+                  <ul className="max-h-28 space-y-1 overflow-y-auto">
+                    {c.locations.map((l) => (
+                      <li key={l.id} className={`flex flex-wrap items-center gap-1.5 text-xs ${l.is_active ? '' : 'opacity-60'}`}>
+                        <span className="min-w-0 max-w-full truncate font-medium">{l.name}</span>
+                        <Badge tone={l.type === 'godown' ? 'default' : 'info'}>{l.type === 'godown' ? 'Godown' : 'Branch'}</Badge>
+                        {l.is_default && <Badge tone="active">Main</Badge>}
+                        {l.is_landscape && <Badge tone="active">Landscape</Badge>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <div className="mt-3 flex items-center justify-between border-t border-line pt-3" onClick={(e) => e.stopPropagation()}>
                 <StatusToggle active={Boolean(c.is_active)} onToggle={(next) => onToggle(c, next)} />
                 <div className="flex items-center gap-1">
@@ -343,6 +366,7 @@ export default function CompaniesList() {
           it will not be deleted — make it <b>Inactive</b> instead so nothing is lost.
         </p>
       </Modal>
+      <LocationFormModal open={locModal.open} onClose={() => setLocModal((m) => ({ ...m, open: false }))} companyId={locModal.companyId} initial={locModal.initial} existingCodes={locModal.codes} />
     </div>
   );
 }

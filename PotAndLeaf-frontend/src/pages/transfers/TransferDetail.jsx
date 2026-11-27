@@ -87,8 +87,7 @@ export default function TransferDetail() {
   });
   const approveM = useMutation({
     mutationFn: () => api.post(`/transfers/${id}/approve`, {
-      to_company_id: approveTo ? Number(approveTo) : undefined,
-      from_company_id: approveFrom && String(approveFrom) !== String(data?.company_id) ? Number(approveFrom) : undefined,
+      from_location_id: approveFrom && String(approveFrom) !== String(data?.from_location_id) ? approveFrom : undefined,
       approvals: Object.entries(approvals).map(([itemId, row]) => ({
         id: itemId,
         approved_qty: Number(row.qty) || 0,
@@ -109,13 +108,16 @@ export default function TransferDetail() {
   });
   const receiveM = useMutation({
     mutationFn: () => api.post(`/transfers/${id}/receive`, { receipts: Object.entries(receipts).map(([itemId, q]) => ({ id: itemId, received_qty: Number(q) || 0 })) }, withCompany(destCompanyId)),
-    onSuccess: () => { invalidate(); setReceiving(false); toast.success('Received. Stock added and new barcodes made.'); },
+    onSuccess: () => { invalidate(); setReceiving(false); toast.success('Received. The stock is now at the receiving branch or godown.'); },
     onError: fail('Could not confirm receipt.'),
   });
 
   if (isLoading) return <DetailLoading />;
   if (isError || !data) return <DetailError backTo="/transfers" />;
   const t = data;
+  // Stock only moves between branches and godowns of one company, so show the location names.
+  const fromName = t.is_intra_company ? t.from_location : (t.from_company ?? t.from_location);
+  const toName = t.is_intra_company ? t.to_location : (t.to_company ?? t.to_location);
 
   const openReceive = () => {
     const seed = {};
@@ -126,14 +128,14 @@ export default function TransferDetail() {
   const openApprove = () => {
     const seed = {};
     (t.items ?? []).forEach((it) => { seed[it.id] = { qty: String(it.qty), reason: '' }; });
-    setApprovals(seed); setApproveFrom(String(t.company_id)); setApproving(true);
+    setApprovals(seed); setApproveFrom(String(t.from_location_id ?? t.company_id)); setApproving(true);
   };
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <DetailHeader
         title={`Transfer ${t.transfer_no}`}
-        subtitle={`${t.from_location ?? t.from_company} → ${t.to_location ?? t.to_company} · ${formatDate(t.transfer_date)}${t.is_intra_company ? ' · location move' : ''}`}
+        subtitle={`${t.from_location ?? t.from_company} → ${t.to_location ?? t.to_company} · ${formatDate(t.transfer_date)}${t.is_intra_company ? ' · branch / godown transfer' : ''}`}
         backTo="/transfers"
         actions={<>
           <Badge tone={tone[t.status] ?? 'default'}>{STATUS[t.status] ?? t.status}</Badge>
@@ -147,15 +149,15 @@ export default function TransferDetail() {
       />
       <NextStep>{{
         requested: t.can?.approve
-          ? `${t.to_company} asked for this stock. Check it and click “Approve”${t.can?.change_source ? ' (you can choose which company sends it)' : ''}, or “Reject”.`
-          : `Request sent to ${t.from_company}. Waiting for the admin to approve it.`,
+          ? `${toName} asked for this stock. Check it and click “Approve”${t.can?.change_source ? ' (you can choose which branch or godown sends it)' : ''}, or “Reject”.`
+          : `Request sent to ${fromName}. Waiting for approval.`,
         draft: t.can?.dispatch
-          ? `Approved. Pack the items and click “Dispatch” to send them to ${t.to_company ?? t.to_location}.`
-          : `Approved. Waiting for ${t.from_company} to dispatch the stock.`,
+          ? `Approved. Pack the items and click “Dispatch” to send them to ${toName}.`
+          : `Approved. Waiting for ${fromName} to dispatch the stock.`,
         in_transit: t.can?.receive
           ? 'The stock is on the way. When it arrives, click “Receive” — stock is added and new barcodes are made.'
-          : `On the way. ${t.to_company ?? t.to_location} clicks “Receive” when the stock arrives.`,
-        received: 'Done. The stock was added to the receiving company with new barcodes (see the items below).',
+          : `On the way. ${toName} clicks “Receive” when the stock arrives.`,
+        received: 'Done. The stock is now at the receiving branch or godown (see the items below).',
       }[t.status] ?? null}</NextStep>
 
       {t.status === 'rejected' && (
@@ -166,7 +168,7 @@ export default function TransferDetail() {
 
       <Section title="Details">
         <InfoGrid cols={4}>
-          <InfoItem label="Type" value={t.is_intra_company ? 'Location transfer' : (t.is_stock_request ? 'Stock request' : 'Inter-company')} />
+          <InfoItem label="Type" value={t.is_stock_request ? 'Stock request' : 'Stock transfer'} />
           <InfoItem label="Sent by (from)" value={t.from_location ?? t.from_company} />
           <InfoItem label="Needed by (to)" value={t.to_location ?? t.to_company} />
           {t.requested_by && <InfoItem label="Requested by" value={t.requested_by} />}
@@ -221,16 +223,16 @@ export default function TransferDetail() {
       >
         {t.can?.change_source && (
           <div className="mb-4">
-            <p className="mb-2 text-sm font-medium">Which company sends the stock?</p>
+            <p className="mb-2 text-sm font-medium">Which branch or godown sends the stock?</p>
             {sourcesLoading && !sources ? <div className="flex justify-center py-4"><Spinner className="size-5" /></div> : (
               <div className="space-y-2">
                 {(sources ?? []).map((src) => {
-                  const picked = String(approveFrom) === String(src.company_id);
+                  const picked = String(approveFrom) === String(src.location_id);
                   return (
-                    <button key={src.company_id} type="button" onClick={() => setApproveFrom(String(src.company_id))}
+                    <button key={src.location_id} type="button" onClick={() => setApproveFrom(String(src.location_id))}
                       className={'w-full rounded-xl border p-3 text-left transition-colors ' + (picked ? 'border-leaf bg-leaf-soft/60 ring-2 ring-leaf/20' : 'border-line hover:border-leaf/40')}>
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold">{src.company_name}{src.is_current && <span className="ml-1 text-xs font-normal text-muted">(asked)</span>}</span>
+                        <span className="text-sm font-semibold">{src.location_name}{src.is_current && <span className="ml-1 text-xs font-normal text-muted">(asked)</span>}</span>
                         <span className={'rounded-full px-2 py-0.5 text-[10px] font-semibold ' + (src.enough ? 'bg-leaf-soft text-leaf-hover' : 'bg-amber-50 text-amber-700')}>{src.enough ? 'Has enough' : 'Not enough'}</span>
                       </div>
                       <div className="mt-1 text-xs text-muted">
@@ -239,7 +241,7 @@ export default function TransferDetail() {
                     </button>
                   );
                 })}
-                {(sources ?? []).length === 0 && <p className="text-sm text-muted">No other company has these products.</p>}
+                {(sources ?? []).length === 0 && <p className="text-sm text-muted">No other branch or godown has these products.</p>}
               </div>
             )}
           </div>
@@ -278,7 +280,7 @@ export default function TransferDetail() {
           </Button>
         </>}
       >
-        <p className="mb-3 text-sm text-muted">Enter the quantity actually received at {t.to_company ?? t.to_location}. Any shortfall returns to {t.from_company ?? t.from_location}. Missing products are created at the destination shop automatically.</p>
+        <p className="mb-3 text-sm text-muted">Enter the quantity actually received at {toName}. Any shortfall returns to {fromName}. Missing products are created at the destination shop automatically.</p>
         <div className="space-y-2">
           {(t.items ?? []).map((it) => (
             <div key={it.id} className="flex items-center justify-between gap-3">

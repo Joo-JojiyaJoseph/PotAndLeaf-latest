@@ -186,8 +186,9 @@ class AccessRequestController extends Controller
     /** Small numbers for the bell: requests waiting for me, and answers to mine. */
     public function notices(Request $request): JsonResponse
     {
+        $stockCounts = $this->stockCountNotices($request);
         if (! AccessRequestTables::ready()) {
-            return $this->ok(['waiting_for_me' => 0, 'my_answers' => []]);
+            return $this->ok(['waiting_for_me' => 0, 'my_answers' => [], 'stock_counts' => $stockCounts]);
         }
         $user = $request->user();
         $companyId = $this->company($request)->id;
@@ -199,7 +200,39 @@ class AccessRequestController extends Controller
             ->whereIn('status', ['approved', 'rejected'])->where('decided_at', '>=', now()->subDays(7))
             ->with('decider:id,name')->latest('decided_at')->limit(5)->get()->map(fn ($r) => $this->present($r));
 
-        return $this->ok(['waiting_for_me' => $waiting, 'my_answers' => $answers]);
+        return $this->ok(['waiting_for_me' => $waiting, 'my_answers' => $answers, 'stock_counts' => $stockCounts]);
+    }
+
+    /**
+     * Stock counts whose stock was changed straight away and now wait for head office / admin to check
+     * (shown in the bell). Only for people who may verify; head office sees every company's.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function stockCountNotices(Request $request): array
+    {
+        $user = $request->user();
+        $companyId = $this->company($request)->id;
+        if (! $user->is_super_admin && ! $user->hasPermission('stock_verifications.approve', $companyId)) {
+            return [];
+        }
+
+        $rows = \App\Models\StockVerification::query()
+            ->when(! $user->is_super_admin, fn ($q) => $q->where('company_id', $companyId))
+            ->where('status', 'applied')
+            ->withCount(['items as changed_count' => fn ($q) => $q->where('variance', '!=', 0)])
+            ->orderByDesc('applied_at')->limit(10)->get();
+        $names = \App\Models\Company::whereIn('id', $rows->pluck('company_id')->unique())->pluck('name', 'id');
+
+        return $rows->map(fn ($v) => [
+            'id'           => $v->id,
+            'count_no'     => $v->count_no,
+            'company_id'   => $v->company_id,
+            'company_name' => $names[$v->company_id] ?? null,
+            'is_quick'     => (bool) $v->is_quick,
+            'changed'      => (int) $v->changed_count,
+            'applied_at'   => optional($v->applied_at)->toIso8601String(),
+        ])->values()->all();
     }
 
     /** Extra permissions given to a user in this company (shown on the user page). */

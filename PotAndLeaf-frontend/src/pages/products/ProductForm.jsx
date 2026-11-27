@@ -1,3 +1,4 @@
+import PriceTiers from '../../components/PriceTiers';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -40,7 +41,6 @@ export default function ProductForm() {
   const err = (k) => fieldError(errors, k);
   const [saving, setSaving] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
-  const [margin, setMargin] = useState('0');
   const companyReady = isEdit || !isSuperAdmin || Boolean(formCompanyId);
 
   const { data: existing, isLoading: loadingExisting } = useQuery({
@@ -58,15 +58,7 @@ export default function ProductForm() {
   const companyCfg = apiCompanyId ? withCompany(apiCompanyId) : {};
   const formDataCfg = targetCompanyId ? withCompany(targetCompanyId) : {};
 
-  const suggestedRetail = useMemo(() => {
-    const cost = Number(form.cost_price) || 0;
-    const m = Math.max(0, Number(margin) || 0);
-    return Math.round(cost * (1 + m / 100) * 100) / 100;
-  }, [form.cost_price, margin]);
-
-  const applyMargin = () => {
-    setForm((f) => ({ ...f, retail_price: suggestedRetail, mrp: f.mrp || suggestedRetail }));
-  };
+  const patchForm = (patch) => setForm((f) => ({ ...f, ...patch }));
 
   const { data: formData, isLoading: loadingForm } = useQuery({
     queryKey: ['product-form-data', targetCompanyId || activeCompany?.id],
@@ -302,30 +294,8 @@ export default function ProductForm() {
           </div>
 
           <div className="mt-5 border-t border-line pt-5">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="microlabel text-faint">Pricing</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted">Suggest from cost + margin</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={margin}
-                  onChange={(e) => setMargin(e.target.value)}
-                  className="tnum h-8 w-16 rounded-lg border border-line bg-surface px-2 text-right text-sm"
-                />
-                <span className="text-xs text-muted">%</span>
-                <span className="tnum text-xs text-muted">→ {suggestedRetail.toFixed(2)}</span>
-                <Button type="button" variant="soft" size="sm" onClick={applyMargin}>Apply</Button>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <Field label="Cost price" required error={err('cost_price')}><Input type="number" step="0.01" value={form.cost_price} onChange={set('cost_price')} /></Field>
-              <Field label="MRP"><Input type="number" step="0.01" value={form.mrp} onChange={set('mrp')} /></Field>
-              <Field label="Retail price"><Input type="number" step="0.01" value={form.retail_price} onChange={set('retail_price')} /></Field>
-              <Field label="Wholesale price"><Input type="number" step="0.01" value={form.wholesale_price} onChange={set('wholesale_price')} /></Field>
-              <Field label="Dealer price"><Input type="number" step="0.01" value={form.dealer_price} onChange={set('dealer_price')} /></Field>
-            </div>
+            <div className="microlabel mb-3 text-faint">Pricing</div>
+            <PriceTiers value={form} onChange={patchForm} costError={err('cost_price')} />
           </div>
 
           <div className="mt-5 border-t border-line pt-5">

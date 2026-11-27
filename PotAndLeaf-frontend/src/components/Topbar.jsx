@@ -9,6 +9,7 @@ import {
   ArrowRightStartOnRectangleIcon,
   Bars3Icon,
   BellIcon,
+  ClipboardDocumentCheckIcon,
   MoonIcon,
   QuestionMarkCircleIcon,
   SunIcon,
@@ -34,10 +35,12 @@ export default function Topbar({ onMenu }) {
   });
   const waiting = noticesQ.data?.waiting_for_me ?? 0;
   const answers = noticesQ.data?.my_answers ?? [];
+  // Stock counts that already changed the stock and wait for head office / admin to check them.
+  const stockCounts = noticesQ.data?.stock_counts ?? [];
   const seenKey = `pl_seen_answers_${user?.id ?? ''}`;
   const [seen, setSeen] = useState(() => { try { return JSON.parse(localStorage.getItem(seenKey) || '[]'); } catch { return []; } });
   const unseen = answers.filter((a) => !seen.includes(a.id));
-  const badge = waiting + unseen.length;
+  const badge = waiting + unseen.length + stockCounts.length;
   // A newly approved request: load the new permissions straight away (menu updates, no refresh needed).
   const newlyApproved = unseen.filter((a) => a.status === 'approved').map((a) => a.id).join(',');
   useEffect(() => { if (newlyApproved) reloadPermissions?.(); }, [newlyApproved, reloadPermissions]);
@@ -161,8 +164,17 @@ export default function Topbar({ onMenu }) {
         >
           <div className="border-b border-line px-4 py-3">
             <p className="text-sm font-semibold text-ink">Notifications</p>
-            <p className="text-xs text-muted">Access requests and answers</p>
+            <p className="text-xs text-muted">Stock checks, access requests and answers</p>
           </div>
+          {stockCounts.map((v) => (
+            <Link key={v.id} to={`/stock-verifications/${v.id}${isSuperAdmin && v.company_id ? `?company_id=${v.company_id}` : ''}`} onClick={() => setNotesOpen(false)} className="flex items-start gap-3 border-b border-line px-4 py-3 hover:bg-leaf-soft/60">
+              <ClipboardDocumentCheckIcon className="mt-0.5 size-5 shrink-0 text-amber" />
+              <span className="text-sm">
+                {v.is_quick ? 'Stock was corrected while billing' : 'Stock count'} <b>{v.count_no}</b> changed the stock of <b>{v.changed}</b> item{v.changed === 1 ? '' : 's'}{isSuperAdmin && v.company_name ? ` at ${v.company_name}` : ''}. Please check it and click Verify.
+                <span className="block text-[11px] text-faint">{formatDateTime(v.applied_at)}</span>
+              </span>
+            </Link>
+          ))}
           {waiting > 0 && (
             <Link to="/access-requests" onClick={() => setNotesOpen(false)} className="flex items-start gap-3 border-b border-line px-4 py-3 hover:bg-leaf-soft/60">
               <InboxArrowDownIcon className="mt-0.5 size-5 shrink-0 text-amber" />
@@ -180,7 +192,7 @@ export default function Topbar({ onMenu }) {
               </span>
             </Link>
           ))}
-          {waiting === 0 && answers.length === 0 && (
+          {waiting === 0 && answers.length === 0 && stockCounts.length === 0 && (
             <div className="px-4 py-8 text-center">
               <span className="mx-auto flex size-10 items-center justify-center rounded-full bg-leaf-soft text-leaf">
                 <BellIcon className="size-5" />

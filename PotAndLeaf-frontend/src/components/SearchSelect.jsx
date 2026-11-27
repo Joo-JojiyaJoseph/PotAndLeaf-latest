@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckIcon, ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { classNames } from '../lib/format';
+import { MediaImg } from './media';
 
 /**
  * Themed dropdown (green focus, hover, and selected state). Portals the menu
@@ -162,6 +163,11 @@ export default function SearchSelect({
         <span className={classNames('min-w-0 flex-1 truncate', selected ? 'text-ink' : 'text-muted')}>
           {selected ? (
             <>
+              {selected.hasImage && String(selected.value) !== '' && (
+                <span className="mr-2 inline-flex size-6 -translate-y-px items-center justify-center overflow-hidden rounded-md bg-leaf-soft align-middle">
+                  <MediaImg value={selected.image} className="size-full object-cover" iconClassName="size-3 text-leaf/50" />
+                </span>
+              )}
               {selected.label}
               {selected.sublabel ? <span className="text-muted"> · {selected.sublabel}</span> : null}
             </>
@@ -216,8 +222,13 @@ export default function SearchSelect({
                         : 'text-ink hover:bg-leaf-soft hover:text-leaf-hover',
                   )}
                 >
+                  {opt.hasImage && (
+                    <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-leaf-soft">
+                      <MediaImg value={opt.image} className="size-full object-cover" iconClassName="size-4 text-leaf/50" />
+                    </span>
+                  )}
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{opt.label}</span>
+                    <span className="block break-words font-medium leading-snug">{opt.label}</span>
                     {opt.sublabel && (
                       <span className={classNames('mt-0.5 block truncate text-[11px]', active ? 'text-white/80' : 'text-muted')}>
                         {opt.sublabel}

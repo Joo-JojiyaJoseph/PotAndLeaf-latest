@@ -7,6 +7,7 @@ import { Badge, Button, Card, Spinner } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatDate } from '../../lib/format';
 import { mediaUrl } from '../../components/media';
+import CompanyLocations from './CompanyLocations';
 import { BuildingOffice2Icon } from '@heroicons/react/24/outline';
 
 export default function CompanyDetail() {
@@ -76,6 +77,8 @@ export default function CompanyDetail() {
           {c.legal_name && <p className="mt-1 text-sm"><span className="text-muted">Legal name:</span> {c.legal_name}</p>}
         </div>
       </div>
+
+      <CompanyLocations companyId={c.id} />
 
       <Section title="Company information">
         <InfoGrid cols={3}>

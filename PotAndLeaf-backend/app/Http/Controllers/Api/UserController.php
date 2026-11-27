@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\User\StoreUserRequest;
 use App\Http\Requests\User\UpdateUserRequest;
 use App\Http\Resources\UserResource;
+use App\Models\Location;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Api\ApiResponse;
@@ -16,6 +17,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 /**
  * User management within a company. Each user is a real login (email + password)
@@ -66,8 +69,12 @@ class UserController extends Controller
         $this->allow($request, 'users.view');
 
         $roles = Role::query()->orderBy('name')->get(['id', 'name']);
+        $locations = Location::query()
+            ->when($company?->id, fn ($q) => $q->where('company_id', $company->id))
+            ->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
+            ->get(['id', 'company_id', 'name', 'type', 'is_default']);
 
-        return $this->ok(['roles' => $roles]);
+        return $this->ok(['roles' => $roles, 'locations' => $locations]);
     }
 
     public function show(Request $request, User $user): JsonResponse
@@ -118,6 +125,7 @@ class UserController extends Controller
             ]);
             $user->companies()->syncWithoutDetaching([$company->id => ['is_default' => true]]);
             $this->syncCompanyRole($user, $company->id, $data['role_id'] ?? null);
+            $this->syncLocation($user, $company->id, $data['location_id'] ?? null);
 
             return $user;
         });
@@ -156,6 +164,9 @@ class UserController extends Controller
             }
 
             $this->syncCompanyRole($user, $targetCompanyId, $roleId);
+            if (array_key_exists('location_id', $data) || (string) $targetCompanyId !== (string) $companyId) {
+                $this->syncLocation($user, $targetCompanyId, $data['location_id'] ?? null);
+            }
         });
 
         return $this->ok($this->present($user->refresh(), $targetCompanyId), 'User updated.');
@@ -221,12 +232,33 @@ class UserController extends Controller
         }
     }
 
+    /** Set (or clear) the branch / godown a user works at in a company. */
+    private function syncLocation(User $user, int|string $companyId, ?string $locationId): void
+    {
+        if (! Schema::hasColumn('company_user', 'location_id')) {
+            return;
+        }
+        if (filled($locationId)) {
+            $ok = Location::where('company_id', $companyId)->where('is_active', true)->whereKey($locationId)->exists();
+            if (! $ok) {
+                throw ValidationException::withMessages(['location_id' => 'Choose a branch or godown of this company.']);
+            }
+        }
+
+        DB::table('company_user')->where('user_id', $user->id)->where('company_id', $companyId)
+            ->update(['location_id' => filled($locationId) ? $locationId : null]);
+        $user->forgetPermissionCache();
+    }
+
     private function present(User $user, int|string $companyId): UserResource
     {
         $user->load([
             'companies:id,name',
             'roles' => fn ($q) => $q->wherePivot('company_id', $companyId),
         ]);
+        $locationId = $user->locationIdFor($companyId);
+        $location = $locationId ? Location::find($locationId, ['id', 'name', 'type']) : null;
+        $user->setAttribute('location_info', $location ? ['id' => $location->id, 'name' => $location->name, 'type' => $location->type] : null);
 
         return new UserResource($user);
     }

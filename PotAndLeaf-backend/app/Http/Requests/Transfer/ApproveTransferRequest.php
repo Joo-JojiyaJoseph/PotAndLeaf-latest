@@ -20,7 +20,7 @@ class ApproveTransferRequest extends FormRequest
         $itemIds = $transfer?->items()->pluck('id')->all() ?? [];
 
         return [
-            'to_company_id'                => ['nullable', 'integer', Rule::exists('companies', 'id')->where('is_active', true)],
+            'from_location_id'             => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('is_active', true)],
             'approvals'                    => ['nullable', 'array'],
             'approvals.*.id'               => ['required', 'uuid', Rule::in($itemIds)],
             'approvals.*.approved_qty'     => ['required', 'numeric', 'min:0'],

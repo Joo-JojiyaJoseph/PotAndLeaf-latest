@@ -10,7 +10,10 @@ use Illuminate\Validation\ValidationException;
 
 class DamageEntryService
 {
-    public function __construct(private readonly InventoryService $inventory) {}
+    public function __construct(
+        private readonly InventoryService $inventory,
+        private readonly LocationStockService $locationStock,
+    ) {}
 
     public function list(int|string|null $companyId, array $filters): LengthAwarePaginator
     {
@@ -44,7 +47,10 @@ class DamageEntryService
             throw ValidationException::withMessages(['qty' => 'Quantity must be greater than zero.']);
         }
 
-        return DB::transaction(function () use ($companyId, $data, $qty, $userId) {
+        // The branch or godown the damaged stock was in (default: the user's own, else the main location).
+        $locationId = $this->locationStock->resolveLocationId($companyId, $data['location_id'] ?? null, $userId ? \App\Models\User::find($userId) : null);
+
+        return DB::transaction(function () use ($companyId, $data, $qty, $userId, $locationId) {
             $product = Product::forCompany($companyId)->lockForUpdate()->find($data['product_id'] ?? null);
             if (! $product) {
                 throw ValidationException::withMessages(['product_id' => 'Product not found.']);
@@ -68,7 +74,7 @@ class DamageEntryService
                 'company_id'  => $companyId,
                 'product_id'  => $product->id,
                 'product_batch_id' => $batch?->id,
-                'location_id' => null,
+                'location_id' => $locationId,
                 'entry_no'    => $this->nextEntryNo($companyId),
                 'entry_date'  => $data['entry_date'] ?? now()->toDateString(),
                 'qty'         => $qty,
@@ -77,6 +83,7 @@ class DamageEntryService
                 'photo'       => $data['photo'] ?? null,
             ]);
 
+            $this->locationStock->assertAvailable($companyId, $locationId, $product->id, $qty, $product->name);
             $this->inventory->post(
                 $product,
                 'out',
@@ -89,6 +96,7 @@ class DamageEntryService
                 $batch?->id,
             );
             $product->save();
+            $this->locationStock->adjust($companyId, $locationId, $product->id, 'out', $qty);
             if ($batch) {
                 $batch->decrement('remaining_qty', $qty);
                 if ((float) $batch->fresh()->remaining_qty <= 0) $batch->update(['status' => 'depleted']);

@@ -144,15 +144,20 @@ function ValuationTab({ companyParams }) {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
         <StatCard label="Products" value={t.products ?? 0} tone="info" />
         <StatCard label="Total units" value={t.total_units ?? 0} tone="default" />
-        <StatCard label="Stock value" value={formatCurrency(t.total_value ?? 0)} tone="good" />
+        <StatCard label="Stock value (landed cost)" value={formatCurrency(t.total_value ?? 0)} tone="good" />
       </div>
+      <p className="text-xs text-muted">
+        Valued at the landed unit cost of each purchase batch — supplier price plus its share of freight and loading
+        {Number(t.landed_value) > 0 ? <> (landed cost included in the value: <span className="tnum font-medium">{formatCurrency(t.landed_value)}</span>)</> : null}.
+      </p>
       <Card className="overflow-hidden">
         <table className="w-full text-sm">
           <thead><tr className="border-b border-line text-left text-faint">
             <th className="microlabel px-4 py-2.5 font-semibold">SKU</th>
             <th className="microlabel px-4 py-2.5 font-semibold">Product</th>
             <th className="microlabel px-4 py-2.5 text-right font-semibold">Stock</th>
-            <th className="microlabel px-4 py-2.5 text-right font-semibold">Unit cost</th>
+            <th className="microlabel px-4 py-2.5 text-right font-semibold">Landed unit cost</th>
+            <th className="microlabel px-4 py-2.5 text-right font-semibold">Landed in value</th>
             <th className="microlabel px-4 py-2.5 text-right font-semibold">Value</th>
           </tr></thead>
           <tbody>
@@ -162,6 +167,7 @@ function ValuationTab({ companyParams }) {
                 <td className="px-4 py-2.5 font-medium">{p.name}</td>
                 <td className="tnum px-4 py-2.5 text-right text-muted">{p.stock}</td>
                 <td className="tnum px-4 py-2.5 text-right text-muted">{formatCurrency(p.cost)}</td>
+                <td className="tnum px-4 py-2.5 text-right text-muted">{Number(p.landed_value) > 0 ? formatCurrency(p.landed_value) : '—'}</td>
                 <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(p.value)}</td>
               </tr>
             ))}

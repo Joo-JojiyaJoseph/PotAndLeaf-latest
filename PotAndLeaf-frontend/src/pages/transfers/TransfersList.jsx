@@ -44,11 +44,12 @@ export default function TransfersList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Stock transfers</h1>
-          <p className="text-sm text-muted">Ask another company for stock. Request → admin approves → they dispatch → you receive{companyHint}.</p>
+          <p className="text-sm text-muted">Move stock between the branches and godowns of the company. Request → approved → the sending location dispatches → the receiving location receives{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
-          {can('transfers.create') && <Link to="/transfers/new"><Button size="sm"><PlusIcon className="size-4" /> Request stock</Button></Link>}
+          {can('transfers.create') && <Link to="/transfers/new"><Button size="sm" variant="outline"><PlusIcon className="size-4" /> Request stock</Button></Link>}
+          {can('transfers.create') && <Link to="/transfers/send"><Button size="sm"><PlusIcon className="size-4" /> Send stock</Button></Link>}
         </div>
       </div>
 
@@ -86,14 +87,13 @@ export default function TransfersList() {
                       <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(detailPath(t))} className="font-medium text-ink hover:text-leaf">{t.transfer_no}</button></td>
                       <td className="px-4 py-2.5 text-muted">{formatDate(t.transfer_date)}</td>
                       <td className="px-4 py-2.5">
-                        {t.from_company ?? t.from_location}
-                        {!isSuperAdmin && !t.is_intra_company && (
-                          <span className={'mt-0.5 block w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold ' + (t.is_incoming ? 'bg-leaf-soft text-leaf-hover' : 'bg-amber-50 text-amber-700')}>
-                            {t.is_incoming ? 'Coming to us' : 'We send'}
-                          </span>
-                        )}
+                        {t.is_intra_company ? t.from_location : (t.from_company ?? t.from_location)}
+                        {t.is_intra_company && t.from_location_type && <span className="ml-1.5 text-[11px] text-muted">({t.from_location_type === 'godown' ? 'Godown' : 'Branch'})</span>}
                       </td>
-                      <td className="px-4 py-2.5">{t.to_company ?? t.to_location}</td>
+                      <td className="px-4 py-2.5">
+                        {t.is_intra_company ? t.to_location : (t.to_company ?? t.to_location)}
+                        {t.is_intra_company && t.to_location_type && <span className="ml-1.5 text-[11px] text-muted">({t.to_location_type === 'godown' ? 'Godown' : 'Branch'})</span>}
+                      </td>
                       <td className="tnum px-4 py-2.5 text-right text-muted">{t.items_count ?? '—'}</td>
                       <td className="px-4 py-2.5"><Badge tone={tone[t.status] ?? 'default'}>{TRANSFER_STATUS[t.status] ?? t.status}</Badge></td>
                       <td className="px-4 py-2.5 text-right">

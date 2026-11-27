@@ -7,6 +7,8 @@ use App\Models\CommissionPayout;
 use App\Models\CompanySetting;
 use App\Models\Customer;
 use App\Models\CustomerReceipt;
+use App\Models\CustomerRefund;
+use App\Models\SupplierRefund;
 use App\Models\LedgerAccount;
 use App\Models\Location;
 use App\Models\Product;
@@ -144,7 +146,7 @@ class ReportService
             ->whereDate('sale_date', '<=', $toC->toDateString())
             ->when($branchId, fn ($q) => $q->where('location_id', $branchId));
 
-        $salesTotal = (float) (clone $salesQ)->sum(DB::raw('subtotal - loyalty_discount'));
+        $salesTotal = (float) (clone $salesQ)->sum(DB::raw('subtotal - loyalty_discount - final_discount'));
 
         $cogs = $this->saleCogs($companyId, $fromC->toDateString(), $toC->toDateString(), $branchId);
 
@@ -163,7 +165,7 @@ class ReportService
             ->where('status', 'confirmed')
             ->whereBetween('sale_date', [$fromC->toDateString(), $toC->toDateString()])
             ->when($branchId, fn ($q) => $q->where('location_id', $branchId))
-            ->selectRaw("{$bucketExpr} as bucket, SUM(subtotal - loyalty_discount) as sales")
+            ->selectRaw("{$bucketExpr} as bucket, SUM(subtotal - loyalty_discount - final_discount) as sales")
             ->groupBy(DB::raw($bucketExpr))
             ->orderBy('bucket')
             ->get()
@@ -182,7 +184,7 @@ class ReportService
                     ->where('location_id', $loc->id)
                     ->whereDate('sale_date', '>=', $fromC->toDateString())
                     ->whereDate('sale_date', '<=', $toC->toDateString())
-                    ->sum(DB::raw('subtotal - loyalty_discount'));
+                    ->sum(DB::raw('subtotal - loyalty_discount - final_discount'));
                 $branchCogs = $this->saleCogs($companyId, $fromC->toDateString(), $toC->toDateString(), $loc->id);
                 // With all companies selected, each branch uses its own company's expense.
                 $exp = round(($companyId !== null ? $dailyExpense : $this->settings->getFloat($loc->company_id, 'daily_expense')) * $days, 2);
@@ -241,9 +243,9 @@ class ReportService
             ->where('status', 'confirmed')
             ->whereDate('sale_date', '>=', $from)
             ->whereDate('sale_date', '<=', $to)
-            ->get(['sale_date', 'subtotal', 'loyalty_discount'])
+            ->get(['sale_date', 'subtotal', 'loyalty_discount', 'final_discount'])
             ->groupBy(fn (Sale $s) => $s->sale_date->toDateString())
-            ->map(fn ($rows) => (float) $rows->sum(fn (Sale $s) => (float) $s->subtotal - (float) $s->loyalty_discount));
+            ->map(fn ($rows) => (float) $rows->sum(fn (Sale $s) => (float) $s->subtotal - (float) $s->loyalty_discount - (float) $s->final_discount));
 
         $cogsByDay = StockLedgerEntry::query()
             ->join('sales', 'sales.id', '=', 'stock_ledger_entries.reference_id')
@@ -1111,7 +1113,7 @@ class ReportService
                     'type'        => 'credit',
                     'reference'   => $r->receipt_no,
                     'invoice'     => $r->sale?->sale_no,
-                    'description' => $r->applied_from_advance ? 'Advance applied' : 'Receipt',
+                    'description' => $r->applied_from_advance ? 'Advance applied' : ($r->mode === 'discount' ? 'Discount allowed' : 'Receipt'),
                     'amount'      => (float) $r->amount,
                     'debit'       => 0,
                     'credit'      => (float) $r->amount,
@@ -1202,7 +1204,7 @@ class ReportService
                     'type'        => 'debit',
                     'reference'   => $p->payment_no,
                     'invoice'     => $p->purchase?->purchase_no,
-                    'description' => $p->applied_from_advance ? 'Advance applied' : 'Payment',
+                    'description' => $p->applied_from_advance ? 'Advance applied' : ($p->mode === 'discount' ? 'Discount received' : 'Payment'),
                     'amount'      => (float) $p->amount,
                     'debit'       => (float) $p->amount,
                     'credit'      => 0,
@@ -1301,6 +1303,43 @@ class ReportService
                 'credit' => (float) $p->amount,
             ]));
 
+        // Money paid back to customers for returned goods (out) and received back from suppliers (in).
+        CustomerRefund::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->whereIn('mode', $modes)
+            ->whereDate('refund_date', '>=', $from)
+            ->whereDate('refund_date', '<=', $to)
+            ->with('customer:id,name')
+            ->get()
+            ->each(fn (CustomerRefund $r) => $rows->push([
+                'date' => $r->refund_date->toDateString(),
+                'type' => 'out',
+                'reference' => $r->refund_no,
+                'party' => $r->customer?->name,
+                'description' => 'Refund to customer (returned goods)',
+                'mode' => $r->mode,
+                'amount' => (float) $r->amount,
+                'debit' => 0,
+                'credit' => (float) $r->amount,
+            ]));
+
+        SupplierRefund::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
+            ->whereIn('mode', $modes)
+            ->whereDate('refund_date', '>=', $from)
+            ->whereDate('refund_date', '<=', $to)
+            ->with('supplier:id,name')
+            ->get()
+            ->each(fn (SupplierRefund $r) => $rows->push([
+                'date' => $r->refund_date->toDateString(),
+                'type' => 'in',
+                'reference' => $r->refund_no,
+                'party' => $r->supplier?->name,
+                'description' => 'Refund from supplier (returned goods)',
+                'mode' => $r->mode,
+                'amount' => (float) $r->amount,
+                'debit' => (float) $r->amount,
+                'credit' => 0,
+            ]));
+
         CommissionPayout::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
             ->where('status', 'paid')
             ->whereIn('mode', $modes)
@@ -1362,10 +1401,15 @@ class ReportService
         $outComm = (float) CommissionPayout::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->where('status', 'paid')->whereIn('mode', $modes)
             ->whereDate('payment_date', '<', $beforeDate)->sum('amount');
 
+        $refundOut = (float) CustomerRefund::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->whereIn('mode', $modes)
+            ->whereDate('refund_date', '<', $beforeDate)->sum('amount');
+        $refundIn = (float) SupplierRefund::query()->when($companyId !== null, fn ($q) => $q->forCompany($companyId))->whereIn('mode', $modes)
+            ->whereDate('refund_date', '<', $beforeDate)->sum('amount');
+
         $accountKey = in_array('cash', $modes, true) && count($modes) === 1 ? 'cash' : 'bank';
         $manual = $this->manualBookNetBefore($companyId, $accountKey, $beforeDate);
 
-        return $in - $outPay - $outComm + $manual;
+        return $in + $refundIn - $outPay - $outComm - $refundOut + $manual;
     }
 
     private function appendManualBookRows($rows, int|string|null $companyId, string $from, string $to, string $accountKey): void

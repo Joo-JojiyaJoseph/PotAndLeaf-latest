@@ -45,7 +45,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   const queryClient = useQueryClient();
   const toast = useToast();
   const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest } = useFormCompany(filterCompanyId);
-  const [form, setForm] = useState({ supplier_id: '', purchase_id: '', amount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false, payment_for: 'outstanding' });
+  const [form, setForm] = useState({ supplier_id: '', purchase_id: '', amount: '', discount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false, payment_for: 'outstanding' });
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
 
@@ -85,6 +85,8 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
         mode: form.mode, payment_date: form.payment_date,
         reference: form.reference || null, notes: form.notes || null,
         is_advance: form.is_advance,
+        // A discount on the final amount: clears dues like money, but no cash moves.
+        discount_amount: !form.is_advance && Number(form.discount) > 0 ? Number(form.discount) : undefined,
       }, withCompany(targetCompanyId || writeCompanyId(prefill, party, filterCompanyId)));
     },
     onSuccess: () => {
@@ -102,7 +104,7 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
   });
 
   function handleClose() {
-    setForm({ supplier_id: '', purchase_id: '', amount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false, payment_for: 'outstanding' });
+    setForm({ supplier_id: '', purchase_id: '', amount: '', discount: '', mode: 'cash', payment_date: today(), reference: '', notes: '', is_advance: false, payment_for: 'outstanding' });
     setErrors({}); setApplied(null); onClose();
   }
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -208,7 +210,25 @@ function RecordPaymentModal({ open, onClose, prefill, filterCompanyId, companyPa
             )}
           </div>
         )}
-        <Field label="Amount" required error={err('amount')}><Input type="number" step="0.01" value={form.amount} onChange={set('amount')} /></Field>
+        <Field label="Amount paid" required error={err('amount')}><Input type="number" step="0.01" value={form.amount} onChange={set('amount')} /></Field>
+        {!form.is_advance && (
+          <Field label="Discount on the final amount (₹)" error={err('discount_amount')}>
+            <Input
+              type="number" step="0.01" min="0" value={form.discount} placeholder="0.00"
+              onChange={(e) => {
+                const d = e.target.value;
+                // With a bill chosen: the amount to pay becomes the bill balance less the discount.
+                const bill = (payables ?? []).find((p) => String(p.id) === String(form.purchase_id));
+                setForm((f) => ({ ...f, discount: d, ...(form.payment_for === 'bill' && bill ? { amount: String(Math.max(0, Math.round((Number(bill.balance) - (Number(d) || 0)) * 100) / 100)) } : {}) }));
+              }}
+            />
+            {Number(form.discount) > 0 && (
+              <span className="mt-1 block text-xs text-muted">
+                Clears <b className="text-ink">{formatCurrency((Number(form.amount) || 0) + Number(form.discount))}</b> of what you owe: {formatCurrency(Number(form.amount) || 0)} paid + {formatCurrency(Number(form.discount))} discount. No cash moves for the discount; it is entered in the accounts.
+              </span>
+            )}
+          </Field>
+        )}
         <Field label="Mode" error={err('mode')}>
           <Select value={form.mode} onChange={set('mode')} className={selectCls}>
             <option value="cash">Cash</option><option value="bank">Bank</option><option value="upi">UPI</option><option value="cheque">Cheque</option>

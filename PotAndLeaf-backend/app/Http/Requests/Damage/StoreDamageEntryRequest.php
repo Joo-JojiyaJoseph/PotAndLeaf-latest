@@ -22,6 +22,7 @@ class StoreDamageEntryRequest extends FormRequest
             'location_id' => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)],
             'qty'         => ['required', 'numeric', 'gt:0'],
             'reason'      => ['required', 'string', 'max:120'],
+            'location_id' => ['nullable', 'uuid', \Illuminate\Validation\Rule::exists('locations', 'id')->where('is_active', true)],
             'notes'       => ['nullable', 'string', 'max:2000'],
             'photo'       => ['nullable', 'string', 'max:500'],
             'entry_date'  => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Damage date')],

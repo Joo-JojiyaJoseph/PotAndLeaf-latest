@@ -42,6 +42,31 @@ class MediaUrl
         return self::ensureAbsolute(Storage::disk('public')->url('uploads/'.ltrim($pathOrUrl, '/')));
     }
 
+    /**
+     * First image of a product as an inline data URI, for PDFs (the PDF engine cannot fetch our
+     * own URLs). Null if there is no usable local image, or it is large (keeps the PDF small).
+     *
+     * @param  array<int, string>|null  $images
+     */
+    public static function firstAsDataUri(?array $images, int $maxBytes = 400_000): ?string
+    {
+        foreach ($images ?? [] as $img) {
+            $path = self::storagePath(is_string($img) ? $img : null);
+            if (! $path || ! Storage::disk('public')->exists($path)) {
+                continue;
+            }
+            $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+            $mime = match ($ext) { 'jpg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', default => null };
+            if (! $mime || Storage::disk('public')->size($path) > $maxBytes) {
+                continue;
+            }
+
+            return 'data:'.$mime.';base64,'.base64_encode(Storage::disk('public')->get($path));
+        }
+
+        return null;
+    }
+
     /** Normalize an absolute URL or /storage path back to a public-disk path (uploads/…). */
     public static function storagePath(?string $pathOrUrl): ?string
     {

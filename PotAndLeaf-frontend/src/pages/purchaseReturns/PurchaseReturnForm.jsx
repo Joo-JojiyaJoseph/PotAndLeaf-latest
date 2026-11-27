@@ -1,3 +1,4 @@
+import { MediaImg } from '../../components/media';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +21,8 @@ export default function PurchaseReturnForm() {
   const [returnDate, setReturnDate] = useState(today());
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
+  // Credit beyond what we owe the supplier: kept as supplier advance, or really received back now.
+  const [refundMode, setRefundMode] = useState('advance');
   const [qtys, setQtys] = useState({}); // purchase_item_id -> string
   const [lineReasons, setLineReasons] = useState({}); // purchase_item_id -> reason for that product
   const [batchIds, setBatchIds] = useState({}); // purchase_item_id -> batch uuid
@@ -120,6 +123,7 @@ export default function PurchaseReturnForm() {
         return_date: returnDate,
         reason: reason || null,
         notes: notes || null,
+        refund_mode: refundMode,
         items,
       }, companyRequest());
       navigate('/purchase-returns');
@@ -211,7 +215,7 @@ export default function PurchaseReturnForm() {
                     return (
                       <tr key={it.purchase_item_id} className="border-b border-line/60 last:border-0">
                         <td className="px-4 py-2">
-                          <div className="font-medium">{it.product_name}</div>
+                          <div className="flex items-center gap-2.5 font-medium"><div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-leaf-soft"><MediaImg value={it.image} className="size-full object-cover" iconClassName="size-4 text-leaf/50" /></div><span>{it.product_name}</span></div>
                           {hasBatches && (
                             <Select
                               value={batchIds[it.purchase_item_id] ?? ''}
@@ -296,6 +300,17 @@ export default function PurchaseReturnForm() {
           <Card className="p-5 lg:col-span-2">
             <Field label="Notes">
               <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </Field>
+            <Field label="Credit beyond what you owe the supplier" className="mt-4">
+              <Select value={refundMode} onChange={(e) => setRefundMode(e.target.value)} className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25">
+                <option value="advance">Keep as the supplier's advance (use it on a later purchase)</option>
+                <option value="cash">Received back now — Cash</option>
+                <option value="upi">Received back now — UPI</option>
+                <option value="card">Received back now — Card</option>
+                <option value="bank">Received back now — Bank transfer</option>
+                <option value="cheque">Received back now — Cheque</option>
+              </Select>
+              <p className="mt-1 text-xs text-muted">First the return reduces what you owe the supplier. Any credit left over is kept as advance, or recorded as money received and entered in the Cash / Bank Book. You can also mark it as received later from the return page.</p>
             </Field>
             <p className="mt-3 text-xs text-muted">
               {isInterstate ? 'Inter-state purchase — IGST is reversed.' : 'Intra-state purchase — CGST + SGST are reversed.'}{' '}

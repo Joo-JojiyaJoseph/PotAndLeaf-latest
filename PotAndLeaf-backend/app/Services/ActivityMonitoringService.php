@@ -21,7 +21,7 @@ class ActivityMonitoringService
         $pendingApprovals = [
             'stock_verifications' => StockVerification::query()
                 ->when($companyId !== null, fn ($q) => $q->forCompany($companyId))
-                ->where('status', 'submitted')->count(),
+                ->whereIn('status', ['submitted', 'applied'])->count(),
         ];
 
         $recentLogins = PersonalAccessToken::query()

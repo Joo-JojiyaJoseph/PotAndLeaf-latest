@@ -8,7 +8,8 @@ import { Badge, Button, Field, Input, Modal } from '../../components/ui';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, NextStep } from '../../components/detail';
 import { formatDate, classNames } from '../../lib/format';
 
-const statusTone = { draft: 'inactive', submitted: 'submitted', approved: 'approved', rejected: 'rejected', cancelled: 'blocked' };
+const statusTone = { draft: 'inactive', applied: 'warning', verified: 'active', submitted: 'submitted', approved: 'approved', rejected: 'rejected', cancelled: 'blocked' };
+const statusLabel = { applied: 'needs check', verified: 'verified' };
 const varClass = (v) => (Math.abs(v) < 1e-6 ? 'text-muted' : v < 0 ? 'text-danger' : 'text-amber');
 
 export default function StockVerificationDetail() {
@@ -37,6 +38,10 @@ export default function StockVerificationDetail() {
     mutationFn: () => api.post(`/stock-verifications/${id}/submit`, {}, withCompany(recordCompanyId)),
     onSuccess: invalidate,
   });
+  const verifyM = useMutation({
+    mutationFn: () => api.post(`/stock-verifications/${id}/verify`, {}, withCompany(recordCompanyId)),
+    onSuccess: invalidate,
+  });
   const approveM = useMutation({
     mutationFn: () => api.post(`/stock-verifications/${id}/approve`, {}, withCompany(recordCompanyId)),
     onSuccess: invalidate,
@@ -58,24 +63,28 @@ export default function StockVerificationDetail() {
         backTo="/stock-verifications"
         actions={
           <>
-            <Badge tone={statusTone[v.status] ?? 'default'}>{v.status}</Badge>
-            {v.can?.submit && <Button variant="outline" size="sm" onClick={() => submitM.mutate()} disabled={submitM.isPending}><PaperAirplaneIcon className="size-4" /> Submit</Button>}
+            <Badge tone={statusTone[v.status] ?? 'default'}>{statusLabel[v.status] ?? v.status}</Badge>
+            {v.can?.submit && <Button variant="outline" size="sm" onClick={() => submitM.mutate()} disabled={submitM.isPending}><PaperAirplaneIcon className="size-4" /> Update stock now</Button>}
+            {v.can?.verify && <Button size="sm" onClick={() => verifyM.mutate()} disabled={verifyM.isPending}><CheckCircleIcon className="size-4" /> Verify</Button>}
             {v.can?.reject && <Button variant="ghost" size="sm" onClick={() => setRejecting(true)}><XCircleIcon className="size-4" /> Reject</Button>}
             {v.can?.approve && <Button size="sm" onClick={() => approveM.mutate()} disabled={approveM.isPending}><CheckCircleIcon className="size-4" /> Approve</Button>}
           </>
         }
       />
       <NextStep>{{
-        draft: 'Count saved. When the count is finished, click “Submit” to send it for approval.',
+        draft: 'Count saved. When the count is finished, click “Update stock now”. The stock changes at once and head office / admin check it afterwards.',
+        applied: 'Stock was updated to the counted figures. Head office / admin check the count and click “Verify”. Billing can go on meanwhile.',
         submitted: 'Waiting for approval. When approved, stock is changed to the counted figures.',
       }[v.status] ?? null}</NextStep>
 
       <Section title="Details">
         <InfoGrid cols={4}>
           <InfoItem label="Count date" value={formatDate(v.count_date)} />
-          <InfoItem label="Location" value={v.location_note} />
+          <InfoItem label="Location" value={v.location?.name ?? v.location_note} />
           <InfoItem label="Submitted" value={v.submitted_at ? formatDate(v.submitted_at) : null} />
-          <InfoItem label="Approved" value={v.approved_at ? formatDate(v.approved_at) : null} />
+          <InfoItem label="Stock updated" value={v.applied_at ? formatDate(v.applied_at) : null} />
+          <InfoItem label="Verified" value={v.verified_at ? formatDate(v.verified_at) : null} />
+          <InfoItem label="Approved (old)" value={v.approved_at ? formatDate(v.approved_at) : null} />
           {v.rejection_reason && <InfoItem label="Rejection reason" value={v.rejection_reason} />}
           <InfoItem label="Notes" value={v.notes} />
         </InfoGrid>

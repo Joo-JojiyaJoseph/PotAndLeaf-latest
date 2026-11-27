@@ -33,6 +33,8 @@ class StockTransferResource extends JsonResource
             'from_company_id' => $this->company_id,
             'to_company_id'   => $this->to_company_id,
             'from_location_id'=> $this->from_location_id,
+            'from_location_type' => $this->fromLocation?->type,
+            'to_location_type' => $this->toLocation?->type,
             'to_location_id'  => $this->to_location_id,
             'from_company'    => $this->fromCompany?->name,
             'to_company'      => $this->isIntraCompany()
@@ -80,7 +82,7 @@ class StockTransferResource extends JsonResource
                 'receive'  => $this->status === 'in_transit' && ($isHo || $isDest) && $user?->hasPermission('transfers.receive', $isHo ? ($this->to_company_id ?? $this->company_id) : $currentCompanyId),
                 'cancel'   => in_array($this->status, ['draft', 'in_transit', 'requested'], true) && ($isHo || $isSource || $ownRequest)
                     && $user?->hasPermission('transfers.delete', $ownRequest ? $currentCompanyId : ($isHo ? $this->company_id : $currentCompanyId)),
-                'change_source' => $this->status === 'requested' && ! $this->isIntraCompany() && $isHo,
+                'change_source' => $this->status === 'requested' && ($this->isIntraCompany() ? ($isHo || $isSource) : $isHo),
             ],
         ];
     }

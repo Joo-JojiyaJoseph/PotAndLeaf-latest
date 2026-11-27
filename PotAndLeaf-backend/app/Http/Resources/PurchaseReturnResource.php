@@ -26,6 +26,16 @@ class PurchaseReturnResource extends JsonResource
             'grand_total'   => (float) $this->grand_total,
             'status'        => $this->status,
             'notes'         => $this->notes,
+            'refund_mode'   => $this->refund_mode ?? 'advance',
+            'advance_credit'   => (float) ($this->advance_credit ?? 0),
+            'advance_refunded' => (float) ($this->advance_refunded ?? 0),
+            // Held as advance and not yet given back: this is what "Mark refund given" can pay out.
+            'refundable'    => round(max(0, (float) ($this->advance_credit ?? 0) - (float) ($this->advance_refunded ?? 0)), 2),
+            'refunds'       => $this->whenLoaded('refunds', fn () => $this->refunds->map(fn ($r) => [
+                'id' => $r->id, 'refund_no' => $r->refund_no, 'refund_date' => optional($r->refund_date)->toDateString(),
+                'amount' => (float) $r->amount, 'mode' => $r->mode, 'reference' => $r->reference, 'notes' => $r->notes,
+                'from_advance' => (bool) $r->from_advance,
+            ])->values()),
             'confirmed_at'  => optional($this->confirmed_at)->toIso8601String(),
             'purchase'      => $this->whenLoaded('purchase', fn () => [
                 'id'          => $this->purchase?->id,
@@ -40,6 +50,7 @@ class PurchaseReturnResource extends JsonResource
             'can'           => [
                 'confirm' => $this->status === 'draft' && $user?->hasPermission('purchase_returns.confirm', $companyId),
                 'cancel'  => $this->status === 'draft' && $user?->hasPermission('purchase_returns.delete', $companyId),
+                'refund'  => $this->status === 'confirmed' && (float) ($this->advance_credit ?? 0) - (float) ($this->advance_refunded ?? 0) > 0.005 && $user?->hasPermission('purchase_returns.confirm', $companyId),
             ],
         ];
     }

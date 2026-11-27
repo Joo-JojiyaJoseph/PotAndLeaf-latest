@@ -37,8 +37,8 @@ class AdvanceOrderController extends Controller
         $customers = Customer::forCompany($company->id)->where('status', 'active')->orderBy('name')
             ->get(['id', 'name'])->map(fn ($c) => ['id' => $c->id, 'name' => $c->name]);
         $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')
-            ->get(['id', 'sku', 'name', 'retail_price', 'gst_rate'])
-            ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'retail_price' => (float) $p->retail_price, 'gst_rate' => (float) $p->gst_rate]);
+            ->get(['id', 'sku', 'name', 'retail_price', 'gst_rate', 'images'])
+            ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'image' => \App\Support\Media\MediaUrl::resolveMany($p->images ?? [])[0] ?? null, 'retail_price' => (float) $p->retail_price, 'gst_rate' => (float) $p->gst_rate]);
 
         return $this->ok(['customers' => $customers, 'products' => $products]);
     }

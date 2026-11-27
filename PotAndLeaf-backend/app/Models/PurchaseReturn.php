@@ -16,7 +16,7 @@ class PurchaseReturn extends Model
     protected $fillable = [
         'company_id', 'purchase_id', 'supplier_id', 'return_no', 'return_date',
         'is_interstate', 'reason', 'subtotal', 'tax_total', 'grand_total',
-        'status', 'notes', 'confirmed_at', 'advance_credit',
+        'status', 'notes', 'confirmed_at', 'advance_credit', 'refund_mode', 'advance_refunded',
     ];
 
     protected function casts(): array
@@ -39,6 +39,11 @@ class PurchaseReturn extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function refunds(): HasMany
+    {
+        return $this->hasMany(SupplierRefund::class);
     }
 
     public function items(): HasMany

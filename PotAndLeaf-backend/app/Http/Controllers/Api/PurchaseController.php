@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Purchase\StorePurchaseRequest;
 use App\Http\Requests\Purchase\UpdatePurchaseRequest;
 use App\Http\Resources\PurchaseResource;
+use App\Models\Location;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Supplier;
@@ -50,11 +51,13 @@ class PurchaseController extends Controller
             ->where('status', 'active')
             ->with('unit:id,short_name,name')
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'hsn_code', 'gst_rate', 'cost_price', 'unit_id', 'length_cm', 'width_cm', 'height_cm'])
+            ->get(['id', 'name', 'sku', 'hsn_code', 'gst_rate', 'cost_price', 'mrp', 'retail_price', 'wholesale_price', 'dealer_price', 'unit_id', 'length_cm', 'width_cm', 'height_cm', 'images'])
             ->map(fn ($p) => [
-                'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku,
+                'id' => $p->id, 'name' => $p->name, 'sku' => $p->sku, 'image' => \App\Support\Media\MediaUrl::resolveMany($p->images ?? [])[0] ?? null,
                 'hsn_code' => $p->hsn_code, 'gst_rate' => (float) $p->gst_rate,
                 'cost_price' => (float) $p->cost_price,
+                'mrp' => (float) $p->mrp, 'retail_price' => (float) $p->retail_price,
+                'wholesale_price' => (float) $p->wholesale_price, 'dealer_price' => (float) $p->dealer_price,
                 'unit' => $p->unit?->short_name ?? $p->unit?->name,
                 'length_cm' => (float) $p->length_cm,
                 'width_cm' => (float) $p->width_cm,
@@ -64,6 +67,11 @@ class PurchaseController extends Controller
         return $this->ok([
             'suppliers' => $suppliers,
             'products'  => $products,
+            // The branch or godown the goods are received into.
+            'locations' => Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
+                ->get(['id', 'name', 'type', 'is_default'])
+                ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'type' => $l->type, 'is_default' => (bool) $l->is_default]),
+            'my_location_id' => $request->user()->is_super_admin ? null : $request->user()->locationIdFor($company->id),
             'tax_rates' => [0, 5, 12, 18, 28],
             // Settings → "Freight / loading on purchases is paid to the supplier".
             'freight_to_supplier' => app(\App\Services\SettingsService::class)->get($company->id, 'landed_cost_payable_to_supplier') !== '0',
@@ -83,7 +91,7 @@ class PurchaseController extends Controller
         $this->allow($request, 'purchases.view');
         $this->assertRecordCompany($request, $purchase);
 
-        return $this->ok(new PurchaseResource($purchase->load(['supplier', 'items', 'supplierPayments', 'paymentAllocations.payment', 'purchaseOrder:id,purchase_id,po_no', 'createdBy:id,name', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
+        return $this->ok(new PurchaseResource($purchase->load(['supplier', 'location:id,name,type', 'items', 'supplierPayments', 'paymentAllocations.payment', 'purchaseOrder:id,purchase_id,po_no', 'createdBy:id,name', 'company:id,name,legal_name,gst_number,address,phone,state,state_code'])));
     }
 
     public function update(UpdatePurchaseRequest $request, Purchase $purchase): JsonResponse

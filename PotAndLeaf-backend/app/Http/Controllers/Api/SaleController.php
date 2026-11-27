@@ -32,7 +32,7 @@ class SaleController extends Controller
         $filters = $request->only(['search', 'status', 'bill_kind', 'per_page', 'from', 'to', 'customer_id', 'payment_mode']);
         // Salesmen see only the bills they made.
         if ($request->user()->seesOnlyOwn('sales', $this->company($request)->id)) {
-            $filters['created_by'] = $request->user()->id;
+            $filters['mine'] = $request->user()->id;
         }
 
         return $this->ok(SaleResource::collection($this->sales->list($this->listCompanyId($request), $filters)));
@@ -55,9 +55,9 @@ class SaleController extends Controller
         $settings = app(\App\Services\SettingsService::class)->all($company->id);
 
         $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')
-            ->get(['id', 'sku', 'name', 'hsn_code', 'gst_rate', 'current_stock', 'retail_price', 'wholesale_price', 'dealer_price', 'mrp'])
+            ->get(['id', 'sku', 'name', 'hsn_code', 'gst_rate', 'current_stock', 'retail_price', 'wholesale_price', 'dealer_price', 'mrp', 'images'])
             ->map(fn ($p) => [
-                'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'hsn_code' => $p->hsn_code,
+                'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'hsn_code' => $p->hsn_code, 'image' => \App\Support\Media\MediaUrl::resolveMany($p->images ?? [])[0] ?? null,
                 'gst_rate' => (float) $p->gst_rate, 'current_stock' => (float) $p->current_stock,
                 'retail_price' => (float) $p->retail_price, 'wholesale_price' => (float) $p->wholesale_price,
                 'dealer_price' => (float) $p->dealer_price, 'mrp' => (float) $p->mrp,
@@ -80,10 +80,23 @@ class SaleController extends Controller
             ->values();
 
         $locations = Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
-            ->get(['id', 'name', 'is_default'])
-            ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'is_default' => (bool) $l->is_default]);
+            ->get(['id', 'name', 'type', 'is_default'])
+            ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'type' => $l->type, 'is_default' => (bool) $l->is_default]);
+
+        // With several branches / godowns each product is sold from the branch's own stock.
+        $locationStock = [];
+        if ($locations->count() > 1) {
+            foreach (app(\App\Services\LocationStockService::class)->balances($company->id)->groupBy('location_id') as $locationId => $rows) {
+                $locationStock[$locationId] = $rows->pluck('qty', 'product_id')->map(fn ($q) => (float) $q)->all();
+            }
+        }
 
         return $this->ok([
+            'location_stock' => (object) $locationStock,
+            // Staff of this company who can be named as the salesman on a bill.
+            'salesmen'       => \App\Models\User::query()->companyMembers($company->id, 'active')->orderBy('name')->get()->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values(),
+            'my_user_id'     => $request->user()->id,
+            'my_location_id' => $request->user()->is_super_admin ? null : $request->user()->locationIdFor($company->id),
             'customers' => $customers,
             'products'  => $products,
             'batches'   => $batches,
@@ -114,7 +127,7 @@ class SaleController extends Controller
         $this->assertOwnSale($request, $sale);
 
         return $this->ok(new SaleResource($sale->load([
-            'items.batch:id,batch_no', 'customer:id,name,type', 'createdBy:id,name',
+            'items.batch:id,batch_no', 'customer:id,name,type', 'createdBy:id,name', 'enteredBy:id,name', 'location:id,name,type',
             'company:id,name,legal_name,gst_number,address,phone,email,state,state_code',
             'cancelRequestedBy:id,name', 'cancelReviewedBy:id,name',
         ])));
@@ -130,7 +143,26 @@ class SaleController extends Controller
             ? 'Proforma issued — no stock movement.'
             : 'Sale confirmed — stock updated.';
 
+        if (! $confirmed->isProforma()) {
+            try {
+                app(SaleNotificationService::class)->sendCareGuideWhatsApp($confirmed, requireAutoSetting: true);
+            } catch (\Throwable $e) {
+                report($e);   // a failed WhatsApp must never undo the sale
+            }
+        }
+
         return $this->ok(new SaleResource($confirmed), $message);
+    }
+
+    public function sendCareGuide(Request $request, Sale $sale, SaleNotificationService $notifications): JsonResponse
+    {
+        $this->allow($request, 'sales.whatsapp');
+        $this->assertRecordCompany($request, $sale, writable: true);
+        $result = $notifications->sendCareGuideWhatsApp($sale);
+
+        return $result['success']
+            ? $this->ok(['provider' => $result['provider'] ?? null], 'Care guide sent on WhatsApp.')
+            : $this->message($result['message'], 422);
     }
 
     public function destroy(Request $request, Sale $sale): JsonResponse
@@ -206,10 +238,15 @@ class SaleController extends Controller
         abort_unless($request->user()->hasPermission($permission, $this->company($request)->id), 403);
     }
 
+    private function isOwnSale(Sale $sale, $user): bool
+    {
+        return (int) $sale->created_by === (int) $user->id || (int) $sale->entered_by === (int) $user->id;
+    }
+
     /** Salesmen may open only the bills they made. */
     private function assertOwnSale(Request $request, Sale $sale): void
     {
         $user = $request->user();
-        abort_if($user->seesOnlyOwn('sales', $sale->company_id) && (int) $sale->created_by !== (int) $user->id, 403, 'You can only see the bills you made.');
+        abort_if($user->seesOnlyOwn('sales', $sale->company_id) && ! $this->isOwnSale($sale, $user), 403, 'You can only see the bills you made.');
     }
 }

@@ -27,7 +27,12 @@ class StoreSaleRequest extends FormRequest
         $companyId = $this->route('current_company')->id;
 
         return [
-            'customer_id'   => ['nullable', 'uuid', Rule::exists('customers', 'id')->where('company_id', $companyId)],
+            // Every bill needs a customer (name, phone optional). Add a new one with the "New" button on the bill.
+            'customer_id'   => ['required', 'uuid', Rule::exists('customers', 'id')->where('company_id', $companyId)],
+            // The salesman credited with the bill and its commission (default: the person entering it).
+            'salesman_id'   => ['nullable', 'integer', Rule::exists('company_user', 'user_id')->where('company_id', $companyId)],
+            // Discount in rupees on the whole bill (spread over the lines before GST).
+            'discount_amount' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'location_id'   => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)],
             'customer_name' => ['nullable', 'string', 'max:150'],
             'sale_date'     => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Sale date')],

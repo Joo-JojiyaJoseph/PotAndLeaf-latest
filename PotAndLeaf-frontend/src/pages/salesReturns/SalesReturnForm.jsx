@@ -1,3 +1,4 @@
+import { MediaImg } from '../../components/media';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -19,6 +20,8 @@ export default function SalesReturnForm() {
   const [returnDate, setReturnDate] = useState(today());
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
+  // What happens to the money for the goods: kept as the customer's advance, or really paid back now.
+  const [refundMode, setRefundMode] = useState('advance');
   const [qtys, setQtys] = useState({});
   const [lineReasons, setLineReasons] = useState({}); // sale_item_id -> reason for that product
   const [errors, setErrors] = useState([]);
@@ -77,6 +80,7 @@ export default function SalesReturnForm() {
         return_date: returnDate,
         reason: reason || null,
         notes: notes || null,
+        refund_mode: refundMode,
         items,
       }, companyRequest());
       navigate(`/sales-returns/${res.data.data.id}`);
@@ -165,7 +169,7 @@ export default function SalesReturnForm() {
                   const lt = computed.lines[i]?.line_total ?? 0;
                   return (
                     <tr key={it.sale_item_id} className="border-b border-line/60 last:border-0">
-                      <td className="px-3 py-2 font-medium">{it.product_name}</td>
+                      <td className="px-3 py-2 font-medium"><div className="flex items-center gap-2.5"><div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-leaf-soft"><MediaImg value={it.image} className="size-full object-cover" iconClassName="size-4 text-leaf/50" /></div><span>{it.product_name}</span></div></td>
                       <td className="tnum px-3 py-2 text-right text-muted">{it.qty}</td>
                       <td className="tnum px-3 py-2 text-right text-muted">{it.returned}</td>
                       <td className="tnum px-3 py-2 text-right text-muted">{it.returnable}</td>
@@ -205,6 +209,17 @@ export default function SalesReturnForm() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-2">
           <Field label="Notes"><Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" /></Field>
+          <Field label="Money for the returned goods" className="mt-4">
+            <Select value={refundMode} onChange={(e) => setRefundMode(e.target.value)} className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25">
+              <option value="advance">Keep as the customer's advance (use it on a later bill)</option>
+              <option value="cash">Give back now — Cash</option>
+              <option value="upi">Give back now — UPI</option>
+              <option value="card">Give back now — Card</option>
+              <option value="bank">Give back now — Bank transfer</option>
+              <option value="cheque">Give back now — Cheque</option>
+            </Select>
+            <p className="mt-1 text-xs text-muted">First the return clears what the customer still owes on credit bills. The rest is kept as advance, or paid back and entered in the Cash / Bank Book. You can also mark it as given later from the return page.</p>
+          </Field>
         </Card>
         <Card className="p-5">
           <dl className="space-y-2 text-sm">

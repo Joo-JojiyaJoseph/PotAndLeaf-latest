@@ -8,6 +8,7 @@ use App\Models\Sale;
 use App\Services\ActivityLogService;
 use App\Services\CommissionEngine;
 use App\Services\InventoryService;
+use App\Services\LocationStockService;
 use App\Services\LoyaltyService;
 use App\Services\PoolStockService;
 use App\Services\ReceiptService;
@@ -31,6 +32,7 @@ class ConfirmSale
         private readonly PoolStockService $pool,
         private readonly ActivityLogService $activity,
         private readonly ReceiptService $receipts,
+        private readonly LocationStockService $locationStock,
     ) {}
 
     public function handle(Sale $sale, ?int $userId = null): Sale
@@ -88,6 +90,8 @@ class ConfirmSale
                             ]);
                         }
                     }
+                    // With several branches / godowns, a bill can only sell what its own branch holds.
+                    $this->locationStock->assertAvailable($sale->company_id, $sale->location_id, $product->id, (float) $item->qty, $product->name);
                     if ((float) $product->current_stock < (float) $item->qty) {
                         throw ValidationException::withMessages([
                             'items' => "Not enough stock for {$product->name}: {$product->current_stock} available, {$item->qty} required.",
@@ -114,6 +118,10 @@ class ConfirmSale
                         productBatchId: $batch?->id,
                     );
                     $product->save();
+                }
+
+                if (! $this->pool->isPooled($product)) {
+                    $this->locationStock->adjust($sale->company_id, $sale->location_id, $product->id, 'out', (float) $item->qty);
                 }
 
                 $this->supervisorCommission->accrue(

@@ -5,7 +5,7 @@ const round = (n, d = 2) => {
   return Math.round((Number(n) + Number.EPSILON) * f) / f;
 };
 
-export function computePurchase(items, isInterstate, landedCostTotal = 0) {
+export function computePurchase(items, isInterstate, landedCostTotal = 0, finalDiscount = 0) {
   let subtotal = 0;
   let discountTotal = 0;
 
@@ -58,7 +58,9 @@ export function computePurchase(items, isInterstate, landedCostTotal = 0) {
       discount_total: round(discountTotal),
       tax_total: round(taxTotal),
       landed_cost_total: round(landedCostTotal),
-      grand_total: round(subtotal + round(taxTotal) + round(landedCostTotal)),
+      // A discount on the FINAL amount comes off after GST and landed cost.
+      final_discount: round(Math.min(Math.max(0, Number(finalDiscount) || 0), subtotal + round(taxTotal) + round(landedCostTotal))),
+      grand_total: round(subtotal + round(taxTotal) + round(landedCostTotal) - Math.min(Math.max(0, Number(finalDiscount) || 0), subtotal + round(taxTotal) + round(landedCostTotal))),
     },
   };
 }

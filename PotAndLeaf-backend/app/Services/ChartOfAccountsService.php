@@ -20,6 +20,9 @@ class ChartOfAccountsService
         'other_expense'     => ['code' => 'OEXP', 'name' => 'Other Expenses',      'account_type' => 'expense'],
         'customer_advance'  => ['code' => 'CADV', 'name' => 'Customer Advances',   'account_type' => 'liability'],
         'supplier_advance'  => ['code' => 'SADV', 'name' => 'Supplier Advances',   'account_type' => 'asset'],
+        // Settlement discounts: given to customers who pay less than they owe, and received from suppliers.
+        'discount_allowed'  => ['code' => 'DISA', 'name' => 'Discount Allowed',    'account_type' => 'expense'],
+        'discount_received' => ['code' => 'DISR', 'name' => 'Discount Received',   'account_type' => 'income'],
         'capital'           => ['code' => 'CAP',  'name' => 'Capital',             'account_type' => 'equity'],
     ];
 

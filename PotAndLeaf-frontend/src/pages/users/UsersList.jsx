@@ -14,7 +14,7 @@ import { Badge, Button, Card, Field, Input, Modal, Spinner, Select } from '../..
 import Pagination from '../../components/Pagination';
 import StatusToggle from '../../components/StatusToggle';
 
-const empty = { name: '', email: '', password: '', phone: '', role_id: '', is_active: true };
+const empty = { name: '', email: '', password: '', phone: '', role_id: '', location_id: '', is_active: true };
 const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25';
 
 export default function UsersList() {
@@ -127,7 +127,7 @@ export default function UsersList() {
     setPickedCompany(!isSuperAdmin || Boolean(createCompanyId));
   };
   const openEdit = (u) => {
-    setForm({ name: u.name, email: u.email, password: '', phone: u.phone ?? '', role_id: u.roles?.[0]?.id ?? '', is_active: u.is_active });
+    setForm({ name: u.name, email: u.email, password: '', phone: u.phone ?? '', role_id: u.roles?.[0]?.id ?? '', location_id: u.location?.id ?? '', is_active: u.is_active });
     setErrors({});
     setEditing(u);
     setFormCompanyId(resolveUserCompany(u) ?? '');
@@ -137,6 +137,8 @@ export default function UsersList() {
   const err = (k) => fieldError(errors, k);
   const rows = data?.data ?? [];
   const roles = formData?.roles ?? [];
+  const locations = formData?.locations ?? [];
+  const pickedLocation = locations.find((l) => String(l.id) === String(form.location_id));
 
   return (
     <div className="space-y-5 p-4 sm:p-6">
@@ -189,6 +191,7 @@ export default function UsersList() {
                   <th className="microlabel px-4 py-2.5 font-semibold">Name</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Email</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Role</th>
+                  <th className="microlabel px-4 py-2.5 font-semibold">Works at</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Phone</th>
                   <th className="microlabel px-4 py-2.5 font-semibold">Status</th>
                   <th className="microlabel px-4 py-2.5" />
@@ -202,6 +205,7 @@ export default function UsersList() {
                     </td>
                     <td className="px-4 py-2.5 text-muted">{u.email}</td>
                     <td className="px-4 py-2.5">{u.roles?.length ? <Badge tone="info">{u.roles[0].name}</Badge> : <span className="text-muted">—</span>}</td>
+                    <td className="px-4 py-2.5 text-sm text-muted">{u.location ? `${u.location.name} (${u.location.type === 'godown' ? 'Godown' : 'Branch'})` : '—'}</td>
                     <td className="tnum px-4 py-2.5 text-xs text-muted">{u.phone || '—'}</td>
                     <td className="px-4 py-2.5">
                       {statusFilter === 'removed'
@@ -280,6 +284,13 @@ export default function UsersList() {
               <option value="">No role</option>
               {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </Select>
+          </Field>
+          <Field label="Works at" error={err('location_id')}>
+            <Select value={form.location_id} onChange={set('location_id')} className={selectCls}>
+              <option value="">Head office (not tied to one location)</option>
+              {locations.map((l) => <option key={l.id} value={l.id}>{l.name} — {l.type === 'godown' ? 'Godown' : 'Branch'}</option>)}
+            </Select>
+            {pickedLocation?.type === 'godown' && <p className="mt-1 text-xs text-warning">A user based at a godown can only use stock transfers.</p>}
           </Field>
           <Field label="Status">
             <Select value={form.is_active ? '1' : '0'} onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === '1' }))} className={selectCls}>

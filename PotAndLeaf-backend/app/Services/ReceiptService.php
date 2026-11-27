@@ -31,7 +31,83 @@ class ReceiptService
             ->withQueryString();
     }
 
+    /**
+     * Record money received. A discount typed while collecting ("discount_amount") is kept as a companion
+     * entry with mode "discount": it clears dues exactly like money would, but no cash or bank moves, and in
+     * the accounts it is Dr Discount Allowed / Cr Accounts Receivable.
+     */
     public function record(int|string $companyId, array $data, ?int $userId = null): CustomerReceipt
+    {
+        $discount = round(max(0.0, (float) ($data['discount_amount'] ?? 0)), 2);
+        unset($data['discount_amount']);
+        if ($discount <= 0.004 || (bool) ($data['is_advance'] ?? false)) {
+            return $this->recordOne($companyId, $data, $userId);
+        }
+
+        return DB::transaction(function () use ($companyId, $data, $userId, $discount) {
+            $main = $this->recordOne($companyId, $data, $userId);
+            $this->recordDiscount($companyId, $main, $discount, $userId);
+
+            return $main->refresh()->load(['customer:id,name', 'sale:id,sale_no', 'allocations']);
+        });
+    }
+
+    /** What is still owed on a bill (after points and what was paid). */
+    private function saleRoom(?string $saleId): float
+    {
+        $sale = $saleId ? Sale::find($saleId) : null;
+
+        return $sale ? max(0.0, round((float) $sale->grand_total - (float) $sale->loyalty_discount - (float) $sale->amount_paid, 2)) : 0.0;
+    }
+
+    /** The discount settles the same bills (or the same on-account dues) the receipt went to. */
+    private function recordDiscount(int|string $companyId, CustomerReceipt $main, float $discount, ?int $userId): void
+    {
+        $tooMuch = ValidationException::withMessages(['discount_amount' => 'The discount is more than what is still owed on these bills. Lower it.']);
+        $base = [
+            'customer_id'  => $main->customer_id,
+            'receipt_date' => optional($main->receipt_date)->toDateString(),
+            'mode'         => 'discount',
+            'amount'       => $discount,
+            'reference'    => 'Discount on '.$main->receipt_no,
+            'notes'        => 'Discount while collecting '.$main->receipt_no,
+            'discount_for_id' => $main->id,
+        ];
+
+        $picked = $main->allocations()->get();
+        if ($picked->isNotEmpty()) {
+            $left = $discount;
+            $rows = [];
+            foreach ($picked as $a) {
+                $share = round(min($left, $this->saleRoom($a->sale_id)), 2);
+                if ($share > 0) {
+                    $rows[] = ['sale_id' => $a->sale_id, 'amount' => $share];
+                    $left = round($left - $share, 2);
+                }
+                if ($left <= 0.004) {
+                    break;
+                }
+            }
+            if ($left > 0.005) {
+                throw $tooMuch;
+            }
+            $base['allocations'] = $rows;
+        } elseif ($main->sale_id) {
+            if ($discount > $this->saleRoom($main->sale_id) + 0.005) {
+                throw $tooMuch;
+            }
+            $base['sale_id'] = $main->sale_id;
+        } else {
+            $customer = Customer::query()->find($main->customer_id);
+            if (! $customer || $discount > max(0.0, (float) $customer->outstanding) + 0.005) {
+                throw $tooMuch;
+            }
+        }
+
+        $this->recordOne($companyId, $base, $userId);
+    }
+
+    private function recordOne(int|string $companyId, array $data, ?int $userId = null): CustomerReceipt
     {
         $receipt = DB::transaction(function () use ($companyId, $data) {
             $isAdvance = (bool) ($data['is_advance'] ?? false);
@@ -57,6 +133,7 @@ class ReceiptService
                 'reference'    => $data['reference'] ?? null,
                 'notes'        => $data['notes'] ?? null,
                 'is_advance'   => $isAdvance,
+                'discount_for_id' => $data['discount_for_id'] ?? null,
             ]);
 
             $customer = Customer::forCompany($companyId)->lockForUpdate()->find($data['customer_id']);
@@ -335,6 +412,11 @@ class ReceiptService
     public function delete(CustomerReceipt $receipt): void
     {
         DB::transaction(function () use ($receipt) {
+            // A discount given with this receipt goes with it.
+            foreach (CustomerReceipt::query()->where('discount_for_id', $receipt->id)->get() as $discountEntry) {
+                $this->delete($discountEntry);
+            }
+
             $customer = Customer::forCompany($receipt->company_id)->lockForUpdate()->find($receipt->customer_id);
             $saleIds = $receipt->allocations()->pluck('sale_id')->all();
             if ($receipt->sale_id) {

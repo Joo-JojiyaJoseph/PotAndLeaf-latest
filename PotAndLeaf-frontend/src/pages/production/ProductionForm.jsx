@@ -29,6 +29,8 @@ function productOptions(products) {
   return products.map((p) => ({
     value: p.id,
     label: p.name,
+    image: p.images?.[0] ?? null,
+    hasImage: true,
     sublabel: `${p.sku || 'No SKU'} · ${stockQty(p.current_stock)} in stock`,
   }));
 }
@@ -93,7 +95,17 @@ export default function ProductionForm() {
   const [orderCompanyId] = useState(() => presetCompanyId || companyId || '');
   const [productMode, setProductMode] = useState('existing');
   const [productId, setProductId] = useState('');
-  const [newProduct, setNewProduct] = useState({ sku: '', name: '', unit_id: '' });
+  // A new product has the same fields as the product form (category, GST and every selling price).
+  const [newProduct, setNewProduct] = useState({ sku: '', name: '', unit_id: '', category_id: '', subcategory_id: '', gst_rate: '', mrp: '', retail_price: '', wholesale_price: '', dealer_price: '' });
+  // Selling prices of an existing product (saved on the product only when the box below is ticked).
+  const [prices, setPrices] = useState({ gst_rate: '', mrp: '', retail_price: '', wholesale_price: '', dealer_price: '' });
+  const [updatePrices, setUpdatePrices] = useState(false);
+  const pricesFor = useRef(null);
+  // Costs of the run besides the materials, and the margin used to suggest a price.
+  const [settingCharge, setSettingCharge] = useState('');
+  const [miscCharge, setMiscCharge] = useState('');
+  const [marginType, setMarginType] = useState('percent');
+  const [marginValue, setMarginValue] = useState('');
   const [outputQty, setOutputQty] = useState('1');
   const [supervisorId, setSupervisorId] = useState('');
   const [orderDate, setOrderDate] = useState(today());
@@ -142,6 +154,10 @@ export default function ProductionForm() {
     });
   }, [formData?.products, liveStockQ.data]);
   const units = formData?.units ?? [];
+  const categories = formData?.categories ?? [];
+  const mainCategories = categories.filter((c) => !c.parent_id);
+  const subCategories = categories.filter((c) => c.parent_id && String(c.parent_id) === String(newProduct.category_id));
+  const taxRates = formData?.tax_rates ?? [0, 5, 12, 18, 28];
   const supervisors = formData?.supervisors ?? [];
   const recipes = formData?.boms ?? [];
 
@@ -157,6 +173,14 @@ export default function ProductionForm() {
     setOrderDate(o.order_date || today());
     setNotes(o.notes || '');
     setStatus(o.status || 'draft');
+    setSettingCharge(o.setting_charge ? String(o.setting_charge) : '');
+    setMiscCharge(o.misc_charge ? String(o.misc_charge) : '');
+    setMarginType(o.margin_type || 'percent');
+    setMarginValue(o.margin_value ? String(o.margin_value) : '');
+    if (o.output_prices) {
+      pricesFor.current = o.output_product_id;
+      setPrices({ gst_rate: String(o.output_prices.gst_rate ?? ''), mrp: String(o.output_prices.mrp ?? ''), retail_price: String(o.output_prices.retail_price ?? ''), wholesale_price: String(o.output_prices.wholesale_price ?? ''), dealer_price: String(o.output_prices.dealer_price ?? '') });
+    }
     const recipe = o.recipe;
     if (recipe?.stages?.length) {
       setMultiStage(true);
@@ -173,6 +197,16 @@ export default function ProductionForm() {
       setItems(rows.map((i) => ({ component_product_id: i.component_product_id, qty: String(i.qty ?? '') })));
     }
   }, [existingQ.data]);
+
+  // Existing product: show its current selling prices (same fields as the product form).
+  useEffect(() => {
+    if (productMode !== 'existing' || !productId || pricesFor.current === productId) return;
+    const p = products.find((x) => String(x.id) === String(productId));
+    if (!p) return;
+    pricesFor.current = productId;
+    setPrices({ gst_rate: String(p.gst_rate ?? ''), mrp: String(p.mrp ?? ''), retail_price: String(p.retail_price ?? ''), wholesale_price: String(p.wholesale_price ?? ''), dealer_price: String(p.dealer_price ?? '') });
+    setUpdatePrices(false);
+  }, [productMode, productId, products]);
 
   function applyRecipe(nextProductId) {
     setProductId(nextProductId);
@@ -197,7 +231,24 @@ export default function ProductionForm() {
   const lines = flattenLines(multiStage, items, stages);
   const costRows = useMemo(() => buildCost(products, lines, outputQty), [products, lines, outputQty]);
   const materialTotal = costRows.reduce((s, r) => s + r.lineCost, 0);
-  const unitCost = (Number(outputQty) || 0) > 0 ? materialTotal / Number(outputQty) : 0;
+  const qtyN = Number(outputQty) || 0;
+  const settingN = Number(settingCharge) || 0;
+  const miscN = Number(miscCharge) || 0;
+  // The setting charge and miscellaneous costs belong to the finished goods too.
+  const totalCost = materialTotal + settingN + miscN;
+  const unitCost = qtyN > 0 ? totalCost / qtyN : 0;
+  const marginN = Number(marginValue) || 0;
+  const unitMargin = marginType === 'amount' ? marginN : (unitCost * marginN) / 100;
+  const suggestedPrice = unitCost + unitMargin;
+  // What the product is (or will be) sold at: the prices on this form.
+  const priceSet = productMode === 'new' ? newProduct : prices;
+  const retailN = Number(priceSet.retail_price) || 0;
+  const sellingValue = retailN * qtyN;
+  const expectedProfit = (retailN - unitCost) * qtyN;
+  const marginAtRetail = unitCost > 0 && retailN > 0 ? ((retailN - unitCost) / unitCost) * 100 : null;
+  const setRetail = (v) => (productMode === 'new'
+    ? setNewProduct((p) => ({ ...p, retail_price: String(v) }))
+    : (setPrices((p) => ({ ...p, retail_price: String(v) })), setUpdatePrices(true)));
   const insufficient = costRows.filter((r) => !r.sufficient);
   const lowStock = costRows.filter((r) => r.low);
   const canEdit = !isEdit || existingQ.data?.status === 'draft';
@@ -211,8 +262,28 @@ export default function ProductionForm() {
       notes: notes || null,
       complete,
     };
-    if (productMode === 'new') body.new_product = { ...newProduct, unit_id: newProduct.unit_id || null };
-    else body.product_id = productId;
+    body.setting_charge = settingN;
+    body.misc_charge = miscN;
+    body.margin_type = marginType;
+    body.margin_value = marginN;
+    const num = (v) => (v === '' || v == null ? null : Number(v));
+    if (productMode === 'new') {
+      const { subcategory_id, category_id, ...rest } = newProduct;
+      body.new_product = {
+        ...rest,
+        sku: null, // numbered by the system
+        unit_id: rest.unit_id || null,
+        category_id: subcategory_id || category_id || null,
+        gst_rate: num(rest.gst_rate), mrp: num(rest.mrp), retail_price: num(rest.retail_price),
+        wholesale_price: num(rest.wholesale_price), dealer_price: num(rest.dealer_price),
+      };
+    } else {
+      body.product_id = productId;
+      body.update_prices = updatePrices;
+      if (updatePrices) {
+        body.prices = { gst_rate: num(prices.gst_rate), mrp: num(prices.mrp), retail_price: num(prices.retail_price), wholesale_price: num(prices.wholesale_price), dealer_price: num(prices.dealer_price) };
+      }
+    }
     if (multiStage) {
       body.stages = stages.map((s) => ({
         name: s.name || 'Stage',
@@ -336,6 +407,7 @@ export default function ProductionForm() {
               <button type="button" onClick={() => setProductMode('new')} className={'rounded-lg px-3 py-1.5 text-sm ' + (productMode === 'new' ? 'bg-leaf text-white' : 'bg-paper text-muted')}>New product</button>
             </div>
             {productMode === 'existing' ? (
+              <>
               <Field label="Product" required error={err('product_id')}>
                 <SearchSelect
                   value={productId}
@@ -346,9 +418,25 @@ export default function ProductionForm() {
                   disabled={!companyReady || !canEdit}
                 />
               </Field>
+              {productId && (
+                <div className="mt-4">
+                  <p className="microlabel mb-2 font-semibold text-ink">Selling prices of this product</p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                    <Field label="GST %"><Select value={prices.gst_rate} onChange={(e) => { setPrices((p) => ({ ...p, gst_rate: e.target.value })); setUpdatePrices(true); }} className={selectCls} disabled={!canEdit}>{taxRates.map((r) => <option key={r} value={String(r)}>{r}%</option>)}</Select></Field>
+                    {[['mrp', 'MRP'], ['retail_price', 'Retail price'], ['wholesale_price', 'Wholesale price'], ['dealer_price', 'Dealer price']].map(([k, label]) => (
+                      <Field key={k} label={label}><Input type="number" step="0.01" min="0" value={prices[k]} onChange={(e) => { setPrices((p) => ({ ...p, [k]: e.target.value })); setUpdatePrices(true); }} disabled={!canEdit} /></Field>
+                    ))}
+                  </div>
+                  <label className="mt-2 flex items-center gap-2 text-xs text-muted">
+                    <input type="checkbox" className="size-4 rounded border-line text-leaf" checked={updatePrices} onChange={(e) => setUpdatePrices(e.target.checked)} disabled={!canEdit} />
+                    Save these prices on the product when I save the production (leave it unticked to only use them for the estimate below).
+                  </label>
+                </div>
+              )}
+              </>
             ) : (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <Field label="SKU" required error={err('new_product.sku')}><Input value={newProduct.sku} onChange={(e) => setNewProduct((p) => ({ ...p, sku: e.target.value }))} disabled={!canEdit} /></Field>
+                <Field label="SKU"><Input value="" placeholder="Auto-generated when saved" readOnly disabled className="bg-paper text-muted" /></Field>
                 <Field label="Product name" required error={err('new_product.name')}><Input value={newProduct.name} onChange={(e) => setNewProduct((p) => ({ ...p, name: e.target.value }))} disabled={!canEdit} /></Field>
                 <Field label="Unit">
                   <Select value={newProduct.unit_id} onChange={(e) => setNewProduct((p) => ({ ...p, unit_id: e.target.value }))} className={selectCls} disabled={!canEdit}>
@@ -356,6 +444,28 @@ export default function ProductionForm() {
                     {units.map((u) => <option key={u.id} value={u.id}>{u.short_name || u.name}</option>)}
                   </Select>
                 </Field>
+                <Field label="Category" error={err('new_product.category_id')}>
+                  <Select value={newProduct.category_id} onChange={(e) => setNewProduct((p) => ({ ...p, category_id: e.target.value, subcategory_id: '' }))} className={selectCls} disabled={!canEdit}>
+                    <option value="">Select…</option>
+                    {mainCategories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Subcategory">
+                  <Select value={newProduct.subcategory_id} onChange={(e) => setNewProduct((p) => ({ ...p, subcategory_id: e.target.value }))} className={selectCls} disabled={!canEdit || subCategories.length === 0}>
+                    <option value="">{subCategories.length ? 'Optional' : '—'}</option>
+                    {subCategories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
+                  </Select>
+                </Field>
+                <Field label="GST %">
+                  <Select value={newProduct.gst_rate} onChange={(e) => setNewProduct((p) => ({ ...p, gst_rate: e.target.value }))} className={selectCls} disabled={!canEdit}>
+                    <option value="">0%</option>
+                    {taxRates.filter((r) => r > 0).map((r) => <option key={r} value={String(r)}>{r}%</option>)}
+                  </Select>
+                </Field>
+                {[['mrp', 'MRP'], ['retail_price', 'Retail price'], ['wholesale_price', 'Wholesale price'], ['dealer_price', 'Dealer price']].map(([k, label]) => (
+                  <Field key={k} label={label} error={err(`new_product.${k}`)}><Input type="number" step="0.01" min="0" value={newProduct[k]} onChange={(e) => setNewProduct((p) => ({ ...p, [k]: e.target.value }))} disabled={!canEdit} /></Field>
+                ))}
+                <p className="text-xs text-muted sm:col-span-3">The cost price is not typed: it becomes the cost of one piece made here (materials + setting charge + miscellaneous ÷ pieces).</p>
               </div>
             )}
           </div>
@@ -429,7 +539,7 @@ export default function ProductionForm() {
 
       <Card className="p-5">
         <h2 className="text-sm font-semibold">Production cost</h2>
-        <p className="mt-1 text-xs text-muted">Final unit cost = sum of (material qty × output qty × material cost) ÷ output qty.</p>
+        <p className="mt-1 text-xs text-muted">Cost of one piece = (materials + setting charge + miscellaneous) ÷ pieces made.</p>
         {costRows.length === 0 ? (
           <p className="mt-3 text-sm text-muted">Add materials to see the cost breakdown.</p>
         ) : (
@@ -456,10 +566,42 @@ export default function ProductionForm() {
             </table>
           </div>
         )}
-        <div className="mt-3 flex flex-wrap gap-4 text-sm">
-          <span>Materials total: <strong className="tnum">{formatCurrency(materialTotal)}</strong></span>
-          <span>Finished unit cost: <strong className="tnum">{formatCurrency(unitCost)}</strong></span>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+          <Field label="Setting charge (₹ for the run)"><Input type="number" step="0.01" min="0" value={settingCharge} onChange={(e) => setSettingCharge(e.target.value)} placeholder="0.00" disabled={!canEdit} /></Field>
+          <Field label="Miscellaneous (₹ for the run)"><Input type="number" step="0.01" min="0" value={miscCharge} onChange={(e) => setMiscCharge(e.target.value)} placeholder="0.00" disabled={!canEdit} /></Field>
+          <Field label="Margin on cost">
+            <div className="flex gap-2">
+              <Input type="number" step="0.01" min="0" value={marginValue} onChange={(e) => setMarginValue(e.target.value)} placeholder="0" disabled={!canEdit} />
+              <Select value={marginType} onChange={(e) => setMarginType(e.target.value)} className="h-10 w-28 shrink-0 rounded-xl border border-line bg-surface px-2 text-sm" disabled={!canEdit}>
+                <option value="percent">%</option>
+                <option value="amount">₹ / piece</option>
+              </Select>
+            </div>
+          </Field>
+          <div className="flex items-end"><p className="text-xs text-muted">Setting charge and miscellaneous are added to the cost of the pieces made.</p></div>
         </div>
+
+        <dl className="mt-4 grid grid-cols-1 gap-x-8 gap-y-1.5 rounded-2xl bg-paper/60 p-4 text-sm sm:grid-cols-2">
+          <div className="flex justify-between"><dt className="text-muted">Materials</dt><dd className="tnum">{formatCurrency(materialTotal)}</dd></div>
+          <div className="flex justify-between"><dt className="text-muted">Setting charge</dt><dd className="tnum">{formatCurrency(settingN)}</dd></div>
+          <div className="flex justify-between"><dt className="text-muted">Miscellaneous</dt><dd className="tnum">{formatCurrency(miscN)}</dd></div>
+          <div className="flex justify-between font-medium"><dt>Total cost</dt><dd className="tnum">{formatCurrency(totalCost)}</dd></div>
+          <div className="flex justify-between font-medium"><dt>Cost of one piece</dt><dd className="tnum">{formatCurrency(unitCost)}</dd></div>
+          <div className="flex justify-between"><dt className="text-muted">Margin per piece{marginType === 'percent' && marginN > 0 ? ` (${marginN}%)` : ''}</dt><dd className="tnum">{formatCurrency(unitMargin)}</dd></div>
+          <div className="flex items-center justify-between font-semibold text-leaf-hover sm:col-span-2">
+            <dt>Suggested price (cost + margin)</dt>
+            <dd className="flex items-center gap-3"><span className="tnum">{formatCurrency(suggestedPrice)}</span>
+              {canEdit && suggestedPrice > 0 && <button type="button" className="rounded-lg border border-line px-2 py-1 text-xs font-medium text-leaf hover:bg-leaf-soft" onClick={() => setRetail(Math.round(suggestedPrice * 100) / 100)}>Use as retail price</button>}
+            </dd>
+          </div>
+          <div className="mt-1 flex justify-between border-t border-line pt-2 sm:col-span-2"><dt className="text-muted">Retail price now</dt><dd className="tnum">{retailN > 0 ? formatCurrency(retailN) : '— not set —'}</dd></div>
+          {retailN > 0 && (
+            <>
+              <div className="flex justify-between"><dt className="text-muted">Selling value ({qtyN} × retail)</dt><dd className="tnum">{formatCurrency(sellingValue)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Expected profit at retail</dt><dd className={'tnum font-medium ' + (expectedProfit < 0 ? 'text-danger' : '')}>{formatCurrency(expectedProfit)}{marginAtRetail != null ? ` (${marginAtRetail.toFixed(1)}%)` : ''}</dd></div>
+            </>
+          )}
+        </dl>
         {insufficient.length > 0 && (
           <div className="mt-3 rounded-xl border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
             Insufficient stock:{' '}

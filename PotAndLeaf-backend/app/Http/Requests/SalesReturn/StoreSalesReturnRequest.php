@@ -23,6 +23,8 @@ class StoreSalesReturnRequest extends FormRequest
             'notes'       => ['nullable', 'string', 'max:2000'],
             'items'                 => ['required', 'array', 'min:1'],
             'items.*.sale_item_id'  => ['required', 'uuid'],
+            // What happens to the money for the goods: kept as the customer's advance (default) or paid back now.
+            'refund_mode'           => ['nullable', 'in:advance,cash,upi,card,bank,cheque'],
             'items.*.qty'           => ['required', 'numeric', 'gt:0'],
             'items.*.reason'        => ['nullable', 'string', 'max:255'],
         ];

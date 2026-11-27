@@ -8,10 +8,12 @@ import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui
 import { formatCurrency, todayISO as today } from '../../lib/format';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
 import { computePurchase } from '../../lib/purchaseCalc';
+import PriceTiers from '../../components/PriceTiers';
 
 const emptyLine = () => ({
   product_id: '', qty: '', rate: '', discount: '', gst_rate: '',
   is_bulk: false, sell_as: '', units_per_set: '', split_product_id: '', set_product_id: '',
+  mrp: '', retail_price: '', wholesale_price: '', dealer_price: '', show_prices: false,
 });
 const numInput =
   'h-9 w-full rounded-[10px] border border-line bg-surface px-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-leaf/30';
@@ -35,12 +37,15 @@ export default function PurchaseForm() {
   const headerCompanyId = searchParams.get('company_id') || companyId;
 
   const [header, setHeader] = useState({
+    location_id: '',
     supplier_id: '',
     purchase_date: today(),
     invoice_no: '',
     invoice_date: '',
     is_interstate: false,
     landed_cost_total: '',
+    agent_code: '',
+    discount_amount: '',
     notes: '',
   });
   const [lines, setLines] = useState([emptyLine()]);
@@ -81,15 +86,26 @@ export default function PurchaseForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetCompanyId]);
 
+  // New bill: start with the person's own location, else the main one.
+  useEffect(() => {
+    const locs = formData?.locations ?? [];
+    if (existing || header.location_id || locs.length < 2) return;
+    const pick = locs.find((l) => String(l.id) === String(formData?.my_location_id)) ?? locs.find((l) => l.is_default) ?? locs[0];
+    setHeader((h) => ({ ...h, location_id: String(pick.id) }));
+  }, [formData?.locations?.length, formData?.my_location_id, existing]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!existing) return;
     setHeader({
+      location_id: existing.location_id ?? '',
       supplier_id: existing.supplier?.id ?? '',
       purchase_date: existing.purchase_date ?? today(),
       invoice_no: existing.invoice_no ?? '',
       invoice_date: existing.invoice_date ?? '',
       is_interstate: existing.is_interstate,
       landed_cost_total: existing.landed_cost_total || '',
+      agent_code: existing.agent_code ?? '',
+      discount_amount: existing.final_discount || '',
       notes: existing.notes ?? '',
     });
     setLines(
@@ -104,6 +120,8 @@ export default function PurchaseForm() {
         units_per_set: it.units_per_set || '',
         split_product_id: it.split_product_id ?? '',
         set_product_id: it.set_product_id ?? '',
+        mrp: it.mrp ?? '', retail_price: it.retail_price ?? '', wholesale_price: it.wholesale_price ?? '', dealer_price: it.dealer_price ?? '',
+        show_prices: [it.mrp, it.retail_price, it.wholesale_price, it.dealer_price].some((v) => v != null),
       })),
     );
     setFormCompanyId(existing.company_id ?? headerCompanyId ?? '');
@@ -116,8 +134,8 @@ export default function PurchaseForm() {
   }, [formData]);
 
   const computed = useMemo(
-    () => computePurchase(lines, header.is_interstate, Number(header.landed_cost_total) || 0),
-    [lines, header.is_interstate, header.landed_cost_total],
+    () => computePurchase(lines, header.is_interstate, Number(header.landed_cost_total) || 0, Number(header.discount_amount) || 0),
+    [lines, header.is_interstate, header.landed_cost_total, header.discount_amount],
   );
 
   function setLine(index, patch) {
@@ -130,6 +148,9 @@ export default function PurchaseForm() {
       product_id: productId,
       gst_rate: product ? product.gst_rate : '',
       rate: lines[index].rate || (product ? product.cost_price : ''),
+      // The product's current prices, so only the ones you change are updated at confirm.
+      mrp: product?.mrp || '', retail_price: product?.retail_price || '',
+      wholesale_price: product?.wholesale_price || '', dealer_price: product?.dealer_price || '',
     });
   }
 
@@ -162,12 +183,15 @@ export default function PurchaseForm() {
 
     setSaving(true);
     const payload = {
+      location_id: header.location_id || undefined,
       supplier_id: header.supplier_id,
       purchase_date: header.purchase_date,
       invoice_no: header.invoice_no?.trim() || null,
       invoice_date: header.invoice_date || null,
       is_interstate: header.is_interstate,
       landed_cost_total: Number(header.landed_cost_total) || 0,
+      agent_code: header.agent_code?.trim() || null,
+      discount_amount: Number(header.discount_amount) || 0,
       notes: header.notes || null,
       ...(isEdit && isSuperAdmin && formCompanyId && String(formCompanyId) !== String(existing?.company_id)
         ? { company_id: formCompanyId }
@@ -180,6 +204,10 @@ export default function PurchaseForm() {
           rate: Number(l.rate) || 0,
           discount: Number(l.discount) || 0,
           gst_rate: Number(l.gst_rate) || 0,
+          mrp: l.show_prices && Number(l.mrp) > 0 ? Number(l.mrp) : null,
+          retail_price: l.show_prices && Number(l.retail_price) > 0 ? Number(l.retail_price) : null,
+          wholesale_price: l.show_prices && Number(l.wholesale_price) > 0 ? Number(l.wholesale_price) : null,
+          dealer_price: l.show_prices && Number(l.dealer_price) > 0 ? Number(l.dealer_price) : null,
           is_bulk: Boolean(l.is_bulk),
           sell_as: l.is_bulk ? l.sell_as || null : null,
           units_per_set: l.is_bulk && l.sell_as ? Number(l.units_per_set) || null : null,
@@ -314,6 +342,20 @@ export default function PurchaseForm() {
               className={fieldErrors.purchase_date ? 'border-danger' : undefined}
             />
           </Field>
+          {(formData?.locations?.length ?? 0) > 1 && (
+            <Field label="Receive into" error={fieldErrors.location_id}>
+              <Select
+                value={header.location_id}
+                onChange={(e) => setHeader((h) => ({ ...h, location_id: e.target.value }))}
+                className="h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/30"
+              >
+                {(formData?.locations ?? []).map((l) => (
+                  <option key={l.id} value={l.id}>{l.name} ({l.type === 'godown' ? 'Godown' : 'Branch'})</option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-muted">The goods and their barcodes are added to this branch or godown when you confirm.</p>
+            </Field>
+          )}
           <Field label="Invoice no." error={fieldErrors.invoice_no}>
             <Input
               value={header.invoice_no || ''}
@@ -327,6 +369,14 @@ export default function PurchaseForm() {
               type="date"
               value={header.invoice_date}
               onChange={(e) => setHeader((h) => ({ ...h, invoice_date: e.target.value }))}
+            />
+          </Field>
+          <Field label="Agent code (optional)" error={fieldErrors.agent_code}>
+            <Input
+              value={header.agent_code}
+              maxLength={60}
+              placeholder="Agent who arranged this purchase"
+              onChange={(e) => setHeader((h) => ({ ...h, agent_code: e.target.value }))}
             />
           </Field>
         </div>
@@ -374,7 +424,7 @@ export default function PurchaseForm() {
                         >
                           <option value="">Select…</option>
                           {(formData?.products ?? []).map((p) => (
-                            <option key={p.id} value={p.id}>
+                            <option key={p.id} value={p.id} image={p.image}>
                               {p.name} {p.sku ? `· ${p.sku}` : ''}
                             </option>
                           ))}
@@ -429,6 +479,35 @@ export default function PurchaseForm() {
                         </button>
                       </td>
                     </tr>
+                    {line.product_id && (
+                      <tr className="border-b border-line/60 last:border-0">
+                        <td colSpan={9} className="px-3 pb-3 pt-0">
+                          <label className="flex items-center gap-2 text-xs text-muted">
+                            <input
+                              type="checkbox"
+                              checked={line.show_prices}
+                              onChange={(e) => setLine(i, { show_prices: e.target.checked })}
+                              className="size-4 rounded border-line text-leaf focus:ring-leaf/40"
+                            />
+                            Set selling prices for this product when the bill is confirmed
+                            <span className="text-faint">· landed cost per unit {formatCurrency(c.landed_unit_cost ?? 0)}</span>
+                          </label>
+                          {line.show_prices && (
+                            <div className="mt-2 rounded-xl border border-line bg-paper/60 p-3">
+                              <PriceTiers
+                                value={{ landed_unit_cost: c.landed_unit_cost ?? 0, mrp: line.mrp, retail_price: line.retail_price, wholesale_price: line.wholesale_price, dealer_price: line.dealer_price }}
+                                onChange={(patch) => { const { landed_unit_cost: _ignored, ...rest } = patch; if (Object.keys(rest).length) setLine(i, rest); }}
+                                costField="landed_unit_cost"
+                                costLabel="Landed cost per unit"
+                                costReadOnly
+                                costRequired={false}
+                              />
+                              <p className="mt-1 text-xs text-muted">At confirm these prices replace the product&apos;s MRP, retail, wholesale and dealer prices, and its cost becomes the landed cost.</p>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
                     {/* {line.is_bulk && (
                       <tr className="border-b border-line/60 bg-leaf-soft/30 last:border-0">
                         <td colSpan={10} className="px-3 pb-3 pt-1">
@@ -600,6 +679,25 @@ export default function PurchaseForm() {
               <dt>Landed cost</dt>
               <dd className="tnum">{formatCurrency(t.landed_cost_total)}</dd>
             </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="text-muted">Discount on final amount (₹)</dt>
+              <dd>
+                <input
+                  type="number" min="0" step="0.01" inputMode="decimal"
+                  value={header.discount_amount}
+                  onChange={(e) => setHeader((h) => ({ ...h, discount_amount: e.target.value }))}
+                  className={numInput + ' !w-28'}
+                  placeholder="0.00" aria-label="Discount on the final amount in rupees"
+                />
+              </dd>
+            </div>
+            {fieldErrors.discount_amount && <p className="text-xs text-danger">{fieldErrors.discount_amount}</p>}
+            {t.final_discount > 0 && (
+              <div className="flex justify-between text-leaf">
+                <dt>Discount taken off (after GST)</dt>
+                <dd className="tnum">− {formatCurrency(t.final_discount)}</dd>
+              </div>
+            )}
             {formData?.freight_to_supplier === false && t.landed_cost_total > 0 ? (
               <>
                 <div className="mt-2 flex justify-between border-t border-line pt-2 font-medium">

@@ -33,6 +33,14 @@ class CreateSale
 
         $computed = $this->calculator->compute($data['items'], (bool) ($data['is_interstate'] ?? false));
 
+        // A discount typed in rupees on the whole bill is taken off the FINAL amount, after GST and
+        // all other calculations. A free (complimentary) bill has nothing to discount.
+        $finalDiscount = $billKind === 'complimentary' ? 0.0 : round(max(0.0, (float) ($data['discount_amount'] ?? 0)), 2);
+        if ($finalDiscount > 0) {
+            $this->assertFinalDiscount($companyId, $data['items'], $finalDiscount, (float) $computed['totals']['grand_total']);
+            $computed['totals']['grand_total'] = round((float) $computed['totals']['grand_total'] - $finalDiscount, 2);
+        }
+
         $customerName = $data['customer_name'] ?? null;
         $customer = null;
         if (! empty($data['customer_id'])) {
@@ -81,24 +89,40 @@ class CreateSale
         // A retail customer always gets the retail price tier (it cannot be changed on the bill).
         $retailOnly = $customer && ($customer->type?->value ?? $customer->type) === 'retail';
 
-        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind, $userId, $retailOnly) {
+        // The salesman credited with the bill (and its commission): the one chosen, else the person entering it.
+        $salesmanId = filled($data['salesman_id'] ?? null) ? (int) $data['salesman_id'] : $userId;
+        if ($salesmanId !== null && $salesmanId !== $userId) {
+            $isStaff = \App\Models\User::query()->whereKey($salesmanId)->where('is_active', true)
+                ->whereExists(fn ($q) => $q->selectRaw('1')->from('company_user')->whereColumn('company_user.user_id', 'users.id')->where('company_user.company_id', $companyId))
+                ->exists();
+            if (! $isStaff) {
+                throw ValidationException::withMessages(['salesman_id' => 'Choose an active staff member of this company as the salesman.']);
+            }
+        }
+
+        // The branch the bill sells from (default: the user's own branch, else the main location).
+        $locationId = app(\App\Services\LocationStockService::class)->resolveLocationId($companyId, $data['location_id'] ?? null, $userId ? \App\Models\User::find($userId) : null);
+
+        return DB::transaction(function () use ($companyId, $data, $computed, $customerName, $productMeta, $redeemPoints, $loyaltyDiscount, $billTotal, $billKind, $userId, $retailOnly, $locationId, $finalDiscount, $salesmanId) {
             $t = $computed['totals'];
             $due = max(0, $billTotal - $loyaltyDiscount);
             $sale = $this->sales->create([
                 'company_id'              => $companyId,
                 'customer_id'             => $data['customer_id'] ?? null,
-                'location_id'             => $data['location_id'] ?? null,
+                'location_id'             => $locationId,
                 'customer_name'           => $customerName,
                 'sale_no'                 => $this->sales->nextSaleNo($companyId),
                 'sale_date'               => $data['sale_date'],
                 'is_interstate'           => (bool) ($data['is_interstate'] ?? false),
                 'payment_mode'            => $data['payment_mode'] ?? 'cash',
                 'bill_kind'               => $billKind,
-                'created_by'              => $userId,
+                'created_by'              => $salesmanId,
+                'entered_by'              => $userId,
                 'subtotal'                => $t['subtotal'],
                 'tax_total'               => $t['tax_total'],
                 'round_off'               => $t['round_off'],
                 'grand_total'             => $t['grand_total'],
+                'final_discount'          => $finalDiscount,
                 'amount_paid'             => $data['amount_paid'] ?? $due,
                 'loyalty_points_redeemed' => $redeemPoints,
                 'loyalty_discount'        => $loyaltyDiscount,
@@ -131,6 +155,29 @@ class CreateSale
 
             return $sale->load(['items', 'customer:id,name,type,loyalty_points']);
         });
+    }
+
+    /** The final-amount discount cannot be more than the bill total, nor break the discount ceiling. */
+    private function assertFinalDiscount(int|string $companyId, array $items, float $finalDiscount, float $billTotal): void
+    {
+        if ($finalDiscount > $billTotal + 0.005) {
+            throw ValidationException::withMessages([
+                'discount_amount' => sprintf('The discount (₹%.2f) cannot be more than the bill total (₹%.2f).', $finalDiscount, $billTotal),
+            ]);
+        }
+
+        $gross = 0.0;
+        $lineDiscounts = 0.0;
+        foreach ($items as $item) {
+            $gross += (float) ($item['qty'] ?? 0) * (float) ($item['rate'] ?? 0);
+            $lineDiscounts += (float) ($item['discount'] ?? 0);
+        }
+        $ceiling = $this->settings->getFloat($companyId, 'discount_ceiling_percent');
+        if ($ceiling > 0 && $billTotal > 0 && (($lineDiscounts + $finalDiscount) / max($gross, $billTotal)) * 100 > $ceiling + 0.01) {
+            throw ValidationException::withMessages([
+                'discount_amount' => "Total discount exceeds the {$ceiling}% ceiling set in Settings.",
+            ]);
+        }
     }
 
     /** Enforce HO-configured max line discount as % of (qty × rate). Skipped for complimentary bills. */

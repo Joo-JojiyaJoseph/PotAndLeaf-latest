@@ -46,6 +46,38 @@ export default function ReportsToolbar({
   companyFilterValue,
   onCompanyChange,
   activeCompanyName,
+}) {
+  return (
+    <div className="glass-card p-3 sm:p-4 lg:p-5">
+      <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-leaf-soft text-leaf sm:size-11">
+            <ChartBarIcon className="size-5 sm:size-6" strokeWidth={1.5} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="page-title">Reports</h1>
+            <p className="mt-0.5 text-xs text-muted sm:text-sm">{subtitle}</p>
+          </div>
+        </div>
+
+        <div className="flex w-full min-w-0 flex-col gap-2 [&>*]:w-full sm:flex-row sm:flex-wrap sm:items-center sm:[&>*]:w-auto lg:w-auto lg:justify-end">
+          {isSuperAdmin ? (
+            <CompanyFilter value={companyFilterValue} onChange={onCompanyChange} className="w-full min-w-0 sm:w-auto sm:max-w-[240px]" />
+          ) : (
+            <div className="inline-flex h-10 min-w-0 max-w-full items-center gap-2 rounded-xl glass-control px-3 text-sm">
+              <BuildingOffice2Icon className="size-4 shrink-0 text-leaf" />
+              <span className="truncate font-medium text-ink">{activeCompanyName}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+/** Dates, report filters and Export — shown below the report menu. */
+export function ReportsFilterBar({
   range,
   onRangeChange,
   hideDateRange,
@@ -81,32 +113,9 @@ export default function ReportsToolbar({
   );
 
   return (
-    <div className="glass-card p-3 sm:p-4 lg:p-5">
-      <div className="flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-leaf-soft text-leaf sm:size-11">
-            <ChartBarIcon className="size-5 sm:size-6" strokeWidth={1.5} />
-          </span>
-          <div className="min-w-0">
-            <h1 className="page-title">Reports</h1>
-            <p className="mt-0.5 text-xs text-muted sm:text-sm">{subtitle}</p>
-          </div>
-        </div>
-
-        <div className="flex w-full min-w-0 flex-col gap-2 [&>*]:w-full sm:flex-row sm:flex-wrap sm:items-center sm:[&>*]:w-auto lg:w-auto lg:justify-end">
-          {isSuperAdmin ? (
-            <CompanyFilter value={companyFilterValue} onChange={onCompanyChange} className="w-full min-w-0 sm:w-auto sm:max-w-[240px]" />
-          ) : (
-            <div className="inline-flex h-10 min-w-0 max-w-full items-center gap-2 rounded-xl glass-control px-3 text-sm">
-              <BuildingOffice2Icon className="size-4 shrink-0 text-leaf" />
-              <span className="truncate font-medium text-ink">{activeCompanyName}</span>
-            </div>
-          )}
-          {extraFilters}
-        </div>
-      </div>
-
-      <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3 sm:mt-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:pt-4">
+    <div className="glass-card p-3 sm:p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+        {extraFilters}
         {!hideDateRange && (
           <>
             <div className="-mx-1 flex max-w-full gap-0 overflow-x-auto overscroll-x-contain px-1 pb-0.5 sm:mx-0 sm:overflow-visible sm:rounded-xl sm:border sm:border-line sm:px-0">

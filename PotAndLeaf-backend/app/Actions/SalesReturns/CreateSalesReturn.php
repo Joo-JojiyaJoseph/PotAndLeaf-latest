@@ -79,6 +79,7 @@ class CreateSalesReturn
                 'sale_id'       => $sale->id,
                 'customer_id'   => $sale->customer_id,
                 'location_id'   => $sale->location_id,
+                'refund_mode'   => $data['refund_mode'] ?? 'advance',
                 'return_no'     => $this->returns->nextReturnNo($companyId),
                 'return_date'   => $data['return_date'],
                 'is_interstate' => (bool) $sale->is_interstate,

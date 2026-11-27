@@ -23,6 +23,7 @@ class StoreUserRequest extends FormRequest
             'phone'     => ['nullable', 'string', 'max:20', 'regex:/^(?=.*\d)\+?[0-9()\-\s]{7,20}$/'],
             'role_id'   => ['nullable', 'uuid', Rule::exists('roles', 'id')],
             'is_active' => ['boolean'],
+            'location_id' => ['nullable', 'uuid', Rule::exists('locations', 'id')],
         ];
     }
 

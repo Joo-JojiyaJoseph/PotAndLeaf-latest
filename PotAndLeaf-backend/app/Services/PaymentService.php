@@ -33,7 +33,81 @@ class PaymentService
             ->withQueryString();
     }
 
+    /**
+     * Record a payment. A discount typed while paying ("discount_amount") is kept as a companion entry
+     * with mode "discount": it clears dues exactly like money would, but no cash or bank moves, and in the
+     * accounts it is Dr Accounts Payable / Cr Discount Received.
+     */
     public function record(int|string $companyId, array $data, ?int $userId = null): SupplierPayment
+    {
+        $discount = round(max(0.0, (float) ($data['discount_amount'] ?? 0)), 2);
+        unset($data['discount_amount']);
+        $isAdvance = (bool) ($data['is_advance'] ?? false) || ($data['payment_for'] ?? null) === 'advance';
+        if ($discount <= 0.004 || $isAdvance) {
+            return $this->recordOne($companyId, $data, $userId);
+        }
+
+        return DB::transaction(function () use ($companyId, $data, $userId, $discount) {
+            $main = $this->recordOne($companyId, $data, $userId);
+            $this->recordDiscount($companyId, $main, $discount, $userId);
+
+            return $main->refresh()->load(['supplier:id,name', 'purchase:id,purchase_no', 'allocations']);
+        });
+    }
+
+    /** The discount settles the same bills (or the same on-account dues) the payment went to. */
+    private function recordDiscount(int|string $companyId, SupplierPayment $main, float $discount, ?int $userId): void
+    {
+        $tooMuch = ValidationException::withMessages(['discount_amount' => 'The discount is more than what is still owed on this payment\'s bills. Lower it.']);
+        $base = [
+            'supplier_id'  => $main->supplier_id,
+            'payment_date' => optional($main->payment_date)->toDateString(),
+            'mode'         => 'discount',
+            'payment_for'  => $main->payment_for,
+            'amount'       => $discount,
+            'reference'    => 'Discount on '.$main->payment_no,
+            'notes'        => 'Discount while paying '.$main->payment_no,
+            'discount_for_id' => $main->id,
+        ];
+
+        $picked = $main->allocations()->where('auto_applied', false)->get();
+        if ($picked->isNotEmpty()) {
+            $left = $discount;
+            $rows = [];
+            foreach ($picked as $a) {
+                $purchase = Purchase::find($a->purchase_id);
+                $room = $purchase ? max(0.0, \App\Http\Requests\Payment\StoreSupplierPaymentRequest::remainingPurchaseBalance($purchase)) : 0.0;
+                $share = round(min($left, $room), 2);
+                if ($share > 0) {
+                    $rows[] = ['purchase_id' => $a->purchase_id, 'amount' => $share];
+                    $left = round($left - $share, 2);
+                }
+                if ($left <= 0.004) {
+                    break;
+                }
+            }
+            if ($left > 0.005) {
+                throw $tooMuch;
+            }
+            $base['allocations'] = $rows;
+        } elseif ($main->purchase_id) {
+            $purchase = Purchase::find($main->purchase_id);
+            $room = $purchase ? max(0.0, \App\Http\Requests\Payment\StoreSupplierPaymentRequest::remainingPurchaseBalance($purchase)) : 0.0;
+            if ($discount > $room + 0.005) {
+                throw $tooMuch;
+            }
+            $base['purchase_id'] = $main->purchase_id;
+        } else {
+            $supplier = Supplier::query()->find($main->supplier_id);
+            if (! $supplier || $discount > max(0.0, (float) $supplier->outstanding) + 0.005) {
+                throw $tooMuch;
+            }
+        }
+
+        $this->recordOne($companyId, $base, $userId);
+    }
+
+    private function recordOne(int|string $companyId, array $data, ?int $userId = null): SupplierPayment
     {
         $payment = DB::transaction(function () use ($companyId, $data, $userId) {
             $amount = (float) $data['amount'];
@@ -85,6 +159,7 @@ class PaymentService
                 'amount'       => $amount,
                 'mode'         => $data['mode'] ?? 'cash',
                 'payment_for'  => $paymentFor,
+                'discount_for_id' => $data['discount_for_id'] ?? null,
                 'reference'    => $data['reference'] ?? null,
                 'notes'        => $data['notes'] ?? null,
                 'is_advance'   => $isAdvance,
@@ -199,6 +274,11 @@ class PaymentService
     public function delete(SupplierPayment $payment, ?int $userId = null): void
     {
         DB::transaction(function () use ($payment, $userId) {
+            // A discount given with this payment goes with it.
+            foreach (SupplierPayment::query()->where('discount_for_id', $payment->id)->get() as $discountEntry) {
+                $this->delete($discountEntry, $userId);
+            }
+
             $companyId = $payment->company_id;
             $paymentNo = $payment->payment_no;
 

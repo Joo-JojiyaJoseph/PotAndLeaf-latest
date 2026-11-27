@@ -51,6 +51,7 @@ class UpdatePurchase
             $data['items'],
             (bool) ($data['is_interstate'] ?? false),
             (float) ($data['landed_cost_total'] ?? 0),
+            (float) ($data['discount_amount'] ?? 0),
         );
 
         $snapshots = Product::forCompany($companyId)
@@ -65,7 +66,9 @@ class UpdatePurchase
                 'invoice_date'  => $data['invoice_date'] ?? null,
                 'purchase_date' => $data['purchase_date'],
                 'is_interstate' => (bool) ($data['is_interstate'] ?? false),
+                'agent_code'    => filled($data['agent_code'] ?? null) ? trim($data['agent_code']) : null,
                 'notes'         => $data['notes'] ?? null,
+                ...(filled($data['location_id'] ?? null) ? ['location_id' => $data['location_id']] : []),
                 ...$computed['totals'],
             ]);
 
@@ -90,6 +93,10 @@ class UpdatePurchase
                     'line_total'       => $line['line_total'],
                     'landed_alloc'     => $line['landed_alloc'],
                     'landed_unit_cost' => $line['landed_unit_cost'],
+                    'mrp'               => CreatePurchase::price($data['items'][$i]['mrp'] ?? null),
+                    'retail_price'      => CreatePurchase::price($data['items'][$i]['retail_price'] ?? null),
+                    'wholesale_price'   => CreatePurchase::price($data['items'][$i]['wholesale_price'] ?? null),
+                    'dealer_price'      => CreatePurchase::price($data['items'][$i]['dealer_price'] ?? null),
                     'is_bulk'           => (bool) ($data['items'][$i]['is_bulk'] ?? false),
                     'sell_as'           => $data['items'][$i]['sell_as'] ?? null,
                     'units_per_set'     => $data['items'][$i]['units_per_set'] ?? null,

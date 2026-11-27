@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpenIcon, BuildingLibraryIcon, BanknotesIcon, PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { BuildingLibraryIcon, BanknotesIcon, PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import useCompanyFilter from '../../hooks/useCompanyFilter';
@@ -29,14 +29,6 @@ const BOOKS = {
     subtitle: 'All money through the bank — UPI, card, cheque and transfers. Bills and payments appear by themselves.',
     icon: BuildingLibraryIcon,
   },
-  journal: {
-    book: 'journal',
-    slug: 'journal',
-    title: 'Journal',
-    endpoint: '/accounting/journal',
-    subtitle: 'Every money entry in one list: the ones made by themselves (receipts, supplier payments, cash sales, commission paid) and your own corrections. The two sides of each entry are always equal.',
-    icon: BookOpenIcon,
-  },
 };
 
 const TYPE_LABEL = {
@@ -45,7 +37,6 @@ const TYPE_LABEL = {
   bank_receipt: 'Bank receipt',
   bank_payment: 'Bank payment',
   contra: 'Contra',
-  journal: 'Journal',
 };
 
 function monthStart() {
@@ -55,7 +46,6 @@ const today = todayISO;
 
 export function bookFromPath(pathname) {
   if (pathname.includes('/bank-book')) return BOOKS.bank;
-  if (pathname.includes('/journal')) return BOOKS.journal;
   return BOOKS.cash;
 }
 
@@ -70,11 +60,10 @@ export default function AccountingBookPage() {
   const [from, setFrom] = useState(monthStart);
   const [to, setTo] = useState(today);
   const [page, setPage] = useState(1);
-  const [show, setShow] = useState('all'); // Journal: every entry, or only hand-made corrections
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['accounting-book', meta.book, activeCompany?.id, filterCompanyId, from, to, page, show],
-    queryFn: () => api.get(meta.endpoint, { params: { ...companyParams, from, to, page, ...(meta.book === 'journal' ? { show } : {}) } }).then((r) => r.data),
+    queryKey: ['accounting-book', meta.book, activeCompany?.id, filterCompanyId, from, to, page],
+    queryFn: () => api.get(meta.endpoint, { params: { ...companyParams, from, to, page } }).then((r) => r.data),
     enabled: Boolean(activeCompany),
     placeholderData: keepPreviousData,
   });
@@ -100,8 +89,8 @@ export default function AccountingBookPage() {
     : error?.response?.data?.message ?? 'Could not load the book.';
 
   const Icon = meta.icon;
-  const inflowLabel = meta.book === 'journal' ? 'Debits' : 'Receipts';
-  const outflowLabel = meta.book === 'journal' ? 'Credits' : 'Payments';
+  const inflowLabel = 'Receipts';
+  const outflowLabel = 'Payments';
 
   const typeTone = useMemo(() => ({
     cash_receipt: 'active',
@@ -138,30 +127,15 @@ export default function AccountingBookPage() {
             <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />
             {!to && <span className="mt-1 block text-xs text-muted">Empty = up to today</span>}
           </Field>
-          {meta.book === 'journal' && (
-            <Field label="Show">
-              <Select value={show} onChange={(e) => { setShow(e.target.value); setPage(1); }} className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm">
-                <option value="all">All entries (automatic + corrections)</option>
-                <option value="corrections">Only corrections I made</option>
-              </Select>
-            </Field>
-          )}
         </div>
       </Card>
 
-      {meta.book !== 'journal' ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard label="Opening" value={formatCurrency(book?.opening ?? 0)} />
-          <StatCard label={inflowLabel} value={formatCurrency(book?.receipts ?? 0)} tone="good" />
-          <StatCard label={outflowLabel} value={formatCurrency(book?.payments ?? 0)} tone="warn" />
-          <StatCard label="Closing" value={formatCurrency(book?.closing ?? 0)} />
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard label="Debits" value={formatCurrency(book?.receipts ?? 0)} />
-          <StatCard label="Credits" value={formatCurrency(book?.payments ?? 0)} />
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Opening" value={formatCurrency(book?.opening ?? 0)} />
+        <StatCard label={inflowLabel} value={formatCurrency(book?.receipts ?? 0)} tone="good" />
+        <StatCard label={outflowLabel} value={formatCurrency(book?.payments ?? 0)} tone="warn" />
+        <StatCard label="Closing" value={formatCurrency(book?.closing ?? 0)} />
+      </div>
 
       <Card className="overflow-hidden">
         {isLoading ? <div className="flex justify-center py-16"><Spinner className="size-6" /></div>
@@ -182,7 +156,7 @@ export default function AccountingBookPage() {
                     <th className="microlabel px-4 py-2.5 font-semibold">Particulars</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Debit</th>
                     <th className="microlabel px-4 py-2.5 text-right font-semibold">Credit</th>
-                    {meta.book !== 'journal' ? <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th> : null}
+                    <th className="microlabel px-4 py-2.5 text-right font-semibold">Balance</th>
                     <th className="microlabel px-4 py-2.5 font-semibold"> </th>
                   </tr>
                 </thead>
@@ -197,19 +171,10 @@ export default function AccountingBookPage() {
                       </td>
                       <td className="max-w-[22rem] px-4 py-2.5 text-ink">
                         {row.narration || '—'}
-                        {meta.book === 'journal' && Array.isArray(row.entries) && row.entries.length > 0 && (
-                          <div className="mt-0.5 space-y-0.5 text-xs text-muted">
-                            {row.entries.map((e, i) => (
-                              <div key={i}>{Number(e.debit) > 0 ? `Dr ${e.account_name} ${formatCurrency(e.debit)}` : `Cr ${e.account_name} ${formatCurrency(e.credit)}`}</div>
-                            ))}
-                          </div>
-                        )}
                       </td>
                       <td className="tnum px-4 py-2.5 text-right">{row.debit ? formatCurrency(row.debit) : '—'}</td>
                       <td className="tnum px-4 py-2.5 text-right">{row.credit ? formatCurrency(row.credit) : '—'}</td>
-                      {meta.book !== 'journal' ? (
-                        <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(row.balance)}</td>
-                      ) : null}
+                      <td className="tnum px-4 py-2.5 text-right font-medium">{formatCurrency(row.balance)}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex justify-end gap-1">
                           {row.is_manual && can('accounts.update') ? (

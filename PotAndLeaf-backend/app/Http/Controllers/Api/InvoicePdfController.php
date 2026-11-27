@@ -18,7 +18,14 @@ class InvoicePdfController extends Controller
         $company = $request->attributes->get('company');
         abort_unless($request->user()->hasPermission('sales.view', $company->id), 403);
         $this->assertRecordCompany($request, (string) $sale->company_id);
-        abort_if($request->user()->seesOnlyOwn('sales', $sale->company_id) && (int) $sale->created_by !== (int) $request->user()->id, 403, 'You can only see the bills you made.');
+        abort_if($request->user()->seesOnlyOwn('sales', $sale->company_id) && (int) $sale->created_by !== (int) $request->user()->id && (int) $sale->entered_by !== (int) $request->user()->id, 403, 'You can only see the bills you made.');
+
+        // An invoice can be printed as soon as the bill is confirmed (paid or not). A quotation / proforma can always be printed.
+        abort_unless(
+            $sale->bill_kind === 'proforma' || $sale->status === 'confirmed',
+            422,
+            'The invoice can be printed once the bill is confirmed.',
+        );
 
         $sale->load([
             'items',
@@ -57,7 +64,7 @@ class InvoicePdfController extends Controller
         $this->assertRecordCompany($request, (string) $purchaseOrder->company_id);
 
         $purchaseOrder->load([
-            'items.product:id,sku,name',
+            'items.product:id,sku,name,images',
             'supplier',
             'company:id,name,legal_name,gst_number,address,phone,email,state,state_code,logo',
             'createdBy:id,name',

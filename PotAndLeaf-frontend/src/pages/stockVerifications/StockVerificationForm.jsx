@@ -1,3 +1,4 @@
+import { MediaImg } from '../../components/media';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -51,12 +52,25 @@ export default function StockVerificationForm() {
     queryFn: () => api.get('/stock-verifications/form-data', companyCfg).then((r) => r.data.data),
   });
 
-  const products = data?.products ?? [];
+  // With several branches / godowns a count is for ONE location: its own stock is the starting figure and
+  // the count is product by product (batches are not kept per location).
+  const locations = data?.locations ?? [];
+  const multiLocation = locations.length > 1;
+  const [locationId, setLocationId] = useState('');
+  useEffect(() => {
+    if (!multiLocation || locationId) return;
+    const pick = locations.find((l) => String(l.id) === String(data?.my_location_id)) ?? locations.find((l) => l.is_default) ?? locations[0];
+    setLocationId(String(pick.id));
+  }, [multiLocation, data?.my_location_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const baseProducts = data?.products ?? [];
+  const products = useMemo(() => (multiLocation && locationId
+    ? baseProducts.map((p) => ({ ...p, system_qty: Number(data?.location_stock?.[locationId]?.[p.id] ?? 0) }))
+    : baseProducts), [baseProducts, multiLocation, locationId, data]);
   // One row per batch (oldest first); a product with no batches is one row.
   // Stock outside every batch (rare) gets its own "Not in a batch" row.
   const rows = useMemo(() => {
     const byProduct = {};
-    (data?.batches ?? []).forEach((b) => { (byProduct[b.product_id] ??= []).push(b); });
+    if (!multiLocation) (data?.batches ?? []).forEach((b) => { (byProduct[b.product_id] ??= []).push(b); });
     const out = [];
     products.forEach((p) => {
       const bs = byProduct[p.id] ?? [];
@@ -71,7 +85,7 @@ export default function StockVerificationForm() {
       out.push(...list);
     });
     return out;
-  }, [products, data]);
+  }, [products, data, multiLocation]);
   const countFor = (r) => (counts[r.key] === undefined ? r.system_qty : counts[r.key]);
 
   const visible = useMemo(() => {
@@ -98,6 +112,7 @@ export default function StockVerificationForm() {
       await api.post('/stock-verifications', {
         count_date: countDate,
         location_note: locationNote || null,
+        location_id: multiLocation ? locationId : undefined,
         notes: notes || null,
         items,
       }, companyCfg);
@@ -182,6 +197,13 @@ export default function StockVerificationForm() {
           <Field label="Count date" required>
             <Input type="date" value={countDate} onChange={(e) => setCountDate(e.target.value)} />
           </Field>
+          {multiLocation && (
+            <Field label="Branch / godown counted" required>
+              <Select value={locationId} onChange={(e) => { setLocationId(e.target.value); setCounts({}); }} className="h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm focus:outline-none focus:ring-2 focus:ring-leaf/25">
+                {locations.map((l) => <option key={l.id} value={l.id}>{l.name} ({l.type === 'godown' ? 'Godown' : 'Branch'})</option>)}
+              </Select>
+            </Field>
+          )}
           <Field label="Location / area">
             <Input value={locationNote} onChange={(e) => setLocationNote(e.target.value)} placeholder="Godown, Shelf A…" />
           </Field>
@@ -225,7 +247,7 @@ export default function StockVerificationForm() {
                       <td className="px-4 py-2 align-top">
                         {showName ? (
                           <>
-                            <div className="font-medium">{r.product.name}</div>
+                            <div className="flex items-center gap-2.5 font-medium"><div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-leaf-soft"><MediaImg value={r.product.image} className="size-full object-cover" iconClassName="size-4 text-leaf/50" /></div><span>{r.product.name}</span></div>
                             <div className="tnum text-xs text-muted">
                               {r.product.sku}{r.product.unit ? ` · ${r.product.unit}` : ''}
                               {r.count > 1 ? ` · total ${r.product.system_qty} in ${r.count} rows` : ''}

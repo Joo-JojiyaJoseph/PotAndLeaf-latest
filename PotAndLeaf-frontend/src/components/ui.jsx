@@ -202,6 +202,7 @@ function optionsFromSelectChildren(children) {
       value: String(value),
       label: label || (value === '' ? 'Select…' : String(value)),
       disabled: Boolean(child.props.disabled),
+      ...('image' in child.props ? { image: child.props.image ?? null, hasImage: true } : {}),
     }];
   });
 }
@@ -268,15 +269,15 @@ export function Modal({ open, onClose, title, children, footer, dismissible = tr
         onClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-line/70 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-4 py-3.5 sm:px-5 sm:py-4">
           <h2 className="text-base font-semibold tracking-tight">{title}</h2>
           <button onClick={onClose} className="rounded-xl p-1.5 text-muted hover:bg-white/60 hover:text-ink" aria-label="Close">
             <XMarkIcon className="size-5" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-5">{children}</div>
         {footer && (
-          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-line px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-line px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:flex-wrap sm:justify-end sm:px-5 sm:py-4 [&>button]:w-full sm:[&>button]:w-auto">
             {footer}
           </div>
         )}

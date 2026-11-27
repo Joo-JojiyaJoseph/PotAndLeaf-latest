@@ -8,6 +8,7 @@ use App\Http\Resources\SalesReturnResource;
 use App\Models\Sale;
 use App\Models\SalesReturn;
 use App\Repositories\Contracts\SalesReturnRepositoryInterface;
+use App\Services\ReturnRefundService;
 use App\Services\SalesReturnService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\AssertsRecordCompany;
@@ -22,6 +23,7 @@ class SalesReturnController extends Controller
     public function __construct(
         private readonly SalesReturnService $returns,
         private readonly SalesReturnRepositoryInterface $returnRepo,
+        private readonly ReturnRefundService $refunds,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -39,7 +41,7 @@ class SalesReturnController extends Controller
         $this->allow($request, 'sales_returns.create');
         $request->validate(['sale_id' => ['required', 'uuid']]);
 
-        $sale = Sale::forCompany($company->id)->with(['items', 'customer:id,name'])->find($request->query('sale_id'));
+        $sale = Sale::forCompany($company->id)->with(['items.product:id,images', 'customer:id,name'])->find($request->query('sale_id'));
         abort_unless($sale && $sale->status === 'confirmed', 404);
 
         $returned = $this->returnRepo->returnedQtyBySaleItem($sale->id);
@@ -51,6 +53,7 @@ class SalesReturnController extends Controller
                 'sale_item_id' => $item->id,
                 'product_id'   => $item->product_id,
                 'product_name' => $item->product_name,
+                'image'        => \App\Support\Media\MediaUrl::resolveMany($item->product?->images ?? [])[0] ?? null,
                 'qty'          => (float) $item->qty,
                 'returned'     => $already,
                 'returnable'   => max(0, (float) $item->qty - $already),
@@ -85,7 +88,7 @@ class SalesReturnController extends Controller
         $this->assertRecordCompany($request, $salesReturn);
 
         return $this->ok(new SalesReturnResource(
-            $salesReturn->load(['customer', 'sale:id,sale_no', 'items'])
+            $salesReturn->load(['customer', 'sale:id,sale_no', 'items', 'refunds'])
         ));
     }
 
@@ -97,6 +100,26 @@ class SalesReturnController extends Controller
         return $this->ok(
             new SalesReturnResource($this->returns->confirm($salesReturn, $request->user()->id)),
             'Return confirmed — stock restored and credit note applied.'
+        );
+    }
+
+    /** Mark money that was kept as the customer's advance as really given back (it then shows in the Cash / Bank Book). */
+    public function refund(Request $request, SalesReturn $salesReturn): JsonResponse
+    {
+        $this->allow($request, 'sales_returns.confirm');
+        $this->assertRecordCompany($request, $salesReturn, writable: true);
+        $data = $request->validate([
+            'amount'      => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
+            'mode'        => ['required', 'in:cash,upi,card,bank,cheque'],
+            'refund_date' => ['nullable', 'date', \App\Support\Validation\BusinessRules::notFuture('Refund date')],
+            'reference'   => ['nullable', 'string', 'max:100'],
+            'notes'       => ['nullable', 'string', 'max:500'],
+        ]);
+        $this->refunds->refundSalesReturn($salesReturn, $data, $request->user()->id);
+
+        return $this->ok(
+            new SalesReturnResource($salesReturn->refresh()->load(['customer', 'sale:id,sale_no', 'items', 'refunds'])),
+            'Refund recorded. The money is in the accounts and the customer advance is reduced.'
         );
     }
 

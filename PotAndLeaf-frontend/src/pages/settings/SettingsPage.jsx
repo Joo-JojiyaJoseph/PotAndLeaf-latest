@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui';
+import { Button, Card, Field, Input, Spinner, Select, Textarea } from '../../components/ui';
 import { useToast } from '../../lib/toast';
 import { FormCompanyField } from '../../components/FormCompanyField';
 import { formatDate } from '../../lib/format';
@@ -53,9 +53,17 @@ const GROUPS = [
     ],
   },
   {
+    title: 'Rental estimate & terms',
+    keys: [
+      { key: 'rental_estimate_valid_days', label: 'Estimate valid for (days)', type: 'number', step: '1', help: "How long an estimate given to a customer stays valid. 7 = one week. It is printed on the estimate." },
+      { key: 'rental_terms', label: 'Terms & conditions on the rental estimate', type: 'textarea', help: "One term on each line. They are printed under the plants on the estimate you give a customer. Leave it empty to use the standard terms." },
+    ],
+  },
+  {
     title: 'Rental automation',
     keys: [
       { key: 'rental_auto_bill', label: 'Auto-generate invoices on billing cycle', type: 'toggle', help: "On: each morning a rent bill is made by itself for every rental whose billing cycle has ended (if that rental has “Generate invoices automatically” ticked). Off: make each rent bill by hand." },
+      { key: 'sale_care_whatsapp', label: 'Send care guide after a sale', type: 'toggle', help: "On: when a sale is confirmed, the customer gets a WhatsApp listing what they bought and how to look after it (from the category care guides). Needs the customer's phone number." },
       { key: 'rental_whatsapp_on_bill', label: 'WhatsApp when auto-billing', type: 'toggle', help: "On: when a rent bill is made by itself, the customer gets it on WhatsApp." },
       { key: 'sms_enabled', label: 'SMS rental reminders & overdue alerts', type: 'toggle', help: "On: rental reminders and overdue alerts also go by SMS (an SMS provider must be set up on the server)." },
       { key: 'rental_payment_due_days', label: 'Payment due days after period end', type: 'number', step: '1', help: "Days the customer gets to pay a rent bill after the period ends. 7 = due one week later." },
@@ -256,7 +264,7 @@ export default function SettingsPage() {
             <h2 className="text-sm font-semibold">{group.title}</h2>
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
               {group.keys.map((field) => (
-                <Field key={field.key} label={field.label}>
+                <Field key={field.key} label={field.label} className={field.type === 'textarea' ? 'sm:col-span-2' : undefined}>
                   {field.type === 'toggle' ? (
                     <Select
                       value={form[field.key] === '1' || form[field.key] === true ? '1' : '0'}
@@ -267,6 +275,13 @@ export default function SettingsPage() {
                       <option value="0">Off</option>
                       <option value="1">On</option>
                     </Select>
+                  ) : field.type === 'textarea' ? (
+                    <Textarea
+                      rows={9}
+                      disabled={!canEdit}
+                      value={form[field.key] ?? ''}
+                      onChange={(e) => setForm((f) => ({ ...f, [field.key]: e.target.value }))}
+                    />
                   ) : field.type === 'text' ? (
                     <Input
                       type="text"

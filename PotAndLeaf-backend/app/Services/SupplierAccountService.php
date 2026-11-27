@@ -63,6 +63,11 @@ class SupplierAccountService
             $moves[] = $this->move($r->return_date, $r->created_at, 'return', 'Goods returned — credit beyond what you owed', $r->return_no, round((float) $r->advance_credit, 2), 0);
         }
 
+        // Advance that was really received back as money (marked on the return) leaves the advance.
+        foreach (\App\Models\SupplierRefund::query()->where('supplier_id', $supplier->id)->where('from_advance', true)->with('purchaseReturn:id,return_no')->get() as $f) {
+            $moves[] = $this->move($f->refund_date, $f->created_at, 'refund', 'Advance received back as money (return '.($f->purchaseReturn?->return_no ?? '—').')', $f->refund_no, 0, round((float) $f->amount, 2));
+        }
+
         usort($moves, fn ($a, $b) => [$a['date'], $a['_at']] <=> [$b['date'], $b['_at']]);
 
         // Advance that cannot be traced to a record (e.g. from returns made before

@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\ProductBatch;
 use App\Models\StockVerification;
 use App\Repositories\Contracts\StockVerificationRepositoryInterface;
+use App\Services\LocationStockService;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -15,7 +16,10 @@ use Illuminate\Support\Facades\DB;
  */
 class CreateStockVerification
 {
-    public function __construct(private readonly StockVerificationRepositoryInterface $verifications) {}
+    public function __construct(
+        private readonly StockVerificationRepositoryInterface $verifications,
+        private readonly LocationStockService $locationStock,
+    ) {}
 
     /** @param array<string,mixed> $data */
     public function handle(int|string $companyId, array $data, ?int $userId = null): StockVerification
@@ -32,6 +36,8 @@ class CreateStockVerification
                 'count_no'      => $this->verifications->nextCountNo($companyId),
                 'count_date'    => $data['count_date'],
                 'location_note' => $data['location_note'] ?? null,
+                'location_id'   => $data['location_id'] ?? null,
+                'is_quick'      => (bool) ($data['is_quick'] ?? false),
                 'notes'         => $data['notes'] ?? null,
                 'status'        => 'draft',
             ]);
@@ -55,6 +61,10 @@ class CreateStockVerification
                 } elseif ($batchedProducts->has($product->id)) {
                     // "Not in a batch" line beside batch lines: stock outside every batch.
                     $system = max(0, round((float) $product->current_stock - (float) ProductBatch::where('product_id', $product->id)->sum('remaining_qty'), 3));
+                    $cost = (float) $product->cost_price;
+                } elseif (! empty($data['location_id']) && $this->locationStock->isMultiLocation($companyId)) {
+                    // A count of one branch / godown starts from what THAT location holds.
+                    $system = $this->locationStock->available($data['location_id'], $product->id);
                     $cost = (float) $product->cost_price;
                 } else {
                     $system = (float) $product->current_stock;

@@ -100,7 +100,7 @@ export default function AdvanceOrderForm() {
                   <td className="px-3 py-2">
                     <Select value={line.product_id} onChange={(e) => onPickProduct(i, e.target.value)} className={selectCls}>
                       <option value="">Select…</option>
-                      {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      {products.map((p) => <option key={p.id} value={p.id} image={p.image}>{p.name}</option>)}
                     </Select>
                   </td>
                   <td className="px-3 py-2"><input type="number" step="0.001" className={numInput} value={line.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></td>

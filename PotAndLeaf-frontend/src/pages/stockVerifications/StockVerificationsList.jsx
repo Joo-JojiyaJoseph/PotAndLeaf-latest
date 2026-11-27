@@ -12,10 +12,16 @@ import { ListToolbar, useListFilters } from '../../components/ListToolbar';
 import { exportList } from '../../lib/exportList';
 import Pagination from '../../components/Pagination';
 
+// A submitted count changes the stock at once ("Needs check"); head office / admin then mark it verified.
+const STATUS_LABEL = { applied: 'Needs check', verified: 'Verified', submitted: 'Submitted (old)' };
+const STATUS_TONE = { applied: 'warning', verified: 'active' };
+
 const STATUS_TABS = [
   { value: '', label: 'All' },
   { value: 'draft', label: 'Draft' },
-  { value: 'submitted', label: 'Submitted' },
+  { value: 'applied', label: 'Needs check' },
+  { value: 'verified', label: 'Verified' },
+  { value: 'submitted', label: 'Submitted (old)' },
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
 ];
@@ -55,6 +61,10 @@ export default function StockVerificationsList() {
     mutationFn: (v) => api.post(`/stock-verifications/${v.id}/submit`, {}, withCompany(resolveRecordCompany(v, recordCtx))),
     onSuccess: invalidate,
   });
+  const verifyM = useMutation({
+    mutationFn: (v) => api.post(`/stock-verifications/${v.id}/verify`, {}, withCompany(resolveRecordCompany(v, recordCtx))),
+    onSuccess: invalidate,
+  });
   const approveM = useMutation({
     mutationFn: (v) => api.post(`/stock-verifications/${v.id}/approve`, {}, withCompany(resolveRecordCompany(v, recordCtx))),
     onSuccess: invalidate,
@@ -79,7 +89,7 @@ export default function StockVerificationsList() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Stock verification</h1>
-          <p className="text-sm text-muted">Count what is really on the shelf. After approval, the system stock is set to your count{companyHint}.</p>
+          <p className="text-sm text-muted">Count what is really on the shelf. When you submit, the system stock is set to your count at once and head office / admin check it afterwards{companyHint}.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Filter />
@@ -148,16 +158,21 @@ export default function StockVerificationsList() {
                   <tr key={v.id} className="border-b border-line/60 last:border-0 hover:bg-sidebar/60">
                     <td className="tnum px-4 py-2.5 text-xs"><button onClick={() => navigate(recordDetailPath('/stock-verifications', v, recordCtx))} className="font-medium text-ink hover:text-leaf">{v.count_no}</button></td>
                     <td className="px-4 py-2.5 text-muted">{formatDate(v.count_date)}</td>
-                    <td className="px-4 py-2.5 text-muted">{v.location_note || '—'}</td>
+                    <td className="px-4 py-2.5 text-muted">{v.location?.name || v.location_note || '—'}{v.is_quick && <span className="ml-1.5 text-[11px] text-amber">· quick fix</span>}</td>
                     <td className="tnum px-4 py-2.5 text-right text-muted">{v.items_count ?? '—'}</td>
                     <td className="px-4 py-2.5">
-                      <Badge tone={v.status}>{v.status}</Badge>
+                      <Badge tone={STATUS_TONE[v.status] ?? v.status}>{STATUS_LABEL[v.status] ?? v.status}</Badge>
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center justify-end gap-2">
                         {v.can?.submit && (
                           <Button variant="outline" size="sm" onClick={() => submitM.mutate(v)} disabled={submitM.isPending}>
-                            <PaperAirplaneIcon className="size-4" /> Submit
+                            <PaperAirplaneIcon className="size-4" /> Update stock
+                          </Button>
+                        )}
+                        {v.can?.verify && (
+                          <Button size="sm" onClick={() => verifyM.mutate(v)} disabled={verifyM.isPending}>
+                            <CheckCircleIcon className="size-4" /> Verify
                           </Button>
                         )}
                         {v.can?.reject && (

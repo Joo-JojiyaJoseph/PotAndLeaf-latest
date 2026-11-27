@@ -15,6 +15,7 @@ class StockVerification extends Model
     protected $fillable = [
         'company_id', 'count_no', 'count_date', 'location_note', 'status',
         'notes', 'rejection_reason', 'submitted_at', 'approved_at', 'approved_by',
+        'location_id', 'applied_at', 'applied_by', 'verified_at', 'verified_by', 'is_quick',
     ];
 
     protected function casts(): array
@@ -23,6 +24,9 @@ class StockVerification extends Model
             'count_date'   => 'date',
             'submitted_at' => 'datetime',
             'approved_at'  => 'datetime',
+            'applied_at'   => 'datetime',
+            'verified_at'  => 'datetime',
+            'is_quick'     => 'boolean',
         ];
     }
 
@@ -39,6 +43,17 @@ class StockVerification extends Model
     public function isDraft(): bool
     {
         return $this->status === 'draft';
+    }
+
+    public function location(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Location::class);
+    }
+
+    /** Stock already changed; waiting for head office / admin to check it. */
+    public function isApplied(): bool
+    {
+        return $this->status === 'applied';
     }
 
     public function isSubmitted(): bool

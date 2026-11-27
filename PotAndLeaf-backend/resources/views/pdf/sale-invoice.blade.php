@@ -111,6 +111,9 @@
   @if((float)$sale->round_off != 0)
     <tr><td>Round off</td><td class="r">{{ $money($sale->round_off) }}</td></tr>
   @endif
+  @if((float)$sale->final_discount > 0)
+    <tr><td>Discount on final amount</td><td class="r">−{{ $money($sale->final_discount) }}</td></tr>
+  @endif
   @if((float)$sale->loyalty_discount > 0)
     <tr><td>Loyalty discount</td><td class="r">−{{ $money($sale->loyalty_discount) }}</td></tr>
   @endif

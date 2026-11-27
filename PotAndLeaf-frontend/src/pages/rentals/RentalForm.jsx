@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, PlusIcon, PrinterIcon, TrashIcon } from '@heroicons/react/24/outline';
 import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { defaultCreateCompanyId } from '../../lib/recordCompany';
@@ -9,6 +9,7 @@ import { Button, Card, Field, Input, Spinner, Select } from '../../components/ui
 import { useToast } from '../../lib/toast';
 import { apiMessage } from '../../lib/formErrors';
 import { formatCurrency, todayISO as today } from '../../lib/format';
+import { printRentalEstimate } from '../../lib/invoicePrint';
 const emptyLine = () => ({ product_id: '', qty: '1', rate_per_cycle: '' });
 const CYCLE_DAYS = { daily: 1, weekly: 7, monthly: 30 };
 const cycleRate = (product, cycle) => {
@@ -48,6 +49,30 @@ export default function RentalForm() {
   const customers = data?.customers ?? [];
   const products = data?.products ?? [];
 
+  // Print an estimate for the customer from what is on the screen (nothing needs to be saved first).
+  function printEstimate() {
+    const cust = customers.find((c) => String(c.id) === String(header.customer_id));
+    const items = lines.filter((l) => l.product_id).map((l) => ({
+      product_name: products.find((p) => p.id === l.product_id)?.name,
+      qty: Number(l.qty) || 0,
+      rate_per_cycle: Number(l.rate_per_cycle) || 0,
+      retail_price: products.find((p) => p.id === l.product_id)?.retail_price,
+    }));
+    if (!items.length) { toast.error('Add at least one plant to print an estimate.'); return; }
+    printRentalEstimate({
+      company: data?.company,
+      customer_name: cust?.name,
+      customer_phone: cust?.phone,
+      start_date: header.start_date,
+      expected_end_date: header.expected_end_date || null,
+      billing_cycle: header.billing_cycle,
+      deposit: Number(header.deposit) > 0 ? Number(header.deposit) : null,
+      items,
+      terms: data?.terms,
+      valid_days: data?.estimate_valid_days,
+    });
+  }
+
   const err = (k) => errors[k]?.[0];
   const setLine = (i, patch) => setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   const stockFor = (productId) => Number(products.find((p) => p.id === productId)?.current_stock) || 0;
@@ -71,7 +96,7 @@ export default function RentalForm() {
         start_date: header.start_date, expected_end_date: header.expected_end_date || null,
         billing_cycle: header.billing_cycle,
         auto_bill: header.auto_bill,
-        deposit: Number(header.deposit) || 0, notes: header.notes || null,
+        deposit: Number(header.deposit) > 0 ? Number(header.deposit) : null, notes: header.notes || null,
         items: lines.filter((l) => l.product_id).map((l) => ({ product_id: l.product_id, qty: Number(l.qty) || 0, rate_per_cycle: Number(l.rate_per_cycle) || 0 })),
       }, companyCfg);
       const cid = res.data.data.company_id ?? targetCompanyId;
@@ -148,7 +173,7 @@ export default function RentalForm() {
           </Field>
           <Field label="Start date" required error={err('start_date')}><Input type="date" value={header.start_date} onChange={(e) => setHeader((h) => ({ ...h, start_date: e.target.value }))} /></Field>
           <Field label="Expected end (optional)" error={err('expected_end_date')}><Input type="date" value={header.expected_end_date} onChange={(e) => setHeader((h) => ({ ...h, expected_end_date: e.target.value }))} /></Field>
-          <Field label="Security deposit (₹)" error={err('deposit')}><Input type="number" step="0.01" value={header.deposit} onChange={(e) => setHeader((h) => ({ ...h, deposit: e.target.value }))} /></Field>
+          <Field label="Security deposit (₹, optional)" error={err('deposit')}><Input type="number" step="0.01" value={header.deposit} onChange={(e) => setHeader((h) => ({ ...h, deposit: e.target.value }))} /></Field>
           <Field label="Auto-bill on cycle">
             <label className="flex h-10 items-center gap-2 text-sm">
               <input type="checkbox" checked={header.auto_bill} onChange={(e) => setHeader((h) => ({ ...h, auto_bill: e.target.checked }))} className="size-4 rounded border-line" />
@@ -185,7 +210,7 @@ export default function RentalForm() {
                     }} className={selectCls}>
                       <option value="">Select…</option>
                       {products.map((p) => (
-                        <option key={p.id} value={p.id}>
+                        <option key={p.id} value={p.id} image={p.image}>
                           {p.name}{p.rental_daily_rate != null ? ` · ₹${p.rental_daily_rate}/day` : ''} · {p.current_stock ?? 0} in stock
                         </option>
                       ))}
@@ -235,6 +260,7 @@ export default function RentalForm() {
 
       <div className="flex items-center justify-end gap-3">
         <Input value={header.notes} onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))} placeholder="Notes (optional)" className="max-w-xs" />
+        <Button variant="outline" onClick={printEstimate} disabled={!companyReady}><PrinterIcon className="size-4" /> Print estimate</Button>
         <Button onClick={save} disabled={saving || !companyReady}>{saving ? <Spinner className="border-white/40 border-t-white" /> : 'Save draft'}</Button>
       </div>
     </div>

@@ -18,7 +18,7 @@ class StoreAccountingVoucherRequest extends FormRequest
 
         return [
             'voucher_date'           => ['required', 'date'],
-            'voucher_type'           => ['required', Rule::in(['cash_receipt', 'cash_payment', 'bank_receipt', 'bank_payment', 'contra', 'journal'])],
+            'voucher_type'           => ['required', Rule::in(['cash_receipt', 'cash_payment', 'bank_receipt', 'bank_payment', 'contra'])],
             'narration'              => ['nullable', 'string', 'max:1000'],
             'amount'                 => ['nullable', 'numeric', 'gt:0'],
             'counterpart_account_id' => ['nullable', 'uuid', Rule::exists('ledger_accounts', 'id')->where('company_id', $companyId)],

@@ -44,6 +44,9 @@ class SettingsController extends Controller
             'website_integration'        => ['sometimes', 'in:0,1,true,false'],
             'whatsapp_enabled'           => ['sometimes', 'in:0,1,true,false'],
             'rental_auto_bill'           => ['sometimes', 'in:0,1,true,false'],
+            'sale_care_whatsapp'         => ['sometimes', 'in:0,1,true,false'],
+            'rental_estimate_valid_days' => ['sometimes', 'integer', 'min:1', 'max:90'],
+            'rental_terms'               => ['sometimes', 'nullable', 'string', 'max:5000'],
             'rental_whatsapp_on_bill'    => ['sometimes', 'in:0,1,true,false'],
             'rental_payment_due_days'    => ['sometimes', 'integer', 'min:0', 'max:90'],
             'rental_overdue_alert_days'  => ['sometimes', 'integer', 'min:0', 'max:90'],
@@ -64,7 +67,7 @@ class SettingsController extends Controller
             'daily_expense'              => ['sometimes', 'numeric', 'min:0'],
         ]);
 
-        foreach (['website_integration', 'whatsapp_enabled', 'sms_enabled', 'rental_auto_bill', 'rental_whatsapp_on_bill', 'sale_cancel_requires_approval', 'eod_management_enabled', 'landed_cost_payable_to_supplier'] as $flag) {
+        foreach (['website_integration', 'whatsapp_enabled', 'sms_enabled', 'rental_auto_bill', 'sale_care_whatsapp', 'rental_whatsapp_on_bill', 'sale_cancel_requires_approval', 'eod_management_enabled', 'landed_cost_payable_to_supplier'] as $flag) {
             if (isset($data[$flag])) {
                 $data[$flag] = in_array($data[$flag], [true, 'true', '1', 1], true) ? '1' : '0';
             }

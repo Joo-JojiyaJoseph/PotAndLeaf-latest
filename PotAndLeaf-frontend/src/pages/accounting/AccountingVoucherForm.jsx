@@ -16,7 +16,6 @@ const emptyLine = () => ({ ledger_account_id: '', debit: '', credit: '', narrati
 const TITLES = {
   cash: { new: 'Add cash entry', edit: 'Edit cash entry' },
   bank: { new: 'Add bank entry', edit: 'Edit bank entry' },
-  journal: { new: 'Add journal entry', edit: 'Edit journal entry' },
 };
 
 export default function AccountingVoucherForm() {
@@ -31,7 +30,7 @@ export default function AccountingVoucherForm() {
   const { formCompanyId, setFormCompanyId, targetCompanyId, companyRequest, companyReady } = useFormCompany(presetCompanyId);
   const [form, setForm] = useState({
     voucher_date: today(),
-    voucher_type: meta.book === 'journal' ? 'journal' : meta.book === 'bank' ? 'bank_receipt' : 'cash_receipt',
+    voucher_type: meta.book === 'bank' ? 'bank_receipt' : 'cash_receipt',
     amount: '',
     counterpart_account_id: '',
     direction: 'cash_to_bank',

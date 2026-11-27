@@ -6,6 +6,7 @@ use App\Actions\StockVerifications\ApproveStockVerification;
 use App\Actions\StockVerifications\CreateStockVerification;
 use App\Actions\StockVerifications\RejectStockVerification;
 use App\Actions\StockVerifications\SubmitStockVerification;
+use App\Actions\StockVerifications\VerifyStockVerification;
 use App\Models\StockVerification;
 use App\Repositories\Contracts\StockVerificationRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -18,6 +19,7 @@ class StockVerificationService
         private readonly SubmitStockVerification $submit,
         private readonly ApproveStockVerification $approve,
         private readonly RejectStockVerification $reject,
+        private readonly VerifyStockVerification $verify,
     ) {}
 
     /** @param array<string,mixed> $filters */
@@ -40,6 +42,11 @@ class StockVerificationService
     public function submit(StockVerification $v, ?int $userId = null): StockVerification
     {
         return $this->submit->handle($v, $userId);
+    }
+
+    public function verify(StockVerification $v, ?int $userId = null, ?string $note = null): StockVerification
+    {
+        return $this->verify->handle($v, $userId, $note);
     }
 
     public function approve(StockVerification $v, ?int $userId = null): StockVerification

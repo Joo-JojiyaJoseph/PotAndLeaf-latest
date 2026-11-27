@@ -83,7 +83,7 @@ export default function PurchasesList() {
       </div>
 
       <ListToolbar lf={lf} placeholder={'Search bill no., supplier invoice or supplier…'} withSearch={true}
-        onExport={() => exportList({ url: '/purchases', params: { ...companyParams, status, ...lf.filters }, filename: 'purchases', columns: [['Purchase no', (r) => r.purchase_no], ['Supplier invoice', (r) => r.invoice_no], ['Date', (r) => r.purchase_date], ['Supplier', (r) => r.supplier?.name], ['Before GST', (r) => r.subtotal], ['GST', (r) => r.tax_total], ['Total', (r) => r.grand_total], ['Paid', (r) => r.amount_paid], ['Balance', (r) => r.balance], ['Status', (r) => r.status]] })} />
+        onExport={() => exportList({ url: '/purchases', params: { ...companyParams, status, ...lf.filters }, filename: 'purchases', columns: [['Purchase no', (r) => r.purchase_no], ['Supplier invoice', (r) => r.invoice_no], ['Agent code', (r) => r.agent_code], ['Date', (r) => r.purchase_date], ['Supplier', (r) => r.supplier?.name], ['Before GST', (r) => r.subtotal], ['GST', (r) => r.tax_total], ['Total', (r) => r.grand_total], ['Paid', (r) => r.amount_paid], ['Balance', (r) => r.balance], ['Status', (r) => r.status]] })} />
 
       <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line">
         {STATUS_TABS.map((tab) => (

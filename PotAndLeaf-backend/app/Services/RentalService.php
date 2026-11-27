@@ -58,7 +58,7 @@ class RentalService
                 'expected_end_date' => $data['expected_end_date'] ?? null,
                 'billing_cycle'     => $data['billing_cycle'] ?? 'monthly',
                 'auto_bill'         => array_key_exists('auto_bill', $data) ? (bool) $data['auto_bill'] : true,
-                'deposit'           => $data['deposit'] ?? 0,
+                'deposit'           => (isset($data['deposit']) && $data['deposit'] !== '' && (float) $data['deposit'] > 0) ? round((float) $data['deposit'], 2) : null,
                 'status'            => 'draft',
                 'notes'             => $data['notes'] ?? null,
             ]);
@@ -95,16 +95,7 @@ class RentalService
         return DB::transaction(function () use ($rental, $userId) {
             $rental->loadMissing('items');
 
-            // Security deposit defaults to the full value of the rented goods.
-            if ((float) $rental->deposit <= 0) {
-                $prices = Product::forCompany($rental->company_id)
-                    ->whereIn('id', $rental->items->pluck('product_id')->filter())
-                    ->pluck('retail_price', 'id');
-                $deposit = $rental->items->sum(fn ($i) => (float) $i->qty * (float) ($prices[$i->product_id] ?? 0));
-                if ($deposit > 0) {
-                    $rental->deposit = round($deposit, 2);
-                }
-            }
+            // The security deposit is optional: it stays empty (NULL) unless one was agreed.
 
             foreach ($rental->items as $item) {
                 if (! $item->product_id) {
@@ -497,14 +488,30 @@ class RentalService
             ->exists();
     }
 
-    public function markInvoicePaid(RentalInvoice $invoice): RentalInvoice
+    /**
+     * Mark a rent bill paid. A discount given on the final amount ($discount) clears the bill like money would;
+     * it is entered in the accounts as Dr Discount Allowed / Cr Accounts Receivable.
+     */
+    public function markInvoicePaid(RentalInvoice $invoice, float $discount = 0.0): RentalInvoice
     {
+        $discount = round(max(0.0, $discount), 2);
+        if ($discount > (float) $invoice->amount + 0.005) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['discount_amount' => 'The discount cannot be more than the bill amount.']);
+        }
+
         if ($invoice->status !== 'paid') {
-            DB::transaction(function () use ($invoice) {
-                $invoice->update(['status' => 'paid']);
+            DB::transaction(function () use ($invoice, $discount) {
+                $invoice->update(['status' => 'paid', 'discount_amount' => $discount]);
                 $rental = $invoice->rental()->first();
                 if ($rental) {
                     $this->adjustCustomerOutstanding($invoice->company_id, $rental->customer_id, -(float) $invoice->amount);
+                }
+                if ($discount > 0.004) {
+                    app(AccountingEngine::class)->postFromSource(
+                        $invoice->company_id, 'rental_invoice_discount', $invoice->id, 'journal', now()->toDateString(),
+                        $discount, 'discount_allowed', 'ar',
+                        "Discount allowed on rent bill {$invoice->invoice_no}",
+                    );
                 }
             });
         }

@@ -9,11 +9,11 @@ class Location extends Model
 {
     use HasUuids;
 
-    protected $fillable = ['company_id', 'name', 'code', 'type', 'is_default', 'is_active'];
+    protected $fillable = ['company_id', 'name', 'code', 'type', 'is_default', 'is_active', 'is_landscape'];
 
     protected function casts(): array
     {
-        return ['is_default' => 'boolean', 'is_active' => 'boolean'];
+        return ['is_default' => 'boolean', 'is_active' => 'boolean', 'is_landscape' => 'boolean'];
     }
 
     public function scopeForCompany($query, int|string $companyId)

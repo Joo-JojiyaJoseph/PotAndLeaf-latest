@@ -2,9 +2,12 @@
 
 namespace App\Models\Concerns;
 
+use App\Models\Location;
 use App\Models\Role;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Company-scoped RBAC for the User model. Roles are global; role_user.company_id
@@ -15,6 +18,17 @@ trait HasRolesAndPermissions
 {
     /** Per-request memo of permission names keyed by company id. */
     protected array $permissionCache = [];
+
+    /** Per-request memo of the user's location id per company. */
+    protected array $locationIdCache = [];
+
+    /** Per-request memo: is the user based at a godown, per company. */
+    protected array $godownCache = [];
+
+    /** A godown user can only work with stock transfers. */
+    public const GODOWN_MODULES = ['transfers'];
+
+    public const GODOWN_EXTRA = [];
 
     public function roles(): BelongsToMany
     {
@@ -81,7 +95,7 @@ trait HasRolesAndPermissions
     /** Distinct permission names granted to this user within a company. */
     public function permissionNamesForCompany(int|string $companyId): Collection
     {
-        return $this->permissionCache[$companyId] ??= Role::query()
+        return $this->permissionCache[$companyId] ??= $this->limitForLocation($companyId, Role::query()
             ->whereHas('users', fn ($q) => $q
                 ->whereKey($this->getKey())
                 ->where('role_user.company_id', $companyId))
@@ -91,7 +105,66 @@ trait HasRolesAndPermissions
             // Extra permissions given to this user alone (approved access requests).
             ->merge($this->extraPermissionNames($companyId))
             ->unique()
-            ->values();
+            ->values());
+    }
+
+    /** The branch or godown this user works at in a company, set on the user (company membership). */
+    public function locationIdFor(int|string $companyId): ?string
+    {
+        if (array_key_exists($companyId, $this->locationIdCache)) {
+            return $this->locationIdCache[$companyId];
+        }
+
+        // Before "php artisan migrate" adds the column, nobody has a location.
+        $id = Schema::hasColumn('company_user', 'location_id')
+            ? DB::table('company_user')->where('user_id', $this->getKey())->where('company_id', $companyId)->value('location_id')
+            : null;
+
+        return $this->locationIdCache[$companyId] = $id ? (string) $id : null;
+    }
+
+    /** True when the user is based at a godown in this company: stock transfers only. */
+    public function isGodownUser(int|string $companyId): bool
+    {
+        if ($this->is_super_admin) {
+            return false;
+        }
+        if (array_key_exists($companyId, $this->godownCache)) {
+            return $this->godownCache[$companyId];
+        }
+        $location = $this->locationIdFor($companyId);
+
+        return $this->godownCache[$companyId] = $location !== null
+            && Location::whereKey($location)->where('type', 'godown')->exists();
+    }
+
+    /**
+     * Branch users keep everything their role allows. A godown user is cut down to stock
+     * transfers, whatever their role says.
+     */
+    protected function limitForLocation(int|string $companyId, Collection $names): Collection
+    {
+        if (! $this->isGodownUser($companyId)) {
+            return $names;
+        }
+
+        $all = $names->contains('*');
+        $kept = collect();
+        foreach (self::GODOWN_MODULES as $module) {
+            if ($all || $names->contains("{$module}.*")) {
+                $kept->push("{$module}.*");
+            } else {
+                $kept = $kept->merge($names->filter(fn ($n) => str_starts_with($n, "{$module}.")));
+            }
+        }
+        foreach (self::GODOWN_EXTRA as $permission) {
+            $module = explode('.', $permission)[0];
+            if ($all || $names->contains($permission) || $names->contains("{$module}.*")) {
+                $kept->push($permission);
+            }
+        }
+
+        return $kept->unique()->values();
     }
 
     /** Permissions given to this one user in a company, on top of their role. */
@@ -114,5 +187,7 @@ trait HasRolesAndPermissions
     public function forgetPermissionCache(): void
     {
         $this->permissionCache = [];
+        $this->locationIdCache = [];
+        $this->godownCache = [];
     }
 }

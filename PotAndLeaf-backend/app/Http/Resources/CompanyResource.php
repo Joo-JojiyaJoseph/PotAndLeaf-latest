@@ -45,6 +45,7 @@ class CompanyResource extends JsonResource
             'is_active'    => (bool) $this->is_active,
             'is_protected' => ProtectedRecords::isProtectedCompany($this->resource),
             'users_count'  => $this->when($this->users_count !== null, $this->users_count),
+            'locations'    => $this->whenLoaded('locations', fn () => $this->locations->map(fn ($l) => ['id' => $l->id, 'code' => $l->code, 'name' => $l->name, 'type' => $l->type, 'is_default' => (bool) $l->is_default, 'is_active' => (bool) $l->is_active, 'is_landscape' => (bool) $l->is_landscape])->values()),
             'created_at'   => $this->created_at?->toIso8601String(),
             'updated_at'   => $this->updated_at?->toIso8601String(),
             'statistics'   => $this->when($this->statistics !== null, $this->statistics),

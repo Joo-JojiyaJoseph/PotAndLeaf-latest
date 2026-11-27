@@ -56,8 +56,9 @@ class BackorderService
 
         return DB::transaction(function () use ($companyId, $data, $userId) {
             $resolved = $this->shortage->allocate($companyId, $data['items'], $userId, [
-                'sale_no' => $data['sale_no'] ?? null,
-                'notes'   => $data['notes'] ?? null,
+                'sale_no'     => $data['sale_no'] ?? null,
+                'notes'       => $data['notes'] ?? null,
+                'location_id' => $data['location_id'] ?? null,
             ]);
 
             if ($resolved['transfers'] === [] && $resolved['backorderItems'] === []) {
@@ -157,7 +158,10 @@ class BackorderService
             if (! $product) {
                 continue;
             }
-            $available = (float) $product->current_stock;
+            // What the bill's own branch holds (the whole company stock when the company has one location).
+            $locationStock = app(LocationStockService::class);
+            $locationId = $sale->location_id ?: $locationStock->defaultLocation($sale->company_id)?->id;
+            $available = $locationId ? $locationStock->available($locationId, $item->product_id) : (float) $product->current_stock;
             $needed = (float) $item->qty;
             $short = $needed - $available;
             if ($short <= 0) {

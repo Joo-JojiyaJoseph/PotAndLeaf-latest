@@ -30,7 +30,7 @@ class CommissionEngine
             return 0.0;
         }
 
-        return max(0.0, round((float) $sale->subtotal - (float) $sale->loyalty_discount, 2));
+        return max(0.0, round((float) $sale->subtotal - (float) $sale->loyalty_discount - (float) $sale->final_discount, 2));
     }
 
     /** Accrue salesman tier, daily target, and promotion bonuses on confirmed sale. */

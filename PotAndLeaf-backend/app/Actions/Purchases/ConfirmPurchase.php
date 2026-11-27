@@ -9,6 +9,7 @@ use App\Models\Supplier;
 use App\Services\ActivityLogService;
 use App\Services\InventoryService;
 use App\Services\SellAsFulfillmentService;
+use App\Services\LocationStockService;
 use App\Services\SettingsService;
 use App\Support\Barcode\BarcodeGenerator;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,7 @@ class ConfirmPurchase
         private readonly ActivityLogService $activity,
         private readonly BarcodeGenerator $barcodes,
         private readonly SettingsService $settings,
+        private readonly LocationStockService $locationStock,
     ) {}
 
     public function handle(Purchase $purchase, ?int $userId = null): Purchase
@@ -92,12 +94,14 @@ class ConfirmPurchase
                     userId: $userId,
                     productBatchId: $batch->id,
                 );
+                $this->locationStock->adjust($purchase->company_id, $purchase->location_id, $product->id, 'in', (float) $item->qty);
 
                 // The new price belongs to this batch only (batch cost_price above).
                 // The product keeps its own cost; it is filled only if it had none yet.
                 if ((float) $product->cost_price <= 0) {
                     $product->cost_price = $item->landed_unit_cost;
                 }
+                $this->applyPrices($product, $item);
                 $product->save(); // saves the new stock set by post()
             }
 
@@ -125,6 +129,25 @@ class ConfirmPurchase
 
             return $purchase->refresh()->load(['supplier', 'items', 'createdBy:id,name']);
         });
+    }
+
+    /**
+     * Prices typed on the purchase line (MRP, retail, wholesale, dealer) become the product's prices.
+     * When any is given the product's cost becomes this line's landed unit cost, so the margins on the
+     * product form match what was worked out on the purchase.
+     */
+    private function applyPrices(Product $product, $item): void
+    {
+        $changed = false;
+        foreach (['mrp', 'retail_price', 'wholesale_price', 'dealer_price'] as $col) {
+            if ($item->{$col} !== null && (float) $item->{$col} > 0) {
+                $product->{$col} = $item->{$col};
+                $changed = true;
+            }
+        }
+        if ($changed && (float) $item->landed_unit_cost > 0) {
+            $product->cost_price = round((float) $item->landed_unit_cost, 2);
+        }
     }
 
     /** Mint a barcoded batch for one stocked purchase line. */

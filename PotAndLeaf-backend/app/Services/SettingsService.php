@@ -20,10 +20,13 @@ class SettingsService
         'website_integration'          => '0',     // company toggle
         'whatsapp_enabled'             => '1',     // allow sending invoices via WhatsApp
         'daily_expense'                => '0',     // flat daily expense for approx profit reports
+        'sale_care_whatsapp'           => '0',     // after a sale is confirmed, WhatsApp the customer the care guide of what they bought
         'rental_auto_bill'             => '1',     // generate invoices on billing cycle via scheduler
         'rental_whatsapp_on_bill'      => '1',     // queue WhatsApp when auto-billing creates an invoice
         'rental_payment_due_days'      => '7',     // days after period end before invoice is due
         'rental_overdue_alert_days'    => '0',     // grace days after due/expected return before alerting
+        'rental_estimate_valid_days'   => '7',     // days an estimate given to a customer stays valid
+        'rental_terms'                 => "1. Rent is charged for each billing cycle (daily, weekly or monthly) that the plants are with the customer. Any part of a cycle counts as a full cycle.\n2. A refundable security deposit is taken when the plants are handed over. A deposit is optional and is taken only if it is agreed. If a deposit was taken, unpaid rent and the charges for damaged or missing plants are deducted from it, and the balance is refunded when the rental is settled. Anything above the deposit is billed to the customer.\n3. A damaged plant is charged at half its retail price and a missing plant at its full retail price.\n4. The customer is responsible for the plants from delivery until they are returned, and must look after them as advised (light and watering). The plants must not be sold, sub-let or used for any other purpose.\n5. The plants must be returned on or before the expected return date. Rent continues for every extra day they are kept.\n6. Rent bills must be paid within the due days shown on the bill.\n7. This estimate is not a tax invoice. The amounts can change if the plants, quantities or rental period change.",   // terms & conditions printed on the rental estimate
         'rental_reminder_lead_days'    => '3',     // days before return/payment due to send a reminder
         'sms_enabled'                  => '0',     // send rental reminders/overdue alerts via SMS
         'sale_cancel_requires_approval'=> '1',     // confirmed sales need HO approval to cancel

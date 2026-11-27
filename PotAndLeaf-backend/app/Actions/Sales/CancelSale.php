@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Services\CommissionEngine;
 use App\Services\InventoryService;
+use App\Services\LocationStockService;
 use App\Models\AdvanceOrder;
 use App\Services\LoyaltyService;
 use App\Services\PoolStockService;
@@ -21,6 +22,7 @@ class CancelSale
         private readonly CommissionEngine $commissionEngine,
         private readonly ReceiptService $receipts,
         private readonly PoolStockService $pool,
+        private readonly LocationStockService $locationStock,
     ) {}
 
     public function handle(Sale $sale, ?int $userId = null): Sale
@@ -55,6 +57,7 @@ class CancelSale
                         productBatchId: $item->product_batch_id,
                     );
                     $product->save();
+                    $this->locationStock->adjust($sale->company_id, $sale->location_id, $product->id, 'in', (float) $item->qty);
                     if ($item->product_batch_id) {
                         $batch = \App\Models\ProductBatch::where('id', $item->product_batch_id)->lockForUpdate()->first();
                         if ($batch) {

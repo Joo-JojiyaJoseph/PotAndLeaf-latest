@@ -18,6 +18,8 @@ class UserResource extends JsonResource
             'phone'          => $this->phone,
             'is_active'      => (bool) $this->is_active,
             'is_super_admin' => (bool) $this->is_super_admin,
+            // The branch or godown the user works at (null = head office / not set).
+            'location'       => $this->location_info ?? null,
             'companies'      => $this->whenLoaded('companies', fn () => $this->companies->map(fn ($c) => [
                 'id' => $c->id, 'name' => $c->name,
             ])->values()),

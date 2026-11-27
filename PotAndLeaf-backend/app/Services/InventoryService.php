@@ -361,59 +361,70 @@ class InventoryService
      *
      * @return array{sku: string, product_name: string|null, branches: list<array<string,mixed>>}
      */
-    public function crossBranchStock(User $user, int|string $currentCompanyId, ?string $sku = null, ?string $productId = null): array
+    /**
+     * Where a product's stock sits across the branches and godowns of the current company
+     * (stock never leaves the company, so only this company's locations are shown).
+     */
+    public function crossBranchStock(User $user, int|string $currentCompanyId, ?string $sku = null, ?string $productId = null, ?string $locationId = null): array
     {
         if (blank($sku) && blank($productId)) {
             throw ValidationException::withMessages(['sku' => 'Provide sku or product_id.']);
         }
 
-        $anchor = null;
-        if (filled($productId)) {
-            $anchor = Product::forCompany($currentCompanyId)->whereKey($productId)->first()
-                ?? Product::query()->whereKey($productId)->first();
-        } elseif (filled($sku)) {
-            $anchor = Product::forCompany($currentCompanyId)->where('sku', $sku)->first()
-                ?? Product::query()->where('sku', $sku)->first();
-        }
-
+        $anchor = filled($productId)
+            ? Product::forCompany($currentCompanyId)->whereKey($productId)->first()
+            : Product::forCompany($currentCompanyId)->where('sku', $sku)->first();
         if (! $anchor) {
             throw ValidationException::withMessages(['sku' => 'Product not found.']);
         }
 
-        $sku = $anchor->sku;
-        $companyIds = $this->accessibleCompanyIds($user, $currentCompanyId);
+        $stock = app(LocationStockService::class);
+        $company = \App\Models\Company::find($currentCompanyId, ['id', 'name', 'code']);
+        $locations = \App\Models\Location::forCompany($currentCompanyId)->where('is_active', true)
+            ->orderByDesc('is_default')->orderBy('name')->get(['id', 'name', 'type', 'is_default']);
+        $mainId = $locations->firstWhere('is_default', true)?->id ?? $locations->first()?->id;
+        $currentId = $locationId ?: ($user->locationIdFor($currentCompanyId) ?: $mainId);
 
-        $products = Product::query()
-            ->whereIn('company_id', $companyIds)
-            ->where('sku', $sku)
-            ->with('company:id,name,code')
-            ->get();
+        // Backorders wait on the location they were made for (older ones: the main location).
+        $pending = \App\Models\BackorderItem::query()
+            ->where('product_id', $anchor->id)
+            ->whereHas('backorder', fn ($q) => $q->forCompany($currentCompanyId)->whereIn('status', ['open', 'partial']))
+            ->with('backorder:id,location_id')->get()
+            ->groupBy(fn ($i) => $i->backorder?->location_id ?: $mainId)
+            ->map(fn ($rows) => round((float) $rows->sum(fn ($i) => $i->pendingQty()), 3));
 
-        $branches = $products->map(function (Product $p) use ($currentCompanyId, $sku) {
-            $pending = $this->backorders->pendingQtyForProduct($p->company_id, $p->id);
-            $inTransitIn = $this->inTransitQty($p->company_id, $sku, 'in');
-            $inTransitOut = $this->inTransitQty($p->company_id, $sku, 'out');
-            $stock = (float) $p->current_stock;
-            $atp = max(0, $stock - $pending);
+        $moving = StockTransferItem::query()
+            ->where('product_id', $anchor->id)
+            ->whereHas('stockTransfer', fn ($q) => $q->where('company_id', $currentCompanyId)->where('status', 'in_transit'))
+            ->with('stockTransfer:id,from_location_id,to_location_id')->get();
+        $inTo = $moving->groupBy(fn ($i) => $i->stockTransfer->to_location_id)->map(fn ($r) => round((float) $r->sum(fn ($i) => $i->dispatchQty()), 3));
+        $outFrom = $moving->groupBy(fn ($i) => $i->stockTransfer->from_location_id)->map(fn ($r) => round((float) $r->sum(fn ($i) => $i->dispatchQty()), 3));
+
+        $branches = $locations->map(function ($l) use ($anchor, $stock, $pending, $inTo, $outFrom, $currentId, $company) {
+            $here = $stock->available($l->id, $anchor->id);
+            $wait = (float) ($pending[$l->id] ?? 0);
 
             return [
-                'company_id'          => $p->company_id,
-                'company_name'        => $p->company?->name,
-                'company_code'        => $p->company?->code,
-                'product_id'          => $p->id,
-                'sku'                 => $p->sku,
-                'product_name'        => $p->name,
-                'current_stock'       => $stock,
-                'backorder_pending'   => round($pending, 3),
-                'in_transit_in'       => round($inTransitIn, 3),
-                'in_transit_out'      => round($inTransitOut, 3),
-                'available_to_promise'=> round($atp, 3),
-                'is_current_branch'   => (int) $p->company_id === (int) $currentCompanyId,
+                'location_id'         => $l->id,
+                'location_name'       => $l->name,
+                'location_type'       => $l->type,
+                'company_id'          => $company?->id,
+                'company_name'        => $l->name,
+                'company_code'        => $company?->code,
+                'product_id'          => $anchor->id,
+                'sku'                 => $anchor->sku,
+                'product_name'        => $anchor->name,
+                'current_stock'       => round($here, 3),
+                'backorder_pending'   => round($wait, 3),
+                'in_transit_in'       => (float) ($inTo[$l->id] ?? 0),
+                'in_transit_out'      => (float) ($outFrom[$l->id] ?? 0),
+                'available_to_promise'=> round(max(0, $here - $wait), 3),
+                'is_current_branch'   => (string) $l->id === (string) $currentId,
             ];
         })->sortByDesc('is_current_branch')->values()->all();
 
         return [
-            'sku'          => $sku,
+            'sku'          => $anchor->sku,
             'product_name' => $anchor->name,
             'branches'     => $branches,
         ];
@@ -556,10 +567,13 @@ class InventoryService
     public function valuation(int|string|null $companyId): array
     {
         $batchTotals = ProductBatch::query()
-            ->when($companyId !== null, fn ($q) => $q->where('company_id', $companyId))
-            ->where('remaining_qty', '>', 0)
-            ->selectRaw('product_id, SUM(remaining_qty) as qty, SUM(remaining_qty * cost_price) as value')
-            ->groupBy('product_id')
+            ->when($companyId !== null, fn ($q) => $q->where('product_batches.company_id', $companyId))
+            ->where('product_batches.remaining_qty', '>', 0)
+            ->leftJoin('purchase_items as pi', 'pi.id', '=', 'product_batches.purchase_item_id')
+            // cost_price on a purchase batch is the LANDED unit cost (price + freight/loading share);
+            // `landed` is the freight/loading part of that value.
+            ->selectRaw('product_batches.product_id, SUM(product_batches.remaining_qty) as qty, SUM(product_batches.remaining_qty * product_batches.cost_price) as value, SUM(product_batches.remaining_qty * COALESCE(pi.landed_alloc / NULLIF(pi.qty, 0), 0)) as landed')
+            ->groupBy('product_batches.product_id')
             ->get()
             ->keyBy('product_id');
 
@@ -575,6 +589,7 @@ class InventoryService
                     ? (float) $batch->value * $batchQty / (float) $batch->qty
                     : 0.0;
                 $value = $batchValue + ($stock - $batchQty) * (float) $p->cost_price;
+                $landed = $batch && (float) $batch->qty > 0 ? (float) $batch->landed * $batchQty / (float) $batch->qty : 0.0;
 
                 return [
                     'id'    => $p->id,
@@ -583,6 +598,8 @@ class InventoryService
                     'stock' => (float) $p->current_stock,
                     'cost'  => $stock > 0 ? round($value / $stock, 4) : (float) $p->cost_price,
                     'value' => round($value, 2),
+                    // How much of `value` is freight / loading (landed cost) added on top of the supplier price.
+                    'landed_value' => round($landed, 2),
                 ];
             });
 
@@ -592,6 +609,7 @@ class InventoryService
                 'products'    => $rows->count(),
                 'total_units' => round($rows->sum('stock'), 3),
                 'total_value' => round($rows->sum('value'), 2),
+                'landed_value' => round($rows->sum('landed_value'), 2),
             ],
         ];
     }

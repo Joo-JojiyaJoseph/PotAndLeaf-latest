@@ -140,6 +140,7 @@ class CreatePurchaseReturn
                 'company_id'       => $companyId,
                 'purchase_id'   => $purchase->id,
                 'supplier_id'   => $purchase->supplier_id,
+                'refund_mode'   => $data['refund_mode'] ?? 'advance',
                 'return_no'     => $this->returns->nextReturnNo($companyId),
                 'return_date'   => $data['return_date'],
                 'is_interstate' => (bool) $purchase->is_interstate,

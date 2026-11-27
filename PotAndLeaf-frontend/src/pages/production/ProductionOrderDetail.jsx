@@ -5,7 +5,9 @@ import api, { withCompany } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
-import { Badge, Button, Card, Select } from '../../components/ui';
+import { useState } from 'react';
+import { Badge, Button, Card, Modal, Select } from '../../components/ui';
+import PriceTiers from '../../components/PriceTiers';
 import { apiMessage } from '../../lib/formErrors';
 import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError } from '../../components/detail';
 import { formatCurrency, formatDate } from '../../lib/format';
@@ -46,10 +48,34 @@ export default function ProductionOrderDetail() {
     queryClient.invalidateQueries({ queryKey: ['production-orders'] });
     queryClient.invalidateQueries({ queryKey: ['inventory'] });
   };
+  // Final step: set the selling prices of the finished product, then complete.
+  const [pricing, setPricing] = useState(null); // null = closed, 'complete' | 'edit'
+  const [priceForm, setPriceForm] = useState({ cost_price: '', mrp: '', retail_price: '', wholesale_price: '', dealer_price: '' });
+  const openPricing = (mode) => {
+    const p = data?.output_prices ?? {};
+    const cost = data?.status === 'completed' ? data?.output_unit_cost : estimateQ.data?.unit_cost;
+    setPriceForm({
+      cost_price: cost ? String(Math.round(Number(cost) * 100) / 100) : '',
+      mrp: p.mrp || '', retail_price: p.retail_price || '', wholesale_price: p.wholesale_price || '', dealer_price: p.dealer_price || '',
+    });
+    setPricing(mode);
+  };
+  const savePrices = () => api.post(`/production/orders/${id}/prices`, {
+    mrp: Number(priceForm.mrp) || null, retail_price: Number(priceForm.retail_price) || null,
+    wholesale_price: Number(priceForm.wholesale_price) || null, dealer_price: Number(priceForm.dealer_price) || null,
+  }, withCompany(recordCompanyId));
   const completeM = useMutation({
-    mutationFn: () => api.post(`/production/orders/${id}/complete`, {}, withCompany(recordCompanyId)),
-    onSuccess: () => { invalidate(); toast.success('Production completed — stock updated.'); },
+    mutationFn: async () => {
+      await savePrices();
+      return api.post(`/production/orders/${id}/complete`, {}, withCompany(recordCompanyId));
+    },
+    onSuccess: () => { setPricing(null); invalidate(); toast.success('Production completed — stock updated and prices saved.'); },
     onError: (err) => toast.error(apiMessage(err, 'Could not complete production.')),
+  });
+  const pricesM = useMutation({
+    mutationFn: savePrices,
+    onSuccess: () => { setPricing(null); invalidate(); toast.success('Prices saved on the finished product.'); },
+    onError: (err) => toast.error(apiMessage(err, 'Could not save the prices.')),
   });
   const cancelM = useMutation({
     mutationFn: () => api.delete(`/production/orders/${id}`, withCompany(recordCompanyId)),
@@ -107,7 +133,8 @@ export default function ProductionOrderDetail() {
               if (ok) cancelM.mutate();
             }}><XCircleIcon className="size-4" /> Delete</Button>
           )}
-          {o.can?.complete && <Button size="sm" onClick={() => completeM.mutate()} disabled={completeM.isPending}><CheckCircleIcon className="size-4" /> Complete</Button>}
+          {o.can?.set_prices && o.status === 'completed' && <Button variant="outline" size="sm" onClick={() => openPricing('edit')}>Set prices</Button>}
+          {o.can?.complete && <Button size="sm" onClick={() => openPricing('complete')} disabled={completeM.isPending}><CheckCircleIcon className="size-4" /> Complete</Button>}
         </>}
       />
 
@@ -116,7 +143,16 @@ export default function ProductionOrderDetail() {
           <InfoItem label="Product" value={o.output_product} />
           <InfoItem label="Output quantity" value={o.output_quantity} />
           <InfoItem label="Unit cost" value={o.status === 'completed' ? formatCurrency(o.output_unit_cost) : (estimateQ.data ? formatCurrency(estimateQ.data.unit_cost) : '—')} mono />
-          <InfoItem label="Material cost" value={o.status === 'completed' ? formatCurrency(o.total_input_cost) : (estimateQ.data ? formatCurrency(estimateQ.data.total_material_cost) : '—')} mono />
+          <InfoItem label="Material cost" value={o.status === 'completed' ? formatCurrency(o.material_cost ?? o.total_input_cost) : (estimateQ.data ? formatCurrency(estimateQ.data.total_material_cost) : '—')} mono />
+          <InfoItem label="Setting charge" value={Number(o.setting_charge) > 0 ? formatCurrency(o.setting_charge) : null} mono />
+          <InfoItem label="Miscellaneous" value={Number(o.misc_charge) > 0 ? formatCurrency(o.misc_charge) : null} mono />
+          {o.status === 'completed' && <InfoItem label="Total cost" value={formatCurrency(o.total_input_cost)} mono />}
+          {o.status === 'completed' && Number(o.margin_value) > 0 && <InfoItem label={`Margin (${o.margin_type === 'amount' ? '₹ per piece' : o.margin_value + '%'})`} value={o.margin_type === 'amount' ? formatCurrency(o.margin_value) : `${o.margin_value}% of cost`} />}
+          {o.suggested_price != null && <InfoItem label="Suggested price" value={formatCurrency(o.suggested_price)} mono />}
+          {o.output_prices && <InfoItem label="MRP" value={formatCurrency(o.output_prices.mrp)} mono />}
+          {o.output_prices && <InfoItem label="Retail price" value={formatCurrency(o.output_prices.retail_price)} mono />}
+          {o.output_prices && <InfoItem label="Wholesale price" value={formatCurrency(o.output_prices.wholesale_price)} mono />}
+          {o.output_prices && <InfoItem label="Dealer price" value={formatCurrency(o.output_prices.dealer_price)} mono />}
           <InfoItem label="Made by" value={o.supervisor || '—'} />
           <InfoItem label="Completed" value={o.completed_at ? formatDate(o.completed_at) : null} />
           <InfoItem label="Notes" value={o.notes} />
@@ -271,6 +307,29 @@ export default function ProductionOrderDetail() {
           </div>
         </Section>
       )}
+
+      <Modal
+        open={Boolean(pricing)}
+        onClose={() => setPricing(null)}
+        title={pricing === 'complete' ? `Complete ${o.order_no ?? 'production'} — set prices` : 'Set prices of the finished product'}
+        footer={<>
+          <Button variant="ghost" size="sm" onClick={() => setPricing(null)}>Cancel</Button>
+          {pricing === 'complete'
+            ? <Button size="sm" disabled={completeM.isPending} onClick={() => completeM.mutate()}>Complete production</Button>
+            : <Button size="sm" disabled={pricesM.isPending} onClick={() => pricesM.mutate()}>Save prices</Button>}
+        </>}
+      >
+        <p className="mb-3 text-sm text-muted">
+          Set the selling prices of <b>{o.output_product}</b>. Enter a margin % on the production cost and the price fills in (rounded to a whole rupee).
+          Leave a price empty to keep the product&apos;s current one.
+        </p>
+        <PriceTiers
+          value={priceForm}
+          onChange={(patch) => setPriceForm((f) => ({ ...f, ...patch }))}
+          costLabel="Cost of one piece"
+          costRequired={false}
+        />
+      </Modal>
     </div>
   );
 }

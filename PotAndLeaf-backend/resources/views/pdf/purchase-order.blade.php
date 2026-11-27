@@ -81,6 +81,7 @@
   <thead>
     <tr>
       <th class="c" style="width:28px">#</th>
+      <th style="width:34px"></th>
       <th>Product</th>
       <th>SKU</th>
       <th class="r">Qty</th>
@@ -96,6 +97,8 @@
       @php $tax = (float) $it->line_total - (float) $it->taxable_value; @endphp
       <tr>
         <td class="c">{{ $i + 1 }}</td>
+        <td>@php $img = \App\Support\Media\MediaUrl::firstAsDataUri($it->product?->images); @endphp
+          @if($img)<img src="{{ $img }}" style="width:30px;height:30px;object-fit:cover">@endif</td>
         <td>{{ $it->product_name }}</td>
         <td>{{ $it->product?->sku }}</td>
         <td class="r">{{ $it->qty }}</td>

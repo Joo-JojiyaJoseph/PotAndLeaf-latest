@@ -8,6 +8,7 @@ import { DetailHeader, Section, InfoGrid, InfoItem, DetailLoading, DetailError, 
 import { formatCurrency, formatDate } from '../../lib/format';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
+import ReturnRefundPanel from '../../components/ReturnRefundPanel';
 
 const statusTone = { draft: 'inactive', confirmed: 'active', cancelled: 'blocked' };
 
@@ -113,6 +114,8 @@ export default function SalesReturnDetail() {
           </dl>
         </Card>
       </div>
+
+      <ReturnRefundPanel ret={r} kind="sales" companyId={recordCompanyId} onDone={invalidate} />
     </div>
   );
 }

@@ -48,9 +48,6 @@ class AccountingController extends Controller
                     ['value' => 'bank_payment', 'label' => 'Bank payment'],
                     ['value' => 'contra', 'label' => 'Contra (cash ↔ bank)'],
                 ],
-                'journal' => [
-                    ['value' => 'journal', 'label' => 'Journal voucher'],
-                ],
             ],
         ]);
     }
@@ -63,11 +60,6 @@ class AccountingController extends Controller
     public function bankBook(Request $request): JsonResponse
     {
         return $this->book($request, 'bank');
-    }
-
-    public function journal(Request $request): JsonResponse
-    {
-        return $this->book($request, 'journal', $request->query('show') === 'corrections');
     }
 
     public function show(Request $request, AccountingTransaction $accountingTransaction): JsonResponse

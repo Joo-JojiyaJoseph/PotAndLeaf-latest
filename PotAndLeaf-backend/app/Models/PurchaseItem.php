@@ -15,7 +15,7 @@ class PurchaseItem extends Model
         'discount', 'taxable_value', 'gst_rate', 'cgst_amount', 'sgst_amount',
         'igst_amount', 'line_total', 'landed_alloc', 'landed_unit_cost',
         'is_bulk', 'sell_as', 'units_per_set', 'split_product_id', 'set_product_id',
-        'shared_pool_group',
+        'shared_pool_group', 'mrp', 'retail_price', 'wholesale_price', 'dealer_price',
     ];
 
     protected function casts(): array

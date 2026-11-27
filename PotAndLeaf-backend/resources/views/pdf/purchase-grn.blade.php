@@ -97,6 +97,9 @@
   @if((float)$purchase->landed_cost_total > 0)
     <tr><td>Landed costs</td><td class="r">{{ $money($purchase->landed_cost_total) }}</td></tr>
   @endif
+  @if((float)$purchase->final_discount > 0)
+    <tr><td>Discount on final amount</td><td class="r">−{{ $money($purchase->final_discount) }}</td></tr>
+  @endif
   <tr class="grand"><td>Grand total</td><td class="r">{{ $money($purchase->grand_total) }}</td></tr>
 </table>
 </body>

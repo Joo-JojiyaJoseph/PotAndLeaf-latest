@@ -8,7 +8,6 @@ import {
   ClipboardDocumentCheckIcon,
   ScissorsIcon,
   BeakerIcon,
-  BookOpenIcon,
   BuildingLibraryIcon,
   CalculatorIcon,
   ChartBarIcon,
@@ -26,6 +25,7 @@ import {
   UserGroupIcon,
   UsersIcon,
   BuildingOffice2Icon,
+  BuildingStorefrontIcon,
   ClipboardDocumentListIcon,
   ClockIcon,
   QrCodeIcon,
@@ -63,6 +63,7 @@ const GROUPS = [
       { key: 'advance-orders', label: 'Advance Orders', to: '/advance-orders', icon: CalendarDaysIcon, permission: 'advance.view' },
       { key: 'backorders', label: 'Backorders (Waiting)', to: '/backorders', icon: ClockIcon, permission: 'backorder.view' },
       { key: 'rentals', label: 'Plant Rental', to: '/rentals', icon: GiftIcon, permission: 'rental.view' },
+      { key: 'landscape', label: 'Landscape Projects', to: '/landscape', icon: SparklesIcon, permission: 'landscape.view', needsLandscape: true },
       { key: 'customers', label: 'Customers', to: '/customers', icon: UsersIcon, permission: 'customers.view' },
       { key: 'receipts', label: 'Money from Customers', to: '/receipts', icon: ReceiptRefundIcon, permission: 'receipts.view' },
       { key: 'loyalty', label: 'Loyalty Points', icon: SparklesIcon, to: '/loyalty', permission: 'loyalty.view' },
@@ -98,7 +99,7 @@ const GROUPS = [
     items: [
       { key: 'cash-book', label: 'Cash Book', to: '/accounting/cash-book', icon: BanknotesIcon, permission: 'accounts.view' },
       { key: 'bank-book', label: 'Bank Book', to: '/accounting/bank-book', icon: BuildingLibraryIcon, permission: 'accounts.view' },
-      { key: 'journal', label: 'Journal (Corrections)', to: '/accounting/journal', icon: BookOpenIcon, permission: 'accounts.view' },
+      { key: 'expenses', label: 'Expenses', to: '/expenses', icon: CurrencyRupeeIcon, permission: 'expenses.view' },
     ],
   },
   {
@@ -106,6 +107,7 @@ const GROUPS = [
     items: [
       { key: 'products', label: 'Products', to: '/products', icon: TagIcon, permission: 'products.view' },
       { key: 'masters', label: 'Categories & Units', to: '/masters', icon: Squares2X2Icon, anyOf: ['categories.view', 'subcategories.view', 'units.view'] },
+      { key: 'locations', label: 'Branches & Godowns', to: '/locations', icon: BuildingStorefrontIcon, permission: 'locations.view' },
       { key: 'companies', label: 'Companies', to: '/companies', icon: BuildingOffice2Icon, superAdmin: true },
       { key: 'users', label: 'Users', to: '/users', icon: UserGroupIcon, permission: 'users.view' },
       { key: 'roles', label: 'Roles & Permissions', to: '/roles', icon: ShieldCheckIcon, permission: 'roles.view' },
@@ -125,7 +127,9 @@ const GROUPS = [
   },
 ];
 
-function itemVisible(item, { isSuperAdmin, showHo, can }) {
+function itemVisible(item, { isSuperAdmin, showHo, can, hasLandscape }) {
+  // The Landscape menu appears only for a company that has a landscape division.
+  if (item.needsLandscape && !hasLandscape) return false;
   if (item.notSuperAdmin && isSuperAdmin) return false;
   if (item.everyone) return true;
   if (item.ownCommission) return !isSuperAdmin && can('commission.view_own') && !can('commission.view');
@@ -191,9 +195,9 @@ function Item({ item, onNavigate }) {
 }
 
 function SidebarBody({ onClose, showClose }) {
-  const { isSuperAdmin, can } = useAuth();
+  const { isSuperAdmin, can, activeCompany } = useAuth();
   const showHo = isSuperAdmin || can('activity.view') || can('backup.view') || can('*');
-  const ctx = { isSuperAdmin, showHo, can };
+  const ctx = { isSuperAdmin, showHo, can, hasLandscape: Boolean(activeCompany?.has_landscape) };
 
   return (
     <>

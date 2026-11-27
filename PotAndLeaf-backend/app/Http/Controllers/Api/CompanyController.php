@@ -40,6 +40,7 @@ class CompanyController extends Controller
                 });
             })
             ->withCount('users')
+            ->with(['locations' => fn ($q) => $q->orderByDesc('is_default')->orderBy('name')->select(['id', 'company_id', 'name', 'code', 'type', 'is_default', 'is_active', 'is_landscape'])])
             ->orderBy('name')
             ->get();
 

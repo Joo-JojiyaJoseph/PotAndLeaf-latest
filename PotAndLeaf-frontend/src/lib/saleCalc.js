@@ -35,6 +35,15 @@ export function computeSale(lines, isInterstate) {
   return { lines: out, totals: { subtotal, tax_total: taxTotal, round_off: roundOff, grand_total: grand } };
 }
 
+/**
+ * A discount typed in rupees on the whole bill comes off the FINAL amount, after GST and round-off.
+ * Mirror of CreateSale on the server. Never more than the bill total.
+ */
+export function applyFinalDiscount(totals, discount) {
+  const d = Math.min(round(Math.max(0, Number(discount) || 0)), totals.grand_total);
+  return { ...totals, final_discount: d, grand_total: round(totals.grand_total - d) };
+}
+
 // Suggested unit price from the customer's pricing tier, falling back sensibly.
 export function tierPrice(product, customerType) {
   if (!product) return 0;

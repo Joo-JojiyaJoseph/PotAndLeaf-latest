@@ -27,6 +27,10 @@ class PurchaseItemResource extends JsonResource
             'line_total'       => (float) $this->line_total,
             'landed_alloc'     => (float) $this->landed_alloc,
             'landed_unit_cost' => (float) $this->landed_unit_cost,
+            'mrp'              => $this->mrp !== null ? (float) $this->mrp : null,
+            'retail_price'     => $this->retail_price !== null ? (float) $this->retail_price : null,
+            'wholesale_price'  => $this->wholesale_price !== null ? (float) $this->wholesale_price : null,
+            'dealer_price'     => $this->dealer_price !== null ? (float) $this->dealer_price : null,
 
             'is_bulk'           => (bool) $this->is_bulk,
             'sell_as'           => $this->sell_as,

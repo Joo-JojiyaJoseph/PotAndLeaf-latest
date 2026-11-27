@@ -7,11 +7,9 @@ use App\Http\Requests\Transfer\ApproveTransferRequest;
 use App\Http\Requests\Transfer\ReceiveTransferRequest;
 use App\Http\Requests\Transfer\StoreTransferRequest;
 use App\Http\Resources\StockTransferResource;
-use App\Models\Company;
 use App\Models\Location;
 use App\Models\Product;
 use App\Models\StockTransfer;
-use App\Models\StockTransferItem;
 use App\Services\TransferService;
 use App\Support\Api\ApiResponse;
 use App\Support\Api\ResolvesFilterCompany;
@@ -27,85 +25,80 @@ class TransferController extends Controller
     public function index(Request $request): JsonResponse
     {
         $this->allow($request, 'transfers.view');
+        $filters = $request->only(['search', 'status', 'per_page', 'from', 'to']);
+        // A godown user sees only the transfers into or out of their own godown.
+        if ($mine = $this->godownLocationId($request)) {
+            $filters['location_id'] = $mine;
+        }
 
-        return $this->ok(StockTransferResource::collection($this->transfers->list($this->listCompanyId($request), $request->only(['search', 'status', 'per_page', 'from', 'to']))));
+        return $this->ok(StockTransferResource::collection($this->transfers->list($this->listCompanyId($request), $filters)));
     }
 
+    /** For the "New transfer" screen: this company's branches and godowns, products and the stock each location holds. */
     public function formData(Request $request): JsonResponse
     {
         $company = $this->company($request);
         $this->allow($request, 'transfers.create');
+        $user = $request->user();
 
-        $source = $this->resolveSourceCompany($request, $company);
+        $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')
+            ->get(['id', 'sku', 'name', 'images'])
+            ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'image' => \App\Support\Media\MediaUrl::resolveMany($p->images ?? [])[0] ?? null]);
 
-        $destinations = Company::active()->where('id', '!=', $source->id)->orderBy('name')
-            ->get(['id', 'name', 'code'])
-            ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code]);
-
-        $sourceCompanies = Company::active()->orderBy('name')
-            ->get(['id', 'name', 'code'])
-            ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'code' => $c->code]);
-
-        $productRows = Product::forCompany($source->id)->where('status', 'active')->orderBy('name')->get(['id', 'sku', 'name', 'current_stock']);
-        $reserved = $this->draftTransferQtyByProduct($source->id, $productRows->pluck('id'));
-        $products = $productRows->map(function ($p) use ($reserved) {
-            $draft = (float) ($reserved[$p->id] ?? 0);
-
-            return [
-                'id' => $p->id,
-                'sku' => $p->sku,
-                'name' => $p->name,
-                'current_stock' => (float) $p->current_stock,
-                'draft_transfer_qty' => $draft,
-                'available_qty' => round(max(0, (float) $p->current_stock - $draft), 3),
-            ];
-        });
-
-        $locations = Location::forCompany($source->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
+        $locations = Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
             ->get(['id', 'name', 'type', 'is_default'])
             ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'type' => $l->type, 'is_default' => (bool) $l->is_default]);
 
         return $this->ok([
-            'companies' => $destinations,
-            'source_companies' => $sourceCompanies,
-            'products' => $products,
-            'locations' => $locations,
-            'from_company' => ['id' => $source->id, 'name' => $source->name, 'code' => $source->code],
+            'products'         => $products,
+            'locations'        => $locations,
+            // What each location can give right now (less what is already promised on open transfers).
+            'stock'            => $this->transfers->availableStock($company->id),
+            'my_location_id'   => $user->is_super_admin ? null : $user->locationIdFor($company->id),
+            'is_godown_user'   => $user->isGodownUser($company->id),
+            'company'          => ['id' => $company->id, 'name' => $company->name, 'code' => $company->code],
         ]);
     }
 
     /**
-     * For the "Request stock" screen: every other company's products with the
-     * stock they can give. An admin may pick which company is asking.
+     * For the "Request stock" screen: the stock the other branches and godowns of this company can give
+     * to the chosen location.
      */
     public function requestData(Request $request): JsonResponse
     {
         $company = $this->company($request);
         $this->allow($request, 'transfers.create');
         $user = $request->user();
-        $forId = $user->is_super_admin && filled($request->query('for_company_id')) ? $request->query('for_company_id') : $company->id;
+
+        $locations = Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
+            ->get(['id', 'name', 'type', 'is_default']);
+        $toId = $request->query('to_location_id');
+        if (! filled($toId) || ! $locations->contains('id', $toId)) {
+            $toId = $user->locationIdFor($company->id) ?: $locations->firstWhere('is_default', true)?->id ?: $locations->first()?->id;
+        }
+        $to = $locations->firstWhere('id', $toId);
 
         return $this->ok([
-            'for_company' => Company::whereKey($forId)->first(['id', 'name']),
-            'companies'   => $user->is_super_admin
-                ? Company::active()->orderBy('name')->get(['id', 'name'])
-                : [['id' => $company->id, 'name' => $company->name]],
-            'stock'       => $this->transfers->availableStock($forId, $request->query('search')),
+            'for_company'    => ['id' => $company->id, 'name' => $company->name],
+            'locations'      => $locations->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'type' => $l->type, 'is_default' => (bool) $l->is_default]),
+            'to_location_id' => $toId,
+            'to_location'    => $to ? ['id' => $to->id, 'name' => $to->name, 'type' => $to->type] : null,
+            'stock'          => $this->transfers->availableStock($company->id, $toId, $request->query('search')),
         ]);
     }
 
-    /** A company asks for stock from other companies (one request per giving company). */
+    /** A branch or godown asks the other locations of its company for stock (one request per giving location). */
     public function storeRequest(Request $request): JsonResponse
     {
         $company = $this->company($request);
         $this->allow($request, 'transfers.create');
         $user = $request->user();
         $data = $request->validate([
-            'to_company_id'           => ['nullable', 'integer', 'exists:companies,id'],
+            'to_location_id'          => ['required', 'uuid', \Illuminate\Validation\Rule::exists('locations', 'id')->where('company_id', $company->id)->where('is_active', true)],
             'transfer_date'           => ['required', 'date', 'before_or_equal:'.\App\Support\Validation\BusinessRules::today()],
             'notes'                   => ['nullable', 'string', 'max:1000'],
             'lines'                   => ['required', 'array', 'min:1', 'max:200'],
-            'lines.*.from_company_id' => ['required', 'integer', 'exists:companies,id'],
+            'lines.*.from_location_id' => ['required', 'uuid', \Illuminate\Validation\Rule::exists('locations', 'id')->where('company_id', $company->id)->where('is_active', true)],
             'lines.*.product_id'      => ['required', 'string'],
             'lines.*.qty'             => ['required', 'numeric', 'gt:0', 'max:9999999'],
         ], [
@@ -113,20 +106,24 @@ class TransferController extends Controller
             'lines.required'                => 'Add at least one product to request.',
             'lines.*.qty.gt'                => 'Each quantity must be more than 0.',
         ]);
-        // Company users always ask for their own company; an admin can ask for any.
-        $toId = $user->is_super_admin && filled($data['to_company_id'] ?? null) ? $data['to_company_id'] : $company->id;
-        $made = $this->transfers->requestStock($toId, $data, $user->id, (bool) $user->is_super_admin);
+
+        // A godown user can only ask for stock to be sent to their own godown.
+        if ($user->isGodownUser($company->id) && (string) $data['to_location_id'] !== (string) $user->locationIdFor($company->id)) {
+            abort(422, 'You can only request stock for your own godown.');
+        }
+
+        $made = $this->transfers->requestStock($company->id, $data['to_location_id'], $data, $user->id, (bool) $user->is_super_admin);
         $count = count($made);
 
         return $this->created(
             StockTransferResource::collection($made),
             $user->is_super_admin
-                ? ($count === 1 ? 'Request created and approved. The sending company can now dispatch it.' : "{$count} requests created and approved (one per sending company).")
-                : ($count === 1 ? 'Stock request sent. It waits for admin approval.' : "{$count} stock requests sent (one per sending company). They wait for admin approval."),
+                ? ($count === 1 ? 'Request created and approved. The sending location can now dispatch it.' : "{$count} requests created and approved (one per sending location).")
+                : ($count === 1 ? 'Stock request sent. It waits for approval.' : "{$count} stock requests sent (one per sending location). They wait for approval.")
         );
     }
 
-    /** Companies that have the requested products, so the approver can choose who sends. */
+    /** Locations that have the requested products, so the approver can choose who sends. */
     public function sources(Request $request, StockTransfer $stockTransfer): JsonResponse
     {
         $this->allow($request, 'transfers.approve');
@@ -140,27 +137,13 @@ class TransferController extends Controller
         $company = $this->company($request);
         $user = $request->user();
         $data = $request->validated();
-        $sourceId = $data['from_company_id'] ?? $company->id;
-        unset($data['confirm'], $data['from_company_id']);
+        unset($data['confirm']);
+        $data['transfer_type'] = 'intra_company';
 
-        $pullingFromOther = (string) $sourceId !== (string) $company->id;
-        if (! $user->is_super_admin && $pullingFromOther) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'from_company_id' => 'Company users request a transfer from their own company. An admin assigns the other company.',
-            ]);
-        }
-        if (! $user->is_super_admin) {
-            $sourceId = $company->id;
-            unset($data['from_company_id']);
-        }
-        $isIntra = ($data['transfer_type'] ?? 'inter_company') === 'intra_company';
-        // Inter-company requests from company users always wait for admin approval.
-        // Location transfers keep the previous approve-permission shortcut.
-        $autoApprove = $isIntra
-            ? ($user->is_super_admin ? $request->boolean('confirm') : $user->hasPermission('transfers.approve', $company->id))
-            : ($user->is_super_admin && $request->boolean('confirm') && filled($data['to_company_id'] ?? null));
+        // Whoever may approve transfers sends it straight to "ready to dispatch"; others wait for approval.
+        $autoApprove = $user->is_super_admin ? $request->boolean('confirm') : $user->hasPermission('transfers.approve', $company->id);
 
-        $transfer = $this->transfers->create($sourceId, $data, $user->id, $autoApprove);
+        $transfer = $this->transfers->create($company->id, $data, $user->id, $autoApprove);
 
         return $this->created(
             new StockTransferResource($transfer),
@@ -171,20 +154,18 @@ class TransferController extends Controller
     public function approve(ApproveTransferRequest $request, StockTransfer $stockTransfer): JsonResponse
     {
         $this->canApprove($request, $stockTransfer);
-        $from = $request->input('from_company_id');
-        if (filled($from) && (string) $from !== (string) $stockTransfer->company_id && ! $request->user()->is_super_admin) {
-            abort(403, 'Only an admin can send this request to a different company.');
-        }
+        $from = $request->input('from_location_id');
 
         return $this->ok(
             new StockTransferResource($this->transfers->approve(
                 $stockTransfer,
                 $request->validated()['approvals'] ?? [],
                 $request->user()->id,
-                $request->validated()['to_company_id'] ?? null,
+                null,
+                null,
                 filled($from) ? $from : null,
-            )->load(['items', 'fromCompany:id,name', 'toCompany:id,name'])),
-            'Approved. The sending company can now dispatch the stock.',
+            )->load(['items', 'fromLocation:id,name,type', 'toLocation:id,name,type'])),
+            'Approved. The sending location can now dispatch the stock.',
         );
     }
 
@@ -210,10 +191,11 @@ class TransferController extends Controller
     {
         $this->allow($request, 'transfers.view');
         $this->sameCompanyOrDestination($request, $stockTransfer);
+        $this->godownScope($request, $stockTransfer);
 
         return $this->ok(new StockTransferResource($stockTransfer->load([
             'items.batch.purchase:id,purchase_no',
-            'fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name',
+            'fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name,type', 'toLocation:id,name,type',
             'redirectedFromCompany:id,name', 'requester:id,name', 'items.receivedBatch:id,batch_no,barcode',
         ])));
     }
@@ -222,6 +204,7 @@ class TransferController extends Controller
     {
         $this->allow($request, 'transfers.dispatch');
         $this->sameSourceCompany($request, $stockTransfer);
+        $this->godownScope($request, $stockTransfer);
 
         return $this->ok(new StockTransferResource($this->transfers->dispatch($stockTransfer, $request->user()->id)), 'Transfer dispatched — stock in transit.');
     }
@@ -229,6 +212,7 @@ class TransferController extends Controller
     public function receive(ReceiveTransferRequest $request, StockTransfer $stockTransfer): JsonResponse
     {
         $this->sameDestinationCompany($request, $stockTransfer);
+        $this->godownScope($request, $stockTransfer);
 
         $receipts = collect($request->validated()['receipts'] ?? [])->mapWithKeys(fn ($r) => [$r['id'] => $r['received_qty']])->all();
 
@@ -249,25 +233,31 @@ class TransferController extends Controller
         return $this->message('Transfer cancelled.');
     }
 
+    /** The location a godown user works at (null for everyone else). */
+    private function godownLocationId(Request $request): ?string
+    {
+        $user = $request->user();
+        $companyId = $this->company($request)->id;
+
+        return $user->isGodownUser($companyId) ? $user->locationIdFor($companyId) : null;
+    }
+
+    /** A godown user can only open transfers into or out of their own godown. */
+    private function godownScope(Request $request, StockTransfer $transfer): void
+    {
+        $mine = $this->godownLocationId($request);
+        if ($mine !== null) {
+            abort_unless(
+                (string) $transfer->from_location_id === $mine || (string) $transfer->to_location_id === $mine,
+                404,
+                'This transfer is not for your godown.',
+            );
+        }
+    }
+
     private function company(Request $request)
     {
         return $request->attributes->get('company');
-    }
-
-    /** Any active company may be the stock source; membership is not required to see it. */
-    private function resolveSourceCompany(Request $request, Company $current): Company
-    {
-        $sourceId = $request->query('source_company_id');
-        if (! filled($sourceId) || (string) $sourceId === (string) $current->id) {
-            return $current;
-        }
-        // Company users always transfer from their own company (issue 26).
-        abort_unless($request->user()->is_super_admin, 403, 'You can only transfer stock from your own company.');
-
-        $source = Company::active()->whereKey($sourceId)->first();
-        abort_unless($source, 422, 'Source company not found.');
-
-        return $source;
     }
 
     private function allow(Request $request, string $permission): void
@@ -324,22 +314,6 @@ class TransferController extends Controller
         if ((string) $transfer->company_id !== $headerId) {
             abort(404);
         }
-    }
-
-    /** @param  \Illuminate\Support\Collection<int, string>  $productIds */
-    private function draftTransferQtyByProduct(int|string $companyId, $productIds): array
-    {
-        if ($productIds->isEmpty()) {
-            return [];
-        }
-
-        return StockTransferItem::query()
-            ->whereIn('product_id', $productIds)
-            ->whereHas('stockTransfer', fn ($q) => $q->where('company_id', $companyId)->whereIn('status', ['draft', 'requested']))
-            ->get()
-            ->groupBy('product_id')
-            ->map(fn ($rows) => round($rows->sum(fn ($row) => $row->dispatchQty()), 3))
-            ->all();
     }
 
     private function sameSourceCompany(Request $request, StockTransfer $transfer): void

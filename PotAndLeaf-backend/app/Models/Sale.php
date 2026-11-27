@@ -18,9 +18,9 @@ class Sale extends Model
             'is_interstate', 'payment_mode', 'bill_kind', 'converted_from_sale_id', 'subtotal', 'tax_total', 'round_off',
             'grand_total', 'amount_paid', 'loyalty_points_redeemed', 'loyalty_discount',
             'status', 'notes', 'confirmed_at',
-            'cancel_requested_at', 'cancel_requested_by', 'cancel_reason',
+            'cancel_requested_at', 'cancel_requested_by', 'cancel_reason', 'bill_discount', 'final_discount',
             'cancel_reviewed_at', 'cancel_reviewed_by', 'cancel_rejection_reason',
-            'created_by',
+            'created_by', 'entered_by',
     ];
 
     protected function casts(): array
@@ -35,6 +35,7 @@ class Sale extends Model
             'amount_paid'             => 'decimal:2',
             'loyalty_points_redeemed' => 'integer',
             'loyalty_discount'        => 'decimal:2',
+            'final_discount'          => 'decimal:2',
             'confirmed_at'            => 'datetime',
             'cancel_requested_at'     => 'datetime',
             'cancel_reviewed_at'      => 'datetime',
@@ -69,6 +70,17 @@ class Sale extends Model
     public function hasCancelRequest(): bool
     {
         return $this->cancel_requested_at !== null && $this->status === 'confirmed';
+    }
+
+    /** Who typed the bill in (created_by is the salesman credited with it). */
+    public function enteredBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'entered_by');
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
     }
 
     public function customer(): BelongsTo

@@ -24,6 +24,8 @@ class StoreStockVerificationRequest extends FormRequest
         return [
             'count_date'    => ['required', 'date', \App\Support\Validation\BusinessRules::notFuture('Count date')],
             'location_note' => ['nullable', 'string', 'max:120'],
+            // The branch or godown being counted (when the company has several).
+            'location_id'   => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('company_id', $companyId)->where('is_active', true)],
             'notes'         => ['nullable', 'string', 'max:2000'],
             'items'                 => ['required', 'array', 'min:1'],
             'items.*.product_id'    => ['required', 'uuid', Rule::exists('products', 'id')->where('company_id', $companyId)],

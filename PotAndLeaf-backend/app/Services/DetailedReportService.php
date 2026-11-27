@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\AdvanceOrder;
+use App\Models\Backorder;
 use App\Models\CustomerReceipt;
 use App\Models\Purchase;
+use App\Models\PurchaseOrder;
 use App\Models\PurchaseReturn;
 use App\Models\Sale;
 use App\Models\SalesReturn;
@@ -19,7 +22,7 @@ class DetailedReportService
 {
     public const VIEWS = ['invoice', 'day', 'week', 'month', 'year'];
 
-    public const TYPES = ['sales', 'purchases', 'sales_returns', 'purchase_returns', 'receipts', 'payments'];
+    public const TYPES = ['sales', 'purchases', 'sales_returns', 'purchase_returns', 'receipts', 'payments', 'cancelled_sales', 'cancelled_purchases', 'cancelled_orders'];
 
     /** Most documents read for one report, so a very wide range cannot overload the server. */
     private const ROW_CAP = 5000;
@@ -84,6 +87,7 @@ class DetailedReportService
             'sales'            => ['taxable', 'tax', 'round_off', 'points', 'total', 'paid', 'due'],
             'purchases'        => ['subtotal', 'discount', 'tax', 'total', 'paid', 'due'],
             'sales_returns', 'purchase_returns' => ['taxable', 'tax', 'total'],
+            'cancelled_sales', 'cancelled_purchases', 'cancelled_orders' => ['total'],
             default            => ['amount'],
         };
     }
@@ -197,7 +201,7 @@ class DetailedReportService
             case 'receipts':
                 // Advance already received and later used on a bill is not new money, so it is left out.
                 $q = $scope(CustomerReceipt::query())->with('customer:id,name')
-                    ->where('applied_from_advance', false)
+                    ->where('applied_from_advance', false)->where('mode', '!=', 'discount')
                     ->whereBetween('receipt_date', [$from, $to])
                     ->when(filled($mode), fn ($b) => $b->where('mode', $mode))
                     ->orderBy('receipt_date')->orderBy('receipt_no');
@@ -213,7 +217,7 @@ class DetailedReportService
 
             case 'payments':
                 $q = $scope(SupplierPayment::query())->with('supplier:id,name')
-                    ->where('applied_from_advance', false)
+                    ->where('applied_from_advance', false)->where('mode', '!=', 'discount')
                     ->whereBetween('payment_date', [$from, $to])
                     ->when(filled($mode), fn ($b) => $b->where('mode', $mode))
                     ->orderBy('payment_date')->orderBy('payment_no');
@@ -230,6 +234,61 @@ class DetailedReportService
                 };
                 break;
 
+            case 'cancelled_sales':
+                $q = $scope(Sale::query())->with(['customer:id,name', 'createdBy:id,name'])
+                    ->where('status', 'cancelled')
+                    ->whereBetween('sale_date', [$from, $to])
+                    ->orderBy('sale_date')->orderBy('sale_no');
+                $map = function (Sale $s): array {
+                    return [
+                        'id' => $s->id, 'company_id' => $s->company_id, 'no' => $s->sale_no, 'date' => $s->sale_date->toDateString(),
+                        'party' => $s->customer?->name ?? ($s->customer_name ?: '—'), 'ref' => null, 'mode' => $s->payment_mode,
+                        'kind' => ['complimentary' => 'Free', 'proforma' => 'Proforma'][$s->bill_kind] ?? 'Tax invoice',
+                        'staff' => $s->createdBy?->name, 'note' => $s->cancel_reason,
+                        'cancelled_on' => $s->updated_at?->toDateString(),
+                        'total' => round((float) $s->grand_total - (float) $s->loyalty_discount, 2),
+                    ];
+                };
+                break;
+
+            case 'cancelled_purchases':
+                $q = $scope(Purchase::query())->with('supplier:id,name')
+                    ->where('status', 'cancelled')
+                    ->whereBetween('purchase_date', [$from, $to])
+                    ->orderBy('purchase_date')->orderBy('purchase_no');
+                $map = function (Purchase $p): array {
+                    return [
+                        'id' => $p->id, 'company_id' => $p->company_id, 'no' => $p->purchase_no, 'date' => $p->purchase_date->toDateString(),
+                        'party' => $p->supplier?->name, 'ref' => $p->invoice_no, 'mode' => null, 'kind' => 'Purchase bill', 'staff' => null,
+                        'note' => $p->notes, 'cancelled_on' => $p->updated_at?->toDateString(),
+                        'total' => (float) $p->grand_total,
+                    ];
+                };
+                break;
+
+            case 'cancelled_orders':
+                // Advance orders, backorders (waiting orders) and purchase orders that were cancelled.
+                $orders = [];
+                foreach ($scope(AdvanceOrder::query())->with('customer:id,name')->where('status', 'cancelled')->whereBetween('order_date', [$from, $to])->limit(self::ROW_CAP)->get() as $o) {
+                    $orders[] = ['id' => $o->id, 'company_id' => $o->company_id, 'no' => $o->order_no, 'date' => $o->order_date->toDateString(),
+                        'party' => $o->customer?->name, 'ref' => null, 'mode' => null, 'kind' => 'Advance order', 'staff' => null,
+                        'note' => $o->notes, 'cancelled_on' => $o->updated_at?->toDateString(), 'total' => (float) $o->grand_total];
+                }
+                foreach ($scope(Backorder::query())->with(['customer:id,name', 'items'])->where('status', 'cancelled')->whereBetween('order_date', [$from, $to])->limit(self::ROW_CAP)->get() as $o) {
+                    $orders[] = ['id' => $o->id, 'company_id' => $o->company_id, 'no' => $o->order_no, 'date' => $o->order_date->toDateString(),
+                        'party' => $o->customer?->name, 'ref' => null, 'mode' => null, 'kind' => 'Backorder', 'staff' => null,
+                        'note' => $o->notes, 'cancelled_on' => $o->updated_at?->toDateString(),
+                        'total' => round((float) $o->items->sum(fn ($i) => (float) $i->ordered_qty * (float) $i->rate), 2)];
+                }
+                foreach ($scope(PurchaseOrder::query())->with('supplier:id,name')->where('status', 'cancelled')->whereBetween('po_date', [$from, $to])->limit(self::ROW_CAP)->get() as $o) {
+                    $orders[] = ['id' => $o->id, 'company_id' => $o->company_id, 'no' => $o->po_no, 'date' => $o->po_date->toDateString(),
+                        'party' => $o->supplier?->name, 'ref' => null, 'mode' => null, 'kind' => 'Purchase order', 'staff' => null,
+                        'note' => $o->notes, 'cancelled_on' => $o->updated_at?->toDateString(), 'total' => (float) $o->grand_total];
+                }
+                usort($orders, fn ($a, $b) => [$a['date'], $a['no']] <=> [$b['date'], $b['no']]);
+
+                return [$this->searched(array_slice($orders, 0, self::ROW_CAP), $search), count($orders) > self::ROW_CAP];
+
             default:
                 return [[], false];
         }
@@ -238,13 +297,19 @@ class DetailedReportService
         $truncated = $models->count() > self::ROW_CAP;
         $rows = $models->take(self::ROW_CAP)->map($map)->all();
 
-        if (filled($search)) {
-            $needle = mb_strtolower(trim((string) $search));
-            $rows = array_values(array_filter($rows, fn ($r) => str_contains(mb_strtolower(
-                ($r['no'] ?? '').' '.($r['party'] ?? '').' '.($r['ref'] ?? '')
-            ), $needle)));
-        }
+        return [$this->searched($rows, $search), $truncated];
+    }
 
-        return [$rows, $truncated];
+    /** @param array<int, array<string, mixed>> $rows */
+    private function searched(array $rows, ?string $search): array
+    {
+        if (! filled($search)) {
+            return $rows;
+        }
+        $needle = mb_strtolower(trim((string) $search));
+
+        return array_values(array_filter($rows, fn ($r) => str_contains(mb_strtolower(
+            ($r['no'] ?? '').' '.($r['party'] ?? '').' '.($r['ref'] ?? '')
+        ), $needle)));
     }
 }

@@ -23,7 +23,7 @@ const selectCls = 'h-10 w-full rounded-xl border border-line bg-surface px-3 tex
 function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyParams }) {
   const queryClient = useQueryClient();
   const { isSuperAdmin, companies, companyId } = useAuth();
-  const [form, setForm] = useState({ name: '', short_name: '', description: '', parent_id: '', status: 'active' });
+  const [form, setForm] = useState({ name: '', short_name: '', description: '', parent_id: '', status: 'active', care_guide_en: '', care_guide_ml: '' });
   const [formCompanyId, setFormCompanyId] = useState('');
   const [errors, setErrors] = useState({});
   const [applied, setApplied] = useState(null);
@@ -44,6 +44,8 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
       const payload = { name: form.name.trim(), description: form.description || null, status: form.status };
       if (tab.hasShort) payload.short_name = form.short_name || null;
       if (tab.type === 'categories') {
+        payload.care_guide_en = form.care_guide_en?.trim() || null;
+        payload.care_guide_ml = form.care_guide_ml?.trim() || null;
         payload.parent_id = tab.mode === 'child' ? (form.parent_id || null) : null;
       }
       if (isSuperAdmin && editing?.id && formCompanyId && String(formCompanyId) !== String(editing.company_id)) {
@@ -66,8 +68,8 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
   const key = editing?.id ?? 'new';
   if (open && applied !== key) {
     setForm(editing
-      ? { name: editing.name ?? '', short_name: editing.short_name ?? '', description: editing.description ?? '', parent_id: editing.parent_id ?? '', status: editing.status ?? 'active' }
-      : { name: '', short_name: '', description: '', parent_id: '', status: 'active' });
+      ? { name: editing.name ?? '', short_name: editing.short_name ?? '', description: editing.description ?? '', parent_id: editing.parent_id ?? '', status: editing.status ?? 'active', care_guide_en: editing.care_guide_en ?? '', care_guide_ml: editing.care_guide_ml ?? '' }
+      : { name: '', short_name: '', description: '', parent_id: '', status: 'active', care_guide_en: '', care_guide_ml: '' });
     setFormCompanyId(editing?.company_id ?? defaultCreateCompanyId({ filterCompanyId, companyId }));
     setApplied(key);
     setErrors({});
@@ -158,6 +160,21 @@ function MasterModal({ open, onClose, tab, editing, filterCompanyId, companyPara
             <div className="sm:col-span-2">
               <Field label="Description" error={err('description')}><Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} /></Field>
             </div>
+            {tab.type === 'categories' && (
+              <>
+                <div className="sm:col-span-2">
+                  <Field label="Care guide — English" error={err('care_guide_en')}>
+                    <textarea rows={3} value={form.care_guide_en} onChange={(e) => setForm((f) => ({ ...f, care_guide_en: e.target.value }))} placeholder="e.g. Keep in bright indirect light. Water when the top soil is dry." className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm" />
+                  </Field>
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Care guide — മലയാളം" error={err('care_guide_ml')}>
+                    <textarea rows={3} lang="ml" value={form.care_guide_ml} onChange={(e) => setForm((f) => ({ ...f, care_guide_ml: e.target.value }))} placeholder="ഉദാ: നേരിട്ടല്ലാത്ത വെളിച്ചത്തിൽ വയ്ക്കുക. മണ്ണ് ഉണങ്ങിയാൽ നനയ്ക്കുക." className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm" />
+                  </Field>
+                  <p className="mt-1 text-xs text-muted">Sent to the customer on WhatsApp after they buy a product from this category (Malayalam first, then English). A subcategory without its own guide uses its category&apos;s.</p>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

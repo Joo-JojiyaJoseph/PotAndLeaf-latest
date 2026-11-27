@@ -39,9 +39,9 @@ class StockVerificationController extends Controller
         $products = Product::forCompany($company->id)
             ->with('unit:id,short_name,name')
             ->orderBy('name')
-            ->get(['id', 'sku', 'name', 'current_stock', 'unit_id'])
+            ->get(['id', 'sku', 'name', 'current_stock', 'unit_id', 'images'])
             ->map(fn ($p) => [
-                'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name,
+                'id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'image' => \App\Support\Media\MediaUrl::resolveMany($p->images ?? [])[0] ?? null,
                 'system_qty' => (float) $p->current_stock,
                 'unit' => $p->unit?->short_name ?? $p->unit?->name,
             ]);
@@ -57,7 +57,23 @@ class StockVerificationController extends Controller
                 'system_qty' => (float) $b->remaining_qty, 'received_at' => optional($b->received_at)->toDateString(),
             ]);
 
-        return $this->ok(['products' => $products, 'batches' => $batches]);
+        $locations = \App\Models\Location::forCompany($company->id)->where('is_active', true)->orderByDesc('is_default')->orderBy('name')
+            ->get(['id', 'name', 'type', 'is_default'])
+            ->map(fn ($l) => ['id' => $l->id, 'name' => $l->name, 'type' => $l->type, 'is_default' => (bool) $l->is_default]);
+
+        // With several branches / godowns each count is for ONE location, so send what each holds.
+        $locationStock = [];
+        if ($locations->count() > 1) {
+            foreach (app(\App\Services\LocationStockService::class)->balances($company->id)->groupBy('location_id') as $locationId => $rows) {
+                $locationStock[$locationId] = $rows->pluck('qty', 'product_id')->map(fn ($q) => (float) $q)->all();
+            }
+        }
+
+        return $this->ok([
+            'location_stock' => (object) $locationStock,
+            'products' => $products, 'batches' => $batches, 'locations' => $locations,
+            'my_location_id' => $request->user()->is_super_admin ? null : $request->user()->locationIdFor($company->id),
+        ]);
     }
 
     public function store(StoreStockVerificationRequest $request): JsonResponse
@@ -73,7 +89,7 @@ class StockVerificationController extends Controller
         $this->allow($request, 'stock_verifications.view');
         $this->assertRecordCompany($request, $stockVerification);
 
-        return $this->ok(new StockVerificationResource($stockVerification->load('items')));
+        return $this->ok(new StockVerificationResource($stockVerification->load(['items', 'location:id,name,type'])));
     }
 
     public function submit(Request $request, StockVerification $stockVerification): JsonResponse
@@ -83,7 +99,53 @@ class StockVerificationController extends Controller
 
         return $this->ok(
             new StockVerificationResource($this->verifications->submit($stockVerification, $request->user()->id)),
-            'Count submitted for HO approval.'
+            'Stock updated now. Head office / admin will check the count and mark it verified — you can keep billing.'
+        );
+    }
+
+    /**
+     * Quick fix while billing: the product is on the shelf but the system says it is out of stock.
+     * The stock is set to the counted quantity immediately (no approval), head office / admin are told to
+     * check it, and the bill can go ahead.
+     */
+    public function quick(Request $request): JsonResponse
+    {
+        $company = $this->company($request);
+        $user = $request->user();
+        abort_unless($user->hasPermission('stock_verifications.create', $company->id) || $user->hasPermission('sales.create', $company->id), 403);
+
+        $data = $request->validate([
+            'product_id'       => ['required', 'uuid', \Illuminate\Validation\Rule::exists('products', 'id')->where('company_id', $company->id)],
+            'counted_qty'      => ['required', 'numeric', 'min:0', 'max:9999999'],
+            'location_id'      => ['nullable', 'uuid', \Illuminate\Validation\Rule::exists('locations', 'id')->where('company_id', $company->id)->where('is_active', true)],
+            'notes'            => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $v = $this->verifications->create($company->id, [
+            'count_date'  => now()->toDateString(),
+            'location_id' => $data['location_id'] ?? null,
+            'is_quick'    => true,
+            'notes'       => 'Quick correction while billing'.(filled($data['notes'] ?? null) ? ': '.$data['notes'] : '.'),
+            'items'       => [['product_id' => $data['product_id'], 'counted_qty' => $data['counted_qty']]],
+        ], $user->id);
+        $v = $this->verifications->submit($v, $user->id);
+
+        return $this->created(
+            new StockVerificationResource($v->load(['items', 'location:id,name,type'])),
+            'Stock corrected. Head office / admin will check it. You can bill now.'
+        );
+    }
+
+    /** Head office / admin has checked a count whose stock was already updated. */
+    public function verify(Request $request, StockVerification $stockVerification): JsonResponse
+    {
+        $this->allow($request, 'stock_verifications.approve');
+        $this->assertRecordCompany($request, $stockVerification, writable: true, writableMessage: 'Switch to the count company to verify it.');
+        $note = $request->validate(['note' => ['nullable', 'string', 'max:500']])['note'] ?? null;
+
+        return $this->ok(
+            new StockVerificationResource($this->verifications->verify($stockVerification, $request->user()->id, $note)->load('location:id,name,type')),
+            'Count verified.'
         );
     }
 

@@ -29,6 +29,8 @@ class StorePurchaseReturnRequest extends FormRequest
 
             'items'                      => ['required', 'array', 'min:1'],
             'items.*.purchase_item_id'   => ['required', 'uuid'],
+            // Credit beyond what we owed: kept as supplier advance (default) or received back as money.
+            'refund_mode'                => ['nullable', 'in:advance,cash,upi,card,bank,cheque'],
             'items.*.qty'                => ['required', 'numeric', 'gt:0'],
             'items.*.reason'             => ['nullable', 'string', 'max:255'],
             'items.*.product_batch_id'   => ['nullable', 'uuid', Rule::exists('product_batches', 'id')->where('company_id', $companyId)],

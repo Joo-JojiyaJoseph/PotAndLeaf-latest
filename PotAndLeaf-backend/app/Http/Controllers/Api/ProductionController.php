@@ -33,14 +33,23 @@ class ProductionController extends Controller
         $company = $this->company($request);
         $this->allow($request, 'production.view');
 
-        $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')->get(['id', 'sku', 'name', 'current_stock', 'cost_price'])
+        $products = Product::forCompany($company->id)->where('status', 'active')->orderBy('name')->get(['id', 'sku', 'name', 'current_stock', 'cost_price', 'mrp', 'retail_price', 'wholesale_price', 'dealer_price', 'gst_rate'])
             ->map(fn ($p) => [
                 'id'            => $p->id,
                 'sku'           => $p->sku,
                 'name'          => $p->name,
                 'current_stock' => (float) $p->current_stock,
                 'cost_price'    => (float) $p->cost_price,
+                // The selling prices, as on the product form.
+                'mrp'             => (float) $p->mrp,
+                'retail_price'    => (float) $p->retail_price,
+                'wholesale_price' => (float) $p->wholesale_price,
+                'dealer_price'    => (float) $p->dealer_price,
+                'gst_rate'        => (float) $p->gst_rate,
             ]);
+        $categories = \App\Models\ProductCategory::query()->where('company_id', $company->id)->where('status', 'active')->orderBy('name')
+            ->get(['id', 'name', 'parent_id'])
+            ->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'parent_id' => $c->parent_id]);
         $units = ProductUnit::query()->where('company_id', $company->id)->orderBy('name')
             ->get(['id', 'name', 'short_name'])
             ->map(fn ($u) => ['id' => $u->id, 'name' => $u->name, 'short_name' => $u->short_name]);
@@ -76,6 +85,8 @@ class ProductionController extends Controller
 
         return $this->ok([
             'products'    => $products,
+            'categories'  => $categories,
+            'tax_rates'   => [0, 5, 12, 18, 28],
             'units'       => $units,
             'locations'   => $locations,
             'boms'        => $boms,
@@ -253,6 +264,21 @@ class ProductionController extends Controller
         $this->assertRecordCompany($request, $productionOrder, writable: true);
 
         return $this->ok(new ProductionOrderResource($this->production->complete($productionOrder, $request->user()->id)), 'Production completed — stock updated.');
+    }
+
+    /** Set the finished product's MRP / retail / wholesale / dealer price (at the final Complete step, or later). */
+    public function setPrices(Request $request, ProductionOrder $productionOrder): JsonResponse
+    {
+        $this->allow($request, 'production.complete');
+        $this->assertRecordCompany($request, $productionOrder, writable: true);
+        $data = $request->validate([
+            'mrp'             => ['nullable', 'numeric', 'min:0'],
+            'retail_price'    => ['nullable', 'numeric', 'min:0'],
+            'wholesale_price' => ['nullable', 'numeric', 'min:0'],
+            'dealer_price'    => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        return $this->ok(new ProductionOrderResource($this->production->setOutputPrices($productionOrder, $data, $request->user()->id)), 'Prices saved on the finished product.');
     }
 
     public function destroyOrder(Request $request, ProductionOrder $productionOrder): JsonResponse

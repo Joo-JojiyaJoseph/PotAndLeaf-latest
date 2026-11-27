@@ -13,7 +13,7 @@ class ProductCategory extends Model
 {
     use HasAuditColumns, HasFactory, HasUuids;
 
-    protected $fillable = ['company_id', 'parent_id', 'code', 'name', 'description', 'status'];
+    protected $fillable = ['company_id', 'parent_id', 'code', 'name', 'description', 'care_guide_en', 'care_guide_ml', 'status'];
 
     public function parent(): BelongsTo
     {

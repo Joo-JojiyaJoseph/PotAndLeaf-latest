@@ -28,9 +28,10 @@ class TransferService
     {
         return StockTransfer::query()
             ->when($companyId !== null, fn ($q) => $q->where(fn ($inner) => $inner->where('company_id', $companyId)->orWhere('to_company_id', $companyId)))
-            ->with(['fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name'])
+            ->with(['fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name,type', 'toLocation:id,name,type'])
             ->withCount('items')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
+            ->when(filled($filters['location_id'] ?? null), fn ($q) => $q->where(fn ($w) => $w->where('from_location_id', $filters['location_id'])->orWhere('to_location_id', $filters['location_id'])))
             ->listFilters($filters, 'transfer_date', ['transfer_no'])
             ->orderByDesc('transfer_date')->orderByDesc('created_at')
             ->paginate(min((int) ($filters['per_page'] ?? 15), 100))
@@ -45,112 +46,166 @@ class TransferService
             ->whereKey($id)->first();
     }
 
+    /**
+     * Create a transfer between two locations (branch or godown) of the same company.
+     * Allowed: godown to branch, branch to godown, branch to branch. Never company to company,
+     * and never godown to godown.
+     */
     public function create(int|string $companyId, array $data, ?int $userId = null, bool $autoApprove = true): StockTransfer
     {
-        $transferType = ($data['transfer_type'] ?? 'inter_company') === 'intra_company' ? 'intra_company' : 'inter_company';
-        $status = $autoApprove ? 'draft' : 'requested';
-
-        if ($transferType === 'intra_company') {
-            $transfer = $this->createIntraCompany($companyId, $data, $status);
-        } else {
-            $transfer = $this->createInterCompany($companyId, $data, $status);
+        if (($data['transfer_type'] ?? 'intra_company') === 'inter_company') {
+            throw ValidationException::withMessages(['transfer_type' => 'Stock can only move between the branches and godowns of one company, not between companies.']);
         }
 
+        $status = $autoApprove ? 'draft' : 'requested';
+        $transfer = $this->createIntraCompany($companyId, $data, $status);
         $this->logTransfer($companyId, $userId, 'create', $transfer, 'Transfer created');
 
         return $transfer;
     }
 
-    /**
-     * Stock other companies can give: each active product with stock left after
-     * what is already promised on open transfers. The requesting company is left out.
-     *
-     * @return list<array<string, mixed>>
-     */
-    public function availableStock(int|string|null $excludeCompanyId, ?string $search = null): array
+    /** Active location of this company, or a clear validation error. */
+    private function activeLocation(int|string $companyId, ?string $locationId, string $field): Location
     {
-        $companies = Company::query()->where('is_active', true)
-            ->when($excludeCompanyId !== null, fn ($q) => $q->where('id', '!=', $excludeCompanyId))
-            ->pluck('name', 'id');
-        if ($companies->isEmpty()) {
+        $location = $locationId
+            ? Location::forCompany($companyId)->whereKey($locationId)->where('is_active', true)->first()
+            : null;
+        if (! $location) {
+            throw ValidationException::withMessages([$field => 'Select a valid active branch or godown of this company.']);
+        }
+
+        return $location;
+    }
+
+    /** godown to branch, branch to godown and branch to branch are allowed; godown to godown is not. */
+    private function assertTransferPair(Location $from, Location $to, string $field = 'to_location_id'): void
+    {
+        if ((string) $from->id === (string) $to->id) {
+            throw ValidationException::withMessages([$field => 'The destination must differ from the source.']);
+        }
+        if ($from->type === 'godown' && $to->type === 'godown') {
+            throw ValidationException::withMessages([$field => 'Stock cannot move from one godown to another. Send it to a branch first.']);
+        }
+    }
+
+    /** Qty promised on open (requested / approved) transfers, per product, leaving one location. */
+    private function openLocationQty(string $fromLocationId, array $productIds, ?string $exceptTransferId = null): array
+    {
+        if ($productIds === []) {
             return [];
         }
-        $products = Product::query()
-            ->whereIn('company_id', $companies->keys())
-            ->where('status', 'active')
-            ->where('current_stock', '>', 0)
-            ->when(filled($search), fn ($q) => $q->where(fn ($w) => $w->where('name', 'like', '%'.trim($search).'%')->orWhere('sku', 'like', '%'.trim($search).'%')))
-            ->with(['unit:id,name,short_name', 'category:id,name'])
-            ->orderBy('name')
-            ->limit(500)
-            ->get(['id', 'company_id', 'name', 'sku', 'current_stock', 'unit_id', 'category_id', 'cost_price']);
-        $reserved = $this->openTransferQty($products->pluck('id')->all());
 
-        return $products->map(fn (Product $p) => [
-            'company_id'   => $p->company_id,
-            'company_name' => $companies[$p->company_id] ?? '—',
-            'product_id'   => $p->id,
-            'name'         => $p->name,
-            'sku'          => $p->sku,
-            'category'     => $p->category?->name,
-            'unit'         => $p->unit?->short_name ?: $p->unit?->name,
-            'in_stock'     => (float) $p->current_stock,
-            'available'    => round(max(0, (float) $p->current_stock - (float) ($reserved[$p->id] ?? 0)), 3),
-        ])->filter(fn ($r) => $r['available'] > 0)
-            ->sortBy([['name', 'asc'], ['company_name', 'asc']])
-            ->values()->all();
+        return StockTransferItem::query()
+            ->whereIn('product_id', $productIds)
+            ->when($exceptTransferId, fn ($q) => $q->where('stock_transfer_id', '!=', $exceptTransferId))
+            ->whereHas('stockTransfer', fn ($q) => $q->where('from_location_id', $fromLocationId)->whereIn('status', ['draft', 'requested']))
+            ->get()
+            ->groupBy('product_id')
+            ->map(fn ($rows) => round($rows->sum(fn ($row) => $row->dispatchQty()), 3))
+            ->all();
     }
 
     /**
-     * A company asks other companies for stock. One request is made per company
-     * the stock comes from. Requests wait for approval unless $autoApprove.
+     * Stock the other branches and godowns of the company can give: for each other location,
+     * each active product it holds, less what is already promised on open transfers.
      *
-     * @param  array{transfer_date: string, notes?: ?string, lines: list<array{from_company_id: int|string, product_id: string, qty: float|string}>}  $data
+     * @return list<array<string, mixed>>
+     */
+    public function availableStock(int|string $companyId, ?string $excludeLocationId = null, ?string $search = null): array
+    {
+        $needle = filled($search) ? mb_strtolower(trim($search)) : null;
+        $rows = $this->locationStock->balances($companyId)
+            ->filter(fn ($r) => (float) $r['qty'] > 0 && (string) $r['location_id'] !== (string) $excludeLocationId)
+            ->when($needle, fn ($c) => $c->filter(fn ($r) => str_contains(mb_strtolower($r['product_name'].' '.$r['sku']), $needle)));
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $products = Product::query()->whereIn('id', $rows->pluck('product_id')->unique())->where('status', 'active')
+            ->with(['unit:id,name,short_name', 'category:id,name'])->get()->keyBy('id');
+        $reserved = [];
+        foreach ($rows->pluck('location_id')->unique() as $locationId) {
+            $reserved[$locationId] = $this->openLocationQty($locationId, $rows->where('location_id', $locationId)->pluck('product_id')->all());
+        }
+
+        return $rows->map(function ($r) use ($products, $reserved) {
+            $p = $products[$r['product_id']] ?? null;
+            if (! $p) {
+                return null;
+            }
+
+            return [
+                'location_id'   => $r['location_id'],
+                'location_name' => $r['location_name'],
+                'location_type' => $r['location_type'],
+                'product_id'    => $p->id,
+                'name'          => $p->name,
+                'sku'           => $p->sku,
+                'category'      => $p->category?->name,
+                'unit'          => $p->unit?->short_name ?: $p->unit?->name,
+                'in_stock'      => (float) $r['qty'],
+                'available'     => round(max(0, (float) $r['qty'] - (float) ($reserved[$r['location_id']][$p->id] ?? 0)), 3),
+            ];
+        })->filter(fn ($r) => $r && $r['available'] > 0)
+            ->sortBy([['name', 'asc'], ['location_name', 'asc']])->values()->all();
+    }
+
+    /**
+     * A branch or godown asks another location of the company for stock. One request is made
+     * for each location the stock comes from. Requests wait for approval unless $autoApprove.
+     *
+     * @param  array{transfer_date: string, notes?: ?string, lines: list<array{from_location_id: string, product_id: string, qty: float|string}>}  $data
      * @return list<StockTransfer>
      */
-    public function requestStock(int|string $toCompanyId, array $data, ?int $userId = null, bool $autoApprove = false): array
+    public function requestStock(int|string $companyId, string $toLocationId, array $data, ?int $userId = null, bool $autoApprove = false): array
     {
-        abort_unless(Company::whereKey($toCompanyId)->where('is_active', true)->exists(), 422, 'Requesting company not found.');
+        $to = $this->activeLocation($companyId, $toLocationId, 'to_location_id');
         $lines = collect($data['lines'] ?? []);
         if ($lines->isEmpty()) {
             throw ValidationException::withMessages(['lines' => 'Add at least one product to request.']);
         }
 
-        // Check every line: right company, active product, enough stock free.
-        $products = Product::query()->whereIn('id', $lines->pluck('product_id'))->get()->keyBy('id');
-        $reserved = $this->openTransferQty($products->keys()->all());
-        foreach ($lines->groupBy('product_id') as $productId => $rows) {
-            $product = $products[$productId] ?? null;
-            $from = $rows->first()['from_company_id'];
-            if (! $product || (string) $product->company_id !== (string) $from) {
-                throw ValidationException::withMessages(['lines' => 'A selected product does not belong to the chosen company. Refresh and try again.']);
-            }
-            if ((string) $from === (string) $toCompanyId) {
-                throw ValidationException::withMessages(['lines' => 'You cannot request stock from your own company.']);
+        $products = Product::forCompany($companyId)->whereIn('id', $lines->pluck('product_id'))->get()->keyBy('id');
+        $fromIds = $lines->pluck('from_location_id')->unique();
+        $froms = [];
+        foreach ($fromIds as $fid) {
+            $froms[$fid] = $this->activeLocation($companyId, $fid, 'lines');
+            $this->assertTransferPair($froms[$fid], $to, 'lines');
+        }
+
+        foreach ($lines->groupBy(fn ($l) => $l['from_location_id'].'|'.$l['product_id']) as $rows) {
+            $first = $rows->first();
+            $product = $products[$first['product_id']] ?? null;
+            if (! $product) {
+                throw ValidationException::withMessages(['lines' => 'A selected product was not found. Refresh and try again.']);
             }
             $want = round((float) $rows->sum(fn ($r) => (float) $r['qty']), 3);
-            $free = round(max(0, (float) $product->current_stock - (float) ($reserved[$productId] ?? 0)), 3);
             if ($want <= 0) {
                 throw ValidationException::withMessages(['lines' => "Enter a quantity for {$product->name}."]);
             }
+            $reserved = $this->openLocationQty($first['from_location_id'], [$product->id]);
+            $free = round(max(0, $this->locationStock->available($first['from_location_id'], $product->id) - (float) ($reserved[$product->id] ?? 0)), 3);
             if ($want > $free + 0.0001) {
-                throw ValidationException::withMessages(['lines' => "Only {$free} of {$product->name} is free at that company; you asked for {$want}."]);
+                $where = $froms[$first['from_location_id']]->name;
+                throw ValidationException::withMessages(['lines' => "Only {$free} of {$product->name} is free at {$where}; you asked for {$want}."]);
             }
         }
 
-        return DB::transaction(function () use ($lines, $products, $toCompanyId, $data, $userId, $autoApprove) {
+        return DB::transaction(function () use ($lines, $products, $companyId, $to, $data, $userId, $autoApprove) {
             $made = [];
-            foreach ($lines->groupBy('from_company_id') as $fromId => $rows) {
+            foreach ($lines->groupBy('from_location_id') as $fromId => $rows) {
                 $transfer = StockTransfer::create([
-                    'company_id'    => $fromId,
-                    'to_company_id' => $toCompanyId,
-                    'transfer_type' => 'inter_company',
-                    'transfer_no'   => $this->nextTransferNo($fromId),
-                    'transfer_date' => $data['transfer_date'],
-                    'status'        => $autoApprove ? 'draft' : 'requested',
-                    'approved_at'   => $autoApprove ? now() : null,
-                    'notes'         => $data['notes'] ?? null,
-                    'requested_by'  => $userId,
+                    'company_id'       => $companyId,
+                    'to_company_id'    => null,
+                    'transfer_type'    => 'intra_company',
+                    'from_location_id' => $fromId,
+                    'to_location_id'   => $to->id,
+                    'transfer_no'      => $this->nextTransferNo($companyId),
+                    'transfer_date'    => $data['transfer_date'],
+                    'status'           => $autoApprove ? 'draft' : 'requested',
+                    'approved_at'      => $autoApprove ? now() : null,
+                    'notes'            => $data['notes'] ?? null,
+                    'requested_by'     => $userId,
                 ]);
                 $transfer->items()->createMany($rows->groupBy('product_id')->map(fn ($r, $pid) => [
                     'product_id'   => $pid,
@@ -158,8 +213,8 @@ class TransferService
                     'qty'          => round((float) $r->sum(fn ($x) => (float) $x['qty']), 3),
                     'received_qty' => 0,
                 ])->values()->all());
-                $this->logTransfer($fromId, $userId, 'create', $transfer, 'Stock requested by company #'.$toCompanyId);
-                $made[] = $transfer->load(['items', 'fromCompany:id,name', 'toCompany:id,name']);
+                $this->logTransfer($companyId, $userId, 'create', $transfer, 'Stock requested by '.$to->name);
+                $made[] = $transfer->load(['items', 'fromLocation:id,name,type', 'toLocation:id,name,type']);
             }
 
             return $made;
@@ -167,61 +222,49 @@ class TransferService
     }
 
     /**
-     * Companies that could send a request instead: for each line, the same
-     * product (matched by name) and how much of it is free there.
+     * Other locations that could send a request instead: for each, how much of the
+     * requested products it has free.
      */
     public function sources(StockTransfer $transfer): array
     {
         $transfer->loadMissing('items');
-        $names = $transfer->items->map(fn ($i) => mb_strtolower(trim((string) $i->product_name)))->unique()->values();
         $rows = [];
-        foreach (Company::query()->where('is_active', true)->where('id', '!=', $transfer->to_company_id)->orderBy('name')->get(['id', 'name']) as $company) {
-            $products = Product::forCompany($company->id)->where('status', 'active')
-                ->whereIn(DB::raw('LOWER(TRIM(name))'), $names)->get(['id', 'name', 'current_stock']);
-            if ($products->isEmpty()) {
+        $to = Location::find($transfer->to_location_id);
+        foreach (Location::forCompany($transfer->company_id)->where('is_active', true)->where('id', '!=', $transfer->to_location_id)->orderBy('name')->get(['id', 'name', 'type']) as $loc) {
+            if ($to && $loc->type === 'godown' && $to->type === 'godown') {
                 continue;
             }
-            $reserved = $this->openTransferQty($products->pluck('id')->all(), $transfer->id);
+            $reserved = $this->openLocationQty($loc->id, $transfer->items->pluck('product_id')->filter()->all(), $transfer->id);
             $lines = [];
             $enough = true;
             foreach ($transfer->items as $item) {
-                $p = $products->first(fn ($x) => mb_strtolower(trim($x->name)) === mb_strtolower(trim((string) $item->product_name)));
-                $free = $p ? round(max(0, (float) $p->current_stock - (float) ($reserved[$p->id] ?? 0)), 3) : 0.0;
-                $enough = $enough && $p && $free + 0.0001 >= (float) $item->qty;
-                $lines[] = ['item_id' => $item->id, 'product_name' => $item->product_name, 'requested' => (float) $item->qty, 'available' => $free, 'found' => (bool) $p];
+                $free = round(max(0, $this->locationStock->available($loc->id, (string) $item->product_id) - (float) ($reserved[$item->product_id] ?? 0)), 3);
+                $enough = $enough && $free + 0.0001 >= (float) $item->qty;
+                $lines[] = ['item_id' => $item->id, 'product_name' => $item->product_name, 'requested' => (float) $item->qty, 'available' => $free, 'found' => true];
             }
-            $rows[] = ['company_id' => $company->id, 'company_name' => $company->name, 'is_current' => (string) $company->id === (string) $transfer->company_id, 'enough' => $enough, 'lines' => $lines];
+            $rows[] = [
+                'location_id' => $loc->id, 'location_name' => $loc->name, 'location_type' => $loc->type,
+                'is_current' => (string) $loc->id === (string) $transfer->from_location_id, 'enough' => $enough, 'lines' => $lines,
+            ];
         }
         usort($rows, fn ($a, $b) => [$b['is_current'], $b['enough']] <=> [$a['is_current'], $a['enough']]);
 
         return $rows;
     }
 
-    /** Before approval, send the request to a different company that has the stock. */
-    public function changeSource(StockTransfer $transfer, int|string $newFromId): StockTransfer
+    /** Before approval, send the request to a different location that has the stock. */
+    public function changeSource(StockTransfer $transfer, string $newFromLocationId): StockTransfer
     {
         if (! $transfer->isRequested()) {
-            throw ValidationException::withMessages(['from_company_id' => 'The sending company can only be changed before approval.']);
+            throw ValidationException::withMessages(['from_location_id' => 'The sending location can only be changed before approval.']);
         }
-        if ((string) $newFromId === (string) $transfer->to_company_id) {
-            throw ValidationException::withMessages(['from_company_id' => 'The requesting company cannot send to itself.']);
-        }
-        abort_unless(Company::whereKey($newFromId)->where('is_active', true)->exists(), 422, 'Company not found.');
+        $from = $this->activeLocation($transfer->company_id, $newFromLocationId, 'from_location_id');
+        $to = $this->activeLocation($transfer->company_id, $transfer->to_location_id, 'to_location_id');
+        $this->assertTransferPair($from, $to, 'from_location_id');
 
-        return DB::transaction(function () use ($transfer, $newFromId) {
-            $transfer->loadMissing('items');
-            foreach ($transfer->items as $item) {
-                $p = Product::forCompany($newFromId)->where('status', 'active')
-                    ->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim((string) $item->product_name))])->first();
-                if (! $p) {
-                    throw ValidationException::withMessages(['from_company_id' => "That company does not have {$item->product_name}."]);
-                }
-                $item->update(['product_id' => $p->id, 'product_batch_id' => null]);
-            }
-            $transfer->update(['company_id' => $newFromId, 'transfer_no' => $this->nextTransferNo($newFromId)]);
+        $transfer->update(['from_location_id' => $from->id]);
 
-            return $transfer->refresh()->load('items');
-        });
+        return $transfer->refresh()->load(['items', 'fromLocation:id,name,type', 'toLocation:id,name,type']);
     }
 
     /** Qty promised on open (requested / approved) transfers, per product. */
@@ -294,8 +337,9 @@ class TransferService
             throw ValidationException::withMessages(['to_location_id' => 'Destination location must differ from the source location.']);
         }
 
-        $this->assertLocationBelongsToCompany($companyId, $fromLocationId, 'from_location_id');
-        $this->assertLocationBelongsToCompany($companyId, $toLocationId, 'to_location_id');
+        $fromLocation = $this->activeLocation($companyId, $fromLocationId, 'from_location_id');
+        $toLocation = $this->activeLocation($companyId, $toLocationId, 'to_location_id');
+        $this->assertTransferPair($fromLocation, $toLocation);
 
         $names = Product::forCompany($companyId)
             ->whereIn('id', collect($data['items'])->pluck('product_id'))
@@ -327,10 +371,10 @@ class TransferService
     }
 
     /** HO approves a requested transfer, optionally with per-line approved quantities. */
-    public function approve(StockTransfer $transfer, array $approvals = [], ?int $userId = null, int|string|null $toCompanyId = null, int|string|null $fromCompanyId = null): StockTransfer
+    public function approve(StockTransfer $transfer, array $approvals = [], ?int $userId = null, int|string|null $toCompanyId = null, int|string|null $fromCompanyId = null, ?string $fromLocationId = null): StockTransfer
     {
-        if ($fromCompanyId !== null && $transfer->isRequested() && (string) $fromCompanyId !== (string) $transfer->company_id) {
-            $transfer = $this->changeSource($transfer, $fromCompanyId);
+        if ($fromLocationId !== null && $transfer->isRequested() && $transfer->isIntraCompany() && (string) $fromLocationId !== (string) $transfer->from_location_id) {
+            $transfer = $this->changeSource($transfer, $fromLocationId);
         }
         if ($transfer->isDraft()) {
             return $transfer->load(['items', 'fromCompany:id,name', 'toCompany:id,name', 'fromLocation:id,name', 'toLocation:id,name']);
@@ -356,6 +400,27 @@ class TransferService
         $transfer->refresh()->load('items');
         if ($transfer->items->every(fn ($i) => $i->dispatchQty() <= 0)) {
             throw ValidationException::withMessages(['approvals' => 'At least one line must have an approved quantity greater than zero.']);
+        }
+
+        if ($transfer->isIntraCompany()) {
+            foreach ($transfer->items as $item) {
+                $needed = $item->dispatchQty();
+                if ($needed <= 0 || ! $item->product_id) {
+                    continue;
+                }
+                $reserved = $this->openLocationQty($transfer->from_location_id, [$item->product_id], $transfer->id);
+                $free = round(max(0, $this->locationStock->available($transfer->from_location_id, $item->product_id) - (float) ($reserved[$item->product_id] ?? 0)), 3);
+                if ($needed > $free + 0.0001) {
+                    throw ValidationException::withMessages([
+                        'approvals' => "Not enough stock of {$item->product_name} at the sending location: {$free} free, {$needed} approved. Choose another location that has it.",
+                    ]);
+                }
+            }
+
+            $transfer->update(['status' => 'draft', 'approved_at' => now(), 'rejection_reason' => null]);
+            $this->logTransfer($transfer->company_id, $userId, 'approve', $transfer->fresh(), 'Transfer approved');
+
+            return $transfer->load(['items', 'fromLocation:id,name,type', 'toLocation:id,name,type']);
         }
 
         $destinationId = $transfer->to_company_id ?: $toCompanyId;

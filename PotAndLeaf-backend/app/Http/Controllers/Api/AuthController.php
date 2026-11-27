@@ -127,7 +127,22 @@ class AuthController extends Controller
 
     private function companies($user): array
     {
-        return $this->withFinancialYear($this->companyRows($user));
+        return $this->withLocation($user, $this->withFinancialYear($this->companyRows($user)));
+    }
+
+    /** The branch or godown the user works at in each company (null for head office). */
+    private function withLocation($user, array $rows): array
+    {
+        return array_map(function ($r) use ($user) {
+            $locationId = $user->is_super_admin ? null : $user->locationIdFor($r['id']);
+            $location = $locationId ? \App\Models\Location::find($locationId, ['id', 'name', 'type']) : null;
+            $r['location'] = $location ? ['id' => $location->id, 'name' => $location->name, 'type' => $location->type] : null;
+            // Companies with a landscape division get the Landscape menu.
+            $r['has_landscape'] = \Illuminate\Support\Facades\Schema::hasColumn('locations', 'is_landscape')
+                && \App\Models\Location::forCompany($r['id'])->where('is_landscape', true)->where('is_active', true)->exists();
+
+            return $r;
+        }, $rows);
     }
 
     private function companyRows($user): array

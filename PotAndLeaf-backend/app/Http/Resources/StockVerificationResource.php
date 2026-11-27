@@ -20,6 +20,11 @@ class StockVerificationResource extends JsonResource
             'count_no'         => $this->count_no,
             'count_date'       => optional($this->count_date)->toDateString(),
             'location_note'    => $this->location_note,
+            'location_id'      => $this->location_id,
+            'location'         => $this->whenLoaded('location', fn () => $this->location ? ['id' => $this->location->id, 'name' => $this->location->name, 'type' => $this->location->type] : null),
+            'is_quick'         => (bool) $this->is_quick,
+            'applied_at'       => optional($this->applied_at)->toIso8601String(),
+            'verified_at'      => optional($this->verified_at)->toIso8601String(),
             'status'           => $this->status,
             'notes'            => $this->notes,
             'rejection_reason' => $this->rejection_reason,
@@ -29,6 +34,8 @@ class StockVerificationResource extends JsonResource
             'items'            => StockVerificationItemResource::collection($this->whenLoaded('items')),
             'can'              => [
                 'submit'  => $this->status === 'draft' && $user?->hasPermission('stock_verifications.create', $companyId),
+                // Stock was already changed when the count was submitted; this only marks it as checked.
+                'verify'  => $this->status === 'applied' && $user?->hasPermission('stock_verifications.approve', $companyId),
                 'approve' => $this->status === 'submitted' && $user?->hasPermission('stock_verifications.approve', $companyId),
                 'reject'  => $this->status === 'submitted' && $user?->hasPermission('stock_verifications.approve', $companyId),
             ],

@@ -7,6 +7,7 @@ use App\Models\LoyaltyLedgerEntry;
 use App\Models\Product;
 use App\Models\SalesReturn;
 use App\Services\InventoryService;
+use App\Services\LocationStockService;
 use App\Services\LoyaltyService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -16,6 +17,7 @@ class CancelSalesReturn
     public function __construct(
         private readonly InventoryService $inventory,
         private readonly LoyaltyService $loyalty,
+        private readonly LocationStockService $locationStock,
     ) {}
 
     public function handle(SalesReturn $return, ?int $userId = null): SalesReturn
@@ -50,6 +52,7 @@ class CancelSalesReturn
                         userId: $userId,
                     );
                     $product->save();
+                    $this->locationStock->adjust($return->company_id, $return->location_id, $product->id, 'out', (float) $item->qty);
                 }
 
                 if ($return->customer_id) {

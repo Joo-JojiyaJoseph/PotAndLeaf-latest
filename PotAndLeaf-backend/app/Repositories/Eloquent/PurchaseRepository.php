@@ -17,7 +17,7 @@ class PurchaseRepository implements PurchaseRepositoryInterface
             ->with('supplier:id,name,supplier_code')
             ->when(filled($filters['status'] ?? null), fn ($q) => $q->where('status', $filters['status']))
             ->when(filled($filters['supplier_id'] ?? null), fn ($q) => $q->where('supplier_id', $filters['supplier_id']))
-            ->listFilters($filters, 'purchase_date', ['purchase_no', 'invoice_no'], ['supplier' => 'name'])
+            ->listFilters($filters, 'purchase_date', ['purchase_no', 'invoice_no', 'agent_code'], ['supplier' => 'name'])
             ->orderByDesc('purchase_date')
             ->orderByDesc('created_at')
             ->paginate($perPage)

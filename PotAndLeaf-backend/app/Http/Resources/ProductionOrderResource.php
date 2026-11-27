@@ -58,6 +58,23 @@ class ProductionOrderResource extends JsonResource
             'location'         => $this->whenLoaded('location', fn () => $this->location?->name),
             'total_input_cost' => (float) $this->total_input_cost,
             'output_unit_cost' => (float) $this->output_unit_cost,
+            // Costs beyond the materials, and the margin used to suggest a price.
+            'setting_charge'   => (float) $this->setting_charge,
+            'misc_charge'      => (float) $this->misc_charge,
+            'margin_type'      => $this->margin_type ?? 'percent',
+            'margin_value'     => (float) $this->margin_value,
+            'material_cost'    => $this->status === 'completed'
+                ? round(max(0, (float) $this->total_input_cost - (float) $this->setting_charge - (float) $this->misc_charge), 2)
+                : null,
+            'suggested_price'  => $this->status === 'completed' && (float) $this->output_unit_cost > 0
+                ? round((float) $this->output_unit_cost + (($this->margin_type ?? 'percent') === 'amount'
+                    ? (float) $this->margin_value
+                    : (float) $this->output_unit_cost * (float) $this->margin_value / 100), 2)
+                : null,
+            // The product's selling prices (as on the product form), for the detail page.
+            'output_prices'    => $this->when($this->relationLoaded('items'), fn () => ($p = \App\Models\Product::query()->whereKey($this->output_product_id)->first(['mrp', 'retail_price', 'wholesale_price', 'dealer_price', 'gst_rate']))
+                ? ['mrp' => (float) $p->mrp, 'retail_price' => (float) $p->retail_price, 'wholesale_price' => (float) $p->wholesale_price, 'dealer_price' => (float) $p->dealer_price, 'gst_rate' => (float) $p->gst_rate]
+                : null),
             'status'           => $this->status,
             'notes'            => $this->notes,
             'completed_at'     => optional($this->completed_at)->toIso8601String(),
@@ -104,6 +121,7 @@ class ProductionOrderResource extends JsonResource
                 })->values();
             }),
             'can'              => [
+                'set_prices'    => $this->status !== 'cancelled' && $user?->hasPermission('production.complete', $companyId),
                 'update'        => $this->status === 'draft' && $user?->hasPermission('production.create', $companyId),
                 'complete'      => $this->status === 'draft' && ! $isMultiStage && $user?->hasPermission('production.complete', $companyId),
                 'cancel'        => in_array($this->status, ['draft', 'in_progress', 'completed'], true) && $user?->hasPermission('production.delete', $companyId),
