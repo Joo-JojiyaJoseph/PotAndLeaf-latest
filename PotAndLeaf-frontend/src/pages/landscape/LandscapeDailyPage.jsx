@@ -127,13 +127,17 @@ export default function LandscapeDailyPage() {
                 </div>
                 <Lines title="Workers and daily wage" rows={s.workers} disabled={!canEdit} onChange={(j, p) => setRow(i, 'workers', j, p)} onAdd={() => setSite(i, { workers: [...s.workers, blankLine()] })} total={sumOf(s.workers)} totalLabel="Labour cost" placeholder="Worker name" />
                 <Lines title="Cash payment for this work" rows={s.payments} disabled={!canEdit} onChange={(j, p) => setRow(i, 'payments', j, p)} onAdd={() => setSite(i, { payments: [...s.payments, blankLine()] })} total={sumOf(s.payments)} placeholder="Food, petrol, bus…" />
+                <details open={s.materials.some((r) => r.name)} className="rounded-xl border border-line/70 p-2.5"><summary className="cursor-pointer text-xs font-semibold text-muted">Materials used</summary><div className="mt-2">
                 <Lines title="Materials used for this work" rows={s.materials} disabled={!canEdit} onChange={(j, p) => setRow(i, 'materials', j, p)} onAdd={() => setSite(i, { materials: [...s.materials, blankLine()] })} placeholder="Manure, chemical…" />
+                </div></details>
+                <details open={Boolean(num(s.bill_amount) || num(s.cash_received) || s.work_status)} className="rounded-xl border border-line/70 p-2.5"><summary className="cursor-pointer text-xs font-semibold text-muted">Work status, bill &amp; money received</summary><div className="mt-2">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Field label="Work status"><Input list="ls-status" disabled={!canEdit} value={s.work_status} onChange={(e) => setSite(i, { work_status: e.target.value })} /></Field>
                   <Field label="Bill amount"><Input type="number" min="0" disabled={!canEdit} value={s.bill_amount} onChange={(e) => setSite(i, { bill_amount: e.target.value })} /></Field>
                   <Field label="Cash received"><Input type="number" min="0" disabled={!canEdit} value={s.cash_received} onChange={(e) => setSite(i, { cash_received: e.target.value })} /></Field>
                   <Field label="Balance"><Input readOnly value={(num(s.bill_amount) - num(s.cash_received)).toFixed(2)} /></Field>
                 </div>
+                </div></details>
                 {s.project_id && <p className="text-xs text-muted">Workers&apos; wages, cash payments and materials go to this project&apos;s cost. Saving the first day starts the work.</p>}
               </Card>
             ))}
@@ -155,11 +159,11 @@ export default function LandscapeDailyPage() {
             </Card>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {canEdit && <Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save statement</Button>}
+          <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-white/95 p-3 shadow-lg backdrop-blur">
+            <div className="mr-auto text-sm"><span className="text-muted">Closing cash balance </span><b className="tnum text-base">{formatCurrency(totals.closing)}</b>{dirty && <span className="ml-2 text-xs text-warning">not saved</span>}</div>
+            {canEdit && <Button size="sm" disabled={saveM.isPending} onClick={() => saveM.mutate()}>Save</Button>}
             <Button size="sm" variant="outline" onClick={() => printDailyStatement(printable())}><PrinterIcon className="size-4" /> Print</Button>
             {canEdit && d?.statement && <Button size="sm" variant="ghost" onClick={() => { if (window.confirm('Delete this day’s statement?')) delM.mutate(); }}><TrashIcon className="size-4" /> Delete</Button>}
-            {dirty && <span className="self-center text-xs text-warning">Not saved yet</span>}
           </div>
         </>
       )}

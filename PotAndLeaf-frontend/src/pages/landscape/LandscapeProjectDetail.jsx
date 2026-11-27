@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeftIcon, CheckCircleIcon, PencilSquareIcon, PlayIcon, PlusIcon, PrinterIcon, TrashIcon, ChatBubbleLeftRightIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline';
@@ -6,6 +6,7 @@ import api from '../../lib/api';
 import { useToast } from '../../lib/toast';
 import { useConfirm } from '../../lib/confirm';
 import { apiMessage } from '../../lib/formErrors';
+import SearchSelect from '../../components/SearchSelect';
 import { Badge, Button, Card, Field, Input, Modal, Select, Spinner, StatCard, Textarea } from '../../components/ui';
 import { classNames, formatCurrency, formatDate, todayISO } from '../../lib/format';
 import { estimateFigures } from '../../lib/landscapeCalc';
@@ -16,8 +17,9 @@ const STATUS_TONE = { enquiry: 'info', quoted: 'warning', approved: 'info', in_p
 const EST_TONE = { draft: 'default', sent: 'warning', approved: 'active', superseded: 'inactive' };
 const ROLE = { brought: 'Brought the work', worked: 'Worked on it', supervised: 'Supervised' };
 const BASIS = { profit: '% of profit', value: '% of work value (ex-GST)', fixed: 'Fixed amount' };
-const TABS = [['estimate', 'Estimate'], ['order', 'Work order'], ['daily', 'Daily work'], ['report', 'Report & commission']];
-const blankLine = (kind = 'plant') => ({ kind, name: '', qty: '', unit: 'nos', rate: '' });
+const TABS = [['estimate', 'Estimate'], ['order', 'Work order'], ['daily', 'Work done'], ['report', 'Profit & commission']];
+const TAB_FOR = { enquiry: 'estimate', quoted: 'estimate', approved: 'order', in_progress: 'daily', completed: 'report', cancelled: 'estimate' };
+const blankLine = (kind = 'plant') => ({ kind, product_id: '', name: '', qty: '', unit: 'nos', rate: '' });
 const blankEstimate = (p) => ({ area_sqft: p?.site_area_sqft ?? '', rate_per_sqft: '', planting_cost: '', service_charge: '', other_charge: '', gst_percent: '', discount: '', valid_until: '', notes: '', items: [blankLine()] });
 
 export default function LandscapeProjectDetail() {
@@ -25,7 +27,9 @@ export default function LandscapeProjectDetail() {
   const toast = useToast();
   const confirm = useConfirm();
   const qc = useQueryClient();
-  const [tab, setTab] = useState('estimate');
+  const [tab, setTab] = useState(null);
+  const [newSignal, setNewSignal] = useState(0);
+  const [finishOpen, setFinishOpen] = useState(false);
   const q = useQuery({ queryKey: ['landscape-project', id], queryFn: () => api.get(`/landscape/projects/${id}`).then((r) => r.data.data) });
   const d = q.data;
   const put = (res) => { qc.setQueryData(['landscape-project', id], res.data.data); qc.invalidateQueries({ queryKey: ['landscape'] }); if (res.data.message) toast.success(res.data.message); };
@@ -42,9 +46,13 @@ export default function LandscapeProjectDetail() {
   const payComM = act((cid) => api.post(`/landscape/commissions/${cid}/pay`));
 
   const approved = useMemo(() => d?.estimates?.find((e) => e.id === d.project.approved_estimate_id), [d]);
+  useEffect(() => { if (d && tab === null) setTab(TAB_FOR[d.project.status] ?? 'estimate'); }, [d, tab]);
   if (q.isLoading) return <div className="flex justify-center py-24"><Spinner className="size-6" /></div>;
   if (!d) return <div className="p-6 text-sm text-muted">Project not found.</div>;
   const p = d.project;
+  const live = (d.estimates ?? []).find((e) => e.status !== 'superseded');
+  const approveAsk = async (e) => { if (await confirm({ title: `Approve ${e.estimate_no}?`, message: `Client agreed to ${formatCurrency(e.total)}. A work order is made and other revisions are closed.`, confirmLabel: 'Approve' })) approveM.mutate(e.id); };
+  const go = (t) => { setTab(t); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const closed = ['completed', 'cancelled'].includes(p.status);
   const ctx = { company: d.company, project: p, estimate: approved ?? d.estimates?.[0] };
 
@@ -63,6 +71,9 @@ export default function LandscapeProjectDetail() {
       </div>
 
       <Stepper status={p.status} />
+      <Kpis d={d} live={live} />
+      <NextStep d={d} live={live} ctx={ctx} busy={sendM.isPending || approveM.isPending}
+        onMake={() => { go('estimate'); setNewSignal((n) => n + 1); }} onSend={() => sendM.mutate(live.id)} onApprove={() => approveAsk(live)} onGo={go} onFinish={() => { go('daily'); setFinishOpen(true); }} />
 
       <div className="flex gap-1 overflow-x-auto rounded-xl bg-paper p-1">
         {TABS.map(([k, l]) => (
@@ -71,13 +82,61 @@ export default function LandscapeProjectDetail() {
       </div>
 
       {tab === 'estimate' && (
-        <EstimateTab d={d} id={id} closed={closed} locked={Boolean(p.approved_estimate_id)} put={put} fail={fail} ctx={ctx}
-          onSend={(e) => sendM.mutate(e.id)} onApprove={async (e) => { if (await confirm({ title: `Approve ${e.estimate_no}?`, message: `Client agreed to ${formatCurrency(e.total)}. A work order is made and other revisions are closed.`, confirmLabel: 'Approve' })) approveM.mutate(e.id); }}
+        <EstimateTab newSignal={newSignal} d={d} id={id} closed={closed} locked={Boolean(p.approved_estimate_id)} put={put} fail={fail} ctx={ctx}
+          onSend={(e) => sendM.mutate(e.id)} onApprove={approveAsk}
           onDelete={async (e) => { if (await confirm({ title: 'Delete this draft?', message: e.estimate_no, confirmLabel: 'Delete' })) delEstM.mutate(e.id); }} busy={sendM.isPending || approveM.isPending} />
       )}
       {tab === 'order' && <OrderTab d={d} id={id} approved={approved} put={put} fail={fail} ctx={ctx} onStart={() => startM.mutate()} />}
-      {tab === 'daily' && <DailyTab d={d} onDelete={(e) => delEntryM.mutate(e.id)} onComplete={(note) => completeM.mutate(note)} />}
+      {tab === 'daily' && <DailyTab finishOpen={finishOpen} setFinishOpen={setFinishOpen} d={d} onDelete={(e) => delEntryM.mutate(e.id)} onComplete={(note) => completeM.mutate(note)} />}
       {tab === 'report' && <ReportTab d={d} id={id} put={put} fail={fail} ctx={ctx} onDeleteCom={(c) => delComM.mutate(c.id)} onPay={(c) => payComM.mutate(c.id)} />}
+    </div>
+  );
+}
+
+function Kpis({ d, live }) {
+  const p = d.project;
+  const value = d.report?.contract_value || live?.total || p.quoted_amount || 0;
+  const items = [['Job value', formatCurrency(value)], ['Advance received', formatCurrency(p.advance_received)], ['Balance to collect', formatCurrency(value - p.advance_received)]];
+  if (d.can.finance && p.approved_estimate_id) items.push(['Cost so far', formatCurrency(d.report?.actual_cost)], ['Profit so far', formatCurrency(d.report?.profit)]);
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      {items.map(([l, v]) => <div key={l} className="rounded-xl border border-line bg-white px-3 py-2"><div className="microlabel text-faint">{l}</div><div className="tnum text-base font-semibold">{v}</div></div>)}
+    </div>
+  );
+}
+
+/** One clear thing to do next, whatever stage the job is at. */
+function NextStep({ d, live, ctx, busy, onMake, onSend, onApprove, onGo, onFinish }) {
+  const p = d.project;
+  const can = d.can.manage;
+  const dailyLink = `/landscape/daily?project=${p.id}&location=${p.location_id ?? ''}`;
+  const Btn = ({ children, ...r }) => <Button size="sm" {...r}>{children}</Button>;
+  const Lnk = ({ to, children }) => <Link to={to} className="inline-flex h-9 items-center gap-1 rounded-xl bg-leaf px-3.5 text-sm font-medium text-white hover:bg-leaf-hover">{children}</Link>;
+  let title; let hint; let actions = null;
+  if (p.status === 'cancelled') return null;
+  if (p.status === 'completed') {
+    title = 'Work completed'; hint = 'See the profit, print the report and give staff commission.';
+    actions = <Btn onClick={() => onGo('report')}>Open profit &amp; commission</Btn>;
+  } else if (p.status === 'in_progress') {
+    title = 'Work is running'; hint = 'Enter each day on the Daily work sheet. Press Work finished when the job is done.';
+    actions = can && <><Lnk to={dailyLink}><PlusIcon className="size-4" /> Enter today&apos;s work</Lnk><Btn variant="outline" onClick={onFinish}>Work finished</Btn></>;
+  } else if (p.status === 'approved') {
+    title = 'Estimate approved — work order ready'; hint = 'Print the work order for the client to sign, then start the work.';
+    actions = <><Btn variant="outline" onClick={() => onGo('order')}>Open work order</Btn>{can && <Lnk to={dailyLink}><PlayIcon className="size-4" /> Start work — enter day 1</Lnk>}</>;
+  } else if (!live) {
+    title = 'Step 1 — Price the job'; hint = 'Make an estimate: area, plants and charges.';
+    actions = can && <Btn onClick={onMake}><PlusIcon className="size-4" /> Make estimate</Btn>;
+  } else if (live.status === 'draft') {
+    title = `Step 2 — Send ${live.estimate_no} to the client`; hint = 'Print it or send it on WhatsApp. You can still edit this draft.';
+    actions = <><Btn variant="outline" onClick={() => printLandscapeEstimate({ ...ctx, estimate: live })}><PrinterIcon className="size-4" /> Print</Btn>{can && <Btn disabled={busy} onClick={onSend}><ChatBubbleLeftRightIcon className="size-4" /> Send on WhatsApp</Btn>}{can && <Btn variant="outline" disabled={busy} onClick={onApprove}>Client already agreed</Btn>}</>;
+  } else {
+    title = `Step 3 — Waiting for the client (${live.estimate_no})`; hint = 'When the client agrees, approve it. To change the price or discount, open the Estimate tab and press Revise.';
+    actions = <>{can && <Btn disabled={busy} onClick={onApprove}><CheckCircleIcon className="size-4" /> Client approved</Btn>}<Btn variant="outline" onClick={() => onGo('estimate')}>Open estimate / revise</Btn></>;
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-leaf/30 bg-leaf-soft/60 p-4">
+      <div className="min-w-0"><div className="text-sm font-semibold text-leaf">{title}</div><div className="text-sm text-muted">{hint}</div></div>
+      <div className="flex flex-wrap gap-2">{actions}</div>
     </div>
   );
 }
@@ -100,7 +159,7 @@ function Stepper({ status }) {
 }
 
 // ───────────────────────── Estimate ─────────────────────────
-function EstimateTab({ d, id, closed, locked, put, fail, ctx, onSend, onApprove, onDelete, busy }) {
+function EstimateTab({ newSignal, d, id, closed, locked, put, fail, ctx, onSend, onApprove, onDelete, busy }) {
   const [form, setForm] = useState(null);
   const [editing, setEditing] = useState(null);   // estimate id when editing a draft
   const [reviseOf, setReviseOf] = useState(null);
@@ -109,13 +168,15 @@ function EstimateTab({ d, id, closed, locked, put, fail, ctx, onSend, onApprove,
   const canEdit = d.can.manage && !closed;
 
   const openNew = () => { setErrors({}); setEditing(null); setReviseOf(null); setForm(ests[0] ? fromEstimate(ests[0], d.project) : blankEstimate(d.project)); };
-  const fromEstimate = (e, p) => ({ ...blankEstimate(p), ...Object.fromEntries(['area_sqft', 'rate_per_sqft', 'planting_cost', 'service_charge', 'other_charge', 'gst_percent', 'discount', 'valid_until', 'notes'].map((k) => [k, e[k] ?? ''])), items: e.items.length ? e.items.map((i) => ({ kind: i.kind, name: i.name, qty: i.qty, unit: i.unit ?? '', rate: i.rate })) : [blankLine()] });
+  const fromEstimate = (e, p) => ({ ...blankEstimate(p), ...Object.fromEntries(['area_sqft', 'rate_per_sqft', 'planting_cost', 'service_charge', 'other_charge', 'gst_percent', 'discount', 'valid_until', 'notes'].map((k) => [k, e[k] ?? ''])), items: e.items.length ? e.items.map((i) => ({ kind: i.kind, product_id: i.product_id ?? '', name: i.name, qty: i.qty, unit: i.unit ?? '', rate: i.rate })) : [blankLine()] });
   const openEdit = (e) => { setErrors({}); setEditing(e.id); setReviseOf(null); setForm(fromEstimate(e, d.project)); };
   const openRevise = (e) => { setErrors({}); setEditing(null); setReviseOf(e.id); setForm(fromEstimate(e, d.project)); };
 
+  useEffect(() => { if (newSignal) openNew(); }, [newSignal]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const saveM = useMutation({
     mutationFn: (f) => {
-      const body = { ...f, items: f.items.filter((i) => i.name.trim()).map((i) => ({ ...i, unit: i.unit || null })), valid_until: f.valid_until || null, revise_of: reviseOf || undefined };
+      const body = { ...f, items: f.items.filter((i) => i.name.trim()).map((i) => ({ ...i, product_id: i.product_id || null, unit: i.unit || null })), valid_until: f.valid_until || null, revise_of: reviseOf || undefined };
       return editing ? api.put(`/landscape/estimates/${editing}`, body) : api.post(`/landscape/projects/${id}/estimates`, body);
     },
     onSuccess: (res) => { put(res); setForm(null); },
@@ -185,12 +246,20 @@ const Row = ({ l, v, bold }) => <tr className="border-b border-line/50 last:bord
 
 function EstimateModal({ form, setForm, errors, saving, title, onSave }) {
   const f = estimateFigures(form ?? {});
+  const prodQ = useQuery({ queryKey: ['landscape-products'], queryFn: () => api.get('/landscape/products').then((r) => r.data.data), enabled: Boolean(form), staleTime: 60000 });
+  const products = prodQ.data ?? [];
+  const options = useMemo(() => [{ value: '__custom', label: 'Not in the product list — type a name', hasImage: false }, ...products.map((p) => ({ value: p.id, label: p.name, sublabel: [p.sku, `₹${p.retail_price}`].filter(Boolean).join(' · '), image: p.image, hasImage: true }))], [products]);
+  const pickProduct = (i, v) => {
+    if (v === '__custom' || v === '') { setLine(i, { product_id: '', custom: true }); return; }
+    const p = products.find((x) => x.id === v);
+    if (p) setLine(i, { product_id: p.id, custom: false, name: p.name, unit: p.unit || 'nos', rate: p.retail_price || '' });
+  };
   const set = (k) => (e) => setForm((x) => ({ ...x, [k]: e.target.value }));
   const setLine = (i, patch) => setForm((x) => ({ ...x, items: x.items.map((l, k) => (k === i ? { ...l, ...patch } : l)) }));
   const err = (k) => errors[k]?.[0];
   return (
     <Modal open={Boolean(form)} onClose={() => setForm(null)} title={title} size="xl"
-      footer={<><Button variant="ghost" size="sm" onClick={() => setForm(null)}>Cancel</Button><Button size="sm" disabled={saving || f.overDiscount} onClick={onSave}>Save estimate</Button></>}>
+      footer={<><span className="text-sm sm:mr-auto sm:self-center">Total <b className="tnum text-base">{formatCurrency(f.total)}</b></span><Button variant="ghost" size="sm" onClick={() => setForm(null)}>Cancel</Button><Button size="sm" disabled={saving || f.overDiscount} onClick={onSave}>Save estimate</Button></>}>
       {form && (
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -207,10 +276,16 @@ function EstimateModal({ form, setForm, errors, saving, title, onSave }) {
             <div className="space-y-2">
               {form.items.map((l, i) => (
                 <div key={i} className="grid grid-cols-6 items-end gap-2 rounded-xl border border-line/70 p-2 sm:grid-cols-12">
-                  <Field label="Type" className="col-span-2 sm:col-span-2"><Select value={l.kind} onChange={(e) => setLine(i, { kind: e.target.value })}><option value="plant">Plant</option><option value="material">Material</option><option value="other">Other</option></Select></Field>
-                  <Field label={l.kind === 'plant' ? 'Which plant' : 'Item'} className="col-span-4 sm:col-span-4"><Input value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder={l.kind === 'plant' ? 'e.g. Areca palm 5ft' : 'e.g. Red soil'} /></Field>
+                  <Field label="Type" className="col-span-2 sm:col-span-2"><Select value={l.kind} onChange={(e) => setLine(i, { kind: e.target.value, product_id: '', name: '' })}><option value="plant">Plant</option><option value="material">Material</option><option value="other">Other</option></Select></Field>
+                  <Field label={l.kind === 'plant' ? 'Which plant' : 'Item'} className="col-span-4 sm:col-span-4">
+                    {l.custom ? (
+                      <div className="flex gap-1.5"><Input value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} placeholder="Type the name" /><button type="button" className="shrink-0 text-xs text-leaf" onClick={() => setLine(i, { custom: false })}>List</button></div>
+                    ) : (
+                      <SearchSelect value={l.product_id || ''} onChange={(v) => pickProduct(i, v)} options={options} placeholder={prodQ.isLoading ? 'Loading products…' : 'Select product…'} searchable emptyLabel="No products" />
+                    )}
+                  </Field>
                   <Field label="Qty" className="col-span-2 sm:col-span-1"><Input type="number" min="0" step="0.001" value={l.qty} onChange={(e) => setLine(i, { qty: e.target.value })} /></Field>
-                  <Field label="Rate (₹)" className="col-span-2 sm:col-span-2"><Input type="number" min="0" step="0.01" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></Field>
+                  <Field label={`Rate (₹)${l.unit ? ` / ${l.unit}` : ''}`} className="col-span-2 sm:col-span-2"><Input type="number" min="0" step="0.01" value={l.rate} onChange={(e) => setLine(i, { rate: e.target.value })} /></Field>
                   <div className="col-span-2 flex items-center justify-between gap-2 pb-2 sm:col-span-3">
                     <span className="tnum text-sm font-medium">{formatCurrency((Number(l.qty) || 0) * (Number(l.rate) || 0))}</span>
                     <button type="button" aria-label="Remove line" onClick={() => setForm((x) => ({ ...x, items: x.items.length === 1 ? [blankLine()] : x.items.filter((_, k) => k !== i) }))} className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger"><TrashIcon className="size-4" /></button>
@@ -222,6 +297,9 @@ function EstimateModal({ form, setForm, errors, saving, title, onSave }) {
             <p className="mt-1 text-xs text-muted">{f.plantCount} plants · plant cost {formatCurrency(f.plantCost)}</p>
           </div>
 
+          <details open={Boolean(Number(form.planting_cost) || Number(form.service_charge) || Number(form.other_charge) || Number(form.gst_percent))} className="rounded-xl border border-line/70 p-3">
+            <summary className="cursor-pointer text-sm font-semibold">Planting, service &amp; other charges, GST <span className="font-normal text-muted">(optional)</span></summary>
+            <div className="mt-3">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Field label="Planting cost (₹)" error={err('planting_cost')}><Input type="number" min="0" step="0.01" value={form.planting_cost} onChange={set('planting_cost')} /></Field>
             <Field label="Service charge (₹)" error={err('service_charge')}><Input type="number" min="0" step="0.01" value={form.service_charge} onChange={set('service_charge')} /></Field>
@@ -229,10 +307,18 @@ function EstimateModal({ form, setForm, errors, saving, title, onSave }) {
             <Field label="GST %" error={err('gst_percent')}><Input type="number" min="0" max="50" step="0.01" value={form.gst_percent} onChange={set('gst_percent')} /></Field>
           </div>
 
+            </div>
+          </details>
+          <details open={Boolean(Number(form.discount) || form.notes)} className="rounded-xl border border-line/70 p-3">
+            <summary className="cursor-pointer text-sm font-semibold">Discount &amp; notes <span className="font-normal text-muted">(optional)</span></summary>
+            <div className="mt-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Discount (₹) — taken off the total after GST" error={err('discount') || (f.overDiscount ? 'The discount is more than the total.' : '')}><Input type="number" min="0" step="0.01" value={form.discount} onChange={set('discount')} /></Field>
             <Field label="Notes for the client"><Textarea rows={2} value={form.notes} onChange={set('notes')} placeholder="Scope, plant guarantee, payment terms…" /></Field>
           </div>
+
+            </div>
+          </details>
 
           <div className="rounded-xl bg-leaf-soft/60 p-3 text-sm">
             <table className="ml-auto w-full max-w-xs"><tbody>
@@ -289,10 +375,12 @@ function OrderTab({ d, id, approved, put, fail, ctx, onStart }) {
 
 // ───────────────────────── Daily work ─────────────────────────
 // Entered once, on the Daily work sheet (all sites of the day). This tab shows what it brought to this job.
-function DailyTab({ d, onDelete, onComplete }) {
+function DailyTab({ finishOpen, setFinishOpen, d, onDelete, onComplete }) {
   const p = d.project;
   const confirm = useConfirm();
-  const [done, setDone] = useState(null);
+  const [doneNote, setDoneNote] = useState(null);
+  const done = finishOpen ? (doneNote ?? '') : null;
+  const setDone = (v) => { if (v === null) { setFinishOpen(false); setDoneNote(null); } else { setDoneNote(v); setFinishOpen(true); } };
   const byDay = useMemo(() => {
     const m = {};
     (d.entries ?? []).forEach((e) => { (m[e.work_date] ??= []).push(e); });

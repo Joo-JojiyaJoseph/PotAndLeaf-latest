@@ -34,6 +34,18 @@ class LandscapeWorkController extends Controller
         return $this->ok($this->payload($request, $landscapeProject));
     }
 
+    /** Products to pick in an estimate (plants, pots, soil, manure…). */
+    public function products(Request $request): JsonResponse
+    {
+        $this->allow($request, 'landscape.view');
+        $companyId = $request->attributes->get('company')->id;
+        $rows = \App\Models\Product::forCompany($companyId)->where('status', 'active')->with('unit:id,short_name,name')->orderBy('name')->limit(3000)
+            ->get(['id', 'sku', 'name', 'retail_price', 'unit_id', 'images'])
+            ->map(fn ($p) => ['id' => $p->id, 'sku' => $p->sku, 'name' => $p->name, 'retail_price' => (float) $p->retail_price, 'unit' => $p->unit?->short_name ?? $p->unit?->name, 'image' => \App\Support\Media\MediaUrl::resolveMany($p->images ?? [])[0] ?? null]);
+
+        return $this->ok($rows);
+    }
+
     // ───────── Estimates ─────────
 
     public function storeEstimate(Request $request, LandscapeProject $landscapeProject): JsonResponse
@@ -300,6 +312,8 @@ class LandscapeWorkController extends Controller
             'company'  => ['name' => $company?->name, 'legal_name' => $company?->legal_name, 'address' => $company?->address, 'phone' => $company?->phone, 'gst_number' => $company?->gst_number, 'email' => $company?->email],
             'estimates' => $p->estimates->map(fn ($e) => $this->estimateRow($e))->reverse()->values(),
             'entries'  => $p->entries->map(fn ($e) => $this->entryRow($e))->values(),
+            'products' => \App\Models\Product::query()->forCompany($companyId)->where('status', 'active')->with('unit:id,short_name,name')->orderBy('name')->get(['id', 'sku', 'name', 'retail_price', 'cost_price', 'current_stock', 'unit_id', 'images'])
+                ->map(fn ($x) => ['id' => $x->id, 'name' => $x->name, 'sku' => $x->sku, 'unit' => $x->unit?->short_name ?: $x->unit?->name, 'rate' => (float) $x->retail_price, 'stock' => (float) $x->current_stock, 'image' => \App\Support\Media\MediaUrl::resolveMany($x->images ?? [])[0] ?? null])->values(),
             'expense_categories' => collect(self::EXPENSE_CATEGORIES)->map(fn ($l, $k) => ['value' => $k, 'label' => $l])->values(),
             'can'      => ['manage' => $request->user()->hasPermission('landscape.manage', $companyId), 'finance' => $finance],
             'staff'    => User::query()->companyMembers($companyId, 'active')->orderBy('name')->get()->map(fn ($u) => ['id' => $u->id, 'name' => $u->name])->values(),

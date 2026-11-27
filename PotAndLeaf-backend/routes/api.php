@@ -173,6 +173,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         Route::post('landscape/projects', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'store']);
         Route::put('landscape/projects/{landscapeProject}', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'update']);
         Route::delete('landscape/projects/{landscapeProject}', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'destroy']);
+        Route::get('landscape/products', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'products']);
         Route::get('landscape/projects/{landscapeProject}', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'show']);
         Route::post('landscape/projects/{landscapeProject}/estimates', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'storeEstimate']);
         Route::put('landscape/estimates/{landscapeEstimate}', [\App\Http\Controllers\Api\LandscapeWorkController::class, 'updateEstimate']);
