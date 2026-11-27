@@ -55,7 +55,7 @@ The menu is grouped by job. You only see the items your role allows.
 | Selling | Sales / Billing, Sales Returns, Advance Orders, Backorders (Waiting), Plant Rental, Customers, Money from Customers, Loyalty Points, Commission |
 | Buying | Purchases (Bills), Purchase Orders, Purchase Returns, Suppliers, Pay Suppliers |
 | Stock | Stock Levels, Batches & Barcodes, Stock Transfers, Stock Count, Damage Entry, Bulk Split, Production |
-| Accounts | Cash Book, Bank Book, Journal (Corrections) |
+| Accounts | Cash Book, Bank Book |
 | Setup | Products, Categories & Units, Companies, Users, Roles & Permissions, Access Requests (admins), Settings, Backups, Activity Log |
 | Help | Help & User Guide (this guide, inside the app), Request Access |
 
@@ -121,7 +121,8 @@ Do these once, in this order: company → users → categories and units → set
 
 1. Click **Add company**.
 2. Fill Name, Code (a short name like CHK-AGRO), Legal name, GST number, State and State code, Phone and Address.
-3. Click **Save**. The app makes the company's one location by itself — you do not add a location.
+3. Click **Save**. The app makes the company's main location by itself. Add more branches and godowns later: on the company's card use **+ Branch** or **+ Godown** (the card also lists each location with its Main and Landscape tags), or open the company and use the **Branches & godowns** section, or use **Setup → Branches & Godowns**.
+4. For a branch you can also set **Landscape division?** to Yes (see section 5.4).
 
 ![Companies list](img/03-companies.jpg#1503x1091)
 
@@ -173,6 +174,8 @@ The user's page (**Setup → Users → click the name**) lists these **Extra per
 **Setup → Categories & Units** has three tabs: **Categories** (Live Plants, Pots & Planters…), **Subcategories** and **Units** (Nos, kg, bag…). Click **New category** (or New unit) and type a name and a short code. Every product needs a category.
 
 ![Categories and units](img/06-masters.jpg#1503x1091)
+
+**Care guide:** when you add or edit a **category** or **subcategory**, fill **Care guide — English** and **Care guide — മലയാളം** (how to look after these products: light, watering, manure…). After a sale the customer can get these on WhatsApp (see 4.1a). A subcategory without its own guide uses its category's guide.
 
 ### 2.4 Settings
 
@@ -280,11 +283,13 @@ There is no HSN code box any more. Codes saved earlier are kept and still print 
 
 ![Product page with category and subcategory](img/54-product-detail.jpg#1503x1091)
 
-**Price helper — "Suggest from cost + margin":** type a margin % and click **Apply**. Retail price = cost × (1 + margin ÷ 100).
+**Prices from a margin %.** The Pricing table gives **MRP, Retail, Wholesale and Dealer** their own **margin on cost %**. Type a percentage and the price fills in: price = cost × (1 + margin ÷ 100), **rounded off to a whole rupee**. If you change the cost, the prices you set by percentage follow it. You can also type a price directly — the table then shows the margin it works out to.
 
-> Example: cost ₹200, margin 40% → 200 × 1.40 = **₹280** retail. If MRP is empty, it is also set to ₹280.
+> Example: cost ₹200. Retail 40% → **₹280**; Wholesale 25% → **₹250**; Dealer 15% → **₹230**; MRP 55% → **₹310**. A cost of ₹83.50 with 30% gives 108.55, rounded to **₹109**.
 
 **Barcodes:** you do not type a barcode on the product. Each purchase lot (batch) gets its own barcode when the purchase is confirmed (see section 3). Print them from **Batches & Barcodes** or **Products → Labels**.
+
+**Product pictures:** wherever you pick a product — purchase bill, sales bill, advance order, backorder, rental, transfer, stock count, production, and the lists on sales and purchase returns — the product's first picture is shown next to its name. Add pictures on the product itself. The purchase order PDF also prints the picture in its own column.
 
 ### 2.6 Customers
 
@@ -412,7 +417,12 @@ A purchase order is the list you send to the supplier before goods arrive. It do
 2. Choose **Purchasing for company**, the **Supplier** and the **Purchase date**. Type the supplier's **Invoice no.** and invoice date.
 3. Tick **Inter-state supply** only if the supplier is in another state (then IGST is used instead of CGST + SGST).
 4. For each item: Product, **Qty**, **Rate**, **Disc. ₹** (discount in rupees for the whole line) and **GST %**. Click **Add line** for more.
-5. Type transport, loading or unloading in **Landed cost**. The line under it says whether this is added to what you owe the supplier or paid to a transporter (Settings).
+5. Type transport, loading or unloading in **Landed cost**. The line under it says whether this is added to what you owe the supplier or paid to a transporter (Settings). The landed cost is shared over the lines in proportion to their value, and each line shows its **landed cost per unit**.
+5a. **Agent code (optional):** type the code of the agent who arranged the purchase. It shows on the purchase page and the printout, and you can search the purchase list by it.
+5b. **Selling prices:** under a product line, tick **Set selling prices for this product when the bill is confirmed**. A table opens with MRP, Retail, Wholesale and Dealer, each with a margin % worked out on the **landed cost per unit** (same rounding as the product form). When you **Confirm**, those prices replace the product's prices, and the product's cost becomes this landed cost. Leave the box unticked to keep the product's prices as they are.
+5c. **Discount on final amount (₹):** under the totals you can type a discount. It comes off **after GST and the landed cost**, so the bill total and the amount you owe the supplier are lower. It is entered in the accounts as Discount Received.
+
+> Example: landed cost per unit ₹112.40. Retail 30% → ₹146, Wholesale 20% → ₹135, Dealer 12% → ₹126, MRP 50% → ₹169. Confirm → the product now sells at those prices.
 6. Click **Save**. Check the totals against the supplier's paper bill.
 7. When the goods are counted and correct, click **Confirm**.
 
@@ -503,6 +513,13 @@ Rate, discount and GST come from the original bill — you only type the quantit
 
 On Confirm, stock goes down (broken goods already left stock when the damage was entered). If you owed the supplier nothing, the amount is kept as an **advance** with that supplier.
 
+**Money for the goods.** The return first reduces what you owe the supplier. Any credit beyond that is either **kept as the supplier's advance** (the default — it is used on your next purchase) or **received back now** as money.
+
+- On the return form, choose **Credit beyond what you owe the supplier**: *Keep as the supplier's advance*, or *Received back now* by Cash, UPI, Card, Bank transfer or Cheque.
+- Kept as advance, and the supplier later pays you back? Open the return and click **Mark refund received from supplier**. It is taken off the supplier's advance and entered in the **Cash Book** or **Bank Book** as money received, with a refund number (RFS-…).
+
+> Example: you owed the supplier ₹1,000 and return goods worth ₹1,400 → ₹1,000 clears the debt and ₹400 is credit. Choose **Received back now — UPI** → ₹400 is entered as money received in the Bank Book.
+
 ### 3.7 Paying a supplier
 
 **Buying → Pay Suppliers.** The **Payables** tab lists every unpaid bill with what was paid, the balance, the **Due date** and status (Unpaid, Partial, Paid).
@@ -551,6 +568,14 @@ Advance used on bills and goods returned appear as extra − lines only when the
 
 > **Example — the Outstanding box goes down.** Outstanding from before ₹10,000, one bill ₹5,000. Pay ₹3,000 with "On account / outstanding from before". You owe 10,000 + 5,000 − 3,000 = **₹12,000**. The payment box and the supplier's **Outstanding** now show 10,000 − 3,000 = **₹7,000 still to pay**; the bill still shows ₹5,000. Pay ₹8,000 more on account → ₹7,000 clears the old outstanding (now **₹0**) and ₹1,000 goes on the bill (₹4,000 left).
 
+**Discount on the final amount.** When a supplier lets you pay less, type the difference in **Discount on the final amount (₹)** on the payment. With a bill chosen, the amount to pay fills in as the bill balance minus the discount.
+
+- The discount clears what you owe like money would; no cash moves for it.
+- It is entered in the accounts as **Discount Received** (against Accounts Payable) and shows on the supplier's statement as *Discount received*.
+- It cannot be more than what is still owed. Voiding the payment voids its discount too.
+
+> Example: bill ₹5,000, you pay ₹4,900 by UPI with a ₹100 discount → ₹4,900 in the Bank Book, ₹100 as Discount Received, the bill is fully paid.
+
 ## 4. Selling
 
 The selling path is: New sale → Save → Confirm (stock goes out, money and points are recorded) → if it was on credit, collect the money later. If goods come back, make a Sales return.
@@ -559,7 +584,8 @@ The selling path is: New sale → Save → Confirm (stock goes out, money and po
 
 1. **Selling → Sales / Billing → New sale.**
 2. Choose **Billing for company**.
-3. Choose the **Customer**, or leave it as **Walk-in** for a counter customer. A new customer? Click **New** next to the box, type the name (and phone), and the customer is added and chosen for this bill.
+3. Choose the **Customer**. Every bill needs one — there is no Walk-in. A new or one-time buyer? Click **New** next to the box, type the name (the phone number is optional), and the customer is added and chosen for this bill.
+   **Salesman:** choose the staff member who made the sale. It starts as the person typing the bill, but you can pick anyone from the list. The **sale and its commission are credited to the salesman you choose**, not to whoever typed the bill. The bill page shows the salesman, and who entered it if that is someone else.
 4. Choose the **Bill type**: **Tax invoice** (normal bill), **Proforma** (a quotation — nothing moves) or **Complimentary** (free gift).
 5. **Payment mode** (Cash, Card, UPI or Credit — pay later), **Amount paid** and loyalty points are at the **bottom** of the bill, after the items. Fill them in last.
 6. Add items: scan the batch barcode in **Scan barcode**, or pick the product. Under the product, the **Batch** box lists its batches with how many are left (and the cost of one, if you may see cost). Leave it on **oldest first (automatic)**, or choose the batch you are selling from. Type the **Qty**. The **Rate** fills in from the price tier. Type a **Disc. %** if you give a discount.
@@ -579,13 +605,25 @@ The selling path is: New sale → Save → Confirm (stock goes out, money and po
 
 | Customer type | Rate used |
 | --- | --- |
-| Retail or Walk-in | Retail price |
+| Retail | Retail price |
 | Wholesale | Wholesale price |
 | Dealer | Dealer price |
 
 For a Retail customer the tier box is locked to Retail, so a cheaper price cannot be chosen by mistake.
 
 **Discount limit:** the discount on one line cannot be more than 20% of qty × rate (changeable in Settings). Free (Complimentary) bills have no limit.
+
+**Discount on final amount (₹):** under the bill total you can type a discount in rupees for the whole bill. It is taken off the **final amount — after GST, round-off and every other calculation** — so GST is still worked out on the full line values. The invoice shows the bill total, the discount and the amount to pay. The line discounts and this discount together must stay inside the same limit. (Bills made before this change keep their old discount, which was spread over the lines.)
+
+> Example: two lines of ₹300 and ₹200, GST 18%. GST is ₹90, total ₹590. A final-amount discount of ₹40 → **you collect ₹550**.
+
+### 4.1a After the sale — care guide on WhatsApp
+
+When a sale is confirmed, the customer can get a WhatsApp message that lists what they bought and, for each category, the care guide in Malayalam and English.
+
+- **Automatic:** switch on **Settings → Send care guide after a sale**. It is off until you switch it on. The customer needs a phone number on the bill, and WhatsApp must be enabled.
+- **By hand:** on a confirmed sale click **Send care guide**.
+- Nothing is sent if none of the products' categories has a care guide. A failed WhatsApp never stops the sale.
 
 ### 4.2 Bill sums, worked out
 
@@ -604,7 +642,7 @@ For a Retail customer the tier box is locked to Retail, so a cheaper price canno
 6. **Credit:** they pay ₹1,000 now → they still owe **₹805**.
 7. **New points earned** on what they actually pay: 1,805 ÷ 100 = 18.05 → **18 points** (part points are dropped).
 
-**Most points allowed on one bill** = 50% of the bill. Bill ₹2,105 → at most 1,052 points. Points cannot be used on a Walk-in bill.
+**Most points allowed on one bill** = 50% of the bill. Bill ₹2,105 → at most 1,052 points.
 
 ![Sale detail](img/29-sale-detail.jpg#1503x1091)
 
@@ -617,7 +655,7 @@ For a Retail customer the tier box is locked to Retail, so a cheaper price canno
 - Points used are taken off and new points are added.
 - The salesperson's commission is added (section 8).
 
-From the bill you can **Print**, save a **PDF** or send it on **WhatsApp**.
+From the bill you can **Print**, save a **PDF** or send it on **WhatsApp**. **Print and PDF appear as soon as the bill is confirmed** — you do not have to wait for payment, so a credit or part-paid bill can be printed too. A quotation (Proforma) can always be printed.
 
 **Cancelling a confirmed bill:** click **Request cancellation**. Head office approves it (Settings: "Cancel needs approval"). Cancelling puts back stock, money, points and commission.
 
@@ -638,6 +676,14 @@ From the bill you can **Print**, save a **PDF** or send it on **WhatsApp**.
 > Example: the customer owes ₹805. They pay ₹805 against that bill → they owe ₹0.
 
 The **Receipt history** tab shows every receipt. Voiding a receipt undoes it, including the cash or bank entry.
+
+**Discount on the final amount.** When a customer pays a little less than the bill, type the difference in **Discount on the final amount (₹)** on the receipt. With an invoice chosen, the amount to collect fills in as the bill balance minus the discount.
+
+- The discount clears the bill like money would, so the bill shows **Paid**. No cash moves for it.
+- It is entered in the accounts as **Discount Allowed** (against Accounts Receivable) and shows on the customer's statement as *Discount allowed*. It is not counted as money received in the Cash or Bank book.
+- It cannot be more than what is still owed on that bill. Voiding the receipt voids its discount too.
+
+> Example: bill ₹1,000, the customer pays ₹950 cash with a ₹50 discount → ₹950 in the Cash Book, ₹50 as Discount Allowed, the bill is fully paid.
 
 ### 4.4 Goods come back — Sales return
 
@@ -662,6 +708,13 @@ Rate, discount and GST come from the original bill. You cannot return more than 
 > | Used points given back | 300 × 531 ÷ 2,105 = 75.68 | 75 points |
 
 On Confirm the goods go back into stock and the salesperson's commission is reduced in the same proportion.
+
+**Money for the returned goods.** The credit note first clears what the customer still owes on credit bills. Whatever is left is either **kept as the customer's advance** (the default — they can use it on the next bill) or **given back now**.
+
+- On the return form, choose **Money for the returned goods**: *Keep as the customer's advance*, or *Give back now* by Cash, UPI, Card, Bank transfer or Cheque.
+- Kept as advance, and later you really hand the money over? Open the return and click **Mark refund given to customer**. Choose how it was paid and the date. It is taken off the customer's advance and entered in the **Cash Book** (cash) or **Bank Book** (UPI, card, bank, cheque) as money paid out, with a refund number (RFC-…).
+
+> Example: credit note ₹531; the customer still owes ₹300 on credit bills → ₹300 is cleared and ₹231 is left. Choose **Give back now — Cash** → ₹231 is paid out now: the Cash Book shows ₹231 out. Or keep it as advance, and mark the ₹231 as given when you pay it.
 
 ## 5. Bookings, waiting orders and plant rental
 
@@ -696,7 +749,7 @@ A backorder is an item a customer wanted that was out of stock.
 1. **Selling → Plant Rental → New rental.**
 2. Choose company, **Customer**, **Billing cycle** (Daily, Weekly or Monthly = 30 days) and **Start date**.
 3. Add the plants, **Qty** and **Rate / cycle** (rent for one plant for one cycle). Only products with **This product can be rented** ticked (on the product form, with a daily rate) appear in the list.
-4. **Security deposit:** type it, or leave it empty — then deposit = full retail price of the plants.
+4. **Security deposit (optional):** type it only if you take one. If you leave it empty no deposit is recorded (it is stored as blank) — it is no longer taken as the retail price.
 5. Keep **Generate invoices automatically** ticked if a rent bill should be made each cycle by itself.
 6. **Save draft**, then **Activate** when the plants leave. Stock goes down.
 7. Each cycle a rent bill is made (or click **Generate invoice**). It is due 7 days after the cycle ends. Click **Mark paid** when paid. A rent bill cannot be deleted.
@@ -706,6 +759,17 @@ A backorder is an item a customer wanted that was out of stock.
 ![New rental](img/34-rental-new.jpg#1503x1091)
 
 ![Rental detail](img/35-rental-detail.jpg#1503x1091)
+
+**Estimate for the customer.** A customer who is still deciding can be given a printed estimate, with the terms and conditions.
+
+- While making a rental, click **Print estimate** (next to *Save draft*). Nothing has to be saved first.
+- On a saved rental (draft or active), click **Print estimate** at the top of the rental page.
+- The estimate shows the plants, quantity, rent per cycle, the rent for the expected period, the refundable deposit (only shown when you entered one), the estimated total in words, the date it is valid until, the **terms and conditions**, and signature boxes for the customer and the shop. It says it is an estimate, not a tax invoice.
+- Write your own terms under **Settings → Rental estimate & terms** (one term on each line). Leave it empty to use the standard terms. The same box sets how many days an estimate stays valid.
+
+> Example: 10 Areca palms at ₹15 a day and 5 money plants at ₹6 a day, 1 to 10 December (10 days), deposit ₹2,000. Rent per day = 150 + 30 = ₹180 → rent for 10 days **₹1,800** → estimated total with the deposit **₹3,800**.
+
+**Discount on a rent bill.** Click **Mark paid** on a rent bill to type a **discount on the final amount**. The window shows the final amount received. The discount is entered in the accounts as Discount Allowed.
 
 **Rent at a glance.** The rentals list shows **Rent / cycle** and **Billed so far** for each rental. The rental page has a **Rent** box: rent per month (or day/week), **Total till expected end**, billed so far and the deposit. While making a rental, each plant line shows its total, and the bottom shows the rent per cycle and the total for the expected period.
 
@@ -725,15 +789,44 @@ A backorder is an item a customer wanted that was out of stock.
 | Refund | deposit − charges (if the deposit is bigger) |
 | Balance to pay | charges − deposit (if the charges are bigger) |
 
-> Example: 10 medium palms, monthly, rent ₹150 per plant per month, retail price ₹250.
+> Example: 10 medium palms, monthly, rent ₹150 per plant per month, retail price ₹250, deposit ₹2,500 agreed with the customer.
 >
-> 1. Deposit (left empty) = 10 × 250 = **₹2,500**.
+> 1. Deposit entered on the rental = **₹2,500** (if none was entered, there is nothing to refund and the whole charge is billed).
 > 2. First month's rent bill = 10 × 150 = **₹1,500**.
 > 3. Returned after 45 days: 8 good, 1 damaged, 1 missing. Cycles = 45 ÷ 30 = 1.5 → **2**.
 > 4. Total rent = 10 × 150 × 2 = 3,000. Already billed 1,500 → rent still due **₹1,500**.
 > 5. Damaged = 250 ÷ 2 = **₹125**. Missing = **₹250**.
 > 6. Charges = 1,500 + 125 + 250 = **₹1,875**.
 > 7. Deposit 2,500 − 1,875 = **refund ₹625** to the customer. The 8 good palms go back into stock.
+
+### 5.4 Landscape division and Landscape Projects
+
+Some branches also do landscaping work (design and planting at a customer's site). When you add or edit a branch — on the company card, the company page or Branches & Godowns — set **Landscape division?** to **Yes**. Godowns cannot be landscape divisions. A company with at least one landscape branch gets the **Landscape Projects** menu (Sales group). People need the **Landscape** permissions: *view*, *manage* (estimates, work orders, daily work) and *finance* (cost, profit and commission — keep this for owners and managers).
+
+**The steps of one job**
+
+1. **New project.** Click **New project**: title, landscape branch, customer, phone, site address and area, and the **category** — Outdoor landscaping, Indoor landscaping, Contract planting, Garden modification, Lawn, Irrigation, Maintenance, Design or Other. Click the project's name to open it.
+2. **Estimate** tab → **Make estimate.** Enter the **total sq ft** and **rate per sq ft** (the work charge is worked out), then add each **plant** (which plant, number, rate) and any **material**. Add the **planting cost**, **service charge**, other charges and **GST %**. The **discount** is taken off the total *after* GST. The sums show as you type. Save.
+3. **Print** the estimate, or **Send on WhatsApp** (needs the customer's phone and WhatsApp enabled). Sending makes the project **Quoted**.
+4. **Change the price?** On a sent estimate click **Revise** — it opens a copy as the next revision (R2, R3…) where you can change quantities, rates or the discount. The older one is marked *Replaced* and stays as a record. A draft can simply be edited or deleted.
+5. **Client approved** on the revision the client accepted. The other revisions close and a **work order** is made (WO number, date, terms).
+6. **Work order** tab: set the advance received, start and end dates, and edit the terms. **Print for client to sign**.
+7. **Daily work:** there is one place for it — **Landscape Projects → Daily work** (see 5.5). On the project, **Start work — enter day 1** (later **Enter today's work**) opens that sheet with this project already added. Saving the first day starts the job. The project's **Daily work** tab only shows what the sheet brought to this job.
+8. **Work finished** (on the project's Daily work tab) closes the job; no more days can be added.
+9. **Report & commission** tab: the estimate against the actual cost — net revenue (GST is not income), labour, expenses by kind, **profit and margin**, and a **day-wise cost** table with a running total. **Print report** gives the same plus every entry (an internal paper — do not give it to the client).
+10. **Staff commission:** click **Add** and choose the staff who *brought the work*, *worked on it* or *supervised*. Give a % of **profit**, a % of **work value (ex-GST)** or a **fixed amount**. After completion click **Mark paid** — the amount is fixed at that moment. Record the actual cash or bank payment under **Expenses**.
+
+Note: the daily labour and expenses here are for the job's profit report; they are not posted to the Cash Book by themselves. Pay and record real money through Expenses or the Cash Book as usual.
+
+### 5.5 Daily work (the paper sheet, on screen)
+
+**Landscape Projects → Daily work** is the same as the paper *Daily Work Statement — Landscape*, one per day and landscape branch. This is the only place daily work is entered.
+
+1. Choose the **date** and the **landscape branch**. The **opening cash balance** is the previous day's closing balance (type it the first time).
+2. For each **site** visited: pick the **linked project** if it is one (party, work type and sq ft fill in), or just type the party name for a visit or service. Add the **workers** with their **daily wage**, **cash payments** (food, petrol, bus…), **materials used**, **work status**, **bill amount** and **cash received** (balance is worked out). **Add site** for more than three; the print puts three side by side.
+3. At the bottom add **other receipts** and **other payments**. Summary: opening balance + cash receipts (cash received on sites + other receipts) − cash payments (site payments + other payments) = **closing cash balance**. Workers' wages and materials are not counted as cash paid, as on the paper sheet.
+4. **Save.** For a site linked to a project, the wages (labour), cash payments and materials go into that project's day-wise cost, and an approved job becomes *in progress*. Saving the same day again replaces those lines.
+5. **Print** gives the filled sheet; **Print blank sheet** an empty one. Click a row under *Recent statements* to open an earlier day.
 
 ## 6. Looking after stock
 
@@ -745,7 +838,7 @@ A backorder is an item a customer wanted that was out of stock.
 | --- | --- |
 | Stock levels | For each item: on hand, promised on open transfer requests, available, reorder level, cost of one, status (Low / OK) |
 | Stock ledger | Every movement in and out, with date and reason |
-| Valuation | What your stock is worth |
+| Valuation | What your stock is worth, at **landed cost** — each purchase batch is valued at the supplier price plus its share of freight and loading. The page also shows how much of the value is landed cost. |
 | Fast / slow / dead | Which items sell quickly, slowly, or not at all |
 
 ![Stock levels](img/22-stock.jpg#1503x1091)
@@ -760,38 +853,40 @@ The sums:
 
 > Example: Mango Sapling — batch PO-000001 had 60, 10 went out (8 sold, 2 rented). The 2 rented plants come back → the batch goes from 50 back to **52**, the same as on hand.
 
-### 6.2 Getting stock from another shop (Stock Transfers)
+### 6.2 Branches, godowns and stock transfers
 
-When you run short, you **ask** another company for stock. Four steps, each done by a different person:
+A company can have **several locations**. Each one is either a **Branch** (a shop that sells) or a **Godown** (a store room). Set them up under **Setup → Branches & Godowns**.
 
-| Step | Who | Button | What happens to stock |
-| --- | --- | --- | --- |
-| 1. Request | The shop that needs stock | **Send request** | Nothing moves yet. The pieces are kept aside at the other shop. |
-| 2. Approve | Admin (head office) | **Approve** | Nothing moves yet. Admin can choose which company sends it. |
-| 3. Dispatch | The shop that sends | **Dispatch** | Stock goes down at the sending shop. Status: On the way. |
-| 4. Receive | The shop that asked | **Receive** | Stock goes up at your shop and a **new barcode batch** is made. |
+- One location is the company's **Main** location. All the stock you had before is there. Stock you move or receive elsewhere is taken out of it.
+- **Who works where:** on **Users**, the **Works at** box says which branch or godown a person is based at.
+  - A person at a **branch** can do everything their role allows.
+  - A person at a **godown** can only use **Stock transfers**. After signing in they land on the transfer list.
+  - A person with no location (head office) sees all locations.
 
-**Step 1 — Request.** Go to **Stock → Stock Transfers → Request stock**. The list shows every **other** company's products and how many each can give (**Free stock**). Search a product, type how many you need in **I need**, click **Add**. Add as many as you like, then click **Send request**. Asking two companies makes two requests, one for each.
+**Stock is kept per location**
 
-![Request stock — pick company, product and quantity](img/49-transfer-request.jpg#1920x1200)
+- **Purchases** go into the location you choose in **Receive into** (the person's own location by default).
+- **Bills** sell from a branch: choose **Sell from (branch)**. The product list shows that branch's own stock, and a bill cannot sell more than the branch holds. Move stock to the branch first.
+- Sales returns, purchase returns and damage entries use the location of the bill or purchase, or the **Stock was at** box.
+- Rentals, production, bulk split and stock counts use the main location.
 
-> Free stock = what the shop has − what is already promised on other open requests. Example: 35 Money Plants, 5 already requested by another shop → you can ask for up to **30**.
+**Moving stock between locations**
 
-**Step 2 — Approve.** The admin opens the request and clicks **Approve**. The window lists every company that has the product and whether it **Has enough**. Pick the company that should send it, check the quantity, click **Confirm approval**. Your own request cannot be approved by you; you can **Cancel** it until it is approved.
+| From | To | Allowed |
+|---|---|---|
+| Godown | Branch | Yes |
+| Branch | Godown | Yes |
+| Branch | Branch | Yes |
+| Godown | Godown | No — send it to a branch first |
+| One company | Another company | No — stock never leaves the company |
 
-![Approve — choose which company sends the stock](img/50-transfer-approve.jpg#1920x1200)
+1. **Stock Transfers → Send stock**: choose **From**, **To**, the products and quantities. The screen shows how much of each product the sending location holds. Or **Request stock**: choose where you need the stock, then pick products from the other locations that have them (one request is made for each sending location).
+2. A request waits for **approval**. The approver can choose a different location to send it from.
+3. The sending location clicks **Dispatch**. The stock is now on the way and is not counted at either location.
+4. The receiving location clicks **Receive** and enters what arrived. Anything short goes back to the sender.
+5. If a bill is short, **Request shortage** shows which other branches and godowns have the item and asks them to send it; whatever nobody has becomes a backorder.
 
-**Step 3 — Dispatch.** The sending shop sees the request marked **We send** with status **To dispatch**. Pack the items and click **Dispatch**.
-
-**Step 4 — Receive.** When the goods arrive, your shop opens the transfer (marked **Coming to us**, status **On the way**), clicks **Receive** and types how many actually arrived. The stock is added to the **same product by name** in your shop (a new product is made if you don't have it yet), and the new barcode shows under **New barcode**.
-
-![A received transfer with its new barcode](img/51-transfer-received.jpg#1503x1091)
-
-> Example: you asked for 10 pots. 9 arrive fine, 1 is broken → type 9. Your shop gets **+9** with a new barcode; **1** goes back to the sender.
-
-![Stock transfers list — statuses and "We send" / "Coming to us"](img/52-transfers-list.jpg#1503x1091)
-
-The status tabs read: **Waiting approval → To dispatch → On the way → Received** (or Rejected / Cancelled). The admin can still move stock directly with **Send stock directly** at the bottom of the Request stock page.
+> Example: the Main godown holds 100 pots and Branch A holds 0. Branch A cannot sell a pot yet. Request 30 pots from the godown, the godown dispatches them, Branch A receives them. Now the godown holds 70 and Branch A holds 30, and Branch A can sell up to 30.
 
 ### 6.3 Splitting a big lot into sizes (Bulk Split)
 
@@ -823,16 +918,19 @@ Count the shelves now and then so the app matches reality.
 1. **Stock → Stock Count → New.**
 2. Choose company, **Count date** and the area counted.
 3. The sheet has **one row per batch** (batch number, barcode label and date), oldest first; a product with no batches has one row. Count the pieces of each batch on the shelf (match the barcode label) and type the **Counted** number. The **Variance** (counted − system) shows at once. Type a batch number or barcode in the filter box to find its row.
-4. Save, then **Submit**. A manager or head office approves it.
-5. On approval, each batch is set to its own count, and the product's stock changes by the same total.
+4. Save, then click **Update stock now**. **The stock changes at once** — no approval is needed first. The count is marked **Needs check** and head office / admin get a notice in the bell (top right).
+5. Head office / admin open the count, look at it and click **Verify**. Verify only marks it as checked; it does not change the stock again. You can keep billing before it is verified. If the count was wrong, make a new count to correct it.
+6. Each batch is set to its own count, and the product's stock changes by the same total. In a company with several branches and godowns, choose **Branch / godown counted** first: the sheet then shows that location's stock, and the count sets that location's stock (counted product by product).
 
 ![Counting batch by batch](img/69-count-batches.jpg#1400x900)
 
 ![New stock count](img/38-stock-count-new.jpg#1503x1091)
 
-> Example: the system says 33 pots, you count 32 → variance −1 → **1 pot is removed** on approval.
+> Example: the system says 33 pots, you count 32 → variance −1 → **1 pot is removed** as soon as you click Update stock now.
 >
-> Batch example: Money Plant batch GRN-000001-01 shows 30, batch GRN-000004-01 shows 20 (stock 50). You count 28 and 21 → variances −2 and +1. On approval GRN-000001-01 becomes **28**, GRN-000004-01 becomes **21**, and Money Plant stock becomes **49**.
+> Batch example: Money Plant batch GRN-000001-01 shows 30, batch GRN-000004-01 shows 20 (stock 50). You count 28 and 21 → variances −2 and +1. GRN-000001-01 becomes **28**, GRN-000004-01 becomes **21**, and Money Plant stock becomes **49**.
+
+**Fix the stock while billing.** A customer picks a plant that is really on the shelf, but the system says it is out of stock, so the bill says "Only 0 in stock". Click **Plants are here? Fix the stock now** under that line, type how many are really here and click **Update stock**. The stock is corrected immediately, you can bill the customer, and head office / admin get a notice to check it. It appears in **Stock Count** as a *quick fix* with the status **Needs check**; they click **Verify** later. Verifying is not needed before you bill. (Needs permission to make bills or to make stock counts.)
 
 ### 6.5 Broken or dead plants (Damage Entry)
 
@@ -864,6 +962,27 @@ Use this when you put items together to make a new product, like a palm planted 
 >
 > Cost of one combo = 3,082.83 ÷ 10 = **₹308.28**.
 
+**Setting charge, miscellaneous and margin.** On the production form you can also type:
+
+- **Setting charge** (₹ for the whole run): set-up or labour cost.
+- **Miscellaneous** (₹ for the whole run): any other cost, such as transport or packing.
+- **Margin on cost**: a % of the cost, or a ₹ amount per piece.
+
+The setting charge and miscellaneous are added to the cost of the pieces made: **cost of one piece = (materials + setting charge + miscellaneous) ÷ pieces made**. That cost becomes the product's cost price and the cost of the new batch, and the production reports' *Total cost* includes it.
+
+The summary under the materials shows the materials, setting charge, miscellaneous, total cost, cost of one piece, margin per piece and a **suggested price (cost + margin)**. Click **Use as retail price** to copy it into the retail price. It also shows the **retail price now**, the selling value (pieces × retail price), the expected profit and the margin at that price.
+
+**Final prices when you complete.** Clicking **Complete** (or **Set prices** on a finished production) opens a window to set the finished product's **MRP, Retail, Wholesale and Dealer** prices. Each has a margin % on the **cost of one piece**; type the % and the price fills in, rounded to a whole rupee, or type a price directly. Prices left empty stay as they are.
+
+> Example: cost of one piece ₹338. Retail 40% → **₹473**, Wholesale 25% → **₹423**, Dealer 15% → **₹389**.
+
+**Prices of the product.** They are the same fields as the product form: **GST %, MRP, Retail price, Wholesale price and Dealer price**.
+
+- Making a **new product** here also asks for its category, subcategory and unit. The **SKU is made by the system** (SKU-00001, SKU-00002, …) when you save — you do not type it. The cost price is not typed — it is the cost of one piece made.
+- For an **existing product** the current prices are filled in. Change them if you like and tick **Save these prices on the product** to keep them; otherwise they only feed the estimate.
+
+> Example: 10 combos cost ₹3,082.83 in materials. Setting charge ₹200, miscellaneous ₹100 → total cost ₹3,382.83, **cost of one piece ₹338.28**. Margin 25% → ₹84.57 per piece → **suggested price ₹422.85**. At a retail price of ₹450 the selling value is ₹4,500 and the expected profit ₹1,117.17 (33.0%).
+
 ## 7. Money books and dues
 
 Bills, receipts and payments write themselves into these books. You only add entries for other money, such as rent, electricity or a bank deposit.
@@ -871,6 +990,8 @@ Bills, receipts and payments write themselves into these books. You only add ent
 ### 7.1 Cash Book
 
 **Accounts → Cash Book.** Choose **From** and **To** dates. Four boxes show **Opening**, **Receipts** (money in), **Payments** (money out) and **Closing**.
+
+Refunds for returned goods appear here too: money paid back to a customer is a **payment (out)**, and money received back from a supplier is a **receipt (in)**.
 
 **Closing cash = opening + money in − money out.**
 
@@ -896,31 +1017,23 @@ Where each payment mode goes:
 
 The opening cash and bank balances are set in Settings.
 
-### 7.3 Journal
+### 7.2a Expenses — payments and other receipts
 
-**Accounts → Journal** lists **every money entry** in one place. You do not type most of them — they are made by themselves:
+**Accounts → Expenses** is where you enter money you pay out for the business (rent, electricity, transport, repairs, tea…) and other money you receive that is not a sale (rent received, interest, scrap sale). Every entry is also written into the **Cash Book** or **Bank Book**, so the accounts stay correct.
 
-| When you… | The journal gets (both sides are always equal) |
-| --- | --- |
-| Take money from a customer (receipt) | Dr Cash / Bank — Cr Customer |
-| Pay a supplier | Dr Supplier (Accounts payable) — Cr Cash / Bank |
-| Make a cash (walk-in) sale | Dr Cash — Cr Sales |
-| Pay commission | Dr Commission — Cr Cash / Bank |
-| Add a Cash Book or Bank Book voucher | as you typed it |
+1. Click **Add expense** (money paid out) or **Add receipt** (money received).
+2. Pick the **date**, the **amount**, and whether it was **cash** (Cash Book) or **bank / UPI / card** (Bank Book).
+3. Choose the **head** from the list, or click **New head** and type one (for example *Fuel*).
+4. Choose the **branch or godown** it belongs to. A person based at one branch or godown can only use their own location.
+5. Add a note if you like (bill number, who was paid) and click **Save**.
 
-Each row shows the date, voucher number, type, what it was for, and under it the two sides, for example *Dr Accounts Payable ₹1,000 · Cr Cash in Hand ₹1,000*. **auto** means it was made by itself. The **Debits** and **Credits** boxes at the top are always the same total.
+The page shows the **expenses paid**, **other receipts** and the **net**, a strip of totals **by head**, and every entry. Filter by dates, type, branch / godown, head or words in the notes, and **Export** the list. **Remove** (the bin) takes an entry back out of the book.
 
-![Journal](img/43-journal.jpg#1503x1091)
+**Each branch and godown has its own expenses.** Give the people at a godown or branch the *Expenses* permissions on **Users → Roles** (view, add, remove). They then see and add only their own location's entries; head office sees all and can filter by location.
 
-**Show → Only corrections I made** lists just the entries typed by hand.
+> Example: the godown pays ₹1,200 cash for loading. Add expense → Head *Transport* → Cash → Godown. The Cash Book shows a payment of ₹1,200 and the Expenses page shows ₹1,200 under Transport for that godown.
 
-**Add entry** is for a correction that does not involve cash or bank, for example moving an amount from one account to another. Total debits must equal total credits.
-
-> Example: an expense of ₹500 was booked to Repairs but should be Transport. Add entry: Transport debit ₹500, Repairs credit ₹500. Both sides are ₹500.
-
-Automatic entries cannot be edited here — fix the receipt or payment itself. If you are not sure, ask your accountant before adding a correction.
-
-### 7.4 Who owes whom
+### 7.3 Who owes whom
 
 Find these under **Reports**:
 
@@ -1002,6 +1115,8 @@ A salesperson with **View own commission** sees **My Commission** in the menu (a
 
 **What counts as "sales":** the bill amount **before GST**, minus any points discount, minus returns. Proforma and free (Complimentary) bills count for nothing.
 
+Commission goes to the **salesman chosen on the bill**. If a cashier types a bill for another salesman, that salesman gets the sale, the daily-target progress and the commission.
+
 > Example bill from section 4.2: before GST ₹1,910, points discount ₹300 → commission counts **₹1,610**.
 
 | Kind | Who gets it | How it is counted |
@@ -1060,13 +1175,13 @@ Customers earn points on every confirmed bill and use them later as a discount. 
 | Earn | 1 point for every full ₹100 the customer pays | Pays ₹1,805 → 1,805 ÷ 100 = 18.05 → **18 points** |
 | Use | 1 point = ₹1 off | 300 points = ₹300 off |
 | Limit | At most 50% of the bill can be paid with points | Bill ₹2,105 → at most **1,052 points** |
-| Walk-in | Points cannot be earned or used without a customer | Pick the customer on the bill |
+| No customer chosen | The bill cannot be saved | Choose the customer, or click **New** to add one |
 
 These numbers are changed in **Loyalty settings** (or Setup → Settings). Points are earned on what the customer actually pays — the bill total minus the points used.
 
 ### Using points on a bill
 
-1. On **New sale**, pick the customer (not Walk-in).
+1. On **New sale**, pick the customer.
 2. Type the points to use. The app stops you if it is more than allowed.
 3. **Confirm.** Points used are taken off first; new points are added on what was paid.
 
@@ -1103,6 +1218,8 @@ Click **Adjust points**, choose the customer, type the points (+ to add, − to 
 ## 10. Reports
 
 **Main → Reports.**
+
+Under the report icons there is one **filter bar**: the dates, any extra filters (customer, supplier…) and the **Export** button. Every report uses this one bar, so there is only one date filter to set.
 
 1. Choose the **company** at the top (head office can choose All companies; some reports need one company).
 2. Choose the period: **7D**, **30D**, **90D**, **This FY** (from the start of your financial year, see Settings) or **Custom** dates.
@@ -1178,6 +1295,37 @@ Cost of goods sold = pieces sold × the cost of one from the batch they left (sc
 
 > Example: sold at ₹280, cost ₹200 → profit ₹80 → margin = 80 ÷ 280 × 100 = **28.6%**.
 
+### Detailed reports: invoice-wise, day-wise, month-wise
+
+Open **Main → Reports → Detailed reports**. There is one report for each kind of document:
+
+| Report | What it lists |
+|---|---|
+| **Sales details** | Confirmed bills (not quotations) |
+| **Purchase details** | Confirmed purchase bills |
+| **Sales return details** | Goods customers returned |
+| **Purchase return details** | Goods sent back to suppliers |
+| **Customer receipt details** | Money received from customers |
+| **Supplier payment details** | Money paid to suppliers |
+| **Cancelled bills** | Sales bills that were cancelled, with who made them and why |
+| **Cancelled purchases** | Purchase bills that were cancelled |
+| **Cancelled orders** | Advance orders, backorders and purchase orders that were cancelled |
+
+**Choose how to see it** with **View by**:
+
+- **Invoice-wise** — one row for every bill, with date, number (click it to open the bill), customer or supplier, payment mode, and the amounts.
+- **Day-wise, Week-wise, Month-wise, Year-wise** — the same documents added up for each day, week (Monday to Sunday), month or year. Each row shows how many documents, how many customers or suppliers, and the totals.
+
+**Choose the dates** at the top: **7D, 30D, 90D, Today, Week, Month**, or **Custom** for any two dates. Use the **Search** box to find one bill number or one customer or supplier, and the **payment mode** box to see only Cash, Card, UPI or Credit. The **Total** row at the bottom adds up everything shown, and **Export → Excel — this report as shown** downloads all rows.
+
+> Example: for November choose **Month** and **Month-wise** → one row, "November 2026", with the number of bills and the month's total. Switch to **Day-wise** → one row for every day of the month. Switch to **Invoice-wise** → every bill of the month.
+
+How the amounts are taken:
+
+- **Sales**: *Before GST* = the goods value. *GST* = tax on the bill. *Total* = bill total − loyalty points used. *Due* = Total − Paid.
+- **Purchases**: *Total* = the supplier's bill total. *Due* = what you still owe on that bill.
+- **Receipts and payments**: advance that was received or paid earlier and later used on a bill is not new money, so it is not listed again.
+
 ### Every report, one by one
 
 Open **Main → Reports**. The icons are grouped as in the table above. For each report this page tells you **what it shows**, **where the figures come from**, and an **example**.
@@ -1241,7 +1389,7 @@ Open **Main → Reports**. The icons are grouped as in the table above. For each
 **Cash book** — every rupee of **cash** in and out, with a running balance.
 
 - **Opening balance** = the opening cash you entered in Settings + all cash movements before the first date.
-- **In** = customer receipts and bills paid in cash. **Out** = supplier payments in cash and commission paid in cash. Manual journal entries on the cash account are included.
+- **In** = customer receipts and bills paid in cash. **Out** = supplier payments in cash and commission paid in cash. Entries you add by hand to the Cash Book are included.
 - Advance used on a bill is **not** listed, because no new cash moved.
 - **Closing balance** = opening + in − out.
 
@@ -1403,7 +1551,7 @@ Every list (Sales, Purchases, Returns, Orders, Rentals, Receipts, Payments, Prod
 **Every week or month**
 
 - [ ] Open the Reorder report and make purchase orders.
-- [ ] Do a Stock count and get it approved.
+- [ ] Do a Stock count (the stock changes at once) and have head office / admin verify it.
 - [ ] Check Supplier dues by age and pay the oldest bills first.
 - [ ] Check Customer dues by age and follow up late customers.
 - [ ] Pay staff commission (Commission → Pay staff).
@@ -1444,8 +1592,6 @@ Every list (Sales, Purchases, Returns, Orders, Rentals, Receipts, Payments, Prod
 **Where is the Void button for a supplier payment?** It was removed on purpose: payment history is a permanent record. If a payment was typed wrongly, ask head office/your accountant to put it right.
 
 **The app will not let me pay commission of ₹2,000.** The person earned less than that this month. The box shows the most you can pay.
-
-**Why does the Journal show supplier payments and receipts?** The Journal now lists every money entry, the automatic ones too, with both sides. Choose **Show → Only corrections I made** to see just your own entries.
 
 **A supplier is missing from the list in a form.** Each form lists only the suppliers of the company chosen in that form. Check the **Company** box at the top of the form.
 
