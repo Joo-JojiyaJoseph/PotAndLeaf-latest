@@ -76,7 +76,7 @@ export default function LandscapeProjectDetail() {
           onDelete={async (e) => { if (await confirm({ title: 'Delete this draft?', message: e.estimate_no, confirmLabel: 'Delete' })) delEstM.mutate(e.id); }} busy={sendM.isPending || approveM.isPending} />
       )}
       {tab === 'order' && <OrderTab d={d} id={id} approved={approved} put={put} fail={fail} ctx={ctx} onStart={() => startM.mutate()} />}
-      {tab === 'daily' && <DailyTab d={d} id={id} put={put} fail={fail} onDelete={(e) => delEntryM.mutate(e.id)} onComplete={(note) => completeM.mutate(note)} />}
+      {tab === 'daily' && <DailyTab d={d} onDelete={(e) => delEntryM.mutate(e.id)} onComplete={(note) => completeM.mutate(note)} />}
       {tab === 'report' && <ReportTab d={d} id={id} put={put} fail={fail} ctx={ctx} onDeleteCom={(c) => delComM.mutate(c.id)} onPay={(c) => payComM.mutate(c.id)} />}
     </div>
   );
@@ -279,7 +279,7 @@ function OrderTab({ d, id, approved, put, fail, ctx, onStart }) {
         <div className="mt-4 flex flex-wrap gap-2">
           {editable && <Button size="sm" variant="outline" disabled={saveM.isPending || !f} onClick={() => saveM.mutate()}>Save changes</Button>}
           <Button size="sm" variant="outline" onClick={() => printLandscapeWorkOrder({ ...ctx, estimate: approved, project: { ...p, ...form, advance_received: Number(form.advance_received) || 0 } })}><PrinterIcon className="size-4" /> Print for client to sign</Button>
-          {d.can.manage && p.status === 'approved' && <Button size="sm" onClick={onStart} disabled={Boolean(f)}><PlayIcon className="size-4" /> Start work</Button>}
+          {d.can.manage && ['approved', 'in_progress'].includes(p.status) && <Link to={`/landscape/daily?project=${p.id}&location=${p.location_id ?? ''}`} className="inline-flex h-9 items-center gap-1 rounded-xl bg-leaf px-3 text-sm font-medium text-white hover:bg-leaf-hover"><PlayIcon className="size-4" /> {p.status === 'approved' ? 'Start work — enter day 1' : 'Enter today\'s work'}</Link>}
         </div>
         {f && <p className="mt-2 text-xs text-warning">Save your changes first.</p>}
       </Card>
@@ -288,76 +288,50 @@ function OrderTab({ d, id, approved, put, fail, ctx, onStart }) {
 }
 
 // ───────────────────────── Daily work ─────────────────────────
-function DailyTab({ d, id, put, fail, onDelete, onComplete }) {
+// Entered once, on the Daily work sheet (all sites of the day). This tab shows what it brought to this job.
+function DailyTab({ d, onDelete, onComplete }) {
   const p = d.project;
   const confirm = useConfirm();
-  const [form, setForm] = useState(null);
-  const [editing, setEditing] = useState(null);
-  const [errors, setErrors] = useState({});
   const [done, setDone] = useState(null);
-  const working = ['approved', 'in_progress'].includes(p.status);
-  const blank = (type) => ({ work_date: todayISO(), type, category: 'plants', name: '', qty: type === 'labour' ? '1' : '', rate: '', notes: '' });
-  const saveM = useMutation({
-    mutationFn: (f) => { const b = { ...f, qty: f.type === 'labour' ? Number(f.qty) || 1 : 1, rate: Number(f.rate) || 0, category: f.type === 'expense' ? f.category : null }; return editing ? api.put(`/landscape/entries/${editing}`, b) : api.post(`/landscape/projects/${id}/entries`, b); },
-    onSuccess: (res) => { put(res); setForm(null); }, onError: (e) => { setErrors(e.response?.data?.errors ?? {}); fail(e); },
-  });
   const byDay = useMemo(() => {
     const m = {};
     (d.entries ?? []).forEach((e) => { (m[e.work_date] ??= []).push(e); });
     return Object.entries(m).sort(([a], [b]) => (a < b ? 1 : -1));
   }, [d.entries]);
-  const err = (k) => errors[k]?.[0];
-  const set = (k) => (e) => setForm((x) => ({ ...x, [k]: e.target.value }));
-  const canAdd = d.can.manage && working;
+  const working = ['approved', 'in_progress'].includes(p.status);
+  const link = `/landscape/daily?project=${p.id}&location=${p.location_id ?? ''}`;
 
   return (
     <div className="space-y-4">
-      {!working && p.status !== 'completed' && <Card className="p-4 text-sm text-muted">Daily entries can be added once the estimate is approved. Open the <b>Work order</b> tab and click <b>Start work</b>.</Card>}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted">Each day: who worked and their wage, and what else was spent on this job.</p>
-        {canAdd && (
+        <p className="text-sm text-muted">Workers, wages, cash paid and materials come from the <b>Daily work</b> sheet. Enter them there, once a day.</p>
+        {d.can.manage && working && (
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => { setErrors({}); setEditing(null); setForm(blank('labour')); }}><PlusIcon className="size-4" /> Labour</Button>
-            <Button size="sm" variant="outline" onClick={() => { setErrors({}); setEditing(null); setForm(blank('expense')); }}><PlusIcon className="size-4" /> Expense</Button>
+            <Link to={link} className="inline-flex h-9 items-center gap-1 rounded-xl bg-leaf px-3 text-sm font-medium text-white hover:bg-leaf-hover"><PlusIcon className="size-4" /> Enter today&apos;s work</Link>
             {p.status === 'in_progress' && <Button size="sm" variant="outline" onClick={() => setDone('')}><CheckCircleIcon className="size-4" /> Work finished</Button>}
           </div>
         )}
       </div>
-      {byDay.length === 0 && <Card className="p-8 text-center text-sm text-muted">No entries yet.</Card>}
+      {!working && p.status !== 'completed' && <Card className="p-4 text-sm text-muted">Approve an estimate first. The work starts when you save the first day&apos;s sheet.</Card>}
+      {byDay.length === 0 && <Card className="p-8 text-center text-sm text-muted">No work entered yet.</Card>}
       {byDay.map(([day, rows]) => (
         <Card key={day} className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-line bg-paper/60 px-4 py-2 text-sm"><b>{formatDate(day)}</b><span className="tnum font-medium">{formatCurrency(rows.reduce((t, r) => t + r.amount, 0))}</span></div>
           <ul>
             {rows.map((e) => (
               <li key={e.id} className="flex items-center justify-between gap-3 border-b border-line/60 px-4 py-2 text-sm last:border-0">
-                <div className="min-w-0"><div className="font-medium">{e.name}</div><div className="text-xs text-muted">{e.type === 'labour' ? `Labour · ${e.qty} × ${formatCurrency(e.rate)}` : `Expense · ${e.category ?? 'other'}`}{e.notes ? ` · ${e.notes}` : ''}</div></div>
+                <div className="min-w-0"><div className="font-medium">{e.name}</div><div className="text-xs text-muted">{e.type === 'labour' ? 'Labour' : `Expense · ${e.category ?? 'other'}`}{e.notes ? ` · ${e.notes}` : ''}</div></div>
                 <div className="flex shrink-0 items-center gap-1"><span className="tnum">{formatCurrency(e.amount)}</span>
-                  {canAdd && <><button type="button" aria-label="Edit" className="rounded-lg p-1.5 text-muted hover:bg-paper" onClick={() => { setErrors({}); setEditing(e.id); setForm({ work_date: e.work_date, type: e.type, category: e.category ?? 'other', name: e.name, qty: String(e.qty), rate: String(e.rate), notes: e.notes ?? '' }); }}><PencilSquareIcon className="size-4" /></button>
-                    <button type="button" aria-label="Delete" className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" onClick={async () => { if (await confirm({ title: 'Remove this entry?', message: `${e.name} — ${formatCurrency(e.amount)}`, confirmLabel: 'Remove' })) onDelete(e); }}><TrashIcon className="size-4" /></button></>}
+                  {!e.from_daily && d.can.manage && working && <button type="button" aria-label="Remove" className="rounded-lg p-1.5 text-muted hover:bg-paper hover:text-danger" onClick={async () => { if (await confirm({ title: 'Remove this entry?', message: `${e.name} — ${formatCurrency(e.amount)}`, confirmLabel: 'Remove' })) onDelete(e); }}><TrashIcon className="size-4" /></button>}
                 </div>
               </li>
             ))}
           </ul>
         </Card>
       ))}
-
-      <Modal open={Boolean(form)} onClose={() => setForm(null)} title={`${editing ? 'Edit' : 'Add'} ${form?.type === 'labour' ? 'labour' : 'expense'}`}
-        footer={<><Button variant="ghost" size="sm" onClick={() => setForm(null)}>Cancel</Button><Button size="sm" disabled={saveM.isPending || !form?.name?.trim()} onClick={() => saveM.mutate(form)}>Save</Button></>}>
-        {form && (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label="Date" error={err('work_date')}><Input type="date" value={form.work_date} onChange={set('work_date')} /></Field>
-            {form.type === 'expense' && <Field label="Spent on"><Select value={form.category} onChange={set('category')}>{(d.expense_categories ?? []).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}</Select></Field>}
-            <Field label={form.type === 'labour' ? 'Worker / team' : 'Details'} required error={err('name')} className="sm:col-span-2"><Input value={form.name} onChange={set('name')} placeholder={form.type === 'labour' ? 'e.g. Gardeners (daily wage)' : 'e.g. Tempo for plants'} /></Field>
-            {form.type === 'labour' && <Field label="Number of people × days" error={err('qty')}><Input type="number" min="0" step="0.5" value={form.qty} onChange={set('qty')} /></Field>}
-            <Field label={form.type === 'labour' ? 'Wage each (₹)' : 'Amount (₹)'} required error={err('rate')}><Input type="number" min="0" step="0.01" value={form.rate} onChange={set('rate')} /></Field>
-            <Field label="Notes" className="sm:col-span-2"><Input value={form.notes} onChange={set('notes')} /></Field>
-            <p className="text-sm text-muted sm:col-span-2">Amount: <b>{formatCurrency((form.type === 'labour' ? Number(form.qty) || 0 : 1) * (Number(form.rate) || 0))}</b></p>
-          </div>
-        )}
-      </Modal>
       <Modal open={done !== null} onClose={() => setDone(null)} title="Finish this work?"
         footer={<><Button variant="ghost" size="sm" onClick={() => setDone(null)}>Not yet</Button><Button size="sm" onClick={() => { onComplete(done); setDone(null); }}>Complete the work</Button></>}>
-        <p className="mb-3 text-sm text-muted">After this, daily entries are locked and the consolidated report is ready.</p>
+        <p className="mb-3 text-sm text-muted">After this, the report is final and no more daily work can be added to this job.</p>
         <Field label="Completion note (optional)"><Textarea rows={3} value={done ?? ''} onChange={(e) => setDone(e.target.value)} /></Field>
       </Modal>
     </div>

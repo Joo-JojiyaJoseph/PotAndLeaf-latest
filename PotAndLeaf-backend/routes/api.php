@@ -165,6 +165,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class])->group(function (
         // Accounting books — cash, bank, journal
         // Landscape division — landscaping projects
         Route::get('landscape/form-data', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'formData']);
+        Route::get('landscape/statements', [\App\Http\Controllers\Api\LandscapeStatementController::class, 'show']);
+        Route::get('landscape/statements/list', [\App\Http\Controllers\Api\LandscapeStatementController::class, 'index']);
+        Route::put('landscape/statements', [\App\Http\Controllers\Api\LandscapeStatementController::class, 'save']);
+        Route::delete('landscape/statements/{landscapeDailyStatement}', [\App\Http\Controllers\Api\LandscapeStatementController::class, 'destroy']);
         Route::get('landscape/projects', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'index']);
         Route::post('landscape/projects', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'store']);
         Route::put('landscape/projects/{landscapeProject}', [\App\Http\Controllers\Api\LandscapeProjectController::class, 'update']);

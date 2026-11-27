@@ -77,7 +77,7 @@ export default function LandscapeProjectsPage() {
         icon={SparklesIcon}
         title="Landscape projects"
         subtitle="Landscaping jobs handled by your landscape division: enquiry, quotation, site work and completion."
-        actions={can('landscape.manage') && !noDivision ? <Button size="sm" onClick={openNew}><PlusIcon className="size-4" /> New project</Button> : null}
+        actions={!noDivision ? <div className="flex flex-wrap gap-2"><Link to="/landscape/daily" className="inline-flex h-9 items-center rounded-xl border border-line bg-white px-3 text-sm font-medium text-leaf hover:bg-leaf-soft">Daily work</Link>{can('landscape.manage') && <Button size="sm" onClick={openNew}><PlusIcon className="size-4" /> New project</Button>}</div> : null}
       />
 
       {noDivision && (

@@ -81,3 +81,47 @@ export function printLandscapeReport({ company, project, estimate: e, report: r,
   <h2>All entries</h2><table><thead><tr><th>Date</th><th>Type</th><th>Details</th><th class="r">Workers × wage</th><th class="r">Amount</th></tr></thead><tbody>${detail}</tbody></table>
   <p class="muted" style="margin-top:14px">Internal report — not for the client.</p>`);
 }
+
+// ── Daily Work Statement — same layout as the paper sheet (3 sites across) ──
+const DAILY_CSS = `
+  .ds{border:2px solid #000;margin-bottom:14px;page-break-inside:avoid} .ds h3{margin:0;padding:4px;text-align:center;font-size:13px;border-bottom:2px solid #000}
+  .cols{display:grid;grid-template-columns:repeat(3,1fr)} .col{border-right:2px solid #000;padding:4px 6px;min-height:430px} .col:last-child{border-right:0}
+  .f{font-size:11px;margin:3px 0;border-bottom:1px dotted #777;min-height:15px} .f b{font-size:10px}
+  .ds table{margin:3px 0 6px;border:1px solid #000} .ds th,.ds td{border:1px solid #000;padding:2px 4px;font-size:11px;height:17px}
+  .ds th{background:#fff;color:#000;text-transform:none;font-size:10px} .sec{font-weight:bold;font-size:10px;margin-top:6px}
+  .bot{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:2px solid #000}.bot>div{border-right:2px solid #000;padding:4px}.bot>div:last-child{border-right:0}`;
+
+function siteCol(s, blank) {
+  const rows = (arr, n) => { const a = (arr ?? []).slice(0, n); while (a.length < n) a.push({ name: '', amount: '' }); return a; };
+  const tr = (r) => `<tr><td>${esc(r.name)}</td><td class="r" style="width:30%">${r.amount !== '' && r.amount != null && Number(r.amount) !== 0 ? Number(r.amount).toLocaleString('en-IN') : ''}</td></tr>`;
+  const w = blank ? ['', '', ''] : [...(s.workers ?? []), '', '', ''].slice(0, Math.max(3, (s.workers ?? []).length));
+  return `<div class="col">
+    <div class="f"><b>PARTY NAME:</b> ${esc(s.party_name)}</div><div class="f"><b>WORK TYPE:</b> ${esc(s.work_type)}</div>
+    <div class="f"><b>SQFT:</b> ${s.sqft ?? ''}</div><div class="f"><b>WORKERS:</b> ${esc(w[0] ?? '')}</div>${w.slice(1).map((x) => `<div class="f">${esc(x)}</div>`).join('')}
+    <div class="sec">CASH PAYMENT FOR THIS WORK</div><table>${rows(s.payments, 8).map(tr).join('')}<tr><th>TOTAL</th><th class="r">${blank ? '' : money(s.payments_total)}</th></tr></table>
+    <div class="sec">MATERIALS USED FOR THIS WORK</div><table>${rows(s.materials, 4).map(tr).join('')}</table>
+    <table><tr><th>WORK STATUS</th><td>${esc(s.work_status)}</td></tr><tr><th>BILL AMOUNT</th><td class="r">${blank || !s.bill_amount ? '' : money(s.bill_amount)}</td></tr>
+    <tr><th>CASH RECEIVED</th><td class="r">${blank || !s.cash_received ? '' : money(s.cash_received)}</td></tr><tr><th>BALANCE</th><td class="r">${blank || (!s.bill_amount && !s.cash_received) ? '' : money(s.balance)}</td></tr></table></div>`;
+}
+
+export function printDailyStatement({ company, location, statement: st, blank = false }) {
+  const sites = blank ? [{}, {}, {}] : st.sites ?? [];
+  const pages = [];
+  for (let i = 0; i < Math.max(1, sites.length); i += 3) {
+    const chunk = sites.slice(i, i + 3);
+    while (chunk.length < 3) chunk.push({});
+    pages.push(chunk);
+  }
+  const rows = (arr, n) => { const a = (arr ?? []).slice(0, n); while (a.length < n) a.push({ name: '', amount: '' }); return a.map((r) => `<tr><td>${esc(r.name)}</td><td class="r" style="width:35%">${r.amount ? Number(r.amount).toLocaleString('en-IN') : ''}</td></tr>`).join(''); };
+  const summary = (label, v) => `<tr><th style="text-align:left">${label}</th><td class="r">${blank || v == null ? '' : money(v)}</td></tr>`;
+  const body = pages.map((chunk, pi) => `<div class="ds"><h3>DAILY WORK STATEMENT — LANDSCAPE <span style="float:right;font-weight:normal;font-size:11px;margin-right:6px">DATE: ${blank ? '' : dt(st.date)} ${esc(location ?? '')}</span></h3>
+    <div class="cols">${chunk.map((s) => siteCol(s, blank)).join('')}</div>
+    ${pi === pages.length - 1 ? `<div class="bot"><div><div class="sec">OTHER RECEIPTS</div><table>${rows(blank ? [] : st.other_receipts, 4)}</table></div>
+      <div><div class="sec">OTHER PAYMENTS</div><table>${rows(blank ? [] : st.other_payments, 4)}</table></div>
+      <div><div class="sec">SUMMARY</div><table>${summary('OP BALANCE', st?.opening_balance)}${summary('TOT. CASH RECEIPT', st?.total_receipts)}${summary('TOT. CASH PAYMENTS', st?.total_payments)}${summary('CL. CASH BALANCE', st?.closing_balance)}</table></div></div>` : ''}</div>`).join('');
+  const w = window.open('', '_blank', 'width=1000,height=1000');
+  if (!w) return;
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Daily work statement</title><style>${CSS}${DAILY_CSS}@page{size:A4;margin:8mm}</style></head><body style="padding:6px">${esc(company?.name) ? '' : ''}${body}<script>window.onload=function(){setTimeout(function(){window.print();},300)}</script></body></html>`);
+  w.document.close();
+}

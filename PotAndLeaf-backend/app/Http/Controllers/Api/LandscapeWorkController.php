@@ -589,7 +589,7 @@ class LandscapeWorkController extends Controller
     private function projectRow(LandscapeProject $p): array
     {
         return [
-            'id' => $p->id, 'project_no' => $p->project_no, 'title' => $p->title, 'location' => $p->location?->name,
+            'id' => $p->id, 'project_no' => $p->project_no, 'title' => $p->title, 'location' => $p->location?->name, 'location_id' => $p->location_id,
             'customer_name' => $p->customer_name, 'customer_phone' => $p->customer_phone,
             'service_type' => $p->service_type, 'service' => LandscapeProject::SERVICES[$p->service_type] ?? $p->service_type,
             'site_address' => $p->site_address, 'site_area_sqft' => $p->site_area_sqft !== null ? (float) $p->site_area_sqft : null,
@@ -616,7 +616,7 @@ class LandscapeWorkController extends Controller
     /** @return array<string, mixed> */
     private function entryRow(LandscapeWorkEntry $e): array
     {
-        return ['id' => $e->id, 'work_date' => $e->work_date->toDateString(), 'type' => $e->type, 'category' => $e->category, 'name' => $e->name, 'qty' => (float) $e->qty, 'rate' => (float) $e->rate, 'amount' => (float) $e->amount, 'notes' => $e->notes];
+        return ['id' => $e->id, 'work_date' => $e->work_date->toDateString(), 'type' => $e->type, 'category' => $e->category, 'name' => $e->name, 'qty' => (float) $e->qty, 'rate' => (float) $e->rate, 'amount' => (float) $e->amount, 'notes' => $e->notes, 'from_daily' => filled($e->statement_id)];
     }
 
     /** @param array<string, mixed> $report */

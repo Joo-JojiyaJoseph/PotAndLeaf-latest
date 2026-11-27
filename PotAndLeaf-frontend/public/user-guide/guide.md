@@ -810,13 +810,23 @@ Some branches also do landscaping work (design and planting at a customer's site
 3. **Print** the estimate, or **Send on WhatsApp** (needs the customer's phone and WhatsApp enabled). Sending makes the project **Quoted**.
 4. **Change the price?** On a sent estimate click **Revise** — it opens a copy as the next revision (R2, R3…) where you can change quantities, rates or the discount. The older one is marked *Replaced* and stays as a record. A draft can simply be edited or deleted.
 5. **Client approved** on the revision the client accepted. The other revisions close and a **work order** is made (WO number, date, terms).
-6. **Work order** tab: set the advance received, start and end dates, and edit the terms. **Print for client to sign**, then click **Start work**.
-7. **Daily work** tab: every day add **Labour** (who, number of people × wage) and **Expenses** (plants, material, transport, other) spent on this job. Edit or remove a wrong entry while the work is open.
-8. **Work finished** closes the job. Daily entries are then locked.
+6. **Work order** tab: set the advance received, start and end dates, and edit the terms. **Print for client to sign**.
+7. **Daily work:** there is one place for it — **Landscape Projects → Daily work** (see 5.5). On the project, **Start work — enter day 1** (later **Enter today's work**) opens that sheet with this project already added. Saving the first day starts the job. The project's **Daily work** tab only shows what the sheet brought to this job.
+8. **Work finished** (on the project's Daily work tab) closes the job; no more days can be added.
 9. **Report & commission** tab: the estimate against the actual cost — net revenue (GST is not income), labour, expenses by kind, **profit and margin**, and a **day-wise cost** table with a running total. **Print report** gives the same plus every entry (an internal paper — do not give it to the client).
 10. **Staff commission:** click **Add** and choose the staff who *brought the work*, *worked on it* or *supervised*. Give a % of **profit**, a % of **work value (ex-GST)** or a **fixed amount**. After completion click **Mark paid** — the amount is fixed at that moment. Record the actual cash or bank payment under **Expenses**.
 
 Note: the daily labour and expenses here are for the job's profit report; they are not posted to the Cash Book by themselves. Pay and record real money through Expenses or the Cash Book as usual.
+
+### 5.5 Daily work (the paper sheet, on screen)
+
+**Landscape Projects → Daily work** is the same as the paper *Daily Work Statement — Landscape*, one per day and landscape branch. This is the only place daily work is entered.
+
+1. Choose the **date** and the **landscape branch**. The **opening cash balance** is the previous day's closing balance (type it the first time).
+2. For each **site** visited: pick the **linked project** if it is one (party, work type and sq ft fill in), or just type the party name for a visit or service. Add the **workers** with their **daily wage**, **cash payments** (food, petrol, bus…), **materials used**, **work status**, **bill amount** and **cash received** (balance is worked out). **Add site** for more than three; the print puts three side by side.
+3. At the bottom add **other receipts** and **other payments**. Summary: opening balance + cash receipts (cash received on sites + other receipts) − cash payments (site payments + other payments) = **closing cash balance**. Workers' wages and materials are not counted as cash paid, as on the paper sheet.
+4. **Save.** For a site linked to a project, the wages (labour), cash payments and materials go into that project's day-wise cost, and an approved job becomes *in progress*. Saving the same day again replaces those lines.
+5. **Print** gives the filled sheet; **Print blank sheet** an empty one. Click a row under *Recent statements* to open an earlier day.
 
 ## 6. Looking after stock
 

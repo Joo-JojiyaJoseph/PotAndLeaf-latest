@@ -69,6 +69,7 @@ const BackorderDetail = lazy(() => import('./pages/backorders/BackorderDetail'))
 const AccountingBookPage = lazy(() => import('./pages/accounting/AccountingBookPage'));
 const ExpensesPage = lazy(() => import('./pages/expenses/ExpensesPage'));
 const LandscapeProjectsPage = lazy(() => import('./pages/landscape/LandscapeProjectsPage'));
+const LandscapeDailyPage = lazy(() => import('./pages/landscape/LandscapeDailyPage'));
 const LandscapeProjectDetail = lazy(() => import('./pages/landscape/LandscapeProjectDetail'));
 const AccountingVoucherForm = lazy(() => import('./pages/accounting/AccountingVoucherForm'));
 const PurchasesList = lazy(() => import('./pages/purchases/PurchasesList'));
@@ -182,6 +183,7 @@ export default function App() {
             <Route path="accounting/cash-book/new" element={<PermissionRoute permission="accounts.create"><AccountingVoucherForm /></PermissionRoute>} />
             <Route path="accounting/cash-book/:id/edit" element={<PermissionRoute permission="accounts.update"><AccountingVoucherForm /></PermissionRoute>} />
             <Route path="landscape" element={<PermissionRoute permission="landscape.view"><LandscapeProjectsPage /></PermissionRoute>} />
+            <Route path="landscape/daily" element={<PermissionRoute permission="landscape.view"><LandscapeDailyPage /></PermissionRoute>} />
             <Route path="landscape/:id" element={<PermissionRoute permission="landscape.view"><LandscapeProjectDetail /></PermissionRoute>} />
             <Route path="expenses" element={<PermissionRoute permission="expenses.view"><ExpensesPage /></PermissionRoute>} />
             <Route path="accounting/bank-book" element={<PermissionRoute permission="accounts.view"><AccountingBookPage /></PermissionRoute>} />
